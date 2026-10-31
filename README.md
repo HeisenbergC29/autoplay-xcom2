@@ -2,7 +2,7 @@
 
 Mod w UnrealScript automatyzujący działania oddziału w misji. Docelowa platforma: **Windows, XCOM 2: War of the Chosen z oficjalnymi dodatkami** (także Alien Hunters, Shen’s Last Gift i Tactical Legacy Pack). Nie jest przeznaczony dla podstawowego XCOM 2 bez WOTC ani trybu wieloosobowego.
 
-**Stan: niekompilowana wersja rozwojowa, nie gotowe wydanie do grania.** Repozytorium zawiera własne źródła moda i narzędzia budowania. Nie zawiera plików gry, SDK ani gotowego `.u`. Nie potwierdzono działania w grze ani pełnego ukończenia wszystkich typów misji. Sama obecność dodatków nie oznacza obsługi wszystkich ich skryptowanych etapów.
+**Stan: niekompilowana wersja rozwojowa, nie gotowe wydanie do grania.** Repozytorium zawiera własne źródła moda i narzędzia budowania. Nie zawiera plików gry, SDK ani gotowego `.u`. Nie potwierdzono działania w grze ani pełnego ukończenia wszystkich typów misji. Sama obecność dodatków nie oznacza obsługi wszystkich ich skryptowanych etapów. Kod sprawdzono już względem przesłanych oryginalnych źródeł WOTC: [wyniki kontroli SDK](docs/SDK-AUDIT.pl.md).
 
 ## Sterowanie
 
@@ -22,11 +22,13 @@ Przycisk używa oryginalnych elementów UI, bez zastępowania plików Flash. Po�
 | Walka | Dozwolone przez grę strzały i wybrane umiejętności żołnierzy, SPARK-ów oraz frakcji WOTC; wycena szans trafienia, obrażeń i dobicia |
 | Walka wręcz | Wybrane ataki Rangera, Templariusza i Renegata, z trasą wyznaczaną przez silnik |
 | Niszczenie celów | Zwykłe strzały do widocznych obiektów oznaczonych przez grę jako wrogie cele misji, np. przekaźniki; bez atakowania neutralnej scenerii |
+| Granaty | Frag/Alien rzucane i wystrzeliwane, natywna trajektoria i promień wybuchu, ocena grup widocznych wrogów; kontrola sojuszników, cywilów, celów misji i niebezpiecznych obiektów na trasie i w wybuchu |
 | Wsparcie | Leczenie i stabilizacja, przeładowanie, overwatch, hunker down |
 | Ruch | Legalne niebieskie ruchy, trasowanie A*, ocena osłon względem widocznych wrogów, kontrola ognia/kwasu i innych zagrożeń na trasie |
+| Eksploracja | Gdy brak znanych celów i przydatnych akcji: ograniczone obliczeniowo próbkowanie niezbadanych pól mapy i podział celów między żołnierzy; bez odczytu pozycji ukrytych wrogów |
 | Cele | Rozpoznawane interakcje: ładunki, skrzynie, dowody, obiekty misji, oznaczanie zasobów, wybrane obiekty fabularne, przenoszenie VIP-a i podejście do cywilów |
 | Hakowanie | Wyłącznie ekran wywołany własnym rozkazem; wybór dostępnej nagrody z najwyższą pokazywaną szansą, zwykły rzut gry, zamknięcie po zakończeniu animacji |
-| Ewakuacja | Istniejąca strefa, kontrolowani cywile / niesiony VIP albo ukończony jawnie oznaczony cel strategiczny; brak wymuszania zwycięstwa |
+| Ewakuacja | Istniejąca strefa, kontrolowani cywile / niesiony VIP albo ukończony jawnie oznaczony cel strategiczny; wyznaczenie nowej strefy zwykłą zdolnością `PlaceEvacZone` po ukończeniu celu, z natywną kontrolą miejsca i widoczności |
 
 Mod nie dodaje punktów akcji, nie zmienia trafień, nie zabija wrogów komendą i nie wywołuje sztucznego zwycięstwa. Wybór przeciwników korzysta z widoczności gracza, w tym legalnego squadsight. Znane pozycje oznaczonych celów misji służą do nawigacji.
 
@@ -34,11 +36,11 @@ Mod nie dodaje punktów akcji, nie zmienia trafień, nie zabija wrogów komendą
 
 To **nie jest jeszcze pełny autopilot wszystkich misji**. Do ukończenia wymagania potrzebne są kompilacja, testy i dopracowanie zachowania na konkretnych mapach:
 
-- Brak taktycznego planera granatów, broni ciężkiej i dowolnych ataków obszarowych wymagających celowania w teren. Nie są automatycznie używane, aby nie wykonywać ich bez sprawdzenia trafianych sojuszników i obiektów.
+- Planer obszarowy obsługuje wyłącznie zwykłe granaty Frag/Alien i domyślnie wymaga dwóch widocznych przeciwników. Broń ciężka, stożki, ogień, kwas, EMP, dym i pozostałe efekty trwałe wymagają osobnych reguł. Pełne skutki zawalania konstrukcji wymagają testów w grze.
 - Brak planowania zasadzki całego oddziału, oszczędzania zasobów na kolejne etapy i pełnego wykorzystania każdej umiejętności DLC. Listy obsługiwanych umiejętności są jawne w `APX_CombatPlanner.uc`.
-- Brak eksploracji całej mapy w poszukiwaniu ostatniego nieodkrytego wroga. Gdy kończą się widoczne cele i znane punkty misji, mod oddaje sterowanie.
+- Eksploracja używa próbkowania siatki mapy. Nie gwarantuje odwiedzenia każdego małego pomieszczenia ani znalezienia wroga, który przemieścił się na wcześniej odwiedzony teren. Gdy nie znajduje osiągalnego celu, automat oddaje sterowanie.
 - Nietypowe cele Kismet, wieloetapowe Lost Towers / Alien Nest, twierdze Wybranych, obrona Avengera, finał i wyzwania Legacy **nie mają potwierdzonej obsługi końca do końca**. Może być potrzebne ręczne przejście etapu lub ewakuacja.
-- Mod nie wyznacza samodzielnie nowej strefy ewakuacji, nie wybiera ścieżek dialogowych i nie zamyka ogólnych komunikatów. Nie uznaje pustej listy celów za powód do opuszczenia misji.
+- Wyznaczanie ewakuacji wymaga istniejącego, ukończonego celu strategicznego i dostępnej zwykłej zdolności gry. Mod nie wybiera ścieżek dialogowych i nie zamyka ogólnych komunikatów. Nie uznaje pustej listy celów za powód do opuszczenia misji.
 - Samouczek, replay i multiplayer są wyłączone. Nie deklarujemy zgodności z Long War of the Chosen ani innymi zmianami zasad.
 
 Brak sensownego planu, odrzucony rozkaz lub limit działań zatrzymuje automat. Gracz może przejąć kontrolę, wykonać brakującą czynność i ponownie go włączyć.
@@ -62,18 +64,21 @@ Brak sensownego planu, odrzucony rozkaz lub limit działań zatrzymuje automat. 
 
 Wynik: `dist\AutoplayXCom2.zip`, pakiet `Script\AutoplayXCom2.u` i lokalizacje PL/EN w UTF-16LE. Logi: `.build\base-make.log` oraz `.build\mod-make.log`. Sukces budowania wymaga nowego, niepustego `.u`; stary pakiet nie może udawać poprawnej kompilacji.
 
-Alternatywnie otwórz `AutoplayXCom2.XCOM_sln` w ModBuddy WOTC. Źródła lokalizacji w Git są UTF-8; zalecaną ścieżką pakowania jest skrypt, który konwertuje je na format gry.
+Alternatywnie otwórz `AutoplayXCom2.XCOM_sln` w ModBuddy WOTC jako projekt edytora. Źródła lokalizacji w Git są UTF-8; zalecaną ścieżką pakowania jest skrypt, który konwertuje je na format gry.
 
-Po skompilowaniu włącz mod w launcherze WOTC (np. Alternative Mod Launcher). Dla instalacji ręcznej wypakuj katalog `AutoplayXCom2` do `XCOM 2\XCom2-WarOfTheChosen\XComGame\Mods`. Nie kopiuj samych plików `.uc` do instalacji gry.
+Po skompilowaniu użyj [instrukcji instalacji](AutoplayXCom2/INSTALL.pl.md), dołączanej również do wynikowego ZIP-a. Włącz mod w launcherze WOTC (np. Alternative Mod Launcher). Dla instalacji ręcznej wypakuj katalog `AutoplayXCom2` do `XCOM 2\XCom2-WarOfTheChosen\XComGame\Mods`. Nie kopiuj samych plików `.uc` do instalacji gry.
 
 ## Weryfikacja
 
-Wykonano kontrolę dostępnych publicznych deklaracji API oraz składni PowerShell i testy zabezpieczeń operacji plikowych narzędzia budowania. **Nie wykonano kompilacji UnrealScript ani testów w grze**: środowisko robocze jest linuksowe, bez SDK i gry.
+Wykonano kontrolę oryginalnych źródeł SDK przesłanych przez użytkownika, składni PowerShell oraz testy zabezpieczeń plikowych, zawartości paczki i konwersji polskiej lokalizacji. **Nie wykonano kompilacji UnrealScript ani testów w grze**: środowisko robocze jest linuksowe i ma źródła SDK, ale nie kompilator Windows ani grę.
 
 ```powershell
 # Przenośne testy ochrony istniejących plików SDK (bez kompilatora):
 pwsh -NoProfile -File .\tests\Test-BuildHelpers.ps1
 pwsh -NoProfile -File .\tests\Test-CollectSdkSources.ps1
+
+# Opcjonalna kontrola nazw klas i zdolności w lokalnym SDK (nie kompilacja):
+python .\tools\check-sdk-references.py --sdk 'D:\SteamLibrary\steamapps\common\XCOM 2 War of the Chosen SDK'
 ```
 
 Lista wymaganych prób w grze: [docs/TESTING.pl.md](docs/TESTING.pl.md). Pliki potrzebne do dalszej weryfikacji i sposób ich przekazania: [docs/SDK-FILES.pl.md](docs/SDK-FILES.pl.md).

@@ -2,6 +2,8 @@
 
 Nie wysyłaj całej gry, zapisów Steam, tokenów ani danych konta. Gra i SDK nie są instalowane w linuksowym środowisku projektu.
 
+**Źródła zostały już otrzymane jako `SrcOrig.rar` i sprawdzone.** Nie trzeba wysyłać ich ponownie. Wynik opisuje `SDK-AUDIT.pl.md`. Bieżący brakujący element to wynik rzeczywistej kompilacji na Windows: przy sukcesie `dist\AutoplayXCom2.zip`, przy błędzie logi z `.build`. RAR jest poprawnym formatem załącznika.
+
 ## Najpierw źródła SDK
 
 Zainstaluj **XCOM 2 War of the Chosen Development Tools** ze Steam. Typowa lokalizacja:

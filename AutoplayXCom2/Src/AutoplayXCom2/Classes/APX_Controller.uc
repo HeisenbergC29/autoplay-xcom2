@@ -7,6 +7,9 @@ var config int MaxActionsPerTurn;
 var config int MaxSameActionPerTurn;
 var config bool AutoEndTurn;
 var config bool AutoCompleteOwnedHacks;
+var config bool ExploreUnseenMap;
+var config bool AutoPlaceEvac;
+var config bool UseExplosiveGrenades;
 
 var localized string StatusOff;
 var localized string StatusActive;
@@ -36,8 +39,11 @@ var private array<ActionUse> ActionUses;
 var private string Status;
 var private int OwnedAbilityID;
 var private int OwnedSourceID;
+var private XComGameStateContext_Ability OwnedActionContext;
 var private UIHackingScreen OwnedHackScreen;
 var private float HackScreenAge;
+var private APX_ExplorationPlanner ExplorationPlanner;
+var private APX_AreaAttackPlanner AreaPlanner;
 
 static function APX_Controller GetOrCreate()
 {
@@ -72,14 +78,23 @@ function string GetStatusText()
     return Status @ "[" $ string(ToggleKey) $ "]";
 }
 
-function Stop(string Reason)
+function Stop(string Reason, optional bool bPreservePendingHack = false)
 {
     bEnabled = false;
     Status = StatusOff;
     UntilDecision = 0.0;
-    OwnedAbilityID = 0;
-    OwnedSourceID = 0;
+    // A user pause may happen before the hack UI has even appeared. Keep only
+    // the exact submitted context, so resuming cannot claim a later manual hack
+    // that happens to reuse the same soldier and ability IDs.
+    if (!bPreservePendingHack)
+    {
+        OwnedAbilityID = 0;
+        OwnedSourceID = 0;
+        OwnedActionContext = none;
+    }
     OwnedHackScreen = none;
+    if (AreaPlanner != none)
+        AreaPlanner.Cleanup();
     `log("Stopped:" @ Reason, , 'AutoplayXCom2');
 }
 
@@ -93,7 +108,7 @@ function Toggle()
 {
     if (bEnabled)
     {
-        Stop("User toggle");
+        Stop("User toggle", true);
         return;
     }
     // Also checked on every decision; never take over multiplayer or replays.
@@ -128,7 +143,7 @@ simulated event Tick(float DeltaTime)
         Toggle();
     bToggleWasDown = bToggleDown;
     if (bEnabled && PC.PlayerInput.PressedKeys.Find('Escape') != INDEX_NONE)
-        Stop("Escape");
+        Stop("Escape", true);
     if (!bEnabled)
         return;
 
@@ -155,8 +170,15 @@ simulated event Tick(float DeltaTime)
     if (HandleOwnedHack(DeltaTime))
         return;
 
-    if (`SCREENSTACK == none || `SCREENSTACK.IsInputBlocked
+    if (PC.IsBusy() || `SCREENSTACK == none || `SCREENSTACK.IsInputBlocked
         || UITacticalHUD(`SCREENSTACK.GetCurrentScreen()) == none)
+    {
+        Status = StatusModal;
+        return;
+    }
+    // Manual targeting remains part of the HUD rather than a separate screen.
+    // Leave it to the player instead of submitting an unrelated order beneath it.
+    if (UITacticalHUD(`SCREENSTACK.GetCurrentScreen()).GetTargetingMethod() != none)
     {
         Status = StatusModal;
         return;
@@ -197,6 +219,7 @@ function bool HandleOwnedHack(float DeltaTime)
     }
     Status = StatusModal;
     if (!AutoCompleteOwnedHacks || !Hack.bIsInited || Hack.OriginalContext == none
+        || OwnedActionContext == none || Hack.OriginalContext != OwnedActionContext
         || OwnedAbilityID == 0
         || Hack.OriginalContext.InputContext.AbilityRef.ObjectID != OwnedAbilityID
         || Hack.OriginalContext.InputContext.SourceObject.ObjectID != OwnedSourceID)
@@ -214,6 +237,7 @@ function bool HandleOwnedHack(float DeltaTime)
         Hack.HackEnded();
         OwnedAbilityID = 0;
         OwnedSourceID = 0;
+        OwnedActionContext = none;
         OwnedHackScreen = none;
         return true;
     }
@@ -251,12 +275,15 @@ function MakeDecision(XComTacticalController PC)
     local XComGameState_Unit UnitState, BestUnit;
     local XComGameState_Player PlayerState;
     local XComGameState_Ability Ability;
+    local XComGameStateContext_Ability SubmittedContext;
     local StateObjectReference PlayerRef;
     local AvailableAction Candidate, BestAction;
     local array<TTile> CandidatePath, BestPath;
+    local array<vector> CandidateLocations, BestLocations;
+    local vector CandidateAim, BestAim;
     local int TargetIndex, BestTargetIndex;
     local float Score, BestScore;
-    local bool bMove, bHavePlan, bSuccess;
+    local bool bMove, bArea, bHavePlan, bSuccess, bCanExplore;
 
     PlayerRef = `TACTICALRULES.GetCachedUnitActionPlayerRef();
     PlayerState = XComGameState_Player(`XCOMHISTORY.GetGameStateForObjectID(PlayerRef.ObjectID));
@@ -278,6 +305,10 @@ function MakeDecision(XComTacticalController PC)
         StopWithStatus("Per-turn action budget reached", StatusLimit);
         return;
     }
+    if (ExploreUnseenMap && ExplorationPlanner == none)
+        ExplorationPlanner = new(self) class'APX_ExplorationPlanner';
+    if (UseExplosiveGrenades && AreaPlanner == none)
+        AreaPlanner = new(self) class'APX_AreaAttackPlanner';
 
     BestScore = -10000.0;
     foreach `XCOMHISTORY.IterateByClassType(class'XComGameState_Unit', UnitState)
@@ -295,6 +326,8 @@ function MakeDecision(XComTacticalController PC)
             BestScore = Score;
             BestUnit = UnitState;
             bMove = false;
+            bArea = false;
+            BestLocations.Length = 0;
             bHavePlan = true;
         }
         if (class'APX_MissionPlanner'.static.ChooseInteraction(UnitState, Candidate, TargetIndex, Score)
@@ -305,6 +338,41 @@ function MakeDecision(XComTacticalController PC)
             BestScore = Score;
             BestUnit = UnitState;
             bMove = false;
+            bArea = false;
+            BestLocations.Length = 0;
+            bHavePlan = true;
+        }
+        CandidateLocations.Length = 0;
+        if (AutoPlaceEvac && class'APX_EvacPlanner'.static.ChoosePlacement(
+            UnitState, Candidate, CandidateLocations, Score) && Score > BestScore)
+        {
+            TargetIndex = Candidate.AvailableTargets.Length == 0 ? INDEX_NONE : 0;
+            if (CanUseAction(UnitState, Candidate, TargetIndex))
+            {
+                BestAction = Candidate;
+                BestTargetIndex = TargetIndex;
+                BestScore = Score;
+                BestUnit = UnitState;
+                BestLocations = CandidateLocations;
+                bMove = false;
+                bArea = false;
+                bHavePlan = true;
+            }
+        }
+        CandidateLocations.Length = 0;
+        if (UseExplosiveGrenades && AreaPlanner != none
+            && AreaPlanner.ChooseAction(UnitState, Candidate, TargetIndex,
+                CandidateLocations, CandidateAim, Score)
+            && Score > BestScore && CanUseAction(UnitState, Candidate, TargetIndex))
+        {
+            BestAction = Candidate;
+            BestTargetIndex = TargetIndex;
+            BestScore = Score;
+            BestUnit = UnitState;
+            BestLocations = CandidateLocations;
+            BestAim = CandidateAim;
+            bMove = false;
+            bArea = true;
             bHavePlan = true;
         }
         CandidatePath.Length = 0;
@@ -315,7 +383,43 @@ function MakeDecision(XComTacticalController PC)
             BestScore = Score;
             BestUnit = UnitState;
             bMove = true;
+            bArea = false;
+            BestLocations.Length = 0;
             bHavePlan = true;
+        }
+    }
+
+    // Explore only when the whole squad lacks an objective, attack or useful
+    // mission move. Sampling the player's fog never queries hidden enemies.
+    if (ExploreUnseenMap && ExplorationPlanner != none
+        && (!bHavePlan || BestScore < 15.0))
+    {
+        foreach `XCOMHISTORY.IterateByClassType(class'XComGameState_Unit', UnitState)
+        {
+            if (UnitState.GetAssociatedPlayerID() != PlayerRef.ObjectID
+                || UnitState.GetTeam() != eTeam_XCom || !UnitState.IsAbleToAct()
+                || UnitState.IsCivilian() || UnitState.GetMyTemplate().bIsCosmetic
+                || !class'APX_MissionPlanner'.static.HasLegalMove(UnitState))
+                continue;
+            bCanExplore = true;
+            CandidatePath.Length = 0;
+            if (ExplorationPlanner.ChooseMove(UnitState, CandidatePath, Score)
+                && Score > BestScore)
+            {
+                BestPath = CandidatePath;
+                BestScore = Score;
+                BestUnit = UnitState;
+                BestLocations.Length = 0;
+                bMove = true;
+                bArea = false;
+                bHavePlan = true;
+            }
+        }
+        if (bCanExplore && (!bHavePlan || BestScore <= 2.0)
+            && ExplorationPlanner.HasPendingSearch())
+        {
+            Status = StatusWaiting;
+            return;
         }
     }
 
@@ -343,16 +447,34 @@ function MakeDecision(XComTacticalController PC)
     {
         OwnedAbilityID = 0;
         OwnedSourceID = 0;
+        OwnedActionContext = none;
+        if (PC.m_kPathingPawn == none)
+        {
+            StopWithStatus("Movement visualizer is unavailable", StatusRejected);
+            return;
+        }
+        // The stock helper copies the human cursor's waypoints. They must not
+        // be applied to an independently planned route or a different soldier.
+        PC.m_kPathingPawn.ClearAllWaypoints();
         bSuccess = PC.GameStateMoveUnitSingle(XGUnit(BestUnit.GetVisualizer()), BestPath);
         `log("Move unit" @ BestUnit.ObjectID @ "tiles" @ BestPath.Length, , 'AutoplayXCom2');
     }
     else
     {
+        if (bArea && !AreaPlanner.PrepareForActivation(
+            BestUnit, BestAction, BestAim, BestLocations))
+        {
+            StopWithStatus("Grenade landing or affected objects changed", StatusRejected);
+            return;
+        }
         // Cache ownership before submitting; the action may create a hack UI.
         OwnedAbilityID = BestAction.AbilityObjectRef.ObjectID;
         OwnedSourceID = BestUnit.ObjectID;
         Ability = XComGameState_Ability(`XCOMHISTORY.GetGameStateForObjectID(OwnedAbilityID));
-        bSuccess = class'XComGameStateContext_Ability'.static.ActivateAbility(BestAction, BestTargetIndex);
+        SubmittedContext = class'XComGameStateContext_Ability'.static.ActivateAbility_ReturnContext(
+            BestAction, BestTargetIndex, BestLocations);
+        OwnedActionContext = SubmittedContext;
+        bSuccess = SubmittedContext != none;
         RecordAction(BestUnit, BestAction, BestTargetIndex);
         `log("Ability" @ Ability.GetMyTemplateName() @ "unit" @ BestUnit.ObjectID
             @ "target index" @ BestTargetIndex, , 'AutoplayXCom2');
@@ -365,6 +487,17 @@ function MakeDecision(XComTacticalController PC)
     ++ActionsThisTurn;
     if (BestScore > 2.0)
         ++MeaningfulActionsThisTurn;
+}
+
+simulated event Destroyed()
+{
+    if (AreaPlanner != none)
+        AreaPlanner.Cleanup();
+    ExplorationPlanner = none;
+    AreaPlanner = none;
+    OwnedActionContext = none;
+    OwnedHackScreen = none;
+    super.Destroyed();
 }
 
 function bool CanUseAction(XComGameState_Unit UnitState, AvailableAction Action, int TargetIndex)
@@ -416,6 +549,9 @@ defaultproperties
     MaxSameActionPerTurn=8
     AutoEndTurn=true
     AutoCompleteOwnedHacks=true
+    ExploreUnseenMap=true
+    AutoPlaceEvac=true
+    UseExplosiveGrenades=true
     bEnabled=false
     bAlwaysTick=true
     bHidden=true

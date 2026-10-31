@@ -9,6 +9,7 @@ Wyniki zapisuj osobno: PASS / FAIL / NIEURUCHOMIONY. Kompilacja nie potwierdza d
 3. Przyciskiem i F8 włącz/wyłącz automat kilkukrotnie w jednej turze, podczas ruchu, strzału, tury obcych, Lost oraz reakcji władcy. Po wyłączeniu może skończyć się tylko rozpoczęta akcja, bez kolejnej.
 4. Escape i pauza: brak nowych rozkazów. Po wczytaniu zapisu, restarcie misji i powrocie z kolejnej misji automat ma być wyłączony, panel pojedynczy.
 5. Otwórz menu, wybór celu, ekran przedmiotu i dialog fabularny. Automat nie może sam zamykać nieznanego ekranu ani rozgrywać pod nim tury.
+6. Wyłącz i włącz automat przed pojawieniem się jego ekranu hakowania, na ekranie wyboru nagrody oraz w czasie animacji hacka. Powinien wznowić tylko ten sam własny kontekst. Późniejszy ręczny hack tym samym żołnierzem i zdolnością nie może zostać przejęty.
 
 ## UI
 
@@ -23,8 +24,11 @@ Wyniki zapisuj osobno: PASS / FAIL / NIEURUCHOMIONY. Kompilacja nie potwierdza d
 - Weryfikacja każdej domyślnej nazwy umiejętności, ograniczeń ładunków, cooldownów, trafień, pancerza i osłon. Brak strzałów do ukrytych wrogów i VIP-a do schwytania.
 - Podpalenie/kwas na początku trasy i dalej na trasie: można wyjść z zagrożonego pola, ale nie przechodzić przez kolejne.
 - Ruch przez drzwi, różne piętra, drabiny i blokady; prawidłowy koszt AP oraz ruch dołączonego GREMLIN-a. Brak pętli i rozkazów bez AP.
+- Włącz automat po ustawieniu ręcznych punktów trasy: stara trasa nie może zostać dołączona do nowej ani do ruchu innego żołnierza. Przy ręcznym celowaniu automat ma czekać na zakończenie lub anulowanie celowania.
 - Panika, ogłuszenie, kontrola umysłu, przejęte jednostki: wyłącznie jednostki rzeczywiście należące do lokalnego gracza.
 - Żadnych dodatkowych AP, wymuszonego trafienia, odczytu ukrytego rzutu hacka ani sztucznego zwycięstwa.
+- Granaty Frag/Alien: skupiona grupa wrogów, sojusznik lub cywil w obszarze, VIP, obiekt celu, zbiornik paliwa na trasie i w wybuchu, piętra nad wybuchem, rzut i granatnik. Faktyczny punkt lądowania i lista trafionych obiektów muszą odpowiadać natywnej trajektorii. Brak przejęcia grafiki trajektorii gracza podczas samej oceny.
+- Eksploracja: brak widocznych wrogów, pełna kolejka pól, niedostępny cel dla jednego żołnierza, zmiana tury, zużycie wszystkich AP i przebudowa mapy. Nie może wystąpić nieskończone czekanie ani zniknięcie reszty niezeskanowanych pól po zapełnieniu kolejki.
 
 ## Cele i zakończenie misji
 
@@ -32,7 +36,7 @@ Każdy wiersz wymaga pełnego przebiegu od włączenia do prawidłowego zakończ
 
 | Rodzaj | Wymagane sprawdzenie |
 | --- | --- |
-| Eliminacja / zaopatrzenie | Zwycięstwo i ostatni niewykryty przeciwnik; obecnie brak pełnego przeszukiwania mapy |
+| Eliminacja / zaopatrzenie | Zwycięstwo i ostatni niewykryty przeciwnik; eksploracja niezbadanych pól oraz wrogowie przemieszczający się na odwiedzony teren |
 | Hakowanie / odzyskanie danych | Podejście, hack, legalny wybór nagrody, animacja, zaliczenie celu, wynik misji |
 | Zniszczenie / ochrona urządzenia | Atak na wrogi obiekt oznaczony jako cel i termin; brak ataku na urządzenie do ochrony; sprawdzić metadane poszczególnych typów celów |
 | Sabotaż obiektu / Blacksite | Interakcja ładunku / fiolki, istniejąca lub wymagana nowa strefa ewakuacji, cały żywy oddział |

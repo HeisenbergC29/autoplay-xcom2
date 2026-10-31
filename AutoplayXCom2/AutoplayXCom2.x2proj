@@ -10,6 +10,7 @@
     <ProjectGuid>{D73671C4-5386-4A1C-9542-5D209D3BD245}</ProjectGuid>
   </PropertyGroup>
   <ItemGroup>
+    <Content Include="INSTALL.pl.md"><SubType>Content</SubType></Content>
     <Folder Include="Config\" />
     <Folder Include="Localization\" />
     <Folder Include="Src\" />

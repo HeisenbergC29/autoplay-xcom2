@@ -21,19 +21,19 @@ if ($parseErrors.Count -gt 0) {
     throw ('build.ps1 has parser errors: ' + ($parseErrors.Message -join '; '))
 }
 
-# Load only the two filesystem helpers; do not execute the Windows-only entrypoint.
+# Load only filesystem helpers; do not execute the Windows-only entrypoint.
 $definitions = $ast.FindAll({
     param($node)
     $node -is [System.Management.Automation.Language.FunctionDefinitionAst]
 }, $true)
-foreach ($helperName in @('Reset-OwnedDirectory', 'Copy-MissingSdkSources')) {
+foreach ($helperName in @('Reset-OwnedDirectory', 'Copy-MissingSdkSources', 'Convert-LocalizationForGame', 'Copy-ModPayload')) {
     $definition = @($definitions | Where-Object Name -eq $helperName)
     if ($definition.Count -ne 1) { throw "Expected exactly one $helperName helper." }
     Invoke-Expression $definition[0].Extent.Text
 }
 
 # Resolve ownership metadata from literal assignments in the real build script.
-foreach ($variableName in @('markerName', 'markerContents')) {
+foreach ($variableName in @('markerName', 'markerContents', 'modName')) {
     $assignment = @($ast.FindAll({
         param($node)
         $node -is [System.Management.Automation.Language.AssignmentStatementAst] -and
@@ -114,7 +114,49 @@ try {
     Assert-True ([IO.File]::ReadAllText($preparedExisting) -eq 'local SDK patch') 'Repeated initialization overwrote an existing patch.'
     Assert-True ([IO.File]::ReadAllText($preparedMissing) -eq 'patch after first initialization') 'Repeated initialization replaced a later edit.'
 
-    Write-Host 'PASS: build.ps1 parses; unknown trees preserved; owned reset repeatable; missing SDK sources copied; existing patches preserved on repeat.'
+    # Real localized text must survive the exact packaging conversion, including
+    # on Windows PowerShell 5.1 whose script-source decoding differs from PS7.
+    $localization = Join-Path $fixture 'Localization'
+    New-Item -ItemType Directory -Path $localization | Out-Null
+    $localizedFile = Join-Path $localization 'AutoplayXCom2.pol'
+    $polishText = [string]::Concat('W', [char]0x0141, [char]0x0104, 'CZ AUTOPLAY')
+    [IO.File]::WriteAllText($localizedFile, $polishText, [Text.UTF8Encoding]::new($false))
+    Convert-LocalizationForGame $localization
+    $convertedBytes = [IO.File]::ReadAllBytes($localizedFile)
+    Assert-True ($convertedBytes.Length -gt 2 -and $convertedBytes[0] -eq 0xFF -and $convertedBytes[1] -eq 0xFE) 'Localization is missing a UTF-16LE BOM.'
+    Assert-True ([IO.File]::ReadAllText($localizedFile) -ceq $polishText) 'Polish characters changed during localization conversion.'
+    Convert-LocalizationForGame $localization
+    Assert-True ([Convert]::ToBase64String([IO.File]::ReadAllBytes($localizedFile)) -ceq [Convert]::ToBase64String($convertedBytes)) 'Repeated localization conversion changed bytes.'
+    Convert-LocalizationForGame (Join-Path $fixture 'MissingLocalization')
+
+    # Packaging must include the actual installation document and omit script
+    # sources from the distributable. The fixture bytes below test file copying,
+    # not a compiler or a valid game package.
+    $payloadSource = Join-Path $fixture 'PayloadSource'
+    $payloadStage = Join-Path $fixture 'PayloadStage'
+    $payloadOutput = Join-Path $fixture 'PayloadOutput'
+    foreach ($directory in @('Config', 'Localization', 'Src', 'Script')) {
+        New-Item -ItemType Directory -Path (Join-Path $payloadSource $directory) -Force | Out-Null
+    }
+    New-Item -ItemType Directory -Path $payloadStage, $payloadOutput | Out-Null
+    $realInstructions = Join-Path $repoRoot 'AutoplayXCom2/INSTALL.pl.md'
+    Copy-Item -LiteralPath $realInstructions -Destination (Join-Path $payloadSource 'INSTALL.pl.md')
+    [IO.File]::WriteAllText((Join-Path $payloadSource "$modName.XComMod"), '[mod]')
+    [IO.File]::WriteAllText((Join-Path $payloadSource 'Src/SourceOnly.uc'), 'fixture source')
+    [IO.File]::WriteAllText((Join-Path $payloadSource 'Script/Fixture.u'), 'copy-test fixture, not bytecode')
+    Copy-ModPayload $payloadSource $payloadStage -IncludeSource
+    Assert-True (Test-Path -LiteralPath (Join-Path $payloadStage 'Src/SourceOnly.uc')) 'Staging omitted mod sources.'
+    Assert-True (!(Test-Path -LiteralPath (Join-Path $payloadStage 'Script'))) 'Source staging copied an existing script package.'
+    Copy-ModPayload $payloadSource $payloadOutput
+    Assert-True (Test-Path -LiteralPath (Join-Path $payloadOutput 'Script/Fixture.u')) 'Distribution omitted script directory.'
+    Assert-True (!(Test-Path -LiteralPath (Join-Path $payloadOutput 'Src'))) 'Distribution unexpectedly contains script sources.'
+    Assert-True ((Get-FileHash -LiteralPath (Join-Path $payloadOutput 'INSTALL.pl.md')).Hash -eq (Get-FileHash -LiteralPath $realInstructions).Hash) 'Installation instructions changed during packaging.'
+    Remove-Item -LiteralPath (Join-Path $payloadSource 'INSTALL.pl.md')
+    $refused = $false
+    try { Copy-ModPayload $payloadSource $payloadOutput } catch { $refused = $true }
+    Assert-True $refused 'Packaging accepted a missing installation document.'
+
+    Write-Host 'PASS: build.ps1 parses; unknown trees preserved; SDK patches preserved; Polish UTF-16LE repeatable; install document included; source omitted from distribution.'
 }
 finally {
     Remove-Item -LiteralPath $fixture -Recurse -Force

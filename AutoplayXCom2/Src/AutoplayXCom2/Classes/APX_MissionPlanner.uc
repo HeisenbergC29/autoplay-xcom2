@@ -142,7 +142,12 @@ static function bool ChooseInteraction(XComGameState_Unit UnitState,
                 || AbilityName == 'Hack' || AbilityName == 'Hack_Chest')
                 && IsUnfinishedObject(ObjectState) && ObjectState.GetRequiresObjectiveGlint())
                 CandidateScore = 190;
-            else if (AbilityName == 'Knockout' && TargetUnit != none && HasObjectiveInfo(TargetUnit))
+            // The SDK's Knockout condition permits civilians generally; an
+            // objective component alone does not distinguish a captive from a
+            // friendly/neutral rescue VIP. Capture only the hostile VIP type.
+            else if (AbilityName == 'Knockout' && TargetUnit != none
+                && TargetUnit.GetMyTemplateName() == 'HostileVIPCivilian'
+                && HasObjectiveInfo(TargetUnit))
                 CandidateScore = 230;
             else if (AbilityName == 'CarryUnit' && TargetUnit != none
                 && !TargetUnit.bRemovedFromPlay && HasObjectiveInfo(TargetUnit))
@@ -219,7 +224,11 @@ static function bool FindGoal(XComGameState_Unit UnitState, out TTile GoalTile,
         if (OtherUnit.ObjectID == UnitState.ObjectID || OtherUnit.bRemovedFromPlay
             || OtherUnit.IsUnitAffectedByEffectName(class'X2AbilityTemplateManager'.default.BeingCarriedEffectName))
             continue;
+        // ObjectiveInfo also marks combat objectives. Do not rush into melee
+        // range of a hostile boss as though it were a civilian to rescue.
         if (HasObjectiveInfo(OtherUnit) && !OtherUnit.IsPlayerControlled()
+            && (!UnitState.IsEnemyUnit(OtherUnit)
+                || OtherUnit.GetMyTemplateName() == 'HostileVIPCivilian')
             && class'X2TacticalVisibilityHelpers'.static.IsUnitVisibleToLocalPlayer(OtherUnit.ObjectID, -1))
             ConsiderGoal(UnitState, OtherUnit.TileLocation, 95, false,
                 GoalTile, GoalValue, bCombatGoal, bFoundGoal);

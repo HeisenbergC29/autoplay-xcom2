@@ -35,11 +35,16 @@ $scriptRoot = Join-Path $SdkPath 'XComGame\Script'
 $packageSrc = Join-Path $srcRoot $modName
 $compiledPackage = Join-Path $scriptRoot "$modName.u"
 $workRoot = Join-Path $repoRoot '.build'
-$stage = Join-Path $workRoot $modName
+# Use the same SDK mod layout as ModBuddy and X2ModBuildCommon, including mod
+# configuration discovery by name, without relying on external staging support.
+$stage = Join-Path $SdkPath "XComGame\Mods\$modName"
 $distRoot = Join-Path $repoRoot 'dist'
 $markerName = '.apx-build-owned'
 $markerContents = 'AutoplayXCom2 build directory v1'
 
+if (!(Test-Path -LiteralPath (Join-Path $projectRoot 'INSTALL.pl.md') -PathType Leaf)) {
+    throw 'The project installation instructions are missing: AutoplayXCom2\INSTALL.pl.md.'
+}
 if (!(Test-Path -LiteralPath $compiler -PathType Leaf)) {
     throw "WOTC SDK compiler missing: $compiler. Install XCOM 2 War of the Chosen Development Tools from Steam (Windows)."
 }
@@ -84,6 +89,30 @@ function Copy-MissingSdkSources {
     }
 }
 
+function Convert-LocalizationForGame([string] $LocalizationPath) {
+    if (!(Test-Path -LiteralPath $LocalizationPath -PathType Container)) { return }
+    foreach ($file in Get-ChildItem -LiteralPath $LocalizationPath -File -Recurse) {
+        # ReadAllText detects an existing BOM, so repeating this conversion is
+        # safe and never changes the repository's UTF-8 source localization.
+        $contents = [IO.File]::ReadAllText($file.FullName, [Text.Encoding]::UTF8)
+        [IO.File]::WriteAllText($file.FullName, $contents, [Text.Encoding]::Unicode)
+    }
+}
+
+function Copy-ModPayload([string] $SourceRoot, [string] $Destination, [switch] $IncludeSource) {
+    $entries = @('Config', 'Localization', "$modName.XComMod", 'INSTALL.pl.md')
+    $entries += if ($IncludeSource) { 'Src' } else { 'Script' }
+    # Check all required entries before copying a partial installation payload.
+    foreach ($entry in $entries) {
+        if (!(Test-Path -LiteralPath (Join-Path $SourceRoot $entry))) {
+            throw "Required mod payload entry is missing: $entry in $SourceRoot"
+        }
+    }
+    foreach ($entry in $entries) {
+        Copy-Item -LiteralPath (Join-Path $SourceRoot $entry) -Destination $Destination -Recurse
+    }
+}
+
 function Invoke-SdkMake([string[]] $Arguments, [string] $LogName) {
     $logPath = Join-Path $workRoot $LogName
     Push-Location (Split-Path -Parent $compiler)
@@ -121,20 +150,9 @@ try {
     Reset-OwnedDirectory $packageSrc
     Copy-Item -Path (Join-Path $projectRoot "Src\$modName\*") -Destination $packageSrc -Recurse
     Reset-OwnedDirectory $stage
-    foreach ($entry in @('Config', 'Localization', 'Src', "$modName.XComMod")) {
-        $source = Join-Path $projectRoot $entry
-        if (Test-Path -LiteralPath $source) {
-            Copy-Item -LiteralPath $source -Destination $stage -Recurse
-        }
-    }
+    Copy-ModPayload $projectRoot $stage -IncludeSource
     # Keep source localization UTF-8 in Git; the game expects UTF-16LE with BOM.
-    $localizationPath = Join-Path $stage 'Localization'
-    if (Test-Path -LiteralPath $localizationPath) {
-        foreach ($file in Get-ChildItem -LiteralPath $localizationPath -File -Recurse) {
-            $contents = [IO.File]::ReadAllText($file.FullName, [Text.Encoding]::UTF8)
-            [IO.File]::WriteAllText($file.FullName, $contents, [Text.Encoding]::Unicode)
-        }
-    }
+    Convert-LocalizationForGame (Join-Path $stage 'Localization')
     # Preserve any old bytecode outside the SDK before forcing a fresh artifact.
     # It cannot accidentally satisfy the checks after a failed compiler invocation.
     if (Test-Path -LiteralPath $compiledPackage) {
@@ -158,9 +176,7 @@ try {
     New-Item -ItemType Directory -Path $distRoot -Force | Out-Null
     $output = Join-Path $distRoot $modName
     Reset-OwnedDirectory $output
-    foreach ($entry in @('Config', 'Localization', 'Script', "$modName.XComMod")) {
-        Copy-Item -LiteralPath (Join-Path $stage $entry) -Destination $output -Recurse
-    }
+    Copy-ModPayload $stage $output
     $archive = Join-Path $distRoot "$modName.zip"
     if (Test-Path -LiteralPath $archive) { Remove-Item -LiteralPath $archive }
     Compress-Archive -LiteralPath $output -DestinationPath $archive
