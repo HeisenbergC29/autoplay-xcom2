@@ -36,6 +36,14 @@ Narzędzie sprawdza obecność dosłownych odwołań do klas, skonfigurowanych n
 
 ## Co pozostaje wymagane
 
-Archiwum zawiera źródła, bez kompilatora i silnika. **Nie wykonano kompilacji UnrealScript, uruchomienia moda ani prób misji.** Testy PowerShell dotyczą rzeczywistych operacji plikowych narzędzi, a nie zachowania gry.
+Archiwum zawiera źródła, bez kompilatora i silnika. W lokalnym środowisku nie uruchomiono kompilatora ani gry. Testy PowerShell dotyczą rzeczywistych operacji plikowych narzędzi, a nie zachowania gry.
 
 Następny krok na Windows: pobrać aktualne repozytorium i wykonać `tools\build.ps1` z poprawną ścieżką SDK. Log `.build\mod-make.log` pozwoli naprawić błędy, których ręczne sprawdzenie źródeł nie wykrywa. Następnie konieczna jest lista prób z `TESTING.pl.md`.
+
+## Otrzymane logi pierwszej próby budowania
+
+`base-make.log` zakończył się `Success - 0 error(s), 1739 warning(s)`: przygotowanie bazowych pakietów SDK powiodło się. Ostrzeżenia dotyczą między innymi zasobów edytora i DLC; nie zatrzymały tej kompilacji.
+
+`mod-make.log` zakończył się `Failure - 1 error(s), 8 warning(s)`. Pierwszy błąd w `APX_MissionPlanner.uc` brzmiał `Booleans may not be out parameters`. Wszystkie trzy bezpośrednie parametry wyjściowe typu `bool` w dwóch funkcjach zastąpiono jedną strukturą `MissionGoal`; jej pola logiczne zachowują dotychczasowy wybór celu. To ograniczenie języka dodano również do narzędzia kontroli oraz czterech testów regresji.
+
+Po tej poprawce należy ponowić kompilację moda **bez `-BuildBase`**, wykorzystując już zbudowane pakiety bazowe. Nie potwierdzono jeszcze sukcesu poprawionej kompilacji ani działania w grze.

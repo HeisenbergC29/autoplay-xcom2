@@ -6,6 +6,16 @@ class APX_MissionPlanner extends Object
 var config int MaxCandidateTiles;
 var config float PreferredCombatRangeTiles;
 
+// UnrealScript cannot pass a bit-packed bool as an out parameter. Carry the
+// related result fields in one value whose structure can be passed by reference.
+struct MissionGoal
+{
+    var TTile Tile;
+    var float Value;
+    var bool bCombat;
+    var bool bFound;
+};
+
 // A component marks an actual mission unit (VIP/captive), rather than every civilian.
 static function bool HasObjectiveInfo(XComGameState_BaseObject StateObject)
 {
@@ -178,37 +188,37 @@ static function float TileDistance(TTile First, TTile Second)
 }
 
 static function ConsiderGoal(XComGameState_Unit UnitState, TTile CandidateTile,
-    float Priority, bool bCombat, out TTile GoalTile, out float GoalValue,
-    out bool bCombatGoal, out bool bFoundGoal)
+    float Priority, bool bCombat, out MissionGoal Goal)
 {
     local float Value;
     Value = Priority - TileDistance(UnitState.TileLocation, CandidateTile) * 0.25;
-    if (!bFoundGoal || Value > GoalValue)
+    if (!Goal.bFound || Value > Goal.Value)
     {
-        GoalTile = CandidateTile;
-        GoalValue = Value;
-        bCombatGoal = bCombat;
-        bFoundGoal = true;
+        Goal.Tile = CandidateTile;
+        Goal.Value = Value;
+        Goal.bCombat = bCombat;
+        Goal.bFound = true;
     }
 }
 
-static function bool FindGoal(XComGameState_Unit UnitState, out TTile GoalTile,
-    out bool bCombatGoal, out array<StateObjectReference> VisibleEnemies)
+static function bool FindGoal(XComGameState_Unit UnitState, out MissionGoal Goal,
+    out array<StateObjectReference> VisibleEnemies)
 {
     local XComGameState_InteractiveObject ObjectState;
     local XComGameState_Unit OtherUnit;
     local XComGameState_EvacZone EvacZone;
     local XComGameState_BattleData BattleData;
     local StateObjectReference EnemyRef;
-    local float GoalValue;
-    local bool bFoundGoal;
+    local MissionGoal EmptyGoal;
+
+    Goal = EmptyGoal;
 
     class'X2TacticalVisibilityHelpers'.static.GetAllVisibleEnemyUnitsForUnit(UnitState.ObjectID, VisibleEnemies);
     EvacZone = class'XComGameState_EvacZone'.static.GetEvacZone(eTeam_XCom);
     if (EvacZone != none && ShouldEvacuate(UnitState))
     {
-        GoalTile = EvacZone.CenterLocation;
-        bCombatGoal = false;
+        Goal.Tile = EvacZone.CenterLocation;
+        Goal.bFound = true;
         return true;
     }
 
@@ -216,7 +226,7 @@ static function bool FindGoal(XComGameState_Unit UnitState, out TTile GoalTile,
     {
         if (IsUnfinishedObject(ObjectState) && ObjectState.GetRequiresObjectiveGlint())
             ConsiderGoal(UnitState, ObjectState.TileLocation, 100, false,
-                GoalTile, GoalValue, bCombatGoal, bFoundGoal);
+                Goal);
     }
 
     foreach `XCOMHISTORY.IterateByClassType(class'XComGameState_Unit', OtherUnit)
@@ -231,12 +241,12 @@ static function bool FindGoal(XComGameState_Unit UnitState, out TTile GoalTile,
                 || OtherUnit.GetMyTemplateName() == 'HostileVIPCivilian')
             && class'X2TacticalVisibilityHelpers'.static.IsUnitVisibleToLocalPlayer(OtherUnit.ObjectID, -1))
             ConsiderGoal(UnitState, OtherUnit.TileLocation, 95, false,
-                GoalTile, GoalValue, bCombatGoal, bFoundGoal);
+                Goal);
         else if (OtherUnit.IsAlive() && OtherUnit.GetTeam() == eTeam_Neutral
             && OtherUnit.RescueRingRadius > 0
             && class'X2TacticalVisibilityHelpers'.static.IsUnitVisibleToLocalPlayer(OtherUnit.ObjectID, -1))
             ConsiderGoal(UnitState, OtherUnit.TileLocation, 80, false,
-                GoalTile, GoalValue, bCombatGoal, bFoundGoal);
+                Goal);
     }
 
     foreach VisibleEnemies(EnemyRef)
@@ -245,20 +255,20 @@ static function bool FindGoal(XComGameState_Unit UnitState, out TTile GoalTile,
         if (OtherUnit != none && OtherUnit.IsAlive() && !OtherUnit.bRemovedFromPlay
             && UnitState.IsEnemyUnit(OtherUnit))
             ConsiderGoal(UnitState, OtherUnit.TileLocation, 40, true,
-                GoalTile, GoalValue, bCombatGoal, bFoundGoal);
+                Goal);
     }
 
-    if (!bFoundGoal)
+    if (!Goal.bFound)
     {
         BattleData = XComGameState_BattleData(`XCOMHISTORY.GetSingleGameStateObjectForClass(class'XComGameState_BattleData', true));
         if (BattleData != none && VSizeSq(BattleData.MapData.ObjectiveLocation) > 1)
         {
-            GoalTile = `XWORLD.GetTileCoordinatesFromPosition(BattleData.MapData.ObjectiveLocation);
-            bCombatGoal = false;
-            bFoundGoal = TileDistance(UnitState.TileLocation, GoalTile) > 3;
+            Goal.Tile = `XWORLD.GetTileCoordinatesFromPosition(BattleData.MapData.ObjectiveLocation);
+            Goal.bCombat = false;
+            Goal.bFound = TileDistance(UnitState.TileLocation, Goal.Tile) > 3;
         }
     }
-    return bFoundGoal;
+    return Goal.bFound;
 }
 
 // Evaluate cover against the enemies the soldier can actually see. Hidden units
@@ -375,6 +385,7 @@ static function bool ChooseMove(XComGameState_Unit UnitState,
     local array<TTile> Tiles, CandidatePath;
     local array<StateObjectReference> VisibleEnemies;
     local TTile GoalTile, Tile, ClosestTile;
+    local MissionGoal Goal;
     local bool bCombatGoal, bSafe;
     local int Index, PathIndex, Stride;
     local float CurrentScore, CandidateScore, BestScore;
@@ -382,8 +393,10 @@ static function bool ChooseMove(XComGameState_Unit UnitState,
     Path.Length = 0;
     Score = 0;
     if (!HasLegalMove(UnitState)
-        || !FindGoal(UnitState, GoalTile, bCombatGoal, VisibleEnemies))
+        || !FindGoal(UnitState, Goal, VisibleEnemies))
         return false;
+    GoalTile = Goal.Tile;
+    bCombatGoal = Goal.bCombat;
     UnitVisualizer = XGUnit(UnitState.GetVisualizer());
     if (UnitVisualizer == none || UnitVisualizer.m_kReachableTilesCache == none)
         return false;

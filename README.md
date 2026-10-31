@@ -2,7 +2,7 @@
 
 Mod w UnrealScript automatyzujący działania oddziału w misji. Docelowa platforma: **Windows, XCOM 2: War of the Chosen z oficjalnymi dodatkami** (także Alien Hunters, Shen’s Last Gift i Tactical Legacy Pack). Nie jest przeznaczony dla podstawowego XCOM 2 bez WOTC ani trybu wieloosobowego.
 
-**Stan: niekompilowana wersja rozwojowa, nie gotowe wydanie do grania.** Repozytorium zawiera własne źródła moda i narzędzia budowania. Nie zawiera plików gry, SDK ani gotowego `.u`. Nie potwierdzono działania w grze ani pełnego ukończenia wszystkich typów misji. Sama obecność dodatków nie oznacza obsługi wszystkich ich skryptowanych etapów. Kod sprawdzono już względem przesłanych oryginalnych źródeł WOTC: [wyniki kontroli SDK](docs/SDK-AUDIT.pl.md).
+**Stan: wersja rozwojowa, bez potwierdzonej poprawnej kompilacji moda.** Repozytorium zawiera własne źródła moda i narzędzia budowania. Nie zawiera plików gry, SDK ani gotowego `.u`. Nie potwierdzono działania w grze ani pełnego ukończenia wszystkich typów misji. Sama obecność dodatków nie oznacza obsługi wszystkich ich skryptowanych etapów. Kod sprawdzono względem przesłanych oryginalnych źródeł WOTC, a następnie otrzymano logi rzeczywistej próby budowania na Windows: [wyniki kontroli SDK i kompilacji](docs/SDK-AUDIT.pl.md).
 
 ## Sterowanie
 
@@ -70,7 +70,7 @@ Po skompilowaniu użyj [instrukcji instalacji](AutoplayXCom2/INSTALL.pl.md), do�
 
 ## Weryfikacja
 
-Wykonano kontrolę oryginalnych źródeł SDK przesłanych przez użytkownika, składni PowerShell oraz testy zabezpieczeń plikowych, zawartości paczki i konwersji polskiej lokalizacji. **Nie wykonano kompilacji UnrealScript ani testów w grze**: środowisko robocze jest linuksowe i ma źródła SDK, ale nie kompilator Windows ani grę.
+Wykonano kontrolę oryginalnych źródeł SDK przesłanych przez użytkownika, składni PowerShell oraz testy zabezpieczeń plikowych, zawartości paczki i konwersji polskiej lokalizacji. Otrzymane logi Windows potwierdzają sukces budowania bazowych pakietów SDK (0 błędów). Kompilacja moda zatrzymała się na niedozwolonych parametrach `out bool` w planerze misji; zastąpiono je strukturą wyniku i dodano test regresji. **Ponowna kompilacja poprawionego moda i testy w grze pozostają wymagane.** Lokalne środowisko ma źródła SDK, ale nie kompilator Windows ani grę.
 
 ```powershell
 # Przenośne testy ochrony istniejących plików SDK (bez kompilatora):
@@ -79,6 +79,7 @@ pwsh -NoProfile -File .\tests\Test-CollectSdkSources.ps1
 
 # Opcjonalna kontrola nazw klas i zdolności w lokalnym SDK (nie kompilacja):
 python .\tools\check-sdk-references.py --sdk 'D:\SteamLibrary\steamapps\common\XCOM 2 War of the Chosen SDK'
+python -m unittest discover -s tests -p 'test_*.py' -v
 ```
 
 Lista wymaganych prób w grze: [docs/TESTING.pl.md](docs/TESTING.pl.md). Pliki potrzebne do dalszej weryfikacji i sposób ich przekazania: [docs/SDK-FILES.pl.md](docs/SDK-FILES.pl.md).

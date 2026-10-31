@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Check class references and configured ability names against a local SDK.
+"""Check class references, ability names and known compiler restrictions.
 
 This is a source-reference audit, NOT an UnrealScript compiler or game test.
 SDK sources stay on the local machine and are never copied to the repository.
@@ -18,6 +18,18 @@ def without_comments(source: str) -> str:
     return token.sub(lambda match: "" if match[0].startswith(("//", "/*")) else match[0], source)
 
 
+def forbidden_out_booleans(source: str) -> list[int]:
+    """Return lines containing the compiler-prohibited direct out bool type.
+
+    Mask comments and literals without changing positions. Boolean fields in an
+    out struct are legal, as are ordinary boolean inputs and function results.
+    """
+    tokens = re.compile(r'//[^\n]*|/\*.*?\*/|"(?:\\.|[^"\\])*"|\x27[^\x27\n]*\x27', re.S)
+    masked = tokens.sub(lambda match: re.sub(r'[^\n]', ' ', match[0]), source)
+    return [masked.count("\n", 0, match.start()) + 1
+            for match in re.finditer(r'\bout\s+(?:const\s+)?bool\b', masked, re.I)]
+
+
 def find_sdk_root(path: Path) -> Path:
     for candidate in (path, path / "Development" / "SrcOrig", path / "Development" / "Src"):
         if (candidate / "XComGame" / "Classes").is_dir():
@@ -34,6 +46,9 @@ def audit(sdk_root: Path, repo_root: Path) -> list[str]:
     source = {file: without_comments(file.read_text(encoding="utf-8-sig", errors="replace"))
               for file in mod_files}
     failures = []
+    for file in mod_files:
+        for line in forbidden_out_booleans(file.read_text(encoding="utf-8-sig")):
+            failures.append(f"{file.name}:{line}: UnrealScript forbids direct out bool parameters; use a result struct.")
     for file, contents in source.items():
         for name in sorted(set(re.findall(r"\bclass\s*'([A-Za-z_]\w*)'", contents, re.I))):
             if name.casefold() not in classes:
@@ -56,7 +71,7 @@ def audit(sdk_root: Path, repo_root: Path) -> list[str]:
         if name.casefold() not in classes:
             failures.append(f"WOTC source marker missing: {name}")
     if not failures:
-        print(f"PASS: {len(mod_files)} mod classes, SDK class references, {ability_count} configured ability names and WOTC markers.")
+        print(f"PASS: {len(mod_files)} mod classes, SDK class references, {ability_count} configured ability names, WOTC markers and out-boolean restriction.")
         print("Not checked by this tool: member signatures, compilation, native behavior or in-game mission completion.")
     return failures
 
