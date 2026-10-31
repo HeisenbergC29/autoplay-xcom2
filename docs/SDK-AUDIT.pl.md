@@ -47,3 +47,11 @@ Następny krok na Windows: pobrać aktualne repozytorium i wykonać `tools\build
 `mod-make.log` zakończył się `Failure - 1 error(s), 8 warning(s)`. Pierwszy błąd w `APX_MissionPlanner.uc` brzmiał `Booleans may not be out parameters`. Wszystkie trzy bezpośrednie parametry wyjściowe typu `bool` w dwóch funkcjach zastąpiono jedną strukturą `MissionGoal`; jej pola logiczne zachowują dotychczasowy wybór celu. To ograniczenie języka dodano również do narzędzia kontroli oraz czterech testów regresji.
 
 Po tej poprawce należy ponowić kompilację moda **bez `-BuildBase`**, wykorzystując już zbudowane pakiety bazowe. Nie potwierdzono jeszcze sukcesu poprawionej kompilacji ani działania w grze.
+
+## Druga próba — 01.11.2026
+
+Kolejny przesłany `mod-make.log` nie zgłasza poprzedniego problemu parametrów. Kompilacja zatrzymała się na trzech niekwalifikowanych wywołaniach `Stop(...)` w `APX_Controller.uc`, z komunikatem `'Stop' is not allowed here`.
+
+UnrealScript interpretuje taki zapis w treści funkcji jako specjalne polecenie `Stop` używane w stanach. Nie oznacza to zakazu natywnych metod `Stop` w SDK: kwalifikowane wywołania, takie jak `Audio.Stop()`, są prawidłowe. Nazwę własnej metody zmieniono na `StopAutoplay`, zarówno w kontrolerze, jak i panelu UI, i dodano cztery testy dla tego przypadku. Łącznie osiem testów preflight przechodzi; nie zastępują kompilatora ani testów w grze.
+
+Do kolejnej próby trzeba zaktualizować oba pliki: `APX_Controller.uc` oraz `APX_UITacticalControl.uc`. Poprawiony wcześniej `APX_MissionPlanner.uc` również musi pozostać aktualny. Bazowych pakietów SDK nie trzeba przebudowywać.

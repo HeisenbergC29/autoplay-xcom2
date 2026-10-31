@@ -70,7 +70,7 @@ Po skompilowaniu użyj [instrukcji instalacji](AutoplayXCom2/INSTALL.pl.md), do�
 
 ## Weryfikacja
 
-Wykonano kontrolę oryginalnych źródeł SDK przesłanych przez użytkownika, składni PowerShell oraz testy zabezpieczeń plikowych, zawartości paczki i konwersji polskiej lokalizacji. Otrzymane logi Windows potwierdzają sukces budowania bazowych pakietów SDK (0 błędów). Kompilacja moda zatrzymała się na niedozwolonych parametrach `out bool` w planerze misji; zastąpiono je strukturą wyniku i dodano test regresji. **Ponowna kompilacja poprawionego moda i testy w grze pozostają wymagane.** Lokalne środowisko ma źródła SDK, ale nie kompilator Windows ani grę.
+Wykonano kontrolę oryginalnych źródeł SDK przesłanych przez użytkownika, składni PowerShell oraz testy zabezpieczeń plikowych, zawartości paczki i konwersji polskiej lokalizacji. Otrzymane logi Windows potwierdzają sukces budowania bazowych pakietów SDK (0 błędów). W kolejnych próbach moda wykryto niedozwolone parametry `out bool` oraz konflikt niekwalifikowanych wywołań `Stop(...)` z poleceniem stanu. Parametry zastąpiono strukturą wyniku, a funkcję zatrzymywania nazwano `StopAutoplay` we wszystkich miejscach; oba problemy mają testy regresji. **Ponowna kompilacja poprawionego moda i testy w grze pozostają wymagane.** Lokalne środowisko ma źródła SDK, ale nie kompilator Windows ani grę.
 
 ```powershell
 # Przenośne testy ochrony istniejących plików SDK (bez kompilatora):

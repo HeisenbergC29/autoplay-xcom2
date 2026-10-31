@@ -1,4 +1,4 @@
-"""Regression checks for a restriction reported by the real WOTC compiler.
+"""Regression checks for restrictions reported by the real WOTC compiler.
 
 These test the preflight scanner, not UnrealScript compilation or gameplay.
 """
@@ -43,6 +43,48 @@ class OutBooleanRestrictionTests(unittest.TestCase):
         for file in (ROOT / "AutoplayXCom2/Src").rglob("*.uc"):
             with self.subTest(file=file.name):
                 self.assertEqual(CHECKS.forbidden_out_booleans(file.read_text()), [])
+
+
+class BareStopRestrictionTests(unittest.TestCase):
+    def test_rejects_calls_reported_by_compiler(self):
+        original = (
+            'Stop(Reason);\n'
+            'if (bEnabled) Stop("User toggle", true);\n'
+            'STOP("Escape", true);\n'
+        )
+        self.assertEqual(CHECKS.forbidden_bare_stop_calls(original), [1, 2, 3])
+
+    def test_accepts_state_statement_qualified_sdk_call_and_renamed_method(self):
+        valid = (
+            'state Paused { Begin: Stop; }\n'
+            'native function Stop();\n'
+            'function bool Stop(string Reason) {}\n'
+            'Audio.Stop();\n'
+            'Audio. /* qualified SDK call */ Stop();\n'
+            'function StopAutoplay(string Reason) {}\n'
+            'StopAutoplay("Escape", true);\n'
+            'Controller.StopAutoplay("HUD removed");\n'
+        )
+        self.assertEqual(CHECKS.forbidden_bare_stop_calls(valid), [])
+
+    def test_ignores_comments_and_literals(self):
+        source = (
+            '// Stop(Reason);\n'
+            '/* Stop("Escape"); */\n'
+            'var string Text = "Stop(Reason)";\n'
+            "var name Key = 'Stop()';\n"
+        )
+        self.assertEqual(CHECKS.forbidden_bare_stop_calls(source), [])
+
+    def test_controller_and_ui_share_renamed_stop_contract(self):
+        classes = ROOT / 'AutoplayXCom2/Src/AutoplayXCom2/Classes'
+        controller = (classes / 'APX_Controller.uc').read_text()
+        ui = (classes / 'APX_UITacticalControl.uc').read_text()
+        self.assertIn('function StopAutoplay(', controller)
+        self.assertIn('Controller.StopAutoplay(', ui)
+        for file in classes.glob('*.uc'):
+            with self.subTest(file=file.name):
+                self.assertEqual(CHECKS.forbidden_bare_stop_calls(file.read_text()), [])
 
 
 if __name__ == "__main__":

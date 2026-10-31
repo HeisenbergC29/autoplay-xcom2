@@ -30,6 +30,28 @@ def forbidden_out_booleans(source: str) -> list[int]:
             for match in re.finditer(r'\bout\s+(?:const\s+)?bool\b', masked, re.I)]
 
 
+def forbidden_bare_stop_calls(source: str) -> list[int]:
+    """Bare Stop(...) is parsed as the state Stop statement, not a call.
+
+    A proper Stop; state statement and qualified SDK calls such as Audio.Stop()
+    remain valid. Our controller uses StopAutoplay to avoid the ambiguity.
+    """
+    tokens = re.compile(r'//[^\n]*|/\*.*?\*/|"(?:\\.|[^"\\])*"|\x27[^\x27\n]*\x27', re.S)
+    masked = tokens.sub(lambda match: re.sub(r'[^\n]', ' ', match[0]), source)
+    failures = []
+    for match in re.finditer(r'\bstop\s*\(', masked, re.I):
+        prefix = masked[:match.start()].rstrip()
+        if prefix.endswith('.'):
+            continue
+        # SDK-native Stop declarations and explicit object.Stop() calls are
+        # legal. It is the statement-position call that the compiler rejects.
+        if re.search(r'\b(?:function|event|delegate)\s+(?:array\s*<\s*\w+\s*>\s+|\w+\s+)?$',
+                     masked[:match.start()], re.I):
+            continue
+        failures.append(masked.count("\n", 0, match.start()) + 1)
+    return failures
+
+
 def find_sdk_root(path: Path) -> Path:
     for candidate in (path, path / "Development" / "SrcOrig", path / "Development" / "Src"):
         if (candidate / "XComGame" / "Classes").is_dir():
@@ -47,8 +69,11 @@ def audit(sdk_root: Path, repo_root: Path) -> list[str]:
               for file in mod_files}
     failures = []
     for file in mod_files:
-        for line in forbidden_out_booleans(file.read_text(encoding="utf-8-sig")):
+        raw_source = file.read_text(encoding="utf-8-sig")
+        for line in forbidden_out_booleans(raw_source):
             failures.append(f"{file.name}:{line}: UnrealScript forbids direct out bool parameters; use a result struct.")
+        for line in forbidden_bare_stop_calls(raw_source):
+            failures.append(f"{file.name}:{line}: bare Stop(...) conflicts with the state statement; use StopAutoplay.")
     for file, contents in source.items():
         for name in sorted(set(re.findall(r"\bclass\s*'([A-Za-z_]\w*)'", contents, re.I))):
             if name.casefold() not in classes:
@@ -71,7 +96,7 @@ def audit(sdk_root: Path, repo_root: Path) -> list[str]:
         if name.casefold() not in classes:
             failures.append(f"WOTC source marker missing: {name}")
     if not failures:
-        print(f"PASS: {len(mod_files)} mod classes, SDK class references, {ability_count} configured ability names, WOTC markers and out-boolean restriction.")
+        print(f"PASS: {len(mod_files)} mod classes, SDK class references, {ability_count} configured ability names, WOTC markers and known parameter/Stop restrictions.")
         print("Not checked by this tool: member signatures, compilation, native behavior or in-game mission completion.")
     return failures
 

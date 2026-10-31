@@ -176,7 +176,7 @@ simulated event Removed()
     // Timers and run state never survive a tactical screen/load transition.
     if (Controller != none)
     {
-        Controller.Stop("HUD removed");
+        Controller.StopAutoplay("HUD removed");
         Controller.Destroy();
         Controller = none;
     }

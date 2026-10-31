@@ -78,7 +78,7 @@ function string GetStatusText()
     return Status @ "[" $ string(ToggleKey) $ "]";
 }
 
-function Stop(string Reason, optional bool bPreservePendingHack = false)
+function StopAutoplay(string Reason, optional bool bPreservePendingHack = false)
 {
     bEnabled = false;
     Status = StatusOff;
@@ -100,7 +100,7 @@ function Stop(string Reason, optional bool bPreservePendingHack = false)
 
 function StopWithStatus(string Reason, string DisplayStatus)
 {
-    Stop(Reason);
+    StopAutoplay(Reason);
     Status = DisplayStatus;
 }
 
@@ -108,7 +108,7 @@ function Toggle()
 {
     if (bEnabled)
     {
-        Stop("User toggle", true);
+        StopAutoplay("User toggle", true);
         return;
     }
     // Also checked on every decision; never take over multiplayer or replays.
@@ -143,14 +143,14 @@ simulated event Tick(float DeltaTime)
         Toggle();
     bToggleWasDown = bToggleDown;
     if (bEnabled && PC.PlayerInput.PressedKeys.Find('Escape') != INDEX_NONE)
-        Stop("Escape", true);
+        StopAutoplay("Escape", true);
     if (!bEnabled)
         return;
 
     if (`TACTICALRULES == none || !`TACTICALRULES.TacticalGameIsInPlay()
         || `TACTICALRULES.HasTacticalGameEnded())
     {
-        Stop("Mission ended or world changed");
+        StopAutoplay("Mission ended or world changed");
         return;
     }
     if (class'Engine'.static.GetEngine().IsMultiPlayerGame()
