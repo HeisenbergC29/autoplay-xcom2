@@ -1,0 +1,19 @@
+# Local build products and IDE state
+.build/
+dist/
+BuildCache/
+.vs/
+*.suo
+*.user
+*.x2proj.user
+*.log
+__pycache__/
+*.pyc
+
+# Never commit SDK/game assets or compiled packages
+*.u
+*.upk
+*.umap
+*.uncompressed_size
+*.XComSave
+sdk-for-review.zip

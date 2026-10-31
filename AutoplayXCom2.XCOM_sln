@@ -1,0 +1,21 @@
+Microsoft Visual Studio Solution File, Format Version 12.00
+# XCOM ModBuddy Solution File, Format Version 11.00
+VisualStudioVersion = 12.0.21005.1
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{5DAE07AF-E217-45C1-8DE7-FF99D6011E8A}") = "AutoplayXCom2", "AutoplayXCom2\AutoplayXCom2.x2proj", "{D73671C4-5386-4A1C-9542-5D209D3BD245}"
+EndProject
+Global
+    GlobalSection(SolutionConfigurationPlatforms) = preSolution
+        Debug|XCOM 2 = Debug|XCOM 2
+        Default|XCOM 2 = Default|XCOM 2
+    EndGlobalSection
+    GlobalSection(ProjectConfigurationPlatforms) = postSolution
+        {D73671C4-5386-4A1C-9542-5D209D3BD245}.Debug|XCOM 2.ActiveCfg = Debug|XCOM 2
+        {D73671C4-5386-4A1C-9542-5D209D3BD245}.Debug|XCOM 2.Build.0 = Debug|XCOM 2
+        {D73671C4-5386-4A1C-9542-5D209D3BD245}.Default|XCOM 2.ActiveCfg = Default|XCOM 2
+        {D73671C4-5386-4A1C-9542-5D209D3BD245}.Default|XCOM 2.Build.0 = Default|XCOM 2
+    EndGlobalSection
+    GlobalSection(SolutionProperties) = preSolution
+        HideSolutionNode = FALSE
+    EndGlobalSection
+EndGlobal

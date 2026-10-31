@@ -1,0 +1,14 @@
+[APX_UITacticalControl]
+EnableLabel="ENABLE AUTOPLAY"
+DisableLabel="STOP AUTOPLAY"
+IndicatorTooltip="Hover to show autoplay. F8 toggles; Escape stops."
+
+[APX_Controller]
+StatusOff="OFF"
+StatusActive="AUTOPLAY"
+StatusWaiting="WAITING FOR GAME"
+StatusModal="PAUSED: SCREEN / MENU"
+StatusNoPlan="STOP: MANUAL ACTION NEEDED"
+StatusRejected="STOP: ACTION REJECTED"
+StatusLimit="STOP: ACTION LIMIT"
+StatusUnavailable="UNAVAILABLE IN THIS MODE"

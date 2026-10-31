@@ -1,0 +1,14 @@
+[APX_UITacticalControl]
+EnableLabel="WŁĄCZ AUTOPLAY"
+DisableLabel="ZATRZYMAJ AUTOPLAY"
+IndicatorTooltip="Najedź, aby pokazać przycisk. F8 przełącza; Escape zatrzymuje."
+
+[APX_Controller]
+StatusOff="WYŁĄCZONY"
+StatusActive="AUTOPLAY"
+StatusWaiting="CZEKA NA GRĘ"
+StatusModal="PAUZA: EKRAN / MENU"
+StatusNoPlan="STOP: POTRZEBNA TWOJA AKCJA"
+StatusRejected="STOP: AKCJA ODRZUCONA"
+StatusLimit="STOP: LIMIT AKCJI"
+StatusUnavailable="NIEDOSTĘPNY W TYM TRYBIE"

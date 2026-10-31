@@ -1,0 +1,5 @@
+[mod]
+publishedFileId=0
+Title=Autoplay XCOM 2
+Description=Experimental tactical autoplay for XCOM 2 War of the Chosen. Requires in-game validation; see README.
+RequiresXPACK=true
