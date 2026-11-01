@@ -70,3 +70,11 @@ Druga grupa ma znaczenie funkcjonalne. Kompilator pomija przypisania pól `confi
 Poprawka usuwa wszystkie takie przypisania z kodu. Wartości liczbowe i wszystkie 27 nazw umiejętności znajdują się w `XComAutoplayXCom2.ini`; dziedziczony `DLCIdentifier` jest w `XComGame.ini`, zgodnie z bazową klasą `config(Game)`. Pozostałe właściwości aktorów i UI zostają w `defaultproperties`, ponieważ nie są polami konfiguracji.
 
 Kontrola sprawdza obecność wartości dla każdego zadeklarowanego pola `config`, zachowanie list oraz odrzucane przypisania, również dziedziczone z SDK. Poprawka wymaga ponownej kompilacji. Nie potwierdzono jeszcze odczytu konfiguracji ani działania autoplaya w grze.
+
+## Czwarta próba — kompilacja po migracji konfiguracji potwierdzona
+
+Kolejne logi otrzymane 01.11.2026 potwierdzają wynik `Success - 0 error(s), 8 warning(s)` zarówno dla bazowych bibliotek, jak i kompilacji moda. `mod-make.log` zawiera jawny zapis pakietu `AutoplayXCom2.u`.
+
+Wszystkie pozostałe ostrzeżenia dotyczą bibliotek SDK/DLC: jednego starego katalogu źródeł i siedmiu odwołań do zasobów narracji/modeli. Nie ma ostrzeżeń dla klas `AutoplayXCom2` ani `property is config`. Poprzednie 59 odrzuconych ustawień zniknęło.
+
+To potwierdzenie kompilacji kodu, nie wykonania dalszych kroków skryptu pakującego. Do sprawdzenia pozostają zawartość `dist/AutoplayXCom2.zip`, odczyt konfiguracji przez uruchomioną grę oraz próby misji z `TESTING.pl.md`. Nie ma potrzeby ponownego budowania tylko z powodu tych ośmiu znanych ostrzeżeń bibliotek SDK.

@@ -2,7 +2,7 @@
 
 Mod w UnrealScript automatyzujący działania oddziału w misji. Docelowa platforma: **Windows, XCOM 2: War of the Chosen z oficjalnymi dodatkami** (także Alien Hunters, Shen’s Last Gift i Tactical Legacy Pack). Nie jest przeznaczony dla podstawowego XCOM 2 bez WOTC ani trybu wieloosobowego.
 
-**Stan: wersja rozwojowa. Log Windows potwierdził kompilację i zapis `.u`, ale wykazał odrzucenie ustawień konfiguracji.** W aktualnych źródłach przeniesiono je do INI; ta poprawka wymaga ponownego zbudowania. Repozytorium nie zawiera plików gry, SDK ani gotowego `.u`. Nie potwierdzono działania w grze ani pełnego ukończenia wszystkich typów misji. Sama obecność dodatków nie oznacza obsługi wszystkich ich skryptowanych etapów. Szczegóły: [wyniki kontroli SDK i kompilacji](docs/SDK-AUDIT.pl.md).
+**Stan: wersja rozwojowa z potwierdzoną kompilacją Windows po poprawkach konfiguracji.** Najnowszy log potwierdza zapis `AutoplayXCom2.u`: 0 błędów, 8 ostrzeżeń bibliotek SDK i brak odrzucanych ustawień naszego moda. Repozytorium nie zawiera plików gry, SDK ani gotowego `.u`. Zawartość wynikowej paczki ZIP oraz działanie w grze pozostają do sprawdzenia; nie potwierdzono pełnego ukończenia wszystkich typów misji. Szczegóły: [wyniki kontroli SDK i kompilacji](docs/SDK-AUDIT.pl.md).
 
 ## Sterowanie
 
@@ -70,7 +70,7 @@ Po skompilowaniu użyj [instrukcji instalacji](AutoplayXCom2/INSTALL.pl.md), do�
 
 ## Weryfikacja
 
-Wykonano kontrolę oryginalnych źródeł SDK przesłanych przez użytkownika, składni PowerShell oraz testy zabezpieczeń plikowych, zawartości paczki i konwersji polskiej lokalizacji. Po poprawkach `out bool` i `Stop(...)` otrzymany log Windows potwierdził zapis `AutoplayXCom2.u`: **0 błędów, 67 ostrzeżeń**. Osiem dotyczyło zasobów SDK, a 59 odrzuconych przypisań `config` w naszym `defaultproperties`. Wszystkie te wartości, w tym 27 nazw umiejętności, znajdują się teraz w INI; testy kontrolują ich kompletność i brak odrzucanych przypisań. **Ponowne zbudowanie po migracji konfiguracji i testy w grze pozostają wymagane.** Lokalne środowisko ma źródła SDK, ale nie kompilator Windows ani grę.
+Wykonano kontrolę oryginalnych źródeł SDK przesłanych przez użytkownika, składni PowerShell oraz testy zabezpieczeń plikowych, zawartości paczki i konwersji polskiej lokalizacji. Po przeniesieniu ustawień do INI najnowsze logi Windows potwierdzają **0 błędów i 8 ostrzeżeń SDK**, zarówno dla bazy, jak i moda. `AutoplayXCom2.u` został zapisany, a wcześniejsze 59 odrzuconych przypisań `config` zniknęło. Wszystkie 27 nazw umiejętności jest w INI; testy kontrolują ich kompletność. **Kontrola wynikowego ZIP-a oraz testy w grze pozostają wymagane.** Lokalne środowisko ma źródła SDK i logi, ale nie kompilator Windows ani grę.
 
 ```powershell
 # Przenośne testy ochrony istniejących plików SDK (bez kompilatora):
