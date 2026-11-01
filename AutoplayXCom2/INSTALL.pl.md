@@ -1,17 +1,18 @@
 # Instalacja Autoplay XCOM 2
 
-Ta instrukcja dotyczy paczki **zawierającej `Script\AutoplayXCom2.u`**. Archiwum źródeł pobrane przez GitHub „Download ZIP” wymaga najpierw kompilacji opisanej w README repozytorium. Nie jest gotowym modem.
+Ta instrukcja dotyczy paczki **zawierającej `Script\AutoplayXCom2.u`**. Skompilowana paczka testowa jest przygotowana do instalacji. Archiwum źródeł pobrane przez GitHub „Download ZIP” nadal wymaga kompilacji opisanej w README repozytorium.
 
 ## Wymagania
 
-- XCOM 2: War of the Chosen na Windows. Mod jest przygotowywany dla gry z oficjalnymi dodatkami.
-- Launcher pozwalający włączać mody WOTC, np. Alternative Mod Launcher.
+- Docelowo: aktualna wersja **XCOM 2 Collection ze Steam na Windows**, uruchamiana jako **War of the Chosen**, z oficjalnymi dodatkami z kolekcji.
+- Autoplay jest jedynym modem. Nie wymaga Community Highlandera, Mod Config Menu ani innych dodatków z Workshop.
+- Włącz mod w launcherze obsługującym WOTC lub przez natywny plik konfiguracji opisany poniżej. Alternative Mod Launcher jest opcjonalnym launcherem, nie zależnością moda.
 - SDK jest potrzebne wyłącznie do budowania; do instalacji gotowej paczki z `.u` nie jest wymagane.
 
 ## Instalacja paczki po kompilacji
 
 1. Zamknij grę i launcher.
-2. Rozpakuj `AutoplayXCom2.zip` do:
+2. Rozpakuj `AutoplayXCom2-WOTC-0.1.0-alpha.zip` (albo własny zbudowany `AutoplayXCom2.zip`) do:
 
 ```text
 <SteamLibrary>\steamapps\common\XCOM 2\XCom2-WarOfTheChosen\XComGame\Mods\
@@ -31,9 +32,29 @@ Mods\AutoplayXCom2\Localization\AutoplayXCom2.int
 
 Nie twórz podwójnego katalogu `AutoplayXCom2\AutoplayXCom2`. Jeśli aktualizujesz ręcznie, zachowaj własne zmiany konfiguracji i zastąp katalog poprzedniej wersji, aby nie pozostawić starego `.u`.
 
-3. Uruchom launcher dla **War of the Chosen**. W AML odśwież listę modów; jeśli katalog lokalnych modów nie jest wykrywany, dodaj powyższy folder `XComGame\Mods` do katalogów modów w ustawieniach AML.
-4. Zaznacz **Autoplay XCOM 2** i uruchom WOTC. Nie trzeba włączać konsoli deweloperskiej.
+3. Uruchom launcher dla **War of the Chosen**, zaznacz **Autoplay XCOM 2** i uruchom WOTC. Collection to zestaw produktów; przy uruchomieniu należy wybrać dodatek War of the Chosen. Konsola deweloperska nie jest potrzebna.
+4. Jeżeli używasz AML, odśwież listę modów; jeśli lokalny mod nie jest wykrywany, dodaj powyższy folder `XComGame\Mods` do katalogów modów w ustawieniach AML. Nie instaluj żadnego drugiego moda jako zależności.
 5. Wczytaj misję. Automat zaczyna wyłączony. Na pierwszą próbę użyj osobnego zapisu testowego i wykonaj próby opisane w `docs/TESTING.pl.md` repozytorium.
+
+## Włączenie przez konfigurację gry
+
+Jeśli nie masz w launcherze listy modów, oryginalny WOTC obsługuje tablicę `ActiveMods` w klasie `Engine.XComModOptions`.
+
+1. Uruchom raz War of the Chosen i zamknij grę.
+2. Otwórz plik poniżej (w razie potrzeby utwórz go jako plik `.ini`, bez końcówki `.txt`):
+
+```text
+<Dokumenty>\My Games\XCOM2 War of the Chosen\XComGame\Config\XComModOptions.ini
+```
+
+3. W sekcji `[Engine.XComModOptions]` dodaj poniższy wpis. Dla konfiguracji z jednym modem powinna istnieć jedna aktywna pozycja `ActiveMods`:
+
+```ini
+[Engine.XComModOptions]
+ActiveMods="AutoplayXCom2"
+```
+
+4. Uruchom War of the Chosen przez Steam. Jeśli launcher nadpisze tę listę, użyj jego wyboru modów albo opcjonalnego AML. To natywna ścieżka konfiguracji potwierdzona w SDK; zachowanie konkretnego launchera wymaga sprawdzenia na Twojej instalacji.
 
 ## Użycie
 
@@ -81,4 +102,4 @@ Położenie jest liczone od środka prawej krawędzi. Bardziej ujemne `OffsetX` 
 - Log gry: `<Dokumenty>\My Games\XCOM2 War of the Chosen\XComGame\Logs\Launch.log`. Do zgłoszenia dołącz typ misji, etap i listę pozostałych modów.
 - Wyłączenie moda: odznacz go w launcherze. Bieżące włączenie autoplaya nie jest zapisywane w kampanii.
 
-Ta wersja wymaga kompilacji i prób w grze. Obecność paczki instalacyjnej nie jest potwierdzeniem pełnej obsługi każdej skryptowanej misji DLC; stan weryfikacji opisuje README repozytorium.
+Kompilację potwierdzono, a zawartość paczki i zależności binarne sprawdzono. Ta wersja **alpha nie ma jeszcze testów w działającej grze**. Nie potwierdzono pełnej obsługi każdej skryptowanej misji DLC ani konkretnego najnowszego numeru builda Steam. Stan weryfikacji opisuje README repozytorium.

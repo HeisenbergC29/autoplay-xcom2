@@ -78,3 +78,19 @@ Kolejne logi otrzymane 01.11.2026 potwierdzają wynik `Success - 0 error(s), 8 w
 Wszystkie pozostałe ostrzeżenia dotyczą bibliotek SDK/DLC: jednego starego katalogu źródeł i siedmiu odwołań do zasobów narracji/modeli. Nie ma ostrzeżeń dla klas `AutoplayXCom2` ani `property is config`. Poprzednie 59 odrzuconych ustawień zniknęło.
 
 To potwierdzenie kompilacji kodu, nie wykonania dalszych kroków skryptu pakującego. Do sprawdzenia pozostają zawartość `dist/AutoplayXCom2.zip`, odczyt konfiguracji przez uruchomioną grę oraz próby misji z `TESTING.pl.md`. Nie ma potrzeby ponownego budowania tylko z powodu tych ośmiu znanych ostrzeżeń bibliotek SDK.
+
+## Otrzymana i sprawdzona paczka instalacyjna
+
+Następnie otrzymano `AutoplayXCom2.zip` o rozmiarze 66 360 bajtów. CRC archiwum jest poprawne. Jest jeden katalog `AutoplayXCom2`, własny `.u`, trzy pliki konfiguracji, manifest `RequiresXPACK=true`, obie lokalizacje w UTF-16LE z BOM, instrukcja oraz znacznik narzędzia budowania. Konfiguracja, manifest i teksty odpowiadają źródłom repozytorium; listy zawierają wszystkie 27 zdolności.
+
+Statyczna kontrola `.u` potwierdziła 786 nazw, 464 importy i 773 eksporty, spójne zakresy tabel oraz dziewięć klas moda z oryginalnymi klasami bazowymi. Importy prowadzą wyłącznie do `Core`, `Engine`, `XComGame`; nie stwierdzono zależności od innych modów. Wszystkie importowane klasy są w przesłanym oryginalnym SDK lub należą do standardowych typów Core.
+
+Na tej podstawie przygotowano paczkę `release/AutoplayXCom2-WOTC-0.1.0-alpha.zip`. Zachowuje ona identyczny `.u`, konfigurację i napisy; zawiera uaktualnioną instrukcję oraz `BUILD-INFO.json`. [Profil zgodności i granice tego potwierdzenia](COMPATIBILITY.pl.md).
+
+Można powtórzyć kontrolę bez uruchamiania gry:
+
+```powershell
+python .\tools\check-compiled-package.py .\release\AutoplayXCom2-WOTC-0.1.0-alpha.zip
+```
+
+Ta kontrola oraz 14 testów parsera dotyczą struktury pliku, ścieżek ZIP, zależności i spójności hashy, nie wykonywania bytecode. Sprawdzenie paczki **nie potwierdza konkretnego numeru builda Steam, uruchomienia moda ani wykonania misji**. Następny etap to próba na docelowym czystym WOTC użytkownika.
