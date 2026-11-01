@@ -44,11 +44,13 @@ class ConfigDefaultsTests(unittest.TestCase):
                   if section == 'AutoplayXCom2.APX_CombatPlanner' and key.endswith('Abilities')]
         self.assertEqual(Counter(key for key, _ in combat), {
             'AttackAbilities': 16, 'HealAbilities': 4, 'StabilizeAbilities': 2,
-            'ReloadAbilities': 1, 'OverwatchAbilities': 3, 'HunkerAbilities': 1})
+            'ReloadAbilities': 1, 'OverwatchAbilities': 4, 'HunkerAbilities': 1,
+            'SupportAbilities': 1})
         self.assertEqual(len(combat), len(set(combat)))
         self.assertTrue({('AttackAbilities', 'StandardShot'), ('AttackAbilities', 'Rend'),
                          ('HealAbilities', 'GremlinHeal'), ('ReloadAbilities', 'Reload'),
-                         ('OverwatchAbilities', 'Overwatch')} <= set(combat))
+                         ('OverwatchAbilities', 'Overwatch'),
+                         ('SupportAbilities', 'AidProtocol')} <= set(combat))
 
     def test_dlc_identifier_uses_inherited_game_config(self):
         entries = CHECKS.read_config_entries(ROOT / 'AutoplayXCom2/Config/XComGame.ini')

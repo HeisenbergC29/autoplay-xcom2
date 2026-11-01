@@ -20,6 +20,7 @@
   <ItemGroup>
     <Content Include="Config\*.ini"><SubType>Content</SubType></Content>
     <Content Include="Localization\*.*"><SubType>Content</SubType></Content>
+    <Content Include="Diagnostics\*.ps1"><SubType>Content</SubType></Content>
     <Content Include="Src\AutoplayXCom2\Classes\*.uc"><SubType>Content</SubType></Content>
   </ItemGroup>
   <Import Project="$(MSBuildLocalExtensionPath)\XCOM2.targets" />

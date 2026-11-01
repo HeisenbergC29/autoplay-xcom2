@@ -108,6 +108,19 @@ Położenie jest liczone od środka prawej krawędzi. Bardziej ujemne `OffsetX` 
 
 ## Diagnoza
 
+Nowa kompilacja automatycznie rejestruje decyzje po pierwszym włączeniu autoplaya.
+Po misji, przed ponownym uruchomieniem gry, otwórz PowerShell w folderze
+`Mods\AutoplayXCom2\Diagnostics` i uruchom:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File '.\Collect-MissionRecording.ps1'
+```
+
+Raport ZIP pojawi się w `<Dokumenty>\AutoplayXCom2-Reports`. Skrypt działa także
+po usunięciu pobranego folderu źródeł. Załącz raport do zgłoszenia wraz z poziomem
+trudności, wynikiem misji i stratami. Szczegóły: `docs/mission-recording.pl.md`
+w repozytorium. To zapis diagnostyczny, nie film ani replay.
+
 - Stałe „PAUSED: SCREEN / MENU” na zwykłym HUD-zie w wersji `0.1.0-alpha`: pobierz aktualne źródła, ponownie zbuduj i zastąp cały folder moda; sama zmiana INI nie wystarczy. Po aktualizacji uruchom grę ponownie.
 - Jeśli aktualna kompilacja nadal czeka, prześlij `Launch.log` z `<Dokumenty>\My Games\XCOM2 War of the Chosen\XComGame\Logs`. Wpisy `AutoplayXCom2: Waiting:` oraz `UI stack:` wskazują rozpoznaną przyczynę; powtarzane są tylko po zmianie przyczyny.
 - Brak przycisku: sprawdź, czy uruchomiono WOTC, mod jest zaznaczony, istnieje plik `.u` i nie ma podwójnego katalogu.

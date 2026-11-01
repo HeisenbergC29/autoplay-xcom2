@@ -33,6 +33,7 @@ EXPECTED_CLASSES = {
     "APX_UITacticalControl": "UIPanel",
     "X2DownloadableContentInfo_AutoplayXCom2": "X2DownloadableContentInfo",
 }
+OPTIONAL_CLASSES = {"APX_MissionRecorder": "Object"}
 REQUIRED_FILES = {
     f"{ROOT}/AutoplayXCom2.XComMod",
     f"{ROOT}/INSTALL.pl.md",
@@ -45,7 +46,8 @@ REQUIRED_FILES = {
 }
 MAX_BINARY_BYTES = 32 * 1024 * 1024
 MAX_ARCHIVE_BYTES = 64 * 1024 * 1024
-OPTIONAL_FILES = {f"{ROOT}/.apx-build-owned", f"{ROOT}/BUILD-INFO.json"}
+OPTIONAL_FILES = {f"{ROOT}/.apx-build-owned", f"{ROOT}/BUILD-INFO.json",
+                  f"{ROOT}/Diagnostics/Collect-MissionRecording.ps1"}
 
 
 class InvalidPackage(ValueError):
@@ -205,11 +207,13 @@ def parse_ue3_package(data: bytes) -> dict:
     roots = Counter(root_for(obj) for obj in imports)
     require(set(roots) <= ALLOWED_PACKAGES, f"External package dependency: {sorted(set(roots) - ALLOWED_PACKAGES)}.")
     own_classes = [obj for obj in exports if obj["class_index"] == 0]
-    require(len(own_classes) == len(EXPECTED_CLASSES)
-            and {obj["name"] for obj in own_classes} == set(EXPECTED_CLASSES),
-            "Compiled package does not contain exactly the nine expected mod classes.")
+    class_names = {obj["name"] for obj in own_classes}
+    known_classes = EXPECTED_CLASSES | OPTIONAL_CLASSES
+    require(set(EXPECTED_CLASSES) <= class_names <= set(known_classes)
+            and len(own_classes) == len(class_names),
+            "Compiled package has missing, duplicate or unexpected mod classes.")
     for obj in own_classes:
-        require(obj["super_index"] != 0 and object_for(obj["super_index"])["name"] == EXPECTED_CLASSES[obj["name"]],
+        require(obj["super_index"] != 0 and object_for(obj["super_index"])["name"] == known_classes[obj["name"]],
                 f"Unexpected superclass for {obj['name']}.")
     payloads = sorted((obj["offset"], obj["offset"] + obj["size"]) for obj in exports if obj["size"])
     require(all(a[1] <= b[0] for a, b in zip(payloads, payloads[1:])), "Overlapping export payloads.")
@@ -299,12 +303,16 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("archive", type=Path)
     parser.add_argument("--json", type=Path, help="Optional path for the inspection report")
+    parser.add_argument("--require-recorder", action="store_true", help="Require the new mission-recording class; rejects older packages")
     args = parser.parse_args()
     try:
         report = inspect_zip(args.archive)
+        if args.require_recorder:
+            require("APX_MissionRecorder" in report["own_classes"], "Package predates mission recording; rebuild current sources.")
+            require(f"{ROOT}/Diagnostics/Collect-MissionRecording.ps1" in report["files"], "Mission report collector is missing from the installation package.")
         if args.json:
             args.json.write_text(json.dumps(report, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
-        print("PASS: installer paths/CRC, supported UE3 tables, stock package roots and nine mod classes.")
+        print("PASS: installer paths/CRC, supported UE3 tables, stock package roots and expected mod classes.")
         print("Dependencies:", ", ".join(report["import_roots"]))
         print("Binary SHA-256:", report["binary_sha256"])
         print(report["scope"])

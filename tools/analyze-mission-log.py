@@ -1,0 +1,278 @@
+#!/usr/bin/env python3
+"""Summarize APXREC mission observations from a WOTC log or report ZIP.
+
+The report describes recorded observations. It does not replay the game or infer
+hidden enemy actions, unobserved damage, or why a mission was lost.
+"""
+from __future__ import annotations
+
+import argparse
+from collections import Counter
+import json
+from pathlib import Path, PurePosixPath
+import re
+import stat
+import sys
+import zipfile
+
+MAX_LOG_BYTES = 128 * 1024 * 1024
+MAX_ARCHIVE_BYTES = 256 * 1024 * 1024
+MAX_ARCHIVE_ENTRIES = 32
+MAX_RECORDS = 100000
+KEY = re.compile(r'^[a-z_][a-z0-9_]*$')
+INTEGER = re.compile(r'^-?\d+$')
+DECIMAL = re.compile(r'^-?\d+(?:\.\d+)?$')
+
+
+def decode_log(data: bytes) -> str:
+    if data.startswith((b'\xff\xfe', b'\xfe\xff')):
+        return data.decode('utf-16', errors='replace')
+    return data.decode('utf-8-sig', errors='replace')
+
+
+def read_logs(path: Path) -> list[tuple[str, str]]:
+    if not zipfile.is_zipfile(path):
+        if path.stat().st_size > MAX_LOG_BYTES:
+            raise ValueError('Log exceeds the 128 MiB analysis limit.')
+        return [(path.name, decode_log(path.read_bytes()))]
+    logs = []
+    with zipfile.ZipFile(path) as archive:
+        entries = archive.infolist()
+        if len(entries) > MAX_ARCHIVE_ENTRIES:
+            raise ValueError('Report ZIP has too many entries.')
+        total = 0
+        names = set()
+        for entry in entries:
+            relative = PurePosixPath(entry.filename.replace('\\', '/'))
+            if relative.is_absolute() or '..' in relative.parts or ':' in str(relative):
+                raise ValueError('Unsafe ZIP entry path.')
+            if stat.S_ISLNK(entry.external_attr >> 16):
+                raise ValueError('ZIP symbolic links are not supported.')
+            key = str(relative).casefold()
+            if key in names:
+                raise ValueError('Duplicate ZIP entry name.')
+            names.add(key)
+            total += entry.file_size
+            if entry.file_size > MAX_LOG_BYTES or total > MAX_ARCHIVE_BYTES:
+                raise ValueError('Report ZIP exceeds the analysis size limit.')
+            if not entry.is_dir() and relative.suffix.casefold() == '.log':
+                logs.append((str(relative), decode_log(archive.read(entry))))
+    if not logs:
+        raise ValueError('Report ZIP contains no .log files.')
+    return logs
+
+
+def typed_value(key: str, value: str):
+    # IDs and sequence numbers are integers; keep the session identifier literal.
+    if key == 'session':
+        return value
+    if value.casefold() in ('true', 'false'):
+        return value.casefold() == 'true'
+    if INTEGER.fullmatch(value):
+        return int(value)
+    if DECIMAL.fullmatch(value):
+        return float(value)
+    return value
+
+
+def parse_record(line: str) -> dict | None:
+    marker = line.find('APXREC|')
+    if marker < 0:
+        return None
+    fields = {}
+    for fragment in line[marker + len('APXREC|'):].strip().split('|'):
+        if '=' not in fragment:
+            raise ValueError('incomplete key=value record')
+        key, value = fragment.split('=', 1)
+        if not KEY.fullmatch(key) or key in fields:
+            raise ValueError('invalid or duplicate record field')
+        fields[key] = typed_value(key, value)
+    if fields.get('v') != 1:
+        raise ValueError('unsupported recording version')
+    if not fields.get('session') or not isinstance(fields.get('seq'), int):
+        raise ValueError('missing session or sequence')
+    if not isinstance(fields.get('event'), str) or not fields['event']:
+        raise ValueError('missing event name')
+    return fields
+
+
+def action_family(ability: str) -> str:
+    if ability in {'Overwatch', 'PistolOverwatch', 'SniperRifleOverwatch', 'LongWatch'}:
+        return 'overwatch'
+    if ability == 'HunkerDown':
+        return 'hunker'
+    if ability in {'ThrowGrenade', 'LaunchGrenade'}:
+        return 'grenade'
+    if ability in {'Evac', 'PlaceEvacZone'}:
+        return 'evacuation'
+    if ability == 'Reload':
+        return 'reload'
+    if ability == 'AidProtocol':
+        return 'support'
+    return 'other'
+
+
+def summarize_session(session: str, records: list[dict]) -> dict:
+    records.sort(key=lambda item: item['seq'])
+    events = Counter(record['event'] for record in records)
+    chosen = [record for record in records if record['event'] == 'chosen']
+    accepted = [record for record in chosen if record.get('accepted') is True]
+    abilities = Counter(str(record.get('ability', 'unknown')) for record in accepted
+                        if record.get('kind') not in {'move', 'explore'})
+    families = Counter(action_family(ability) for ability, count in abilities.items()
+                       for _ in range(count))
+    result_frames = [record for record in records if record['event'] == 'result']
+    interrupted = [record for record in result_frames
+                   if str(record.get('interruption', '')).casefold() == 'einterruptionstatus_interrupt']
+    # Interrupt contexts precede resolution and can carry a default hit enum.
+    # Count the resumed/completed context, not that provisional frame, as a roll.
+    results = [record for record in result_frames
+               if str(record.get('interruption', '')).casefold() != 'einterruptionstatus_interrupt']
+    hit_results = Counter(str(record.get('hit', 'unknown')) for record in results)
+    observed_losses = Counter()
+    deaths = set()
+    last_units = {}
+    for record in records:
+        if record['event'] != 'unit' or 'id' not in record:
+            continue
+        unit = (str(record.get('scope', 'unknown')), record['id'])
+        previous = last_units.get(unit)
+        if previous:
+            if isinstance(previous.get('hp'), (int, float)) and isinstance(record.get('hp'), (int, float)):
+                observed_losses[unit[0]] += max(0, previous['hp'] - record['hp'])
+            if previous.get('alive') is True and record.get('alive') is False:
+                deaths.add(unit)
+        last_units[unit] = record
+    sequences = [record['seq'] for record in records]
+    sequence_gaps = sum(max(0, right - left - 1) for left, right in zip(sequences, sequences[1:]))
+    start = next((record for record in records if record['event'] == 'start'), {})
+    ends = [record for record in records if record['event'] == 'end']
+    outcome = ends[-1].get('outcome', 'unknown') if ends else 'unknown'
+    weak_shots = [record for record in accepted if isinstance(record.get('chance'), (int, float))
+                  and 0 <= record['chance'] < 35]
+    unsupported = Counter(str(record.get('ability', 'unknown')) for record in records
+                          if record['event'] == 'unsupported'
+                          or (record['event'] == 'candidate' and record.get('kind') in {'unsupported', 'unhandled'})
+                          or (record['event'] == 'ability' and record.get('handler') == 'unhandled'
+                              and record.get('code') == 'AA_Success' and record.get('input') is True))
+    warnings = []
+    if not start:
+        warnings.append('Recording starts mid-session; the start record is missing.')
+    if not ends:
+        warnings.append('No end record; mission outcome is unknown and the recording may be incomplete.')
+    if sequence_gaps:
+        warnings.append(f'{sequence_gaps} sequence numbers missing; observations are incomplete.')
+    if events['limit']:
+        warnings.append('Recorder reached its configured record limit.')
+    if ends and isinstance(ends[-1].get('history_pending'), int) and ends[-1]['history_pending'] > 0:
+        warnings.append(f"{ends[-1]['history_pending']} history frames remain unrecorded; action results are incomplete.")
+    return {
+        'session': session,
+        'mission': start.get('mission', 'unknown'),
+        'difficulty': start.get('difficulty', 'unknown'),
+        'outcome': outcome,
+        'events': dict(sorted(events.items())),
+        'accepted_actions': len(accepted),
+        'rejected_actions': sum(record.get('accepted') is False for record in chosen),
+        'abilities': dict(sorted(abilities.items())),
+        'action_families': dict(sorted(families.items())),
+        'moves': sum(record.get('kind') in {'move', 'explore'} for record in accepted),
+        'hit_results': dict(sorted(hit_results.items())),
+        'interrupted_result_frames': len(interrupted),
+        'recorded_misses': sum(count for hit, count in hit_results.items()
+                               if hit.casefold() in {'miss', 'ehit_miss'}),
+        'observed_hp_loss': dict(sorted(observed_losses.items())),
+        'observed_deaths': dict(sorted(Counter(scope for scope, _ in deaths).items())),
+        'low_chance_actions': weak_shots,
+        'unsupported_abilities': dict(sorted(unsupported.items())),
+        'warnings': warnings,
+        'records': records,
+    }
+
+
+def analyze_logs(logs: list[tuple[str, str]]) -> dict:
+    sessions = {}
+    malformed = []
+    seen = {}
+    duplicate_count = 0
+    record_count = 0
+    for filename, content in logs:
+        for number, line in enumerate(content.splitlines(), 1):
+            try:
+                record = parse_record(line)
+            except ValueError as error:
+                malformed.append({'file': filename, 'line': number, 'reason': str(error)})
+                continue
+            if record is None:
+                continue
+            record_count += 1
+            if record_count > MAX_RECORDS:
+                raise ValueError('Recording exceeds the analysis record limit.')
+            key = (record['session'], record['seq'])
+            if key in seen:
+                duplicate_count += 1
+                if seen[key] != record:
+                    malformed.append({'file': filename, 'line': number,
+                                      'reason': 'conflicting record with same session and sequence'})
+                continue
+            seen[key] = record.copy()
+            record['log_file'] = filename
+            record['log_line'] = number
+            sessions.setdefault(record['session'], []).append(record)
+    return {
+        'format_version': 1,
+        'input_logs': [name for name, _ in logs],
+        'record_count': len(seen),
+        'duplicate_records': duplicate_count,
+        'malformed_records': malformed,
+        'sessions': [summarize_session(name, records) for name, records in sorted(sessions.items())],
+        'limitations': [
+            'Observed HP losses are changes between snapshots, not a complete damage ledger.',
+            'Enemy snapshots contain only player-visible contacts; disappearance is not a confirmed kill.',
+            'Candidate scores describe planner preferences, not proven reasons for victory or defeat.',
+            'Missing logs or end markers do not establish a mission result.',
+        ],
+    }
+
+
+def human_summary(report: dict) -> str:
+    lines = [f"APXREC records: {report['record_count']}; sessions: {len(report['sessions'])}"]
+    for session in report['sessions']:
+        lines.append(f"Session {session['session']}: mission={session['mission']}, "
+                     f"difficulty={session['difficulty']}, outcome={session['outcome']}")
+        lines.append(f"  Accepted actions={session['accepted_actions']}, moves={session['moves']}, "
+                     f"recorded misses={session['recorded_misses']}")
+        families = session['action_families']
+        lines.append('  ' + ', '.join(f'{name}={families.get(name, 0)}'
+                                     for name in ['overwatch', 'hunker', 'grenade', 'reload', 'support', 'evacuation']))
+        if session['unsupported_abilities']:
+            lines.append('  Recorded unsupported abilities: ' + ', '.join(session['unsupported_abilities']))
+        for warning in session['warnings']:
+            lines.append('  Warning: ' + warning)
+    if report['malformed_records']:
+        lines.append(f"Warning: {len(report['malformed_records'])} malformed/conflicting records.")
+    if not report['sessions']:
+        lines.append('No APXREC mission recording found. Enable recording and use a newly compiled mod.')
+    lines.append('This is an observation summary, not a replay or proof of tactical correctness.')
+    return '\n'.join(lines)
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('input', type=Path, help='Launch.log or ZIP created by collect-mission-recording.ps1')
+    parser.add_argument('--json', type=Path, help='Write detailed JSON report (refuses an existing file)')
+    args = parser.parse_args()
+    try:
+        report = analyze_logs(read_logs(args.input))
+        if args.json:
+            with args.json.open('x', encoding='utf-8') as output:
+                json.dump(report, output, ensure_ascii=False, indent=2)
+                output.write('\n')
+    except (OSError, ValueError, zipfile.BadZipFile) as error:
+        parser.error(str(error))
+    print(human_summary(report))
+    return 0 if report['sessions'] else 1
+
+
+if __name__ == '__main__':
+    sys.exit(main())

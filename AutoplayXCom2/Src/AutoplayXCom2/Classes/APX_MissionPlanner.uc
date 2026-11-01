@@ -1,7 +1,8 @@
 // Tactical mission actions use the normal rules cache; never complete objectives by force.
 class APX_MissionPlanner extends Object
     config(AutoplayXCom2)
-    dependson(X2GameRuleset, X2TacticalGameRulesetDataStructures, XComWorldData);
+    dependson(X2GameRuleset, X2TacticalGameRulesetDataStructures, XComWorldData,
+        X2GameRulesetVisibilityDataStructures, XGTacticalGameCoreNativeBase);
 
 var config int MaxCandidateTiles;
 var config float PreferredCombatRangeTiles;
@@ -305,8 +306,8 @@ static function bool HasCombatThreats(XComGameState_Unit UnitState)
     return VisibleEnemies.Length > 0;
 }
 
-// This is a conservative directional-cover heuristic, not a hypothetical shot
-// preview. Solid walls/peek tiles and enemy movement can change actual LOS.
+// Directional cover and tile LOS estimate exposure, not next-turn hit chance.
+// Enemy movement and ability conditions can still change the eventual shot.
 static function float DirectionalRisk(int CoverLevel, float Distance,
     bool bCanTakeCover, bool bMeleeOnly)
 {
@@ -330,6 +331,15 @@ static function float CombinedExposure(float SumRisk, float WorstRisk, float Hea
     return (SumRisk * 0.65 + WorstRisk * 0.75) * (1.0 + (1.0 - FClamp(HealthFraction, 0.0, 1.0)) * 0.6);
 }
 
+static function float KnownThreatRisk(float Risk, bool bClearLOS, bool bMeleeOnly)
+{
+    // An enemy behind a solid obstruction is a possible next-turn threat, not
+    // an immediate uncovered shot. Melee danger still depends on proximity.
+    if (!bClearLOS && !bMeleeOnly)
+        return Risk * 0.35;
+    return Risk;
+}
+
 static function float ExposureRisk(XComGameState_Unit UnitState, TTile Tile,
     array<StateObjectReference> VisibleEnemies)
 {
@@ -339,6 +349,9 @@ static function float ExposureRisk(XComGameState_Unit UnitState, TTile Tile,
     local float Angle, Risk, SumRisk, WorstRisk;
     local ECoverType Cover;
     local int CoverLevel;
+    local GameRulesCache_VisibilityInfo Visibility;
+    local TTile EnemyTile;
+    local bool bClearLOS;
 
     TargetLocation = `XWORLD.GetPositionFromTileCoordinates(Tile);
     foreach VisibleEnemies(EnemyRef)
@@ -356,6 +369,9 @@ static function float ExposureRisk(XComGameState_Unit UnitState, TTile Tile,
             CoverLevel = 1;
         Risk = DirectionalRisk(CoverLevel, TileDistance(Tile, Enemy.TileLocation),
             UnitState.GetMyTemplate().bCanTakeCover, Enemy.IsMeleeOnly());
+        EnemyTile = Enemy.TileLocation;
+        bClearLOS = `XWORLD.CanSeeTileToTile(EnemyTile, Tile, Visibility);
+        Risk = KnownThreatRisk(Risk, bClearLOS, Enemy.IsMeleeOnly());
         SumRisk += Risk;
         WorstRisk = FMax(WorstRisk, Risk);
     }
@@ -432,6 +448,64 @@ static function float ScoreRouteAdvance(float CurrentCohesion, float CandidateCo
     return 25.0 + FClamp(CandidateCohesion - CurrentCohesion, -6.0, 8.0);
 }
 
+static function int AdvanceCoverLevel(XComGameState_Unit UnitState, TTile Tile, TTile GoalTile)
+{
+    local vector GoalLocation, TargetLocation;
+    local float Angle;
+    local ECoverType Cover;
+
+    if (!UnitState.GetMyTemplate().bCanTakeCover)
+        return 0;
+    GoalLocation = `XWORLD.GetPositionFromTileCoordinates(GoalTile);
+    TargetLocation = `XWORLD.GetPositionFromTileCoordinates(Tile);
+    Cover = `XWORLD.GetCoverTypeForTarget(GoalLocation, TargetLocation, Angle);
+    if (Cover == CT_Standing)
+        return 2;
+    if (Cover == CT_MidLevel)
+        return 1;
+    return 0;
+}
+
+static function float AdvanceEndpointScore(float RouteProgress, int CoverLevel)
+{
+    // Prefer cover when it costs only a little progress. Progress is measured
+    // along the actual A* route, so a necessary detour remains useful.
+    return RouteProgress * 2.0 + float(Clamp(CoverLevel, 0, 2)) * 2.5;
+}
+
+static function float FiringPositionValue(float Distance, float PreferredRange,
+    bool bClearLOS, bool bFlanking, bool bHighGround)
+{
+    local float Value;
+
+    // Geometry through a wall cannot justify a move to "flank" a visible unit.
+    if (!bClearLOS)
+        return -20.0;
+    Value = -Abs(Distance - PreferredRange);
+    if (bFlanking && Distance <= 15.0)
+        Value += 14.0;
+    if (bHighGround && Distance <= 18.0)
+        Value += 5.0;
+    return Value;
+}
+
+static function bool IsKnownCombatTile(TTile Tile)
+{
+    local FOWTileStatus FogStatus;
+    local byte GameplayFlags;
+    local CachedCoverAndPeekData CoverData;
+    local TTile VisibilityTile;
+
+    if (`XWORLD.IsTileOutOfRange(Tile))
+        return false;
+    CoverData = `XWORLD.GetCachedCoverAndPeekData(Tile);
+    VisibilityTile = Tile;
+    if (CoverData.bDefaultTileValid != 0)
+        VisibilityTile = CoverData.DefaultVisibilityCheckTile;
+    `XWORLD.GetTileFOWValue(VisibilityTile, FogStatus, GameplayFlags);
+    return FogStatus != eFOWTileStatus_NeverSeen;
+}
+
 static function float OffensivePositionScore(XComGameState_Unit UnitState, TTile Tile,
     array<StateObjectReference> VisibleEnemies)
 {
@@ -440,6 +514,9 @@ static function float OffensivePositionScore(XComGameState_Unit UnitState, TTile
     local vector SourceLocation, EnemyLocation;
     local ECoverType Cover;
     local float Distance, Angle, Value, BestValue;
+    local GameRulesCache_VisibilityInfo Visibility;
+    local TTile EnemyTile;
+    local bool bClearLOS;
 
     BestValue = -10000.0;
     SourceLocation = `XWORLD.GetPositionFromTileCoordinates(Tile);
@@ -450,15 +527,13 @@ static function float OffensivePositionScore(XComGameState_Unit UnitState, TTile
             || !UnitState.IsEnemyUnit(Enemy))
             continue;
         Distance = TileDistance(Tile, Enemy.TileLocation);
-        Value = -Abs(Distance - default.PreferredCombatRangeTiles);
         EnemyLocation = `XWORLD.GetPositionFromTileCoordinates(Enemy.TileLocation);
         Cover = `XWORLD.GetCoverTypeForTarget(SourceLocation, EnemyLocation, Angle);
-        // Flanking is useful only against cover users within practical range.
-        // Keep this bounded: geometry alone does not establish a legal shot.
-        if (Enemy.GetMyTemplate().bCanTakeCover && Cover == CT_None && Distance <= 15.0)
-            Value += 14.0;
-        if (Tile.Z > Enemy.TileLocation.Z && Distance <= 18.0)
-            Value += 5.0;
+        EnemyTile = Enemy.TileLocation;
+        bClearLOS = `XWORLD.CanSeeTileToTile(Tile, EnemyTile, Visibility);
+        Value = FiringPositionValue(Distance, default.PreferredCombatRangeTiles,
+            bClearLOS, Enemy.GetMyTemplate().bCanTakeCover && Cover == CT_None,
+            Tile.Z > EnemyTile.Z);
         BestValue = FMax(BestValue, Value);
     }
     if (BestValue == -10000.0)
@@ -520,11 +595,12 @@ static function bool ChooseRoutePrefix(XComGameState_Unit UnitState,
     local array<TTile> FullPath, CandidatePath;
     local int Index, PathIndex;
     local bool bSafe, bRequireSupport;
-    local float StartSupport, PathCost;
+    local float StartSupport, PathCost, CandidateValue, BestValue;
 
     Path.Length = 0;
     bRequireSupport = !ShouldEvacuate(UnitState);
     StartSupport = NearestSupportDistance(UnitState, UnitState.TileLocation);
+    BestValue = -1000000.0;
     if (!class'X2PathSolver'.static.BuildPath(UnitState,
         UnitState.TileLocation, GoalTile, FullPath, false))
         return false;
@@ -555,11 +631,17 @@ static function bool ChooseRoutePrefix(XComGameState_Unit UnitState,
         }
         if (bSafe)
         {
-            Path = CandidatePath;
-            return true;
+            CandidateValue = AdvanceEndpointScore(float(Index),
+                AdvanceCoverLevel(UnitState, FullPath[Index], GoalTile));
+            CandidateValue += SquadPositionScore(UnitState, FullPath[Index]);
+            if (CandidateValue > BestValue)
+            {
+                BestValue = CandidateValue;
+                Path = CandidatePath;
+            }
         }
     }
-    return false;
+    return Path.Length > 1;
 }
 
 static function bool ChooseMove(XComGameState_Unit UnitState,
@@ -624,6 +706,7 @@ static function bool ChooseMove(XComGameState_Unit UnitState,
         PathCost = UnitVisualizer.m_kReachableTilesCache.GetPathCostToTile(Tile);
         if (TileDistance(Tile, UnitState.TileLocation) < 1
             || class'XComPath'.static.TileContainsHazard(UnitState, Tile)
+            || (bCombatGoal && !IsKnownCombatTile(Tile))
             || PathCost < 0.0 || PathCost > UnitVisualizer.GetMobility()
             || (bRequireSupport && !IsSupportedAdvanceDestination(StartSupport,
                 NearestSupportDistance(UnitState, Tile))))
@@ -647,6 +730,7 @@ static function bool ChooseMove(XComGameState_Unit UnitState,
         for (PathIndex = 1; PathIndex < CandidatePath.Length; ++PathIndex)
         {
             if (class'XComPath'.static.TileContainsHazard(UnitState, CandidatePath[PathIndex])
+                || (bCombatGoal && !IsKnownCombatTile(CandidatePath[PathIndex]))
                 || (bRequireSupport && !IsSupportedAdvanceStep(StartSupport,
                     NearestSupportDistance(UnitState, CandidatePath[PathIndex]))))
             {

@@ -11,6 +11,8 @@ import json
 from pathlib import Path
 import stat
 import struct
+import subprocess
+import sys
 import tempfile
 import unittest
 from zipfile import BadZipFile, ZipFile, ZipInfo, ZIP_STORED
@@ -31,10 +33,11 @@ def fstring(value):
     return i32(len(data)) + data
 
 
-def table_fixture(foreign_package="XComGame"):
+def table_fixture(foreign_package="XComGame", extra_classes=None):
+    classes = CHECKS.EXPECTED_CLASSES | (extra_classes or {})
     names = list(dict.fromkeys(["None", "Core", "Engine", foreign_package, "Class", "Package",
                                "Object", "Actor", "UIScreenListener", "UIPanel", "X2DownloadableContentInfo",
-                               *CHECKS.EXPECTED_CLASSES]))
+                               *classes]))
     name_index = {name: index for index, name in enumerate(names)}
     name_table = b"".join(fstring(name) + struct.pack("<Q", 0) for name in names)
     package_names = ["Core", "Engine", foreign_package]
@@ -44,7 +47,7 @@ def table_fixture(foreign_package="XComGame"):
                 ("UIScreenListener", "UIPanel", "X2DownloadableContentInfo")]
     import_table = b"".join(i32(name_index[cp], 0, name_index[cn], 0, outer, name_index[name], 0)
                             for cp, cn, outer, name in imports)
-    export_count = len(CHECKS.EXPECTED_CLASSES)
+    export_count = len(classes)
     name_offset = 129
     import_offset = name_offset + len(name_table)
     export_offset = import_offset + len(import_table)
@@ -53,7 +56,7 @@ def table_fixture(foreign_package="XComGame"):
     supers = {"Object": -4, "Actor": -5, "UIScreenListener": -6,
               "UIPanel": -7, "X2DownloadableContentInfo": -8}
     export_table = b""
-    for index, (name, superclass) in enumerate(CHECKS.EXPECTED_CLASSES.items()):
+    for index, (name, superclass) in enumerate(classes.items()):
         export_table += (i32(0, supers[superclass], 0, name_index[name], 0, 0)
                          + struct.pack("<Q", 0) + i32(1, header_size + index, 0, 0)
                          + bytes(16) + i32(0))
@@ -79,6 +82,36 @@ def archive_fixture(package, extra=()):
 
 
 class CompiledTableTests(unittest.TestCase):
+    def test_require_recorder_cli_distinguishes_new_installer_from_legacy(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            archive = Path(temporary) / 'mod.zip'
+            command = [sys.executable, str(ROOT / 'tools/check-compiled-package.py'),
+                       str(archive), '--require-recorder']
+            legacy, _ = table_fixture()
+            archive.write_bytes(archive_fixture(legacy))
+            result = subprocess.run(command, capture_output=True, text=True)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn('predates mission recording', result.stderr)
+            current, _ = table_fixture(extra_classes={"APX_MissionRecorder": "Object"})
+            archive.write_bytes(archive_fixture(current))
+            result = subprocess.run(command, capture_output=True, text=True)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn('collector is missing', result.stderr)
+            archive.write_bytes(archive_fixture(current, extra=[
+                ('AutoplayXCom2/Diagnostics/Collect-MissionRecording.ps1', b'# fixture')]))
+            result = subprocess.run(command, capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_accepts_new_mission_recorder_with_stock_superclass(self):
+        data, _ = table_fixture(extra_classes={"APX_MissionRecorder": "Object"})
+        report = CHECKS.parse_ue3_package(data)
+        self.assertIn("APX_MissionRecorder", report["own_classes"])
+
+    def test_rejects_unknown_additional_class(self):
+        data, _ = table_fixture(extra_classes={"UnrelatedClass": "Object"})
+        with self.assertRaisesRegex(CHECKS.InvalidPackage, "unexpected mod classes"):
+            CHECKS.parse_ue3_package(data)
+
     def test_parses_handcrafted_stock_roots_and_nine_classes(self):
         data, _ = table_fixture()
         report = CHECKS.parse_ue3_package(data)

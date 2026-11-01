@@ -174,14 +174,14 @@ def audit(sdk_root: Path, repo_root: Path) -> list[str]:
             literals.update(name.casefold() for name in re.findall(r'''["']([A-Za-z_]\w*)["']''', text))
     ability_count = 0
     for file, contents in source.items():
-        for name in re.findall(r'\b(?:Attack|Heal|Stabilize|Reload|Overwatch|Hunker)Abilities\(\d+\)\s*=\s*"([A-Za-z_]\w*)"', contents):
+        for name in re.findall(r'\b(?:Attack|Heal|Stabilize|Reload|Overwatch|Hunker|Support)Abilities\(\d+\)\s*=\s*"([A-Za-z_]\w*)"', contents):
             ability_count += 1
             if name.casefold() not in literals:
                 failures.append(f"{file.name}: configured ability name absent from SDK factories: {name}")
     config_path = repo_root / 'AutoplayXCom2/Config/XComAutoplayXCom2.ini'
     for section, key, name in read_config_entries(config_path):
         if section.casefold() == 'autoplayxcom2.apx_combatplanner' and re.fullmatch(
-                r'(?:Attack|Heal|Stabilize|Reload|Overwatch|Hunker)Abilities', key, re.I):
+                r'(?:Attack|Heal|Stabilize|Reload|Overwatch|Hunker|Support)Abilities', key, re.I):
             ability_count += 1
             if name.casefold() not in literals:
                 failures.append(f"{config_path.name}: configured ability name absent from SDK factories: {name}")

@@ -195,12 +195,15 @@ try {
     [IO.File]::WriteAllText((Join-Path $payloadSource "$modName.XComMod"), '[mod]')
     [IO.File]::WriteAllText((Join-Path $payloadSource 'Src/SourceOnly.uc'), 'fixture source')
     [IO.File]::WriteAllText((Join-Path $payloadSource 'Script/Fixture.u'), 'copy-test fixture, not bytecode')
+    New-Item -ItemType Directory -Path (Join-Path $payloadSource 'Diagnostics') | Out-Null
+    [IO.File]::WriteAllText((Join-Path $payloadSource 'Diagnostics/Collect-MissionRecording.ps1'), '# diagnostic fixture')
     Copy-ModPayload $payloadSource $payloadStage -IncludeSource
     Assert-True (Test-Path -LiteralPath (Join-Path $payloadStage 'Src/SourceOnly.uc')) 'Staging omitted mod sources.'
     Assert-True (!(Test-Path -LiteralPath (Join-Path $payloadStage 'Script'))) 'Source staging copied an existing script package.'
     Copy-ModPayload $payloadSource $payloadOutput
     Assert-True (Test-Path -LiteralPath (Join-Path $payloadOutput 'Script/Fixture.u')) 'Distribution omitted script directory.'
     Assert-True (!(Test-Path -LiteralPath (Join-Path $payloadOutput 'Src'))) 'Distribution unexpectedly contains script sources.'
+    Assert-True (Test-Path -LiteralPath (Join-Path $payloadOutput 'Diagnostics/Collect-MissionRecording.ps1')) 'Distribution omitted the installed diagnostic collector.'
     Assert-True ((Get-FileHash -LiteralPath (Join-Path $payloadOutput 'INSTALL.pl.md')).Hash -eq (Get-FileHash -LiteralPath $realInstructions).Hash) 'Installation instructions changed during packaging.'
     Remove-Item -LiteralPath (Join-Path $payloadSource 'INSTALL.pl.md')
     $refused = $false

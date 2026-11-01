@@ -364,11 +364,12 @@ function bool BuildSafeBluePrefix(XComGameState_Unit UnitState,
     local XGUnit UnitVisualizer;
     local array<TTile> FullPath, CandidatePath;
     local int Index, PathIndex;
-    local float Cost, StartSupport;
+    local float Cost, StartSupport, CandidateValue, BestValue;
     local bool bSafe;
 
     Path.Length = 0;
     StartSupport = class'APX_MissionPlanner'.static.NearestSupportDistance(UnitState, UnitState.TileLocation);
+    BestValue = -1000000.0;
     UnitVisualizer = XGUnit(UnitState.GetVisualizer());
     if (UnitVisualizer == none || UnitVisualizer.m_kReachableTilesCache == none)
         return false;
@@ -405,11 +406,17 @@ function bool BuildSafeBluePrefix(XComGameState_Unit UnitState,
         }
         if (bSafe)
         {
-            Path = CandidatePath;
-            return true;
+            CandidateValue = class'APX_MissionPlanner'.static.AdvanceEndpointScore(float(Index),
+                class'APX_MissionPlanner'.static.AdvanceCoverLevel(UnitState, FullPath[Index], GoalTile));
+            CandidateValue += class'APX_MissionPlanner'.static.SquadPositionScore(UnitState, FullPath[Index]);
+            if (CandidateValue > BestValue)
+            {
+                BestValue = CandidateValue;
+                Path = CandidatePath;
+            }
         }
     }
-    return false;
+    return Path.Length > 1;
 }
 
 function bool ChooseMove(XComGameState_Unit UnitState,

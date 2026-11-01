@@ -6,6 +6,13 @@ miała blokadę HUD-u. Bieżące zmiany taktyczne mają testy numerycznych heury
 ale ich kompilacja i próby w grze pozostają **NIEURUCHOMIONE**.
 [Scenariusze taktyczne i kompilacja z zachowanym SDK](tactics-update.pl.md).
 
+Nowe próby powinny korzystać z wersji zawierającej [rejestr misji](mission-recording.pl.md).
+Sprawdź słaby strzał kontra overwatch, ranną jednostkę pod ostrzałem kontra
+hunker, gaszenie Burning oraz ochronę Aid Protocol. Po porażce zachowaj raport
+ZIP z `Diagnostics\Collect-MissionRecording.ps1` i poziom trudności. Test
+rejestratora wymaga prawdziwej gry: obecność testów analizy logów nie potwierdza,
+że nowy kod skompilował się i zarejestrował rzeczywistą misję.
+
 Wyniki zapisuj osobno: PASS / FAIL / NIEURUCHOMIONY. Kompilacja nie potwierdza działania. Zacznij od osobnego testowego zapisu bez Ironman, z WOTC i wszystkimi oficjalnymi dodatkami, bez innych modów.
 
 ## Kompilacja i wejście

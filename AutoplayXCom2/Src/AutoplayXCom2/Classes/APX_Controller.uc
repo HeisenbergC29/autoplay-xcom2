@@ -10,6 +10,9 @@ var config bool AutoCompleteOwnedHacks;
 var config bool ExploreUnseenMap;
 var config bool AutoPlaceEvac;
 var config bool UseExplosiveGrenades;
+var config bool EnableMissionRecording;
+var config bool RecordCandidateScores;
+var config float RecordingInterval;
 
 var localized string StatusOff;
 var localized string StatusActive;
@@ -58,6 +61,8 @@ var private UIHackingScreen OwnedHackScreen;
 var private float HackScreenAge;
 var private APX_ExplorationPlanner ExplorationPlanner;
 var private APX_AreaAttackPlanner AreaPlanner;
+var private APX_MissionRecorder MissionRecorder;
+var private float UntilObservation;
 
 static function APX_Controller GetOrCreate()
 {
@@ -111,6 +116,8 @@ function StopAutoplay(string Reason, optional bool bPreservePendingHack = false)
     OwnedHackScreen = none;
     if (AreaPlanner != none)
         AreaPlanner.Cleanup();
+    if (MissionRecorder != none)
+        MissionRecorder.Marker("autoplay_stop", Reason);
     `log("Stopped:" @ Reason, , 'AutoplayXCom2');
 }
 
@@ -269,6 +276,8 @@ function SetWaitStatus(name Reason, string DisplayStatus, optional string Detail
         return;
     LastWaitReason = Reason;
     LastWaitDetails = Details;
+    if (MissionRecorder != none)
+        MissionRecorder.Marker("wait", string(Reason) @ Details);
     `log("Waiting:" @ string(Reason) @ Details, , 'AutoplayXCom2');
     PC = XComTacticalController(WorldInfo.GetALocalPlayerController());
     `log("UI stack:" @ DescribeUIStack(PC), , 'AutoplayXCom2');
@@ -293,6 +302,29 @@ simulated event Tick(float DeltaTime)
     bToggleWasDown = bToggleDown;
     if (bEnabled && PC.PlayerInput.PressedKeys.Find('Escape') != INDEX_NONE)
         StopAutoplay("Escape", true);
+
+    // Recording is observational and continues through alien turns and a user
+    // stop, so incoming fire and the result of the last order are not lost.
+    if (EnableMissionRecording && MissionRecorder == none && bEnabled
+        && PC.m_XGPlayer != none)
+    {
+        MissionRecorder = new(self) class'APX_MissionRecorder';
+        MissionRecorder.Start(PC.m_XGPlayer.ObjectID);
+    }
+    if (MissionRecorder != none)
+    {
+        if (`TACTICALRULES != none && `TACTICALRULES.HasTacticalGameEnded())
+            MissionRecorder.Finish("tactical_game_ended");
+        else
+        {
+            UntilObservation -= DeltaTime;
+            if (UntilObservation <= 0.0)
+            {
+                UntilObservation = FMax(0.5, RecordingInterval);
+                MissionRecorder.Observe(bEnabled ? "autoplay" : "manual");
+            }
+        }
+    }
     if (!bEnabled)
         return;
 
@@ -482,6 +514,8 @@ function MakeDecision(XComTacticalController PC)
         ExplorationPlanner = new(self) class'APX_ExplorationPlanner';
     if (UseExplosiveGrenades && AreaPlanner == none)
         AreaPlanner = new(self) class'APX_AreaAttackPlanner';
+    if (MissionRecorder != none)
+        MissionRecorder.BeginDecision();
 
     BestScore = -10000.0;
     foreach `XCOMHISTORY.IterateByClassType(class'XComGameState_Unit', UnitState)
@@ -497,6 +531,7 @@ function MakeDecision(XComTacticalController PC)
         if (!UnitState.IsAbleToAct())
             continue;
         if (class'APX_CombatPlanner'.static.ChooseAction(UnitState, Candidate, TargetIndex, Score)
+            && TraceCandidateAction(UnitState, "combat", Candidate, TargetIndex, Score)
             && Score > BestScore && CanUseAction(UnitState, Candidate, TargetIndex))
         {
             BestAction = Candidate;
@@ -509,6 +544,7 @@ function MakeDecision(XComTacticalController PC)
             bHavePlan = true;
         }
         if (class'APX_MissionPlanner'.static.ChooseInteraction(UnitState, Candidate, TargetIndex, Score)
+            && TraceCandidateAction(UnitState, "interaction", Candidate, TargetIndex, Score)
             && Score > BestScore && CanUseAction(UnitState, Candidate, TargetIndex))
         {
             BestAction = Candidate;
@@ -522,7 +558,9 @@ function MakeDecision(XComTacticalController PC)
         }
         CandidateLocations.Length = 0;
         if (AutoPlaceEvac && class'APX_EvacPlanner'.static.ChoosePlacement(
-            UnitState, Candidate, CandidateLocations, Score) && Score > BestScore)
+            UnitState, Candidate, CandidateLocations, Score)
+            && TraceCandidateAction(UnitState, "evac_placement", Candidate, INDEX_NONE, Score)
+            && Score > BestScore)
         {
             TargetIndex = Candidate.AvailableTargets.Length == 0 ? INDEX_NONE : 0;
             if (CanUseAction(UnitState, Candidate, TargetIndex))
@@ -541,6 +579,7 @@ function MakeDecision(XComTacticalController PC)
         if (UseExplosiveGrenades && AreaPlanner != none
             && AreaPlanner.ChooseAction(UnitState, Candidate, TargetIndex,
                 CandidateLocations, CandidateAim, Score)
+            && TraceCandidateAction(UnitState, "grenade", Candidate, TargetIndex, Score)
             && Score > BestScore && CanUseAction(UnitState, Candidate, TargetIndex))
         {
             BestAction = Candidate;
@@ -555,6 +594,7 @@ function MakeDecision(XComTacticalController PC)
         }
         CandidatePath.Length = 0;
         if (class'APX_MissionPlanner'.static.ChooseMove(UnitState, CandidatePath, Score)
+            && TraceCandidateMove(UnitState, CandidatePath, Score)
             && Score > BestScore && CanUseMove(UnitState, CandidatePath))
         {
             BestPath = CandidatePath;
@@ -582,6 +622,7 @@ function MakeDecision(XComTacticalController PC)
             bCanExplore = true;
             CandidatePath.Length = 0;
             if (ExplorationPlanner.ChooseMove(UnitState, CandidatePath, Score)
+                && TraceCandidateMove(UnitState, CandidatePath, Score)
                 && Score > BestScore && CanUseMove(UnitState, CandidatePath))
             {
                 BestPath = CandidatePath;
@@ -614,6 +655,8 @@ function MakeDecision(XComTacticalController PC)
         if (AutoEndTurn)
         {
             bEndTurnRequested = PC.PerformEndTurn(ePlayerEndTurnType_PlayerInput);
+            if (MissionRecorder != none)
+                MissionRecorder.Marker("end_turn", "accepted=" $ string(bEndTurnRequested));
             if (!bEndTurnRequested)
                 StopWithStatus("Engine rejected end turn", StatusRejected);
         }
@@ -622,6 +665,15 @@ function MakeDecision(XComTacticalController PC)
         return;
     }
 
+    // Freeze diagnostic previews before submitting; the resulting history may
+    // change hit chances and health before the accepted-result record is made.
+    if (MissionRecorder != none)
+    {
+        if (bMove)
+            MissionRecorder.PrepareChosenMove(BestUnit, BestPath, BestScore);
+        else
+            MissionRecorder.PrepareChosenAction(BestUnit, BestAction, BestTargetIndex, BestScore);
+    }
     if (bMove)
     {
         OwnedAbilityID = 0;
@@ -664,6 +716,13 @@ function MakeDecision(XComTacticalController PC)
             @ "target" @ ChosenTargetID @ "target index" @ BestTargetIndex @ "score" @ BestScore
             @ "AP before" @ BestUnit.NumActionPoints(), , 'AutoplayXCom2');
     }
+    if (MissionRecorder != none)
+    {
+        if (bMove)
+            MissionRecorder.ChosenMove(BestUnit, BestPath, BestScore, bSuccess);
+        else
+            MissionRecorder.ChosenAction(BestUnit, BestAction, BestTargetIndex, BestScore, bSuccess);
+    }
     if (!bSuccess)
     {
         StopWithStatus("Engine rejected planned action", StatusRejected);
@@ -674,6 +733,23 @@ function MakeDecision(XComTacticalController PC)
     ++ActionsThisTurn;
     if (BestScore > 2.0)
         ++MeaningfulActionsThisTurn;
+}
+
+// Always return true: tracing must never change which legal action is chosen.
+function bool TraceCandidateAction(XComGameState_Unit UnitState, string Kind,
+    AvailableAction Action, int TargetIndex, float Score)
+{
+    if (MissionRecorder != none && RecordCandidateScores)
+        MissionRecorder.CandidateAction(UnitState, Kind, Action, TargetIndex, Score);
+    return true;
+}
+
+function bool TraceCandidateMove(XComGameState_Unit UnitState,
+    const out array<TTile> Path, float Score)
+{
+    if (MissionRecorder != none && RecordCandidateScores)
+        MissionRecorder.CandidateMove(UnitState, Path, Score);
+    return true;
 }
 
 // Re-evaluation after every ally action can change support scores. Remember
@@ -704,12 +780,15 @@ function RecordMove(XComGameState_Unit UnitState, const out array<TTile> Path)
 
 simulated event Destroyed()
 {
+    if (MissionRecorder != none)
+        MissionRecorder.Finish("controller_destroyed");
     if (AreaPlanner != none)
         AreaPlanner.Cleanup();
     ExplorationPlanner = none;
     AreaPlanner = none;
     OwnedActionContext = none;
     OwnedHackScreen = none;
+    MissionRecorder = none;
     super.Destroyed();
 }
 

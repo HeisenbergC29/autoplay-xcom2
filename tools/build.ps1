@@ -45,6 +45,9 @@ $markerContents = 'AutoplayXCom2 build directory v1'
 if (!(Test-Path -LiteralPath (Join-Path $projectRoot 'INSTALL.pl.md') -PathType Leaf)) {
     throw 'The project installation instructions are missing: AutoplayXCom2\INSTALL.pl.md.'
 }
+if (!(Test-Path -LiteralPath (Join-Path $projectRoot 'Diagnostics\Collect-MissionRecording.ps1') -PathType Leaf)) {
+    throw 'The mission report collector is missing. Extract the complete current source ZIP, including AutoplayXCom2\Diagnostics.'
+}
 if (!(Test-Path -LiteralPath $compiler -PathType Leaf)) {
     throw "WOTC SDK compiler missing: $compiler. Install XCOM 2 War of the Chosen Development Tools from Steam (Windows)."
 }
@@ -102,6 +105,9 @@ function Convert-LocalizationForGame([string] $LocalizationPath) {
 function Copy-ModPayload([string] $SourceRoot, [string] $Destination, [switch] $IncludeSource) {
     $entries = @('Config', 'Localization', "$modName.XComMod", 'INSTALL.pl.md')
     $entries += if ($IncludeSource) { 'Src' } else { 'Script' }
+    if (Test-Path -LiteralPath (Join-Path $SourceRoot 'Diagnostics') -PathType Container) {
+        $entries += 'Diagnostics'
+    }
     # Check all required entries before copying a partial installation payload.
     foreach ($entry in $entries) {
         if (!(Test-Path -LiteralPath (Join-Path $SourceRoot $entry))) {

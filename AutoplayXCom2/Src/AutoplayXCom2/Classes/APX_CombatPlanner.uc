@@ -8,6 +8,7 @@ var config array<name> StabilizeAbilities;
 var config array<name> ReloadAbilities;
 var config array<name> OverwatchAbilities;
 var config array<name> HunkerAbilities;
+var config array<name> SupportAbilities;
 var config int MinimumHitChance;
 var config float EmergencyHealthFraction;
 
@@ -110,12 +111,28 @@ static function bool ChooseAction(XComGameState_Unit UnitState,
                 }
             }
         }
+        else if (default.SupportAbilities.Find(AbilityName) != INDEX_NONE)
+        {
+            for (Index = 0; Index < Candidate.AvailableTargets.Length; ++Index)
+            {
+                TargetUnit = XComGameState_Unit(History.GetGameStateForObjectID(
+                    Candidate.AvailableTargets[Index].PrimaryTarget.ObjectID));
+                CandidateScore = ScoreSupport(UnitState, TargetUnit, AbilityName, VisibleEnemies);
+                if (CandidateScore > Score)
+                {
+                    Action = Candidate;
+                    TargetIndex = Index;
+                    Score = CandidateScore;
+                    bFound = CandidateScore > -1000.0;
+                }
+            }
+        }
         else
         {
             SelfIndex = FindSelfTarget(Candidate, UnitState.ObjectID);
             if (Candidate.AvailableTargets.Length > 0 && SelfIndex == INDEX_NONE)
                 continue;
-            CandidateScore = ScoreSelfAction(UnitState, Ability, AbilityName, VisibleEnemies.Length > 0);
+            CandidateScore = ScoreSelfAction(UnitState, Ability, AbilityName, VisibleEnemies);
             if (CandidateScore > Score)
             {
                 Action = Candidate;
@@ -416,9 +433,12 @@ static function int FindSelfTarget(AvailableAction Action, int UnitID)
 }
 
 static function float ScoreSelfAction(XComGameState_Unit UnitState,
-    XComGameState_Ability Ability, name AbilityName, bool bEnemiesVisible)
+    XComGameState_Ability Ability, name AbilityName,
+    array<StateObjectReference> VisibleEnemies)
 {
     local XComGameState_Item Weapon;
+    local int RangedThreats, NearbyMelee;
+    local float RangedRisk, HealthFraction;
 
     if (default.ReloadAbilities.Find(AbilityName) != INDEX_NONE)
     {
@@ -428,17 +448,150 @@ static function float ScoreSelfAction(XComGameState_Unit UnitState,
         if (Weapon == none || Weapon.Ammo >= Weapon.GetClipSize())
             return -10000.0;
         if (Weapon.Ammo == 0)
-            return bEnemiesVisible ? 35.0 : 18.0;
-        return bEnemiesVisible ? 3.0 : 12.0;
+            return VisibleEnemies.Length > 0 ? 35.0 : 18.0;
+        return VisibleEnemies.Length > 0 ? 3.0 : 12.0;
     }
+    if (default.OverwatchAbilities.Find(AbilityName) == INDEX_NONE
+        && default.HunkerAbilities.Find(AbilityName) == INDEX_NONE)
+        return -10000.0;
+
+    RangedRisk = DefensiveRisk(UnitState, VisibleEnemies, RangedThreats, NearbyMelee);
+    HealthFraction = UnitState.GetCurrentStat(eStat_HP)
+        / FMax(1.0, UnitState.GetMaxStat(eStat_HP));
     if (default.OverwatchAbilities.Find(AbilityName) != INDEX_NONE)
+        return ScoreOverwatchDefense(VisibleEnemies.Length > 0,
+            UnitState.IsConcealed(), HealthFraction, RangedRisk, NearbyMelee);
+    return ScoreHunkerDefense(HealthFraction, RangedRisk, RangedThreats,
+        NearbyMelee, UnitState.IsBurning(), UnitState.IsConcealed());
+}
+
+// Evaluate ranged exposure separately: hunker does not turn an approaching
+// melee attacker into a safe threat. Contacts are limited to the player's view.
+static function float DefensiveRisk(XComGameState_Unit UnitState,
+    array<StateObjectReference> VisibleEnemies, out int RangedThreats, out int NearbyMelee)
+{
+    local XComGameState_Unit Enemy;
+    local StateObjectReference EnemyRef;
+    local vector UnitLocation, EnemyLocation;
+    local float Distance, Angle, Risk, TotalRisk, WorstRisk;
+    local ECoverType Cover;
+    local int CoverLevel;
+
+    RangedThreats = 0;
+    NearbyMelee = 0;
+    UnitLocation = `XWORLD.GetPositionFromTileCoordinates(UnitState.TileLocation);
+    foreach VisibleEnemies(EnemyRef)
+    {
+        Enemy = XComGameState_Unit(`XCOMHISTORY.GetGameStateForObjectID(EnemyRef.ObjectID));
+        if (!IsVisibleHostile(UnitState, Enemy, VisibleEnemies))
+            continue;
+        Distance = class'APX_MissionPlanner'.static.TileDistance(UnitState.TileLocation, Enemy.TileLocation);
+        if (Enemy.IsMeleeOnly())
+        {
+            if (Distance <= 8.0)
+                ++NearbyMelee;
+            continue;
+        }
+        ++RangedThreats;
+        EnemyLocation = `XWORLD.GetPositionFromTileCoordinates(Enemy.TileLocation);
+        Cover = `XWORLD.GetCoverTypeForTarget(EnemyLocation, UnitLocation, Angle);
+        CoverLevel = 0;
+        if (Cover == CT_MidLevel)
+            CoverLevel = 1;
+        if (Cover == CT_Standing)
+            CoverLevel = 2;
+        Risk = class'APX_MissionPlanner'.static.DirectionalRisk(CoverLevel, Distance,
+            UnitState.GetMyTemplate().bCanTakeCover, false);
+        TotalRisk += Risk;
+        WorstRisk = FMax(WorstRisk, Risk);
+    }
+    return class'APX_MissionPlanner'.static.CombinedExposure(TotalRisk, WorstRisk, 1.0);
+}
+
+// Defensive values deliberately compete with poor shots, not reliable kills.
+// Out of contact overwatch stays below every useful advance/exploration score.
+static function float ScoreOverwatchDefense(bool bEnemiesVisible, bool bConcealed,
+    float HealthFraction, float RangedRisk, int NearbyMelee)
+{
+    local float Result;
+
+    if (!bEnemiesVisible)
         return 2.0;
+    Result = 17.0;
+    if (bConcealed)
+        Result = 22.0;
+    Result -= FMin(7.0, RangedRisk * 0.12) * (1.0 - FClamp(HealthFraction, 0.0, 1.0));
+    // A nearby melee attacker is likely to move; an available reaction can be
+    // preferable to hunkering, while a legal immediate kill still scores higher.
+    if (NearbyMelee > 0)
+        Result += 5.0;
+    return Result;
+}
+
+static function float ScoreHunkerDefense(float HealthFraction, float RangedRisk,
+    int RangedThreats, int NearbyMelee, bool bBurning, bool bConcealed)
+{
+    local float Result;
+
+    // Stock HunkerDown removes Burning, even without a visible enemy.
+    if (bBurning)
+        return 130.0;
+    if (RangedThreats == 0 || bConcealed)
+        return 1.0;
+    Result = 13.0 + (1.0 - FClamp(HealthFraction, 0.0, 1.0)) * 24.0
+        + FMin(18.0, RangedRisk * 0.4);
+    if (NearbyMelee > 0)
+        Result -= 12.0;
+    return FMax(1.0, Result);
+}
+
+static function float ScoreSupport(XComGameState_Unit SourceUnit,
+    XComGameState_Unit TargetUnit, name AbilityName,
+    array<StateObjectReference> VisibleEnemies)
+{
+    local int RangedThreats, NearbyMelee;
+    local float Risk, HealthFraction;
+
+    if (AbilityName != 'AidProtocol' || TargetUnit == none || !TargetUnit.IsAlive()
+        || TargetUnit.IsIncapacitated() || !SourceUnit.IsFriendlyUnit(TargetUnit)
+        || TargetUnit.IsCivilian() || TargetUnit.GetMyTemplate().bIsCosmetic
+        || TargetUnit.IsUnitAffectedByEffectName('AidProtocol'))
+        return -10000.0;
+    Risk = DefensiveRisk(TargetUnit, VisibleEnemies, RangedThreats, NearbyMelee);
+    HealthFraction = TargetUnit.GetCurrentStat(eStat_HP)
+        / FMax(1.0, TargetUnit.GetMaxStat(eStat_HP));
+    return ScoreAidDefense(HealthFraction, Risk, RangedThreats);
+}
+
+static function float ScoreAidDefense(float HealthFraction, float RangedRisk, int RangedThreats)
+{
+    if (RangedThreats == 0 || RangedRisk < 6.0)
+        return -10000.0;
+    return 16.0 + FMin(20.0, RangedRisk * 0.4)
+        + (1.0 - FClamp(HealthFraction, 0.0, 1.0)) * 24.0;
+}
+
+// Stable labels for the mission recorder; action availability and numeric
+// scores are logged separately and remain the evidence for the final choice.
+static function string GetActionReason(XComGameState_Unit UnitState, name AbilityName)
+{
+    if (default.OverwatchAbilities.Find(AbilityName) != INDEX_NONE)
+        return "reserve_reaction_shot";
     if (default.HunkerAbilities.Find(AbilityName) != INDEX_NONE)
     {
-        if (bEnemiesVisible && UnitState.GetCurrentStat(eStat_HP)
-            / FMax(1.0, UnitState.GetMaxStat(eStat_HP)) <= default.EmergencyHealthFraction)
-            return 18.0;
-        return 1.0;
+        if (UnitState != none && UnitState.IsBurning())
+            return "extinguish_burning";
+        return "reduce_ranged_risk";
     }
-    return -10000.0;
+    if (default.SupportAbilities.Find(AbilityName) != INDEX_NONE)
+        return "protect_exposed_ally";
+    if (default.HealAbilities.Find(AbilityName) != INDEX_NONE)
+        return "heal_wounded_ally";
+    if (default.StabilizeAbilities.Find(AbilityName) != INDEX_NONE)
+        return "stabilize_bleeding_ally";
+    if (default.ReloadAbilities.Find(AbilityName) != INDEX_NONE)
+        return "restore_ammunition";
+    if (default.AttackAbilities.Find(AbilityName) != INDEX_NONE)
+        return "damage_and_elimination_chance";
+    return "outside_combat_allowlist";
 }

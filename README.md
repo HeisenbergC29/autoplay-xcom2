@@ -2,6 +2,12 @@
 
 Mod w UnrealScript automatyzujący działania oddziału w misji. Docelowy profil użytkownika: **aktualne XCOM 2 Collection ze Steam na Windows, uruchamiane jako War of the Chosen, z oficjalnymi dodatkami i wyłącznie tym modem**. Nie wymaga Highlandera ani innych modów. Nie jest przeznaczony dla podstawowego XCOM 2 bez WOTC ani trybu wieloosobowego. [Szczegóły zgodności](docs/COMPATIBILITY.pl.md).
 
+**Nowa wersja do prób Gatecrashera:** poprawiona ocena overwatch i przyczajenia,
+Aid Protocol, ostrożniejsze flankowanie oraz rejestr decyzji i wyników misji.
+[Jak zebrać raport po grze](docs/mission-recording.pl.md). Skrypt zbierający raport
+jest instalowany z modem i działa po usunięciu pobranych źródeł. Zwycięstwo na
+Commanderze lub Legendzie nie jest jeszcze potwierdzone.
+
 **Stan: alpha; według najnowszego zgłoszenia użytkownika mod już wydaje rozkazy, ale przegrywa Gatecrasher na Legendzie i Dowódcy.** Bieżące źródła poprawiają ocenę osłon, zagrożeń i flankowania, dobieranie celów, granaty oraz wsparcie oddziału. Ta zmiana **wymaga nowej kompilacji i prób w grze**; nie ma jeszcze potwierdzenia poprawy wyniku misji. [Opis taktyki, kompilacja z zachowanym SDK i lista prób](docs/tactics-update.pl.md). Nie potwierdzono pełnego ukończenia wszystkich misji DLC.
 
 Dotychczasowy plik `.u` i konfigurację zweryfikowano; importy binarne prowadzą tylko do standardowych pakietów `Core`, `Engine`, `XComGame`. Repozytorium nie zawiera SDK ani plików gry. Szczegóły: [wyniki kontroli SDK i kompilacji](docs/SDK-AUDIT.pl.md).
@@ -100,6 +106,7 @@ SDK Windows ani działającej gry.
 # Przenośne testy ochrony istniejących plików SDK (bez kompilatora):
 pwsh -NoProfile -File .\tests\Test-BuildHelpers.ps1
 pwsh -NoProfile -File .\tests\Test-CollectSdkSources.ps1
+pwsh -NoProfile -File .\tests\Test-CollectMissionRecording.ps1
 
 # Opcjonalna kontrola nazw klas i zdolności w lokalnym SDK (nie kompilacja):
 python .\tools\check-sdk-references.py --sdk 'D:\SteamLibrary\steamapps\common\XCOM 2 War of the Chosen SDK'

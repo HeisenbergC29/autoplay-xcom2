@@ -20,6 +20,9 @@ class TacticalMovementTests(unittest.TestCase):
         cls.route_score = staticmethod(load_uc_function(SOURCE, 'ScoreRouteAdvance'))
         cls.support_step = staticmethod(load_uc_function(SOURCE, 'IsSupportedAdvanceStep'))
         cls.support_destination = staticmethod(load_uc_function(SOURCE, 'IsSupportedAdvanceDestination'))
+        cls.firing_value = staticmethod(load_uc_function(SOURCE, 'FiringPositionValue'))
+        cls.known_threat = staticmethod(load_uc_function(SOURCE, 'KnownThreatRisk'))
+        cls.advance_endpoint = staticmethod(load_uc_function(SOURCE, 'AdvanceEndpointScore'))
 
     def exposure(self, cover_levels, health=1.0):
         risks = [self.risk(cover, 9.0, True, False) for cover in cover_levels]
@@ -74,6 +77,25 @@ class TacticalMovementTests(unittest.TestCase):
         self.assertFalse(self.support_step(15, 16))
         self.assertTrue(self.support_destination(15, 14))
         self.assertFalse(self.support_destination(15, 15))
+
+    def test_wall_blocks_speculative_flank_and_height_reward(self):
+        blocked_flank = self.firing_value(9, 9, False, True, True)
+        clear_shot = self.firing_value(9, 9, True, False, False)
+        self.assertLess(blocked_flank, clear_shot)
+        self.assertEqual(blocked_flank, self.firing_value(9, 9, False, False, False))
+
+    def test_clear_flank_is_better_than_equally_distant_covered_target(self):
+        self.assertGreater(self.firing_value(9, 9, True, True, False),
+                           self.firing_value(9, 9, True, False, False))
+
+    def test_obstructed_ranged_threat_retains_movement_risk_but_less_than_clear_shot(self):
+        self.assertGreater(self.known_threat(30, False, False), 0)
+        self.assertLess(self.known_threat(30, False, False), self.known_threat(30, True, False))
+        self.assertEqual(self.known_threat(30, False, True), self.known_threat(30, True, True))
+
+    def test_advance_prefers_nearby_cover_without_abandoning_progress(self):
+        self.assertGreater(self.advance_endpoint(5, 2), self.advance_endpoint(7, 0))
+        self.assertLess(self.advance_endpoint(2, 2), self.advance_endpoint(7, 0))
 
 
 if __name__ == '__main__':
