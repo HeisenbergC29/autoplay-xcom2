@@ -52,6 +52,40 @@ def forbidden_bare_stop_calls(source: str) -> list[int]:
     return failures
 
 
+def invalid_cover_query_arguments(source: str) -> list[tuple[int, int]]:
+    """Cover queries require vector variables for both const out inputs.
+
+    WOTC rejects a vector-returning call in either position even though its
+    return type matches. Check this known native API, not arbitrary functions.
+    """
+    tokens = re.compile(r'//[^\n]*|/\*.*?\*/|"(?:\\.|[^"\\])*"|\x27[^\x27\n]*\x27', re.S)
+    masked = tokens.sub(lambda match: re.sub(r'[^\n]', ' ', match[0]), source)
+    failures = []
+    variable = re.compile(r'\w+(?:\s*\.\s*\w+|\s*\[[^\[\]]+\])*\s*$', re.S)
+    for call in re.finditer(r'\bGetCoverTypeForTarget\s*\(', masked, re.I):
+        if re.search(r'\bfunction\s+(?:\w+\s+)?$', masked[:call.start()], re.I):
+            continue
+        start = call.end()
+        depth = 0
+        argument = 1
+        for index in range(start, len(masked)):
+            char = masked[index]
+            if char in '([':
+                depth += 1
+            elif char in ')]':
+                if depth == 0:
+                    break
+                depth -= 1
+            elif char == ',' and depth == 0:
+                if not variable.fullmatch(masked[start:index].strip()):
+                    failures.append((masked.count('\n', 0, call.start()) + 1, argument))
+                argument += 1
+                start = index + 1
+                if argument > 2:
+                    break
+    return failures
+
+
 def find_sdk_root(path: Path) -> Path:
     for candidate in (path, path / "Development" / "SrcOrig", path / "Development" / "Src"):
         if (candidate / "XComGame" / "Classes").is_dir():
@@ -113,6 +147,8 @@ def audit(sdk_root: Path, repo_root: Path) -> list[str]:
             failures.append(f"{file.name}:{line}: UnrealScript forbids direct out bool parameters; use a result struct.")
         for line in forbidden_bare_stop_calls(raw_source):
             failures.append(f"{file.name}:{line}: bare Stop(...) conflicts with the state statement; use StopAutoplay.")
+        for line, argument in invalid_cover_query_arguments(raw_source):
+            failures.append(f"{file.name}:{line}: GetCoverTypeForTarget argument {argument} must be a vector variable for const out; assign expressions to locals first.")
         inherited = set()
         parent = re.search(r'\bextends\s+(\w+)', without_comments(raw_source), re.I)
         visited = set()

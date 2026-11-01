@@ -400,7 +400,7 @@ function float CoverOpeningValue(XComGameState_Unit SourceUnit, XComGameState_Un
     local AvailableAction Candidate;
     local AvailableTarget Target;
     local float Angle, Result;
-    local vector EnemyLocation;
+    local vector EnemyLocation, AllyLocation;
     local bool bFollowUp;
 
     EnemyLocation = `XWORLD.GetPositionFromTileCoordinates(Enemy.TileLocation);
@@ -408,9 +408,11 @@ function float CoverOpeningValue(XComGameState_Unit SourceUnit, XComGameState_Un
     {
         if (Ally.ObjectID == SourceUnit.ObjectID || !Ally.IsAbleToAct()
             || Ally.GetAssociatedPlayerID() != SourceUnit.GetAssociatedPlayerID()
-            || Ally.GetTeam() != eTeam_XCom || Ally.GetMyTemplate().bIsCosmetic
-            || `XWORLD.GetCoverTypeForTarget(`XWORLD.GetPositionFromTileCoordinates(
-                Ally.TileLocation), EnemyLocation, Angle) == CT_None
+            || Ally.GetTeam() != eTeam_XCom || Ally.GetMyTemplate().bIsCosmetic)
+            continue;
+        // Native const out vector inputs still require addressable variables.
+        AllyLocation = `XWORLD.GetPositionFromTileCoordinates(Ally.TileLocation);
+        if (`XWORLD.GetCoverTypeForTarget(AllyLocation, EnemyLocation, Angle) == CT_None
             || !`TACTICALRULES.GetGameRulesCache_Unit(Ally.GetReference(), UnitCache))
             continue;
         bFollowUp = false;
