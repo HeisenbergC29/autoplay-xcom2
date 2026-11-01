@@ -2,7 +2,7 @@
 
 Mod w UnrealScript automatyzujący działania oddziału w misji. Docelowy profil użytkownika: **aktualne XCOM 2 Collection ze Steam na Windows, uruchamiane jako War of the Chosen, z oficjalnymi dodatkami i wyłącznie tym modem**. Nie wymaga Highlandera ani innych modów. Nie jest przeznaczony dla podstawowego XCOM 2 bez WOTC ani trybu wieloosobowego. [Szczegóły zgodności](docs/COMPATIBILITY.pl.md).
 
-**Stan: alpha; w opublikowanej paczce 0.1.0 wykryto blokadę wydawania rozkazów.** Użytkownik potwierdził widoczny i klikalny przycisk w misji, ale po włączeniu pozostaje status `PAUSED: SCREEN / MENU`, a jednostki nie działają. Przyczyna: zwykłe nakładki HUD-u zostały błędnie uznane za menu. [Poprawka i aktualizacja](docs/ui-blocking-fix.pl.md) wymagają zbudowania bieżących źródeł w SDK WOTC; nowa kompilacja i działanie poprawki w grze pozostają do potwierdzenia. Nie potwierdzono pełnego ukończenia wszystkich misji DLC.
+**Stan: alpha; według najnowszego zgłoszenia użytkownika mod już wydaje rozkazy, ale przegrywa Gatecrasher na Legendzie i Dowódcy.** Bieżące źródła poprawiają ocenę osłon, zagrożeń i flankowania, dobieranie celów, granaty oraz wsparcie oddziału. Ta zmiana **wymaga nowej kompilacji i prób w grze**; nie ma jeszcze potwierdzenia poprawy wyniku misji. [Opis taktyki, kompilacja z zachowanym SDK i lista prób](docs/tactics-update.pl.md). Nie potwierdzono pełnego ukończenia wszystkich misji DLC.
 
 Dotychczasowy plik `.u` i konfigurację zweryfikowano; importy binarne prowadzą tylko do standardowych pakietów `Core`, `Engine`, `XComGame`. Repozytorium nie zawiera SDK ani plików gry. Szczegóły: [wyniki kontroli SDK i kompilacji](docs/SDK-AUDIT.pl.md).
 
@@ -36,13 +36,19 @@ Przycisk używa oryginalnych elementów UI, bez zastępowania plików Flash. Po�
 | Hakowanie | Wyłącznie ekran wywołany własnym rozkazem; wybór dostępnej nagrody z najwyższą pokazywaną szansą, zwykły rzut gry, zamknięcie po zakończeniu animacji |
 | Ewakuacja | Istniejąca strefa, kontrolowani cywile / niesiony VIP albo ukończony jawnie oznaczony cel strategiczny; wyznaczenie nowej strefy zwykłą zdolnością `PlaceEvacZone` po ukończeniu celu, z natywną kontrolą miejsca i widoczności |
 
+Nowe oceny uwzględniają najsłabiej osłonięty kierunek, rannych żołnierzy, pancerz
+i szansę dobicia, potencjalną flankę oraz wsparcie i odstępy oddziału. Ruch
+ofensywny i eksploracja zachowują AP; ostatni AP w walce może posłużyć do
+wyraźnie bezpieczniejszego odwrotu. Geometryczna ocena flanki nie przewiduje
+pewnie widoczności po ruchu. [Szczegóły i ograniczenia](docs/tactics-update.pl.md).
+
 Mod nie dodaje punktów akcji, nie zmienia trafień, nie zabija wrogów komendą i nie wywołuje sztucznego zwycięstwa. Wybór przeciwników korzysta z widoczności gracza, w tym legalnego squadsight. Znane pozycje oznaczonych celów misji służą do nawigacji.
 
 ## Granice tej wersji
 
 To **nie jest jeszcze pełny autopilot wszystkich misji**. Do ukończenia wymagania potrzebne są kompilacja, testy i dopracowanie zachowania na konkretnych mapach:
 
-- Planer obszarowy obsługuje wyłącznie zwykłe granaty Frag/Alien i domyślnie wymaga dwóch widocznych przeciwników. Broń ciężka, stożki, ogień, kwas, EMP, dym i pozostałe efekty trwałe wymagają osobnych reguł. Pełne skutki zawalania konstrukcji wymagają testów w grze.
+- Planer obszarowy obsługuje wyłącznie zwykłe granaty Frag/Alien. Domyślnie wymaga dwóch widocznych przeciwników, z wyjątkiem pojedynczego celu, któremu minimalne przewidywane obrażenia wystarczają do zabicia. Broń ciężka, stożki, ogień, kwas, EMP, dym i pozostałe efekty trwałe wymagają osobnych reguł. Pełne skutki zawalania konstrukcji wymagają testów w grze.
 - Brak planowania zasadzki całego oddziału, oszczędzania zasobów na kolejne etapy i pełnego wykorzystania każdej umiejętności DLC. Listy obsługiwanych umiejętności są jawne w `Config/XComAutoplayXCom2.ini`.
 - Eksploracja używa próbkowania siatki mapy. Nie gwarantuje odwiedzenia każdego małego pomieszczenia ani znalezienia wroga, który przemieścił się na wcześniej odwiedzony teren. Gdy nie znajduje osiągalnego celu, automat oddaje sterowanie.
 - Nietypowe cele Kismet, wieloetapowe Lost Towers / Alien Nest, twierdze Wybranych, obrona Avengera, finał i wyzwania Legacy **nie mają potwierdzonej obsługi końca do końca**. Może być potrzebne ręczne przejście etapu lub ewakuacja.
@@ -74,9 +80,21 @@ Alternatywnie otwórz `AutoplayXCom2.XCOM_sln` w ModBuddy WOTC jako projekt edyt
 
 Po skompilowaniu użyj [instrukcji instalacji](AutoplayXCom2/INSTALL.pl.md), dołączanej również do wynikowego ZIP-a. Włącz mod w launcherze WOTC (np. Alternative Mod Launcher). Dla instalacji ręcznej wypakuj katalog `AutoplayXCom2` do `XCOM 2\XCom2-WarOfTheChosen\XComGame\Mods`. Nie kopiuj samych plików `.uc` do instalacji gry.
 
+Możesz usunąć pobrany katalog źródeł po zainstalowaniu wyniku lub zachowaniu
+ZIP-a poza nim. SDK i jego pakiety bazowe zachowaj do kolejnych kompilacji;
+nie wymagają ponownego budowania z `-BuildBase` przy każdej aktualizacji.
+
 ## Weryfikacja
 
-Wykonano kontrolę oryginalnych źródeł SDK przesłanych przez użytkownika, składni PowerShell oraz testy zabezpieczeń plikowych, zawartości paczki i konwersji polskiej lokalizacji. Po przeniesieniu ustawień do INI logi Windows potwierdzają **0 błędów i 8 ostrzeżeń SDK**, zarówno dla bazy, jak i moda. Te wyniki dotyczą wcześniejszej kompilacji, przed poprawką blokady HUD-u. Przesłany ZIP ma kompletną konfigurację, 27 nazw zdolności, obie lokalizacje i prawidłowy `.u`. Jego 464 importy prowadzą tylko do trzech standardowych pakietów; dziewięć klas moda jest obecnych. Pierwsza próba użytkownika w grze potwierdziła przycisk i ujawniła brak rozkazów przy statusie pauzy. **Poprawka wymaga nowej kompilacji i powtórzenia próby w grze.** Lokalne środowisko ma źródła SDK, logi i wcześniejszą skompilowaną paczkę, ale nie uruchomioną grę ani kompilator SDK Windows.
+Archiwalna kontrola źródeł SDK i logów Windows po przeniesieniu ustawień do INI
+potwierdziła **0 błędów i 8 ostrzeżeń SDK**, zarówno dla bazy, jak i moda.
+Dotyczy to wcześniejszej kompilacji. Przechowywany ZIP ma kompletną konfigurację,
+27 nazw zdolności, obie lokalizacje i prawidłowy `.u`; jego 464 importy prowadzą
+tylko do `Core`, `Engine` i `XComGame`, a dziewięć klas moda jest obecnych.
+Najnowsze zgłoszenie użytkownika potwierdza wydawanie rozkazów po poprawce HUD-u.
+**Nowe zmiany taktyki nie mają jeszcze kompilacji ani wyniku w grze.** Obecne
+środowisko Linux pozwala uruchamiać testy Python i PowerShell, ale nie zawiera
+SDK Windows ani działającej gry.
 
 ```powershell
 # Przenośne testy ochrony istniejących plików SDK (bez kompilatora):
@@ -90,6 +108,9 @@ python -m unittest discover -s tests -p 'test_*.py' -v
 ```
 
 Lista wymaganych prób w grze: [docs/TESTING.pl.md](docs/TESTING.pl.md). Pliki potrzebne do dalszej weryfikacji i sposób ich przekazania: [docs/SDK-FILES.pl.md](docs/SDK-FILES.pl.md).
+
+Aktualne zmiany taktyki mają testy scenariuszy numerycznych wykonywane na funkcjach
+odczytanych z UnrealScript; nie zastępują one kompilacji ani gry.
 
 ## Źródła techniczne
 

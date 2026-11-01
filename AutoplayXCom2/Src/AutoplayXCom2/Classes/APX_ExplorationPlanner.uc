@@ -42,6 +42,30 @@ var private int ScanCursor;
 var private int LastWorldRebuild;
 var private int LastPlayerTurn;
 
+// A blue-range path can still consume the LAST action. Reserve another normal
+// AP before entering fog, so a newly revealed patrol can be answered this turn.
+static function bool CanSpendExplorationAP(int ActionPoints, bool bThreats)
+{
+    return ActionPoints >= 2 && !bThreats;
+}
+
+static function bool CanExplore(XComGameState_Unit UnitState)
+{
+    if (UnitState == none || !UnitState.IsAbleToAct() || UnitState.IsCivilian()
+        || UnitState.GetMyTemplate().bIsCosmetic
+        || !CanSpendExplorationAP(UnitState.NumActionPoints(),
+            class'APX_MissionPlanner'.static.HasCombatThreats(UnitState)))
+        return false;
+    return class'APX_MissionPlanner'.static.HasLegalMove(UnitState);
+}
+
+static function float ScoreExplorationMove(float CurrentCohesion, float CandidateCohesion)
+{
+    // Catching up acts before stretching the formation. Keep all exploration
+    // below the 25-point mission-route priority and above idle overwatch.
+    return 15.0 + FClamp(CandidateCohesion - CurrentCohesion, -6.0, 8.0);
+}
+
 // The controller must wait for another decision while a bounded scan is still
 // running, rather than report no plan after examining only the first map slice.
 function bool HasPendingSearch()
@@ -64,9 +88,7 @@ function RefreshRoster(int PlayerID)
     foreach `XCOMHISTORY.IterateByClassType(class'XComGameState_Unit', UnitState)
     {
         if (UnitState.GetAssociatedPlayerID() == PlayerID
-            && UnitState.GetTeam() == eTeam_XCom && UnitState.IsAbleToAct()
-            && !UnitState.IsCivilian() && !UnitState.GetMyTemplate().bIsCosmetic
-            && class'APX_MissionPlanner'.static.HasLegalMove(UnitState))
+            && UnitState.GetTeam() == eTeam_XCom && CanExplore(UnitState))
         {
             EligibleUnitIDs.AddItem(UnitState.ObjectID);
             if (EligibleUnitIDs.Length >= Clamp(MaxTrackedUnits, 1, 128))
@@ -300,7 +322,7 @@ function RejectGoal(int UnitID, TTile Tile)
 function bool AssignNextGoal(XComGameState_Unit UnitState, int GoalIndex)
 {
     local int Index, BestIndex;
-    local float Distance, BestDistance;
+    local float Distance, BestDistance, Value;
 
     BestIndex = INDEX_NONE;
     BestDistance = 1000000.0;
@@ -318,10 +340,14 @@ function bool AssignNextGoal(XComGameState_Unit UnitState, int GoalIndex)
             RejectGoal(UnitState.ObjectID, Frontiers[Index]);
             continue;
         }
-        if (Distance < BestDistance)
+        // Among similarly close frontiers, prefer the squad's direction over
+        // a private unexplored corner on the opposite side of the map.
+        Value = Distance - 0.5 * class'APX_MissionPlanner'.static.SquadPositionScore(
+            UnitState, Frontiers[Index]);
+        if (Value < BestDistance)
         {
             BestIndex = Index;
-            BestDistance = Distance;
+            BestDistance = Value;
         }
     }
     if (BestIndex == INDEX_NONE)
@@ -338,10 +364,11 @@ function bool BuildSafeBluePrefix(XComGameState_Unit UnitState,
     local XGUnit UnitVisualizer;
     local array<TTile> FullPath, CandidatePath;
     local int Index, PathIndex;
-    local float Cost;
+    local float Cost, StartSupport;
     local bool bSafe;
 
     Path.Length = 0;
+    StartSupport = class'APX_MissionPlanner'.static.NearestSupportDistance(UnitState, UnitState.TileLocation);
     UnitVisualizer = XGUnit(UnitState.GetVisualizer());
     if (UnitVisualizer == none || UnitVisualizer.m_kReachableTilesCache == none)
         return false;
@@ -357,6 +384,9 @@ function bool BuildSafeBluePrefix(XComGameState_Unit UnitState,
         Cost = UnitVisualizer.m_kReachableTilesCache.GetPathCostToTile(FullPath[Index]);
         if (Cost < 0.0 || Cost > UnitVisualizer.GetMobility())
             continue;
+        if (!class'APX_MissionPlanner'.static.IsSupportedAdvanceDestination(StartSupport,
+            class'APX_MissionPlanner'.static.NearestSupportDistance(UnitState, FullPath[Index])))
+            continue;
         CandidatePath.Length = 0;
         if (!UnitVisualizer.m_kReachableTilesCache.BuildPathToTile(FullPath[Index], CandidatePath)
             || CandidatePath.Length < 2)
@@ -365,7 +395,9 @@ function bool BuildSafeBluePrefix(XComGameState_Unit UnitState,
         // Leaving a hazardous starting tile is allowed; entering hazards is not.
         for (PathIndex = 1; PathIndex < CandidatePath.Length; ++PathIndex)
         {
-            if (class'XComPath'.static.TileContainsHazard(UnitState, CandidatePath[PathIndex]))
+            if (class'XComPath'.static.TileContainsHazard(UnitState, CandidatePath[PathIndex])
+                || !class'APX_MissionPlanner'.static.IsSupportedAdvanceStep(StartSupport,
+                    class'APX_MissionPlanner'.static.NearestSupportDistance(UnitState, CandidatePath[PathIndex])))
             {
                 bSafe = false;
                 break;
@@ -387,8 +419,7 @@ function bool ChooseMove(XComGameState_Unit UnitState,
 
     Path.Length = 0;
     Score = 0.0;
-    if (UnitState == none || UnitState.IsCivilian()
-        || !class'APX_MissionPlanner'.static.HasLegalMove(UnitState))
+    if (!CanExplore(UnitState))
         return false;
     OwnerPlayerID = UnitState.GetAssociatedPlayerID();
     if (!InitializeIfNeeded())
@@ -409,7 +440,9 @@ function bool ChooseMove(XComGameState_Unit UnitState,
             return false;
         if (BuildSafeBluePrefix(UnitState, Goals[GoalIndex].Tile, Path))
         {
-            Score = 15.0;
+            Score = ScoreExplorationMove(
+                class'APX_MissionPlanner'.static.SquadPositionScore(UnitState, UnitState.TileLocation),
+                class'APX_MissionPlanner'.static.SquadPositionScore(UnitState, Path[Path.Length - 1]));
             return true;
         }
         RejectGoal(UnitState.ObjectID, Goals[GoalIndex].Tile);

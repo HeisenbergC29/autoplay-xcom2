@@ -23,7 +23,7 @@ static function bool ChooseAction(XComGameState_Unit UnitState,
     local array<StateObjectReference> VisibleEnemies;
     local name AbilityName;
     local int Index, SelfIndex;
-    local float CandidateScore;
+    local float CandidateScore, MeleePenalty;
     local bool bFound;
 
     Action = EmptyAction;
@@ -72,9 +72,11 @@ static function bool ChooseAction(XComGameState_Unit UnitState,
                     if (!IsVisibleHostile(UnitState, TargetUnit, VisibleEnemies)
                         || !AdditionalTargetsAreSafe(UnitState, Candidate.AvailableTargets[Index], VisibleEnemies))
                         continue;
-                    if (!HasRequiredMeleePath(UnitState, TargetUnit, AbilityTemplate))
+                    if (!HasRequiredMeleePath(UnitState, TargetUnit, AbilityTemplate,
+                        VisibleEnemies, MeleePenalty))
                         continue;
                     CandidateScore = ScoreAttack(Ability, Candidate.AvailableTargets[Index], TargetUnit);
+                    CandidateScore -= MeleePenalty;
                 }
                 else
                 {
@@ -127,11 +129,14 @@ static function bool ChooseAction(XComGameState_Unit UnitState,
 }
 
 static function bool HasRequiredMeleePath(XComGameState_Unit SourceUnit,
-    XComGameState_Unit TargetUnit, X2AbilityTemplate AbilityTemplate)
+    XComGameState_Unit TargetUnit, X2AbilityTemplate AbilityTemplate,
+    array<StateObjectReference> VisibleEnemies, out float RiskPenalty)
 {
     local array<TTile> Destinations, Path;
     local XGUnit UnitVisualizer;
+    local int Index;
 
+    RiskPenalty = 0.0;
     if (AbilityTemplate.TargetingMethod == none || !AbilityTemplate.TargetingMethod.default.ProvidesPath)
         return true;
     if (AbilityTemplate.AbilityTargetStyle == none
@@ -150,8 +155,19 @@ static function bool HasRequiredMeleePath(XComGameState_Unit SourceUnit,
 
     // This is the same destination/path selection used by ActivateAbility_Internal
     // when an AI activates a moving-melee ability without a supplied path.
-    return UnitVisualizer.m_kReachableTilesCache.BuildPathToTile(Destinations[0], Path)
-        && Path.Length > 1;
+    if (!UnitVisualizer.m_kReachableTilesCache.BuildPathToTile(Destinations[0], Path)
+        || Path.Length < 2)
+        return false;
+    for (Index = 1; Index < Path.Length; ++Index)
+    {
+        if (class'XComPath'.static.TileContainsHazard(SourceUnit, Path[Index]))
+            return false;
+    }
+    // Melee spends its own AP and can strand the attacker beside other aliens.
+    // Account for all squad-visible threats at the actual native attack tile.
+    RiskPenalty = class'APX_MissionPlanner'.static.ExposureRisk(
+        SourceUnit, Destinations[0], VisibleEnemies) * 0.65;
+    return true;
 }
 
 static function bool IsVisibleHostile(XComGameState_Unit SourceUnit,
@@ -179,13 +195,102 @@ static function bool AdditionalTargetsAreSafe(XComGameState_Unit SourceUnit,
     return true;
 }
 
+// Stock damage previews report raw damage separately from armour and piercing.
+// Burst-fire previews aggregate shots, so apply mitigation per shot. Ignoring
+// later shred is conservative and avoids claiming a kill that armour prevents.
+static function float PreviewDamageAfterArmor(float Damage, float Armor,
+    float Pierce, int Shots)
+{
+    Shots = Max(1, Shots);
+    if (Damage <= 0.0)
+        return 0.0;
+    return FMax(1.0, Damage / float(Shots)
+        - FMax(0.0, Armor - Pierce / float(Shots))) * float(Shots);
+}
+
+static function bool AbilityIgnoresArmor(X2AbilityTemplate AbilityTemplate)
+{
+    local X2Effect Effect;
+    local X2Effect_ApplyWeaponDamage DamageEffect;
+
+    foreach AbilityTemplate.AbilityTargetEffects(Effect)
+    {
+        DamageEffect = X2Effect_ApplyWeaponDamage(Effect);
+        if (DamageEffect != none && DamageEffect.bIgnoreArmor)
+            return true;
+    }
+    return false;
+}
+
+// A range-based estimate, not a prediction of the hidden damage roll. The
+// guaranteed case is exact for the supplied preview; intermediate rolls use a
+// uniform approximation and intentionally omit critical-hit luck.
+static function float EstimatedKillChance(float MinDamage, float MaxDamage,
+    float Health, float HitChance)
+{
+    if (Health <= 0.0 || MaxDamage <= 0.0)
+        return 0.0;
+    if (MinDamage >= Health)
+        return FClamp(HitChance, 0.0, 100.0) / 100.0;
+    if (MaxDamage < Health)
+        return 0.0;
+    return FClamp(HitChance, 0.0, 100.0) / 100.0
+        * FClamp((MaxDamage - Health + 1.0) / (MaxDamage - MinDamage + 1.0), 0.0, 1.0);
+}
+
+static function float ScoreDamage(float MinDamage, float MaxDamage,
+    float Health, float HitChance, float Threat, float WoundFraction)
+{
+    local float Chance, ExpectedDamage, KillChance;
+
+    if (MaxDamage <= 0.0 || Health <= 0.0)
+        return -10000.0;
+    Chance = FClamp(HitChance, 0.0, 100.0) / 100.0;
+    // Cap each endpoint separately: a pistol that finishes a wounded alien
+    // should not lose to a high-damage attack wasting most of its damage.
+    ExpectedDamage = (FMin(Health, MinDamage) + FMin(Health, MaxDamage)) * 0.5 * Chance;
+    KillChance = EstimatedKillChance(MinDamage, MaxDamage, Health, HitChance);
+    return 5.0 + ExpectedDamage * 8.0 + KillChance * 65.0 * FClamp(Threat, 0.6, 1.5)
+        + Chance * (4.0 + FClamp(WoundFraction, 0.0, 1.0) * 8.0);
+}
+
+// The preview aggregates Rapid Fire / Fan Fire damage, but their hit rolls
+// remain independent. Do not value two required hits like one guaranteed hit.
+// When partial-hit damage might suffice, use a conservative all-hits estimate;
+// when every individual hit is lethal, use the chance of at least one hit.
+static function float BurstKillChance(float MinDamage, float MaxDamage,
+    float Health, float HitChance, int Shots)
+{
+    local float Chance, AllHit, AllMiss;
+
+    Chance = FClamp(HitChance, 0.0, 100.0) / 100.0;
+    AllHit = Chance;
+    AllMiss = 1.0 - Chance;
+    if (Shots >= 2)
+    {
+        AllHit *= Chance;
+        AllMiss *= 1.0 - Chance;
+    }
+    if (Shots >= 3)
+    {
+        AllHit *= Chance;
+        AllMiss *= 1.0 - Chance;
+    }
+    if (Shots > 3)
+        return 0.0;
+    if (MinDamage / float(Max(1, Shots)) >= Health)
+        return 1.0 - AllMiss;
+    return EstimatedKillChance(MinDamage, MaxDamage, Health, 100.0) * AllHit;
+}
+
 static function float ScoreAttack(XComGameState_Ability Ability,
     AvailableTarget Target, XComGameState_Unit TargetUnit)
 {
     local ShotBreakdown Breakdown;
     local WeaponDamageValue MinDamage, MaxDamage;
-    local int HitChance, AllowsShield;
-    local float ExpectedDamage, Result;
+    local X2AbilityMultiTarget_BurstFire BurstFire;
+    local int HitChance, AllowsShield, Shots;
+    local float Armor, Health, MinHPDamage, MaxHPDamage, Threat, Result;
 
     if (Ability.GetMyTemplate().AbilityToHitCalc == none)
         return -10000.0;
@@ -194,15 +299,39 @@ static function float ScoreAttack(XComGameState_Ability Ability,
         return -10000.0;
 
     Ability.GetDamagePreview(Target.PrimaryTarget, MinDamage, MaxDamage, AllowsShield);
-    // Use the game's effects/weapon-tech preview. This is a heuristic: armour
-    // mitigation and multi-shot outcomes can make actual HP damage differ.
-    ExpectedDamage = float(MinDamage.Damage + MaxDamage.Damage) * 0.5 * float(HitChance) / 100.0;
-    if (ExpectedDamage <= 0.0)
-        return -10000.0;
-    Result = 40.0 + ExpectedDamage * 8.0 + float(HitChance) * 0.12;
-    if (float(MinDamage.Damage) >= TargetUnit.GetCurrentStat(eStat_HP)
-        + TargetUnit.GetCurrentStat(eStat_ShieldHP))
-        Result += 35.0 * float(HitChance) / 100.0;
+    Armor = TargetUnit.GetArmorMitigationForUnitFlag();
+    if (AbilityIgnoresArmor(Ability.GetMyTemplate()))
+        Armor = 0.0;
+    Shots = 1;
+    BurstFire = X2AbilityMultiTarget_BurstFire(Ability.GetMyTemplate().AbilityMultiTargetStyle);
+    if (BurstFire != none)
+        Shots += BurstFire.NumExtraShots;
+    MinHPDamage = PreviewDamageAfterArmor(MinDamage.Damage, Armor, MinDamage.Pierce, Shots);
+    MaxHPDamage = PreviewDamageAfterArmor(MaxDamage.Damage, Armor, MaxDamage.Pierce, Shots);
+    Health = TargetUnit.GetCurrentStat(eStat_HP);
+    if (AllowsShield > 0)
+        Health += TargetUnit.GetCurrentStat(eStat_ShieldHP);
+    // Remove dangerous weapons first when kill probabilities are comparable.
+    // Do not reserve a target optimistically: the controller recomputes after
+    // every actual result, so a missed kill naturally leaves a follow-up shot.
+    Threat = FClamp(TargetUnit.GetCurrentStat(eStat_Offense) / 65.0, 0.75, 1.35);
+    if (TargetUnit.GetTeam() == eTeam_TheLost)
+        Threat = 0.6;
+    Result = ScoreDamage(MinHPDamage, MaxHPDamage, Health, HitChance, Threat,
+        1.0 - TargetUnit.GetCurrentStat(eStat_HP) / FMax(1.0, TargetUnit.GetMaxStat(eStat_HP)));
+    if (Shots > 1)
+        Result += (BurstKillChance(MinHPDamage, MaxHPDamage, Health, HitChance, Shots)
+            - EstimatedKillChance(MinHPDamage, MaxHPDamage, Health, HitChance))
+            * 65.0 * FClamp(Threat, 0.6, 1.5);
+    // Spend free attacks before turn-ending shots and conserve scarce attacks
+    // when an ordinary shot gives essentially the same outcome.
+    if (Ability.GetMyTemplateName() == 'LightningHands'
+        || Ability.GetMyTemplateName() == 'Whiplash')
+        Result += 12.0;
+    if (Ability.GetMyTemplateName() == 'CombatProtocol'
+        || Ability.GetMyTemplateName() == 'HailOfBullets'
+        || Ability.GetMyTemplateName() == 'Soulfire')
+        Result -= 8.0;
     return Result;
 }
 
@@ -299,7 +428,7 @@ static function float ScoreSelfAction(XComGameState_Unit UnitState,
         if (Weapon == none || Weapon.Ammo >= Weapon.GetClipSize())
             return -10000.0;
         if (Weapon.Ammo == 0)
-            return 85.0;
+            return bEnemiesVisible ? 35.0 : 18.0;
         return bEnemiesVisible ? 3.0 : 12.0;
     }
     if (default.OverwatchAbilities.Find(AbilityName) != INDEX_NONE)
@@ -308,7 +437,7 @@ static function float ScoreSelfAction(XComGameState_Unit UnitState,
     {
         if (bEnemiesVisible && UnitState.GetCurrentStat(eStat_HP)
             / FMax(1.0, UnitState.GetMaxStat(eStat_HP)) <= default.EmergencyHealthFraction)
-            return 65.0;
+            return 18.0;
         return 1.0;
     }
     return -10000.0;

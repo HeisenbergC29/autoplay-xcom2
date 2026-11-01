@@ -5,6 +5,9 @@ class APX_MissionPlanner extends Object
 
 var config int MaxCandidateTiles;
 var config float PreferredCombatRangeTiles;
+var config float MinimumPositionGain;
+var config float SquadSupportDistance;
+var config float SquadSeparationTiles;
 
 // UnrealScript cannot pass a bit-packed bool as an out parameter. Carry the
 // related result fields in one value whose structure can be passed by reference.
@@ -213,7 +216,7 @@ static function bool FindGoal(XComGameState_Unit UnitState, out MissionGoal Goal
 
     Goal = EmptyGoal;
 
-    class'X2TacticalVisibilityHelpers'.static.GetAllVisibleEnemyUnitsForUnit(UnitState.ObjectID, VisibleEnemies);
+    GetVisibleThreats(UnitState, VisibleEnemies);
     EvacZone = class'XComGameState_EvacZone'.static.GetEvacZone(eTeam_XCom);
     if (EvacZone != none && ShouldEvacuate(UnitState))
     {
@@ -221,6 +224,17 @@ static function bool FindGoal(XComGameState_Unit UnitState, out MissionGoal Goal
         Goal.bFound = true;
         return true;
     }
+
+    // A squadmate's contact still threatens this soldier. Deal with known
+    // enemies before walking toward the much higher-scored mission marker.
+    // Evacuation above remains an explicit exception.
+    foreach VisibleEnemies(EnemyRef)
+    {
+        OtherUnit = XComGameState_Unit(`XCOMHISTORY.GetGameStateForObjectID(EnemyRef.ObjectID));
+        ConsiderGoal(UnitState, OtherUnit.TileLocation, 40, true, Goal);
+    }
+    if (Goal.bFound)
+        return true;
 
     foreach `XCOMHISTORY.IterateByClassType(class'XComGameState_InteractiveObject', ObjectState)
     {
@@ -249,15 +263,6 @@ static function bool FindGoal(XComGameState_Unit UnitState, out MissionGoal Goal
                 Goal);
     }
 
-    foreach VisibleEnemies(EnemyRef)
-    {
-        OtherUnit = XComGameState_Unit(`XCOMHISTORY.GetGameStateForObjectID(EnemyRef.ObjectID));
-        if (OtherUnit != none && OtherUnit.IsAlive() && !OtherUnit.bRemovedFromPlay
-            && UnitState.IsEnemyUnit(OtherUnit))
-            ConsiderGoal(UnitState, OtherUnit.TileLocation, 40, true,
-                Goal);
-    }
-
     if (!Goal.bFound)
     {
         BattleData = XComGameState_BattleData(`XCOMHISTORY.GetSingleGameStateObjectForClass(class'XComGameState_BattleData', true));
@@ -271,49 +276,219 @@ static function bool FindGoal(XComGameState_Unit UnitState, out MissionGoal Goal
     return Goal.bFound;
 }
 
-// Evaluate cover against the enemies the soldier can actually see. Hidden units
-// never contribute to target selection or movement scoring.
-static function float CoverScore(XComGameState_Unit UnitState, TTile Tile,
+// Only the player's known contacts participate, never hidden unit positions.
+// The same contact list is shared by movement, attacks and exploration guards.
+static function GetVisibleThreats(XComGameState_Unit UnitState,
+    out array<StateObjectReference> VisibleEnemies)
+{
+    local int Index;
+    local XComGameState_Unit Enemy;
+
+    VisibleEnemies.Length = 0;
+    class'X2TacticalVisibilityHelpers'.static.GetAllVisibleEnemiesForPlayer(
+        UnitState.ControllingPlayer.ObjectID, VisibleEnemies);
+    for (Index = VisibleEnemies.Length - 1; Index >= 0; --Index)
+    {
+        Enemy = XComGameState_Unit(`XCOMHISTORY.GetGameStateForObjectID(VisibleEnemies[Index].ObjectID));
+        if (Enemy == none || !Enemy.IsAlive() || Enemy.IsIncapacitated()
+            || Enemy.bRemovedFromPlay || Enemy.IsCivilian()
+            || Enemy.GetMyTemplate().bIsCosmetic || !UnitState.IsEnemyUnit(Enemy)
+            || Enemy.GetMyTemplateName() == 'HostileVIPCivilian')
+            VisibleEnemies.Remove(Index, 1);
+    }
+}
+
+static function bool HasCombatThreats(XComGameState_Unit UnitState)
+{
+    local array<StateObjectReference> VisibleEnemies;
+    GetVisibleThreats(UnitState, VisibleEnemies);
+    return VisibleEnemies.Length > 0;
+}
+
+// This is a conservative directional-cover heuristic, not a hypothetical shot
+// preview. Solid walls/peek tiles and enemy movement can change actual LOS.
+static function float DirectionalRisk(int CoverLevel, float Distance,
+    bool bCanTakeCover, bool bMeleeOnly)
+{
+    local float Risk;
+
+    if (bMeleeOnly)
+        return FMax(0.0, 12.0 - Distance) * 4.0;
+    Risk = 30.0;
+    if (!bCanTakeCover)
+        Risk = 12.0;
+    if (bCanTakeCover && CoverLevel == 2)
+        Risk = 3.0;
+    if (bCanTakeCover && CoverLevel == 1)
+        Risk = 10.0;
+    return Risk * FClamp(18.0 / FMax(1.0, Distance), 0.2, 1.0) + FMax(0.0, 4.0 - Distance) * 5.0;
+}
+
+static function float CombinedExposure(float SumRisk, float WorstRisk, float HealthFraction)
+{
+    // One open flank cannot be cancelled out by several full-cover directions.
+    return (SumRisk * 0.65 + WorstRisk * 0.75) * (1.0 + (1.0 - FClamp(HealthFraction, 0.0, 1.0)) * 0.6);
+}
+
+static function float ExposureRisk(XComGameState_Unit UnitState, TTile Tile,
     array<StateObjectReference> VisibleEnemies)
 {
     local StateObjectReference EnemyRef;
     local XComGameState_Unit Enemy;
     local vector TargetLocation, EnemyLocation;
-    local float Angle, Result;
+    local float Angle, Risk, SumRisk, WorstRisk;
     local ECoverType Cover;
+    local int CoverLevel;
 
-    if (!UnitState.GetMyTemplate().bCanTakeCover)
-        return 0;
     TargetLocation = `XWORLD.GetPositionFromTileCoordinates(Tile);
     foreach VisibleEnemies(EnemyRef)
     {
         Enemy = XComGameState_Unit(`XCOMHISTORY.GetGameStateForObjectID(EnemyRef.ObjectID));
-        if (Enemy == none || !Enemy.IsAlive() || Enemy.GetTeam() == eTeam_TheLost
-            || !UnitState.IsEnemyUnit(Enemy))
+        if (Enemy == none || !Enemy.IsAlive() || Enemy.IsIncapacitated()
+            || Enemy.bRemovedFromPlay || !UnitState.IsEnemyUnit(Enemy))
             continue;
         EnemyLocation = `XWORLD.GetPositionFromTileCoordinates(Enemy.TileLocation);
         Cover = `XWORLD.GetCoverTypeForTarget(EnemyLocation, TargetLocation, Angle);
+        CoverLevel = 0;
         if (Cover == CT_Standing)
-            Result += 6;
+            CoverLevel = 2;
         else if (Cover == CT_MidLevel)
-            Result += 3;
-        else
-            Result -= 8;
+            CoverLevel = 1;
+        Risk = DirectionalRisk(CoverLevel, TileDistance(Tile, Enemy.TileLocation),
+            UnitState.GetMyTemplate().bCanTakeCover, Enemy.IsMeleeOnly());
+        SumRisk += Risk;
+        WorstRisk = FMax(WorstRisk, Risk);
     }
+    return CombinedExposure(SumRisk, WorstRisk, UnitState.GetCurrentStat(eStat_HP)
+        / FMax(1.0, UnitState.GetMaxStat(eStat_HP)));
+}
+
+// Smooth support and blast-spacing preferences, not tile reservations. The
+// controller submits one action and recomputes from the resulting live state.
+static function float SquadPositionScore(XComGameState_Unit UnitState, TTile Tile)
+{
+    local XComGameState_Unit Friend;
+    local float Distance, NearestDistance, Result;
+    local bool bHasSupport;
+
+    NearestDistance = 100000.0;
+    foreach `XCOMHISTORY.IterateByClassType(class'XComGameState_Unit', Friend)
+    {
+        if (Friend.ObjectID == UnitState.ObjectID || !Friend.IsAlive()
+            || Friend.IsIncapacitated() || Friend.bRemovedFromPlay || Friend.IsCivilian()
+            || Friend.GetMyTemplate().bIsCosmetic
+            || Friend.GetAssociatedPlayerID() != UnitState.GetAssociatedPlayerID()
+            || !UnitState.IsFriendlyUnit(Friend))
+            continue;
+        Distance = TileDistance(Tile, Friend.TileLocation);
+        NearestDistance = FMin(NearestDistance, Distance);
+        Result -= FMax(0.0, default.SquadSeparationTiles - Distance) * 5.0;
+        bHasSupport = true;
+    }
+    if (bHasSupport)
+        Result -= FMin(30.0, FMax(0.0, NearestDistance - default.SquadSupportDistance) * 4.0);
     return Result;
+}
+
+// A soldier with spent AP still anchors the formation. Use only known friendly
+// positions; no hidden enemy state participates in this support envelope.
+static function float NearestSupportDistance(XComGameState_Unit UnitState, TTile Tile)
+{
+    local XComGameState_Unit Friendly;
+    local float Distance, Nearest;
+    local bool bFound;
+
+    Nearest = 1000000.0;
+    foreach `XCOMHISTORY.IterateByClassType(class'XComGameState_Unit', Friendly)
+    {
+        if (Friendly.ObjectID == UnitState.ObjectID || !Friendly.IsAlive()
+            || Friendly.IsIncapacitated() || Friendly.bRemovedFromPlay
+            || Friendly.GetAssociatedPlayerID() != UnitState.GetAssociatedPlayerID()
+            || Friendly.GetTeam() != eTeam_XCom || Friendly.IsCivilian()
+            || Friendly.GetMyTemplate().bIsCosmetic)
+            continue;
+        Distance = TileDistance(Tile, Friendly.TileLocation);
+        Nearest = FMin(Nearest, Distance);
+        bFound = true;
+    }
+    // A lone survivor must remain able to advance.
+    return bFound ? Nearest : 0.0;
+}
+
+static function bool IsSupportedAdvanceStep(float StartDistance, float Distance)
+{
+    return Distance <= FMax(10.0, StartDistance);
+}
+
+static function bool IsSupportedAdvanceDestination(float StartDistance, float Distance)
+{
+    return Distance <= 10.0 || Distance < StartDistance - 0.5;
+}
+
+static function float ScoreRouteAdvance(float CurrentCohesion, float CandidateCohesion)
+{
+    // Mission-marker routes need the same catch-up ordering as exploration;
+    // a fixed route score otherwise lets the first soldier repeatedly lead.
+    return 25.0 + FClamp(CandidateCohesion - CurrentCohesion, -6.0, 8.0);
+}
+
+static function float OffensivePositionScore(XComGameState_Unit UnitState, TTile Tile,
+    array<StateObjectReference> VisibleEnemies)
+{
+    local XComGameState_Unit Enemy;
+    local StateObjectReference EnemyRef;
+    local vector SourceLocation, EnemyLocation;
+    local ECoverType Cover;
+    local float Distance, Angle, Value, BestValue;
+
+    BestValue = -10000.0;
+    SourceLocation = `XWORLD.GetPositionFromTileCoordinates(Tile);
+    foreach VisibleEnemies(EnemyRef)
+    {
+        Enemy = XComGameState_Unit(`XCOMHISTORY.GetGameStateForObjectID(EnemyRef.ObjectID));
+        if (Enemy == none || !Enemy.IsAlive() || Enemy.IsIncapacitated()
+            || !UnitState.IsEnemyUnit(Enemy))
+            continue;
+        Distance = TileDistance(Tile, Enemy.TileLocation);
+        Value = -Abs(Distance - default.PreferredCombatRangeTiles);
+        EnemyLocation = `XWORLD.GetPositionFromTileCoordinates(Enemy.TileLocation);
+        Cover = `XWORLD.GetCoverTypeForTarget(SourceLocation, EnemyLocation, Angle);
+        // Flanking is useful only against cover users within practical range.
+        // Keep this bounded: geometry alone does not establish a legal shot.
+        if (Enemy.GetMyTemplate().bCanTakeCover && Cover == CT_None && Distance <= 15.0)
+            Value += 14.0;
+        if (Tile.Z > Enemy.TileLocation.Z && Distance <= 18.0)
+            Value += 5.0;
+        BestValue = FMax(BestValue, Value);
+    }
+    if (BestValue == -10000.0)
+        return 0.0;
+    return BestValue;
 }
 
 static function float PositionScore(XComGameState_Unit UnitState, TTile Tile,
     TTile GoalTile, bool bCombatGoal, array<StateObjectReference> VisibleEnemies)
 {
-    local float Distance, Result;
-    Distance = TileDistance(Tile, GoalTile);
+    local float Result;
     if (bCombatGoal)
-        Result = -Abs(Distance - default.PreferredCombatRangeTiles) * 2;
+        Result = OffensivePositionScore(UnitState, Tile, VisibleEnemies);
     else
-        Result = -Distance * 3;
-    Result += CoverScore(UnitState, Tile, VisibleEnemies);
-    return Result;
+        Result = -TileDistance(Tile, GoalTile) * 3.0;
+    return Result - ExposureRisk(UnitState, Tile, VisibleEnemies)
+        + SquadPositionScore(UnitState, Tile);
+}
+
+// Last-AP movement must remove a material threat, not chase a flank with no
+// action left to exploit it. A blue move with two AP still leaves a response.
+static function bool IsUsefulReposition(float PositionGain, float CurrentRisk,
+    float CandidateRisk, int StandardAP, float MinimumGain)
+{
+    if (PositionGain < MinimumGain)
+        return false;
+    if (StandardAP < 2 && CurrentRisk - CandidateRisk < 8.0)
+        return false;
+    // Do not trade a safe firing position for a speculative flank.
+    return CandidateRisk <= CurrentRisk + 3.0;
 }
 
 static function bool HasLegalMove(XComGameState_Unit UnitState)
@@ -344,17 +519,24 @@ static function bool ChooseRoutePrefix(XComGameState_Unit UnitState,
 {
     local array<TTile> FullPath, CandidatePath;
     local int Index, PathIndex;
-    local bool bSafe;
+    local bool bSafe, bRequireSupport;
+    local float StartSupport, PathCost;
 
     Path.Length = 0;
+    bRequireSupport = !ShouldEvacuate(UnitState);
+    StartSupport = NearestSupportDistance(UnitState, UnitState.TileLocation);
     if (!class'X2PathSolver'.static.BuildPath(UnitState,
         UnitState.TileLocation, GoalTile, FullPath, false))
         return false;
     for (Index = FullPath.Length - 1; Index > 0; --Index)
     {
         if (TileDistance(FullPath[Index], UnitState.TileLocation) < 1
-            || !UnitVisualizer.m_kReachableTilesCache.IsTileReachable(FullPath[Index])
-            || UnitVisualizer.m_kReachableTilesCache.GetPathCostToTile(FullPath[Index]) > UnitVisualizer.GetMobility())
+            || !UnitVisualizer.m_kReachableTilesCache.IsTileReachable(FullPath[Index]))
+            continue;
+        PathCost = UnitVisualizer.m_kReachableTilesCache.GetPathCostToTile(FullPath[Index]);
+        if (PathCost < 0.0 || PathCost > UnitVisualizer.GetMobility()
+            || (bRequireSupport && !IsSupportedAdvanceDestination(StartSupport,
+                NearestSupportDistance(UnitState, FullPath[Index]))))
             continue;
         CandidatePath.Length = 0;
         if (!UnitVisualizer.m_kReachableTilesCache.BuildPathToTile(FullPath[Index], CandidatePath)
@@ -363,7 +545,9 @@ static function bool ChooseRoutePrefix(XComGameState_Unit UnitState,
         bSafe = true;
         for (PathIndex = 1; PathIndex < CandidatePath.Length; ++PathIndex)
         {
-            if (class'XComPath'.static.TileContainsHazard(UnitState, CandidatePath[PathIndex]))
+            if (class'XComPath'.static.TileContainsHazard(UnitState, CandidatePath[PathIndex])
+                || (bRequireSupport && !IsSupportedAdvanceStep(StartSupport,
+                    NearestSupportDistance(UnitState, CandidatePath[PathIndex]))))
             {
                 bSafe = false;
                 break;
@@ -386,9 +570,9 @@ static function bool ChooseMove(XComGameState_Unit UnitState,
     local array<StateObjectReference> VisibleEnemies;
     local TTile GoalTile, Tile, ClosestTile;
     local MissionGoal Goal;
-    local bool bCombatGoal, bSafe;
-    local int Index, PathIndex, Stride;
-    local float CurrentScore, CandidateScore, BestScore;
+    local bool bCombatGoal, bSafe, bRequireSupport;
+    local int Index, PathIndex, SampleIndex, SampleCount;
+    local float CurrentScore, CandidateScore, BestScore, CurrentRisk, CandidateRisk, PathCost, StartSupport;
 
     Path.Length = 0;
     Score = 0;
@@ -397,6 +581,13 @@ static function bool ChooseMove(XComGameState_Unit UnitState,
         return false;
     GoalTile = Goal.Tile;
     bCombatGoal = Goal.bCombat;
+    bRequireSupport = !bCombatGoal && !ShouldEvacuate(UnitState);
+    StartSupport = NearestSupportDistance(UnitState, UnitState.TileLocation);
+    // Preserve the last action for overwatch while advancing into fog. Valid
+    // evacuation is allowed because it may be this soldier's final chance.
+    if (!bCombatGoal && VisibleEnemies.Length == 0 && UnitState.NumActionPoints() < 2
+        && !ShouldEvacuate(UnitState))
+        return false;
     UnitVisualizer = XGUnit(UnitState.GetVisualizer());
     if (UnitVisualizer == none || UnitVisualizer.m_kReachableTilesCache == none)
         return false;
@@ -408,7 +599,8 @@ static function bool ChooseMove(XComGameState_Unit UnitState,
     if (!bCombatGoal && VisibleEnemies.Length == 0
         && ChooseRoutePrefix(UnitState, UnitVisualizer, GoalTile, Path))
     {
-        Score = 25;
+        Score = ScoreRouteAdvance(SquadPositionScore(UnitState, UnitState.TileLocation),
+            SquadPositionScore(UnitState, Path[Path.Length - 1]));
         return true;
     }
     // Blue moves preserve an action for combat, interactions or overwatch.
@@ -416,19 +608,33 @@ static function bool ChooseMove(XComGameState_Unit UnitState,
     ClosestTile = UnitVisualizer.m_kReachableTilesCache.GetClosestReachableDestination(GoalTile);
     // Make sure the closest destination participates even with bounded sampling.
     Tiles.InsertItem(0, ClosestTile);
-    Stride = Max(1, (Tiles.Length + Max(1, default.MaxCandidateTiles) - 1)
-        / Max(1, default.MaxCandidateTiles));
+    SampleCount = Min(Tiles.Length, Clamp(default.MaxCandidateTiles, 1, 512));
     CurrentScore = PositionScore(UnitState, UnitState.TileLocation, GoalTile, bCombatGoal, VisibleEnemies);
-    BestScore = CurrentScore + 1.0;
+    BestScore = CurrentScore + FMax(1.0, default.MinimumPositionGain);
+    CurrentRisk = ExposureRisk(UnitState, UnitState.TileLocation, VisibleEnemies);
 
-    for (Index = 0; Index < Tiles.Length; Index += Stride)
+    // Include the closest goal tile and distribute the remaining samples over
+    // the entire native list, even when tile count is just above the budget.
+    for (SampleIndex = 0; SampleIndex < SampleCount; ++SampleIndex)
     {
+        Index = 0;
+        if (SampleIndex > 0 && SampleCount > 1)
+            Index = 1 + ((SampleIndex - 1) * (Tiles.Length - 2)) / Max(1, SampleCount - 2);
         Tile = Tiles[Index];
+        PathCost = UnitVisualizer.m_kReachableTilesCache.GetPathCostToTile(Tile);
         if (TileDistance(Tile, UnitState.TileLocation) < 1
             || class'XComPath'.static.TileContainsHazard(UnitState, Tile)
-            || UnitVisualizer.m_kReachableTilesCache.GetPathCostToTile(Tile) > UnitVisualizer.GetMobility())
+            || PathCost < 0.0 || PathCost > UnitVisualizer.GetMobility()
+            || (bRequireSupport && !IsSupportedAdvanceDestination(StartSupport,
+                NearestSupportDistance(UnitState, Tile))))
             continue;
+        CandidateRisk = ExposureRisk(UnitState, Tile, VisibleEnemies);
         CandidateScore = PositionScore(UnitState, Tile, GoalTile, bCombatGoal, VisibleEnemies);
+        // Small travel cost breaks equivalent-position ties and reduces churn.
+        CandidateScore -= PathCost * 0.25;
+        if (bCombatGoal && !IsUsefulReposition(CandidateScore - CurrentScore,
+            CurrentRisk, CandidateRisk, UnitState.NumActionPoints(), default.MinimumPositionGain))
+            continue;
         if (CandidateScore <= BestScore)
             continue;
 
@@ -440,7 +646,9 @@ static function bool ChooseMove(XComGameState_Unit UnitState,
         // Check the entire route, not just its endpoint; allow leaving a burning start tile.
         for (PathIndex = 1; PathIndex < CandidatePath.Length; ++PathIndex)
         {
-            if (class'XComPath'.static.TileContainsHazard(UnitState, CandidatePath[PathIndex]))
+            if (class'XComPath'.static.TileContainsHazard(UnitState, CandidatePath[PathIndex])
+                || (bRequireSupport && !IsSupportedAdvanceStep(StartSupport,
+                    NearestSupportDistance(UnitState, CandidatePath[PathIndex]))))
             {
                 bSafe = false;
                 break;

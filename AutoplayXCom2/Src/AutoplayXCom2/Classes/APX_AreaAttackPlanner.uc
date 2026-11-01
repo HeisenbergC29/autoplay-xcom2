@@ -319,8 +319,8 @@ function float ScoreBlast(XComGameState_Unit UnitState, XComGameState_Ability Ab
     local XComGameState_Unit Enemy;
     local X2Effect Effect;
     local WeaponDamageValue MinDamage, MaxDamage, EmptyDamage;
-    local int AllowsShield, Count;
-    local float MinTotal, MaxTotal, ExpectedDamage, Result;
+    local int AllowsShield, Count, LethalCount;
+    local float MinTotal, MaxTotal, Health, Armor, Result;
 
     if (Ability.GetMyTemplate().bUseLaunchedGrenadeEffects)
         Effects = Grenade.LaunchedGrenadeEffects;
@@ -333,6 +333,8 @@ function float ScoreBlast(XComGameState_Unit UnitState, XComGameState_Ability Ab
             continue;
         MinTotal = 0.0;
         MaxTotal = 0.0;
+        Armor = Enemy.GetArmorMitigationForUnitFlag();
+        Health = Enemy.GetCurrentStat(eStat_HP) + Enemy.GetCurrentStat(eStat_ShieldHP);
         foreach Effects(Effect)
         {
             if (Effect == none)
@@ -344,19 +346,102 @@ function float ScoreBlast(XComGameState_Unit UnitState, XComGameState_Ability Ab
             MaxDamage = EmptyDamage;
             AllowsShield = 0;
             Effect.GetDamagePreview(TargetRef, Ability, false, MinDamage, MaxDamage, AllowsShield);
-            MinTotal += MinDamage.Damage;
-            MaxTotal += MaxDamage.Damage;
+            // The stock preview reports raw damage; armor is applied per hit.
+            // Do not subtract Shred before this grenade's own damage lands.
+            if (X2Effect_ApplyWeaponDamage(Effect) != none
+                && X2Effect_ApplyWeaponDamage(Effect).bIgnoreArmor)
+            {
+                MinTotal += MinDamage.Damage;
+                MaxTotal += MaxDamage.Damage;
+            }
+            else
+            {
+                MinTotal += class'APX_CombatPlanner'.static.PreviewDamageAfterArmor(
+                    MinDamage.Damage, Armor, MinDamage.Pierce, 1);
+                MaxTotal += class'APX_CombatPlanner'.static.PreviewDamageAfterArmor(
+                    MaxDamage.Damage, Armor, MaxDamage.Pierce, 1);
+            }
         }
-        ExpectedDamage = FMax(0.0, (MinTotal + MaxTotal) * 0.5);
-        if (ExpectedDamage <= 0.0)
+        if (MaxTotal <= 0.0)
             continue;
+        // Stock previews omit the advanced explosive falloff adjustment.
+        // Without its native result, do not promise a minimum or a sure kill.
+        if (`SecondWaveEnabled('ExplosiveFalloff'))
+            MinTotal = 0.0;
         ++Count;
-        Result += ExpectedDamage * 8.0 + 12.0;
+        if (MinTotal >= Health)
+            ++LethalCount;
+        Result += class'APX_CombatPlanner'.static.ScoreDamage(MinTotal, MaxTotal,
+            Health, 100.0, 1.0, 1.0 - Enemy.GetCurrentStat(eStat_HP)
+                / FMax(1.0, Enemy.GetMaxStat(eStat_HP)));
+        // Modest setup value only if an ally can actually follow up now.
+        // This is a cover-opening opportunity, not a promise that terrain breaks.
+        if (MinTotal < Health)
+            Result += CoverOpeningValue(UnitState, Enemy);
     }
-    // Avoid spending a limited explosive for an isolated easy rifle target.
-    if (Count < Max(1, MinimumTargets))
+    return ScoreGrenadeOutcome(Count, LethalCount, Max(1, MinimumTargets), Result);
+}
+
+// A certain single kill may justify the limited grenade; damage-only use still
+// requires the configured group size. Rifle kills win ties by saving the item.
+static function float ScoreGrenadeOutcome(int Count, int LethalCount,
+    int RequiredTargets, float DamageValue)
+{
+    if (Count == 0 || (Count < RequiredTargets && LethalCount == 0))
         return -10000.0;
-    return 25.0 + Result;
+    return DamageValue - 18.0;
+}
+
+function float CoverOpeningValue(XComGameState_Unit SourceUnit, XComGameState_Unit Enemy)
+{
+    local XComGameState_Unit Ally;
+    local XComGameState_Ability Shot;
+    local GameRulesCache_Unit UnitCache;
+    local AvailableAction Candidate;
+    local AvailableTarget Target;
+    local float Angle, Result;
+    local vector EnemyLocation;
+    local bool bFollowUp;
+
+    EnemyLocation = `XWORLD.GetPositionFromTileCoordinates(Enemy.TileLocation);
+    foreach `XCOMHISTORY.IterateByClassType(class'XComGameState_Unit', Ally)
+    {
+        if (Ally.ObjectID == SourceUnit.ObjectID || !Ally.IsAbleToAct()
+            || Ally.GetAssociatedPlayerID() != SourceUnit.GetAssociatedPlayerID()
+            || Ally.GetTeam() != eTeam_XCom || Ally.GetMyTemplate().bIsCosmetic
+            || `XWORLD.GetCoverTypeForTarget(`XWORLD.GetPositionFromTileCoordinates(
+                Ally.TileLocation), EnemyLocation, Angle) == CT_None
+            || !`TACTICALRULES.GetGameRulesCache_Unit(Ally.GetReference(), UnitCache))
+            continue;
+        bFollowUp = false;
+        foreach UnitCache.AvailableActions(Candidate)
+        {
+            if (Candidate.AvailableCode != 'AA_Success' || !Candidate.bInputTriggered
+                || Candidate.bFreeAim)
+                continue;
+            Shot = XComGameState_Ability(`XCOMHISTORY.GetGameStateForObjectID(
+                Candidate.AbilityObjectRef.ObjectID));
+            if (Shot == none || (Shot.GetMyTemplateName() != 'StandardShot'
+                && Shot.GetMyTemplateName() != 'SniperStandardFire'
+                && Shot.GetMyTemplateName() != 'PistolStandardShot'))
+                continue;
+            foreach Candidate.AvailableTargets(Target)
+            {
+                if (Target.PrimaryTarget.ObjectID == Enemy.ObjectID)
+                {
+                    Result += 4.0;
+                    bFollowUp = true;
+                    break;
+                }
+            }
+            // Count one opportunity per ally, even with several loaded weapons.
+            if (Result >= 12.0)
+                return 12.0;
+            if (bFollowUp)
+                break;
+        }
+    }
+    return Result;
 }
 
 function bool EvaluateImpact(XComGameState_Unit UnitState,

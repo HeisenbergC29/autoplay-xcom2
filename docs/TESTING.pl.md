@@ -1,6 +1,10 @@
 # Testy odbiorcze
 
-Dotychczasowy wynik użytkownika dla paczki 0.1.0 alpha: **PASS** — przycisk widoczny i klikalny w misji; **FAIL** — jednostki nie otrzymują rozkazów, stale `PAUSED: SCREEN / MENU`. Źródła poprawiają rozpoznawanie nakładek HUD-u; ich nowa kompilacja i test w grze pozostają **NIEURUCHOMIONE**. [Instrukcja aktualizacji](ui-blocking-fix.pl.md).
+Najnowszy wynik zgłoszony przez użytkownika: **PASS** — mod wydaje rozkazy;
+**FAIL** — przegrywa Gatecrasher na Legendzie i Dowódcy. Dawna paczka 0.1.0 alpha
+miała blokadę HUD-u. Bieżące zmiany taktyczne mają testy numerycznych heurystyk,
+ale ich kompilacja i próby w grze pozostają **NIEURUCHOMIONE**.
+[Scenariusze taktyczne i kompilacja z zachowanym SDK](tactics-update.pl.md).
 
 Wyniki zapisuj osobno: PASS / FAIL / NIEURUCHOMIONY. Kompilacja nie potwierdza działania. Zacznij od osobnego testowego zapisu bez Ironman, z WOTC i wszystkimi oficjalnymi dodatkami, bez innych modów.
 

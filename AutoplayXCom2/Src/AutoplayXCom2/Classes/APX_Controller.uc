@@ -33,6 +33,12 @@ struct ActionUse
     var int Count;
 };
 
+struct VisitedPosition
+{
+    var int UnitID;
+    var TTile Tile;
+};
+
 var private bool bEnabled;
 var private bool bToggleWasDown;
 var private float UntilDecision;
@@ -41,6 +47,7 @@ var private int ActionsThisTurn;
 var private int MeaningfulActionsThisTurn;
 var private bool bEndTurnRequested;
 var private array<ActionUse> ActionUses;
+var private array<VisitedPosition> VisitedPositions;
 var private string Status;
 var private name LastWaitReason;
 var private string LastWaitDetails;
@@ -446,9 +453,9 @@ function MakeDecision(XComTacticalController PC)
     local array<TTile> CandidatePath, BestPath;
     local array<vector> CandidateLocations, BestLocations;
     local vector CandidateAim, BestAim;
-    local int TargetIndex, BestTargetIndex;
+    local int TargetIndex, BestTargetIndex, ChosenTargetID;
     local float Score, BestScore;
-    local bool bMove, bArea, bHavePlan, bSuccess, bCanExplore;
+    local bool bMove, bArea, bHavePlan, bSuccess, bCanExplore, bCombatThreats;
 
     PlayerRef = `TACTICALRULES.GetCachedUnitActionPlayerRef();
     PlayerState = XComGameState_Player(`XCOMHISTORY.GetGameStateForObjectID(PlayerRef.ObjectID));
@@ -461,6 +468,7 @@ function MakeDecision(XComTacticalController PC)
         ActionsThisTurn = 0;
         MeaningfulActionsThisTurn = 0;
         ActionUses.Length = 0;
+        VisitedPositions.Length = 0;
         bEndTurnRequested = false;
     }
     if (bEndTurnRequested)
@@ -479,10 +487,15 @@ function MakeDecision(XComTacticalController PC)
     foreach `XCOMHISTORY.IterateByClassType(class'XComGameState_Unit', UnitState)
     {
         if (UnitState.GetAssociatedPlayerID() != PlayerRef.ObjectID
-            || UnitState.GetTeam() != eTeam_XCom || !UnitState.IsAbleToAct()
+            || UnitState.GetTeam() != eTeam_XCom || !UnitState.IsAlive()
             || UnitState.GetMyTemplate().bIsCosmetic)
             continue;
 
+        // Contacts remain relevant after the last soldier spends their AP.
+        bCombatThreats = bCombatThreats
+            || class'APX_MissionPlanner'.static.HasCombatThreats(UnitState);
+        if (!UnitState.IsAbleToAct())
+            continue;
         if (class'APX_CombatPlanner'.static.ChooseAction(UnitState, Candidate, TargetIndex, Score)
             && Score > BestScore && CanUseAction(UnitState, Candidate, TargetIndex))
         {
@@ -542,7 +555,7 @@ function MakeDecision(XComTacticalController PC)
         }
         CandidatePath.Length = 0;
         if (class'APX_MissionPlanner'.static.ChooseMove(UnitState, CandidatePath, Score)
-            && Score > BestScore)
+            && Score > BestScore && CanUseMove(UnitState, CandidatePath))
         {
             BestPath = CandidatePath;
             BestScore = Score;
@@ -556,7 +569,7 @@ function MakeDecision(XComTacticalController PC)
 
     // Explore only when the whole squad lacks an objective, attack or useful
     // mission move. Sampling the player's fog never queries hidden enemies.
-    if (ExploreUnseenMap && ExplorationPlanner != none
+    if (ExploreUnseenMap && ExplorationPlanner != none && !bCombatThreats
         && (!bHavePlan || BestScore < 15.0))
     {
         foreach `XCOMHISTORY.IterateByClassType(class'XComGameState_Unit', UnitState)
@@ -564,12 +577,12 @@ function MakeDecision(XComTacticalController PC)
             if (UnitState.GetAssociatedPlayerID() != PlayerRef.ObjectID
                 || UnitState.GetTeam() != eTeam_XCom || !UnitState.IsAbleToAct()
                 || UnitState.IsCivilian() || UnitState.GetMyTemplate().bIsCosmetic
-                || !class'APX_MissionPlanner'.static.HasLegalMove(UnitState))
+                || !class'APX_ExplorationPlanner'.static.CanExplore(UnitState))
                 continue;
             bCanExplore = true;
             CandidatePath.Length = 0;
             if (ExplorationPlanner.ChooseMove(UnitState, CandidatePath, Score)
-                && Score > BestScore)
+                && Score > BestScore && CanUseMove(UnitState, CandidatePath))
             {
                 BestPath = CandidatePath;
                 BestScore = Score;
@@ -590,7 +603,8 @@ function MakeDecision(XComTacticalController PC)
 
     // Avoid burning whole turns on overwatch forever when no objective, attack
     // or useful move can be found. An unknown scripted objective needs a human.
-    if ((!bHavePlan || BestScore <= 2.0) && MeaningfulActionsThisTurn == 0)
+    if ((!bHavePlan || BestScore <= 2.0) && MeaningfulActionsThisTurn == 0
+        && !bCombatThreats)
     {
         StopWithStatus("No constructive action or understood mission goal", StatusNoPlan);
         return;
@@ -622,7 +636,10 @@ function MakeDecision(XComTacticalController PC)
         // be applied to an independently planned route or a different soldier.
         PC.m_kPathingPawn.ClearAllWaypoints();
         bSuccess = PC.GameStateMoveUnitSingle(XGUnit(BestUnit.GetVisualizer()), BestPath);
-        `log("Move unit" @ BestUnit.ObjectID @ "tiles" @ BestPath.Length, , 'AutoplayXCom2');
+        `log("Move unit" @ BestUnit.ObjectID @ "tiles" @ BestPath.Length
+            @ "to" @ BestPath[BestPath.Length - 1].X @ BestPath[BestPath.Length - 1].Y
+            @ BestPath[BestPath.Length - 1].Z @ "score" @ BestScore
+            @ "AP before" @ BestUnit.NumActionPoints(), , 'AutoplayXCom2');
     }
     else
     {
@@ -636,22 +653,53 @@ function MakeDecision(XComTacticalController PC)
         OwnedAbilityID = BestAction.AbilityObjectRef.ObjectID;
         OwnedSourceID = BestUnit.ObjectID;
         Ability = XComGameState_Ability(`XCOMHISTORY.GetGameStateForObjectID(OwnedAbilityID));
+        if (BestTargetIndex >= 0 && BestTargetIndex < BestAction.AvailableTargets.Length)
+            ChosenTargetID = BestAction.AvailableTargets[BestTargetIndex].PrimaryTarget.ObjectID;
         SubmittedContext = class'XComGameStateContext_Ability'.static.ActivateAbility_ReturnContext(
             BestAction, BestTargetIndex, BestLocations);
         OwnedActionContext = SubmittedContext;
         bSuccess = SubmittedContext != none;
         RecordAction(BestUnit, BestAction, BestTargetIndex);
         `log("Ability" @ Ability.GetMyTemplateName() @ "unit" @ BestUnit.ObjectID
-            @ "target index" @ BestTargetIndex, , 'AutoplayXCom2');
+            @ "target" @ ChosenTargetID @ "target index" @ BestTargetIndex @ "score" @ BestScore
+            @ "AP before" @ BestUnit.NumActionPoints(), , 'AutoplayXCom2');
     }
     if (!bSuccess)
     {
         StopWithStatus("Engine rejected planned action", StatusRejected);
         return;
     }
+    if (bMove)
+        RecordMove(BestUnit, BestPath);
     ++ActionsThisTurn;
     if (BestScore > 2.0)
         ++MeaningfulActionsThisTurn;
+}
+
+// Re-evaluation after every ally action can change support scores. Remember
+// this turn's visited endpoints so those changes cannot produce A-B-A shuffles.
+function bool CanUseMove(XComGameState_Unit UnitState, const out array<TTile> Path)
+{
+    local int Index;
+    if (Path.Length < 2)
+        return false;
+    for (Index = 0; Index < VisitedPositions.Length; ++Index)
+    {
+        if (VisitedPositions[Index].UnitID == UnitState.ObjectID
+            && VisitedPositions[Index].Tile == Path[Path.Length - 1])
+            return false;
+    }
+    return true;
+}
+
+function RecordMove(XComGameState_Unit UnitState, const out array<TTile> Path)
+{
+    local VisitedPosition Entry;
+    Entry.UnitID = UnitState.ObjectID;
+    Entry.Tile = Path[0];
+    VisitedPositions.AddItem(Entry);
+    Entry.Tile = Path[Path.Length - 1];
+    VisitedPositions.AddItem(Entry);
 }
 
 simulated event Destroyed()

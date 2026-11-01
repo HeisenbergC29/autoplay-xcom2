@@ -4,6 +4,10 @@ Ta instrukcja dotyczy paczki **zawierającej `Script\AutoplayXCom2.u`**. Archiwu
 
 W opublikowanej paczce `0.1.0-alpha` wykryto błąd: zwykły HUD blokuje wydawanie rozkazów ze statusem „PAUSED: SCREEN / MENU”. Poprawka jest w nowszych źródłach i wymaga ponownej kompilacji. Stary ZIP nie zawiera poprawki. Instrukcja aktualizacji: `docs/ui-blocking-fix.pl.md` w repozytorium.
 
+Nowsze źródła zawierają również zmiany taktyki po zgłoszonych przegranych
+Gatecrashera. Wymagają własnej nowej kompilacji i próby na Dowódcy/Legendzie.
+Instrukcja `docs/tactics-update.pl.md` opisuje budowanie z zachowanym SDK.
+
 ## Wymagania
 
 - Docelowo: aktualna wersja **XCOM 2 Collection ze Steam na Windows**, uruchamiana jako **War of the Chosen**, z oficjalnymi dodatkami z kolekcji.
@@ -37,6 +41,11 @@ Nie twórz podwójnego katalogu `AutoplayXCom2\AutoplayXCom2`. Jeśli aktualizuj
 3. Uruchom launcher dla **War of the Chosen**, zaznacz **Autoplay XCOM 2** i uruchom WOTC. Collection to zestaw produktów; przy uruchomieniu należy wybrać dodatek War of the Chosen. Konsola deweloperska nie jest potrzebna.
 4. Jeżeli używasz AML, odśwież listę modów; jeśli lokalny mod nie jest wykrywany, dodaj powyższy folder `XComGame\Mods` do katalogów modów w ustawieniach AML. Nie instaluj żadnego drugiego moda jako zależności.
 5. Wczytaj misję. Automat zaczyna wyłączony. Na pierwszą próbę użyj osobnego zapisu testowego i wykonaj próby opisane w `docs/TESTING.pl.md` repozytorium.
+
+Po instalacji możesz usunąć pobrany katalog źródeł. Wcześniej zachowaj wynikowy
+ZIP i log kompilacji poza nim, jeśli chcesz mieć kopię. Samo SDK i jego bazowe
+pakiety pozostaw do kolejnych aktualizacji; mod w katalogu gry działa niezależnie
+od pobranego repozytorium.
 
 ## Włączenie przez konfigurację gry
 
@@ -106,4 +115,7 @@ Położenie jest liczone od środka prawej krawędzi. Bardziej ujemne `OffsetX` 
 - Log gry: `<Dokumenty>\My Games\XCOM2 War of the Chosen\XComGame\Logs\Launch.log`. Do zgłoszenia dołącz typ misji, etap i listę pozostałych modów.
 - Wyłączenie moda: odznacz go w launcherze. Bieżące włączenie autoplaya nie jest zapisywane w kampanii.
 
-Kompilację potwierdzono, a zawartość paczki i zależności binarne sprawdzono. Ta wersja **alpha nie ma jeszcze testów w działającej grze**. Nie potwierdzono pełnej obsługi każdej skryptowanej misji DLC ani konkretnego najnowszego numeru builda Steam. Stan weryfikacji opisuje README repozytorium.
+Wcześniejszą kompilację i zależności binarne sprawdzono, a użytkownik potwierdził
+wydawanie rozkazów po poprawce HUD-u. Nowe zmiany taktyki **wymagają kompilacji
+i prób w grze**. Nie potwierdzono pełnej obsługi każdej skryptowanej misji DLC
+ani konkretnego najnowszego numeru builda Steam. Stan weryfikacji opisuje README.
