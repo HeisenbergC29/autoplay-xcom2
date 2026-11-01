@@ -2,11 +2,13 @@
 
 Mod w UnrealScript automatyzujący działania oddziału w misji. Docelowy profil użytkownika: **aktualne XCOM 2 Collection ze Steam na Windows, uruchamiane jako War of the Chosen, z oficjalnymi dodatkami i wyłącznie tym modem**. Nie wymaga Highlandera ani innych modów. Nie jest przeznaczony dla podstawowego XCOM 2 bez WOTC ani trybu wieloosobowego. [Szczegóły zgodności](docs/COMPATIBILITY.pl.md).
 
-**Stan: wersja testowa alpha z potwierdzoną kompilacją i sprawdzoną paczką instalacyjną.** Przesłany plik `.u` i konfigurację zweryfikowano; importy binarne prowadzą tylko do standardowych pakietów `Core`, `Engine`, `XComGame`. Paczka do instalacji jest w katalogu [release](release/README.pl.md). Repozytorium nie zawiera SDK ani plików gry. **Nie uruchomiono jeszcze testów w grze i nie potwierdzono pełnego ukończenia wszystkich misji DLC.** Szczegóły: [wyniki kontroli SDK i kompilacji](docs/SDK-AUDIT.pl.md).
+**Stan: alpha; w opublikowanej paczce 0.1.0 wykryto blokadę wydawania rozkazów.** Użytkownik potwierdził widoczny i klikalny przycisk w misji, ale po włączeniu pozostaje status `PAUSED: SCREEN / MENU`, a jednostki nie działają. Przyczyna: zwykłe nakładki HUD-u zostały błędnie uznane za menu. [Poprawka i aktualizacja](docs/ui-blocking-fix.pl.md) wymagają zbudowania bieżących źródeł w SDK WOTC; nowa kompilacja i działanie poprawki w grze pozostają do potwierdzenia. Nie potwierdzono pełnego ukończenia wszystkich misji DLC.
+
+Dotychczasowy plik `.u` i konfigurację zweryfikowano; importy binarne prowadzą tylko do standardowych pakietów `Core`, `Engine`, `XComGame`. Repozytorium nie zawiera SDK ani plików gry. Szczegóły: [wyniki kontroli SDK i kompilacji](docs/SDK-AUDIT.pl.md).
 
 ## Instalacja gotowej paczki
 
-Pobierz [AutoplayXCom2-WOTC-0.1.0-alpha.zip](release/AutoplayXCom2-WOTC-0.1.0-alpha.zip) i użyj dołączonego `INSTALL.pl.md`. To skompilowana wersja testowa; nie wymaga SDK ani ponownego budowania. GitHub „Download ZIP” nadal pobiera całe repozytorium źródeł, a nie samą paczkę instalacyjną.
+Archiwum [AutoplayXCom2-WOTC-0.1.0-alpha.zip](release/AutoplayXCom2-WOTC-0.1.0-alpha.zip) zawiera skompilowaną wersję testową oraz `INSTALL.pl.md`, ale **nadal ma opisaną wyżej blokadę HUD-u i nie zawiera poprawki**. Do sprawdzenia poprawki użyj [instrukcji aktualizacji i budowania](docs/ui-blocking-fix.pl.md). GitHub „Download ZIP” pobiera całe repozytorium źródeł, a nie zaktualizowaną paczkę instalacyjną.
 
 ## Sterowanie
 
@@ -74,7 +76,7 @@ Po skompilowaniu użyj [instrukcji instalacji](AutoplayXCom2/INSTALL.pl.md), do�
 
 ## Weryfikacja
 
-Wykonano kontrolę oryginalnych źródeł SDK przesłanych przez użytkownika, składni PowerShell oraz testy zabezpieczeń plikowych, zawartości paczki i konwersji polskiej lokalizacji. Po przeniesieniu ustawień do INI logi Windows potwierdzają **0 błędów i 8 ostrzeżeń SDK**, zarówno dla bazy, jak i moda. Przesłany ZIP ma kompletną konfigurację, 27 nazw zdolności, obie lokalizacje i prawidłowy `.u`. Jego 464 importy prowadzą tylko do trzech standardowych pakietów; dziewięć klas moda jest obecnych. **Testy w grze pozostają wymagane.** Lokalne środowisko ma źródła SDK, logi i skompilowaną paczkę, ale nie uruchomioną grę.
+Wykonano kontrolę oryginalnych źródeł SDK przesłanych przez użytkownika, składni PowerShell oraz testy zabezpieczeń plikowych, zawartości paczki i konwersji polskiej lokalizacji. Po przeniesieniu ustawień do INI logi Windows potwierdzają **0 błędów i 8 ostrzeżeń SDK**, zarówno dla bazy, jak i moda. Te wyniki dotyczą wcześniejszej kompilacji, przed poprawką blokady HUD-u. Przesłany ZIP ma kompletną konfigurację, 27 nazw zdolności, obie lokalizacje i prawidłowy `.u`. Jego 464 importy prowadzą tylko do trzech standardowych pakietów; dziewięć klas moda jest obecnych. Pierwsza próba użytkownika w grze potwierdziła przycisk i ujawniła brak rozkazów przy statusie pauzy. **Poprawka wymaga nowej kompilacji i powtórzenia próby w grze.** Lokalne środowisko ma źródła SDK, logi i wcześniejszą skompilowaną paczkę, ale nie uruchomioną grę ani kompilator SDK Windows.
 
 ```powershell
 # Przenośne testy ochrony istniejących plików SDK (bez kompilatora):

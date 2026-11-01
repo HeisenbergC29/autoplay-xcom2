@@ -1,6 +1,8 @@
 # Instalacja Autoplay XCOM 2
 
-Ta instrukcja dotyczy paczki **zawierającej `Script\AutoplayXCom2.u`**. Skompilowana paczka testowa jest przygotowana do instalacji. Archiwum źródeł pobrane przez GitHub „Download ZIP” nadal wymaga kompilacji opisanej w README repozytorium.
+Ta instrukcja dotyczy paczki **zawierającej `Script\AutoplayXCom2.u`**. Archiwum źródeł pobrane przez GitHub „Download ZIP” wymaga kompilacji opisanej w README repozytorium.
+
+W opublikowanej paczce `0.1.0-alpha` wykryto błąd: zwykły HUD blokuje wydawanie rozkazów ze statusem „PAUSED: SCREEN / MENU”. Poprawka jest w nowszych źródłach i wymaga ponownej kompilacji. Stary ZIP nie zawiera poprawki. Instrukcja aktualizacji: `docs/ui-blocking-fix.pl.md` w repozytorium.
 
 ## Wymagania
 
@@ -12,7 +14,7 @@ Ta instrukcja dotyczy paczki **zawierającej `Script\AutoplayXCom2.u`**. Skompil
 ## Instalacja paczki po kompilacji
 
 1. Zamknij grę i launcher.
-2. Rozpakuj `AutoplayXCom2-WOTC-0.1.0-alpha.zip` (albo własny zbudowany `AutoplayXCom2.zip`) do:
+2. Rozpakuj nowo zbudowany `dist\AutoplayXCom2.zip` do:
 
 ```text
 <SteamLibrary>\steamapps\common\XCOM 2\XCom2-WarOfTheChosen\XComGame\Mods\
@@ -97,6 +99,8 @@ Położenie jest liczone od środka prawej krawędzi. Bardziej ujemne `OffsetX` 
 
 ## Diagnoza
 
+- Stałe „PAUSED: SCREEN / MENU” na zwykłym HUD-zie w wersji `0.1.0-alpha`: pobierz aktualne źródła, ponownie zbuduj i zastąp cały folder moda; sama zmiana INI nie wystarczy. Po aktualizacji uruchom grę ponownie.
+- Jeśli aktualna kompilacja nadal czeka, prześlij `Launch.log` z `<Dokumenty>\My Games\XCOM2 War of the Chosen\XComGame\Logs`. Wpisy `AutoplayXCom2: Waiting:` oraz `UI stack:` wskazują rozpoznaną przyczynę; powtarzane są tylko po zmianie przyczyny.
 - Brak przycisku: sprawdź, czy uruchomiono WOTC, mod jest zaznaczony, istnieje plik `.u` i nie ma podwójnego katalogu.
 - Status „STOP”: automat oddał sterowanie z powodu braku planu, odrzuconej akcji lub limitu. Przyczyna jest zapisywana pod znacznikiem `AutoplayXCom2` w `Launch.log`.
 - Log gry: `<Dokumenty>\My Games\XCOM2 War of the Chosen\XComGame\Logs\Launch.log`. Do zgłoszenia dołącz typ misji, etap i listę pozostałych modów.

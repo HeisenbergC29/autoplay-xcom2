@@ -15,6 +15,11 @@ var localized string StatusOff;
 var localized string StatusActive;
 var localized string StatusWaiting;
 var localized string StatusModal;
+var localized string StatusGamePaused;
+var localized string StatusHUDWaiting;
+var localized string StatusInputBlocked;
+var localized string StatusTargeting;
+var localized string StatusDialog;
 var localized string StatusNoPlan;
 var localized string StatusRejected;
 var localized string StatusLimit;
@@ -37,6 +42,8 @@ var private int MeaningfulActionsThisTurn;
 var private bool bEndTurnRequested;
 var private array<ActionUse> ActionUses;
 var private string Status;
+var private name LastWaitReason;
+var private string LastWaitDetails;
 var private int OwnedAbilityID;
 var private int OwnedSourceID;
 var private XComGameStateContext_Ability OwnedActionContext;
@@ -83,6 +90,8 @@ function StopAutoplay(string Reason, optional bool bPreservePendingHack = false)
     bEnabled = false;
     Status = StatusOff;
     UntilDecision = 0.0;
+    LastWaitReason = '';
+    LastWaitDetails = "";
     // A user pause may happen before the hack UI has even appeared. Keep only
     // the exact submitted context, so resuming cannot claim a later manual hack
     // that happens to reuse the same soldier and ability IDs.
@@ -120,6 +129,8 @@ function Toggle()
         return;
     }
     bEnabled = true;
+    LastWaitReason = '';
+    LastWaitDetails = "";
     UntilDecision = FMax(0.25, DecisionInterval);
     Status = StatusActive;
     // Enabling midway through a turn should not count earlier player actions.
@@ -127,10 +138,141 @@ function Toggle()
     `log("Enabled", , 'AutoplayXCom2');
 }
 
+// Stock WOTC keeps these passive screens ABOVE UITacticalHUD in its stack.
+// In particular, InitUIScreensComplete pushes UITurnOverlay and then
+// UISpecialMissionHUD. The raw top screen therefore need not be the HUD.
+// Never allow an arbitrary non-consuming screen: menus can evaluate input too.
+function bool IsPassiveTacticalOverlay(UIScreen Screen)
+{
+    return UITurnOverlay(Screen) != none
+        || UISpecialMissionHUD(Screen) != none
+        || UIChallengeModeHUD(Screen) != none
+        || UIUnitFlagManager(Screen) != none
+        || UIEnemyArrowContainer(Screen) != none
+        || UITooltipMgr(Screen) != none
+        || UIEventNotices(Screen) != none;
+}
+
+function name GetUIBlockReason(XComTacticalController PC, out string Details)
+{
+    local XComPresentationLayer Pres;
+    local UIScreenStack Stack;
+    local UITacticalHUD HUD;
+    local UIScreen Screen;
+    local int Index;
+
+    Details = "";
+    Pres = XComPresentationLayer(PC.Pres);
+    if (Pres == none || Pres.Get2DMovie() == none)
+        return 'HUD';
+    Stack = Pres.ScreenStack;
+    HUD = Pres.GetTacticalHUD();
+    if (Stack == none || HUD == none)
+        return 'HUD';
+    if (Stack.IsInputBlocked)
+        return 'InputBlocked';
+    // Dialogs live on the movie, not necessarily in ScreenStack. Wait for
+    // non-modal confirmations as well as those already covered by IsBusy().
+    if (Pres.Get2DMovie().DialogBox != none
+        && Pres.Get2DMovie().DialogBox.ShowingDialog())
+        return 'Dialog';
+    if (PC.IsBusy())
+        return 'UIBusy';
+    if (!HUD.bIsInited || !HUD.bIsVisible || HUD.bIsRemoved
+        || HUD.bIsPendingRemoval || HUD.m_kAbilityHUD == none)
+        return 'HUD';
+
+    // Inspect only the part of the stack above this actual HUD instance.
+    // Unknown visible/opening screens block, even if they do not consume input.
+    for (Index = 0; Index < Stack.Screens.Length; ++Index)
+    {
+        Screen = Stack.Screens[Index];
+        if (Screen == HUD)
+        {
+            // Target selection is inside the HUD, not a separate screen.
+            if (HUD.GetTargetingMethod() != none)
+                return 'Targeting';
+            return '';
+        }
+        if (Screen == none || Screen.bIsRemoved)
+            continue;
+        if (Screen.bIsInited && !Screen.bIsVisible)
+            continue;
+        if (IsPassiveTacticalOverlay(Screen))
+        {
+            // Match stock input readiness while an overlay is still loading.
+            if (!Screen.bIsInited)
+            {
+                Details = string(Screen.Class.Name);
+                return 'HUD';
+            }
+            if (!Screen.ConsumesInput())
+                continue;
+        }
+        Details = string(Screen.Class.Name);
+        return 'Menu';
+    }
+    // A detached HUD reference cannot authorize issuing an order.
+    return 'HUD';
+}
+
+function string DescribeUIStack(XComTacticalController PC)
+{
+    local XComPresentationLayer Pres;
+    local UIScreenStack Stack;
+    local UIScreen Screen;
+    local string Result;
+    local int Index;
+
+    if (PC == none || PC.Pres == none || PC.Pres.ScreenStack == none)
+        return "no presentation / stack";
+    Stack = PC.Pres.ScreenStack;
+    Result = "InputBlocked=" $ string(Stack.IsInputBlocked);
+    Pres = XComPresentationLayer(PC.Pres);
+    if (Pres != none && Pres.Get2DMovie() != none)
+    {
+        Result @= "PCBusy=" $ string(PC.IsBusy())
+            @ "movieInit=" $ string(Pres.Get2DMovie().bIsInited)
+            @ "modalScreens=" $ string(Pres.Get2DMovie().NumModalScreens);
+        if (Pres.Get2DMovie().DialogBox != none)
+            Result @= "dialog=" $ string(Pres.Get2DMovie().DialogBox.ShowingDialog());
+    }
+    for (Index = 0; Index < Min(16, Stack.Screens.Length); ++Index)
+    {
+        Screen = Stack.Screens[Index];
+        if (Screen == none)
+            continue;
+        Result $= " | " $ string(Index) $ ":" $ string(Screen.Class.Name)
+            @ "visible=" $ string(Screen.bIsVisible)
+            @ "init=" $ string(Screen.bIsInited)
+            @ "removed=" $ string(Screen.bIsRemoved)
+            @ "input=" $ string(Screen.InputState);
+    }
+    return Result;
+}
+
+function SetWaitStatus(name Reason, string DisplayStatus, optional string Details)
+{
+    local XComTacticalController PC;
+
+    Status = DisplayStatus;
+    // Log transitions rather than every Tick. Keep internal class names in
+    // Launch.log; the player sees the localized, readable status above.
+    if (Reason == LastWaitReason && Details == LastWaitDetails)
+        return;
+    LastWaitReason = Reason;
+    LastWaitDetails = Details;
+    `log("Waiting:" @ string(Reason) @ Details, , 'AutoplayXCom2');
+    PC = XComTacticalController(WorldInfo.GetALocalPlayerController());
+    `log("UI stack:" @ DescribeUIStack(PC), , 'AutoplayXCom2');
+}
+
 simulated event Tick(float DeltaTime)
 {
     local XComTacticalController PC;
     local bool bToggleDown;
+    local name UIBlockReason;
+    local string UIBlockDetails;
 
     PC = XComTacticalController(WorldInfo.GetALocalPlayerController());
     if (PC == none || PC.PlayerInput == none)
@@ -161,7 +303,7 @@ simulated event Tick(float DeltaTime)
     }
     if (WorldInfo.Pauser != none)
     {
-        Status = StatusModal;
+        SetWaitStatus('GamePaused', StatusGamePaused);
         return;
     }
 
@@ -170,17 +312,28 @@ simulated event Tick(float DeltaTime)
     if (HandleOwnedHack(DeltaTime))
         return;
 
-    if (PC.IsBusy() || `SCREENSTACK == none || `SCREENSTACK.IsInputBlocked
-        || UITacticalHUD(`SCREENSTACK.GetCurrentScreen()) == none)
+    UIBlockReason = GetUIBlockReason(PC, UIBlockDetails);
+    if (UIBlockReason != '')
     {
-        Status = StatusModal;
-        return;
-    }
-    // Manual targeting remains part of the HUD rather than a separate screen.
-    // Leave it to the player instead of submitting an unrelated order beneath it.
-    if (UITacticalHUD(`SCREENSTACK.GetCurrentScreen()).GetTargetingMethod() != none)
-    {
-        Status = StatusModal;
+        switch (UIBlockReason)
+        {
+        case 'HUD':
+            SetWaitStatus(UIBlockReason, StatusHUDWaiting, UIBlockDetails);
+            break;
+        case 'InputBlocked':
+        case 'UIBusy':
+            SetWaitStatus(UIBlockReason, StatusInputBlocked, UIBlockDetails);
+            break;
+        case 'Targeting':
+            SetWaitStatus(UIBlockReason, StatusTargeting, UIBlockDetails);
+            break;
+        case 'Dialog':
+            SetWaitStatus(UIBlockReason, StatusDialog, UIBlockDetails);
+            break;
+        default:
+            SetWaitStatus(UIBlockReason, StatusModal, UIBlockDetails);
+            break;
+        }
         return;
     }
     if (!`TACTICALRULES.IsInState('TurnPhase_UnitActions')
@@ -190,15 +343,27 @@ simulated event Tick(float DeltaTime)
         || !class'XComGameStateVisualizationMgr'.static.VisualizerIdleAndUpToDateWithHistory()
         || `TACTICALRULES.WaitingForVisualizer())
     {
-        Status = StatusWaiting;
+        SetWaitStatus('GameRules', StatusWaiting,
+            "state=" $ string(`TACTICALRULES.GetStateName())
+            @ "team=" $ string(`TACTICALRULES.GetUnitActionTeam())
+            @ "AI=" $ string(`TACTICALRULES.UnitActionPlayerIsAI())
+            @ "waitingStates=" $ string(`TACTICALRULES.IsWaitingForNewStates())
+            @ "visualizerIdle=" $ string(class'XComGameStateVisualizationMgr'.static.VisualizerIdleAndUpToDateWithHistory())
+            @ "waitingVisualizer=" $ string(`TACTICALRULES.WaitingForVisualizer()));
         return;
     }
 
+    if (LastWaitReason != '')
+    {
+        `log("Ready: tactical HUD and game rules allow orders", , 'AutoplayXCom2');
+        LastWaitReason = '';
+        LastWaitDetails = "";
+    }
+    Status = StatusActive;
     UntilDecision -= DeltaTime;
     if (UntilDecision > 0.0)
         return;
     UntilDecision = FMax(0.25, DecisionInterval);
-    Status = StatusActive;
     MakeDecision(PC);
 }
 
@@ -217,7 +382,7 @@ function bool HandleOwnedHack(float DeltaTime)
         HackScreenAge = 0.0;
         return false;
     }
-    Status = StatusModal;
+    SetWaitStatus('Hacking', StatusModal, string(Hack.Class.Name));
     if (!AutoCompleteOwnedHacks || !Hack.bIsInited || Hack.OriginalContext == none
         || OwnedActionContext == none || Hack.OriginalContext != OwnedActionContext
         || OwnedAbilityID == 0
