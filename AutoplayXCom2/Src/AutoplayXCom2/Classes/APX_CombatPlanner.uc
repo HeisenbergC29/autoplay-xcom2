@@ -313,36 +313,3 @@ static function float ScoreSelfAction(XComGameState_Unit UnitState,
     }
     return -10000.0;
 }
-
-defaultproperties
-{
-    MinimumHitChance=15
-    EmergencyHealthFraction=0.45
-    AttackAbilities(0)="StandardShot"
-    AttackAbilities(1)="SniperStandardFire"
-    AttackAbilities(2)="PistolStandardShot"
-    AttackAbilities(3)="Deadeye"
-    AttackAbilities(4)="LightningHands"
-    AttackAbilities(5)="FanFire"
-    AttackAbilities(6)="RapidFire"
-    AttackAbilities(7)="HailOfBullets"
-    AttackAbilities(8)="CombatProtocol"
-    AttackAbilities(9)="Soulfire"
-    AttackAbilities(10)="Volt"
-    AttackAbilities(11)="Whiplash"
-    AttackAbilities(12)="SoulReaper"
-    AttackAbilities(13)="SwordSlice"
-    AttackAbilities(14)="Rend"
-    AttackAbilities(15)="SkirmisherMelee"
-    HealAbilities(0)="MedikitHeal"
-    HealAbilities(1)="NanoMedikitHeal"
-    HealAbilities(2)="GremlinHeal"
-    HealAbilities(3)="Repair"
-    StabilizeAbilities(0)="MedikitStabilize"
-    StabilizeAbilities(1)="GremlinStabilize"
-    ReloadAbilities(0)="Reload"
-    OverwatchAbilities(0)="Overwatch"
-    OverwatchAbilities(1)="PistolOverwatch"
-    OverwatchAbilities(2)="SniperRifleOverwatch"
-    HunkerAbilities(0)="HunkerDown"
-}

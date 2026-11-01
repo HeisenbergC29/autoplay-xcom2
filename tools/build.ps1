@@ -113,6 +113,21 @@ function Copy-ModPayload([string] $SourceRoot, [string] $Destination, [switch] $
     }
 }
 
+function Assert-SdkCompilerResult([string] $LogText, [int] $ExitCode) {
+    if ($ExitCode -ne 0) {
+        throw "SDK compiler exited with code $ExitCode."
+    }
+    if ($LogText -match '(?im)Crash Detected|^Failure\s*-|\b[1-9][0-9]* error\(s\)|\)\s*:\s*Error\b') {
+        throw 'SDK compiler reported an error despite its exit code.'
+    }
+    # WOTC can return success while discarding config assignments in script
+    # defaultproperties. In our package this can leave essential ability lists
+    # empty, so do not turn that bytecode into an installation ZIP.
+    if ($LogText -match '(?im)(?:^|[\\/])AutoplayXCom2[\\/]Classes[\\/][^\r\n]*:\s*Warning,\s*Import failed for ''[^'']+'':\s*property is config\b') {
+        throw 'AutoplayXCom2 config defaults were rejected by the compiler. Move these assignments from defaultproperties to the correct INI file before packaging.'
+    }
+}
+
 function Invoke-SdkMake([string[]] $Arguments, [string] $LogName) {
     $logPath = Join-Path $workRoot $LogName
     Push-Location (Split-Path -Parent $compiler)
@@ -121,12 +136,12 @@ function Invoke-SdkMake([string[]] $Arguments, [string] $LogName) {
         $compilerExitCode = $LASTEXITCODE
     }
     finally { Pop-Location }
-    if ($compilerExitCode -ne 0) {
-        throw "SDK compiler exited with code $compilerExitCode. See $logPath"
-    }
     $logText = [IO.File]::ReadAllText($logPath)
-    if ($logText -match '(?im)Crash Detected|^Failure\s*-|\b[1-9][0-9]* error\(s\)|\)\s*:\s*Error\b') {
-        throw "SDK compiler reported an error despite its exit code. See $logPath"
+    try {
+        Assert-SdkCompilerResult -LogText $logText -ExitCode $compilerExitCode
+    }
+    catch {
+        throw "$($_.Exception.Message) See $logPath"
     }
 }
 

@@ -185,12 +185,6 @@ simulated event Removed()
 
 defaultproperties
 {
-    OffsetX=-220.0
-    OffsetY=-27.0
-    ButtonWidth=184.0
-    FadeSeconds=0.25
-    CollapseDelaySeconds=2.0
-    IndicatorAlpha=35.0
     bIsNavigable=false
     bAnimateOnInit=false
     bCascadeFocus=false

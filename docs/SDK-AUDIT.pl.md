@@ -46,7 +46,7 @@ Następny krok na Windows: pobrać aktualne repozytorium i wykonać `tools\build
 
 `mod-make.log` zakończył się `Failure - 1 error(s), 8 warning(s)`. Pierwszy błąd w `APX_MissionPlanner.uc` brzmiał `Booleans may not be out parameters`. Wszystkie trzy bezpośrednie parametry wyjściowe typu `bool` w dwóch funkcjach zastąpiono jedną strukturą `MissionGoal`; jej pola logiczne zachowują dotychczasowy wybór celu. To ograniczenie języka dodano również do narzędzia kontroli oraz czterech testów regresji.
 
-Po tej poprawce należy ponowić kompilację moda **bez `-BuildBase`**, wykorzystując już zbudowane pakiety bazowe. Nie potwierdzono jeszcze sukcesu poprawionej kompilacji ani działania w grze.
+Po tej poprawce zalecono ponowienie kompilacji moda **bez `-BuildBase`**, wykorzystując już zbudowane pakiety bazowe. Na tym etapie sukces nie był jeszcze potwierdzony.
 
 ## Druga próba — 01.11.2026
 
@@ -55,3 +55,18 @@ Kolejny przesłany `mod-make.log` nie zgłasza poprzedniego problemu parametrów
 UnrealScript interpretuje taki zapis w treści funkcji jako specjalne polecenie `Stop` używane w stanach. Nie oznacza to zakazu natywnych metod `Stop` w SDK: kwalifikowane wywołania, takie jak `Audio.Stop()`, są prawidłowe. Nazwę własnej metody zmieniono na `StopAutoplay`, zarówno w kontrolerze, jak i panelu UI, i dodano cztery testy dla tego przypadku. Łącznie osiem testów preflight przechodzi; nie zastępują kompilatora ani testów w grze.
 
 Do kolejnej próby trzeba zaktualizować oba pliki: `APX_Controller.uc` oraz `APX_UITacticalControl.uc`. Poprawiony wcześniej `APX_MissionPlanner.uc` również musi pozostać aktualny. Bazowych pakietów SDK nie trzeba przebudowywać.
+
+## Trzecia próba — kompilacja zakończona, konfiguracja do poprawy
+
+Następny `mod-make.log` potwierdza zapis `AutoplayXCom2.u` i wynik `Success - 0 error(s), 67 warning(s)`. Najnowszy log bazy ma `Success - 0 error(s), 8 warning(s)`.
+
+67 unikalnych ostrzeżeń moda składa się z:
+
+- 8 ostrzeżeń dotyczących zasobów narracji, materiałów i modeli SDK/DLC oraz starego katalogu `XCom_DLC_Day0`. Pakowanie rozprowadza tylko własny `.u`, nie przebudowane biblioteki SDK.
+- 59 ostrzeżeń `Import failed ... property is config` w naszych klasach: Combat 29, Controller 9, Exploration 8, UI 6, Area 3, Mission 2, Evac 1, DLCInfo 1.
+
+Druga grupa ma znaczenie funkcjonalne. Kompilator pomija przypisania pól `config` w `defaultproperties`. Dotychczas listy umiejętności istniały tylko w odrzucanych przypisaniach, więc planer mógł mieć puste listy ataków, leczenia, przeładowania i overwatch.
+
+Poprawka usuwa wszystkie takie przypisania z kodu. Wartości liczbowe i wszystkie 27 nazw umiejętności znajdują się w `XComAutoplayXCom2.ini`; dziedziczony `DLCIdentifier` jest w `XComGame.ini`, zgodnie z bazową klasą `config(Game)`. Pozostałe właściwości aktorów i UI zostają w `defaultproperties`, ponieważ nie są polami konfiguracji.
+
+Kontrola sprawdza obecność wartości dla każdego zadeklarowanego pola `config`, zachowanie list oraz odrzucane przypisania, również dziedziczone z SDK. Poprawka wymaga ponownej kompilacji. Nie potwierdzono jeszcze odczytu konfiguracji ani działania autoplaya w grze.

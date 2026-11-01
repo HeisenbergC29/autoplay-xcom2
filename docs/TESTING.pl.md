@@ -5,6 +5,7 @@ Wyniki zapisuj osobno: PASS / FAIL / NIEURUCHOMIONY. Kompilacja nie potwierdza d
 ## Kompilacja i wejście
 
 1. Zbuduj czyste pakiety SDK i mod; potwierdź brak błędów, świeży `.u` i poprawne polskie znaki po instalacji.
+   Ostrzeżenia `Import failed ... property is config` dla `AutoplayXCom2` muszą zniknąć. Osiem znanych ostrzeżeń bibliotek SDK nie zastępuje osobnej kontroli logu moda. Sprawdź, że paczka zawiera `XComAutoplayXCom2.ini` z listami zdolności i `XComGame.ini` z identyfikatorem DLC.
 2. Uruchom istniejącą misję z modem. Bez włączenia autoplaya żaden rozkaz nie może zostać wydany.
 3. Przyciskiem i F8 włącz/wyłącz automat kilkukrotnie w jednej turze, podczas ruchu, strzału, tury obcych, Lost oraz reakcji władcy. Po wyłączeniu może skończyć się tylko rozpoczęta akcja, bez kolejnej.
 4. Escape i pauza: brak nowych rozkazów. Po wczytaniu zapisu, restarcie misji i powrocie z kolejnej misji automat ma być wyłączony, panel pojedynczy.

@@ -515,10 +515,3 @@ function bool PrepareForActivation(XComGameState_Unit UnitState,
     }
     return true;
 }
-
-defaultproperties
-{
-    MinimumTargets=2
-    MaxCandidateCenters=32
-    SafetyBufferTiles=1.0
-}

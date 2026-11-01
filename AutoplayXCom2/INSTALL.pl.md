@@ -23,6 +23,7 @@ Po rozpakowaniu układ musi wyglądać tak:
 Mods\AutoplayXCom2\AutoplayXCom2.XComMod
 Mods\AutoplayXCom2\Script\AutoplayXCom2.u
 Mods\AutoplayXCom2\Config\XComEngine.ini
+Mods\AutoplayXCom2\Config\XComGame.ini
 Mods\AutoplayXCom2\Config\XComAutoplayXCom2.ini
 Mods\AutoplayXCom2\Localization\AutoplayXCom2.pol
 Mods\AutoplayXCom2\Localization\AutoplayXCom2.int

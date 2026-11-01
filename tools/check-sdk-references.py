@@ -59,12 +59,51 @@ def find_sdk_root(path: Path) -> Path:
     raise ValueError("Expected SrcOrig/Src, or an SDK directory containing Development/SrcOrig.")
 
 
+def declared_config_properties(source: str) -> set[str]:
+    properties = set()
+    for declaration in re.findall(r'\bvar\b([^;]+);', without_comments(source), re.I):
+        if re.search(r'\bconfig\b', declaration, re.I):
+            name = re.search(r'(\w+)\s*$', declaration)
+            if name:
+                properties.add(name[1].casefold())
+    return properties
+
+
+def forbidden_config_defaults(source: str, inherited_properties=()) -> list[tuple[int, str]]:
+    """WOTC rejects config assignments in defaultproperties, including arrays."""
+    properties = declared_config_properties(source) | {name.casefold() for name in inherited_properties}
+    text = without_comments(source)
+    block = re.search(r'^\s*defaultproperties\s*\{(.*)\}\s*$', text, re.M | re.S | re.I)
+    if not block:
+        return []
+    return [(text.count('\n', 0, block.start(1) + match.start()) + 1, match[1])
+            for match in re.finditer(r'^\s*(\w+)(?:\(\d+\))?\s*=', block[1], re.M)
+            if match[1].casefold() in properties]
+
+
+def read_config_entries(path: Path) -> list[tuple[str, str, str]]:
+    """Read repeated Unreal INI array entries without collapsing their values."""
+    entries = []
+    section = ''
+    for raw in path.read_text(encoding='utf-8-sig').splitlines():
+        line = raw.strip()
+        if not line or line.startswith((';', '#')):
+            continue
+        if line.startswith('[') and line.endswith(']'):
+            section = line[1:-1]
+        elif '=' in line:
+            name, value = line.split('=', 1)
+            entries.append((section, name.strip().lstrip('+.!-'), value.strip().strip('"')))
+    return entries
+
+
 def audit(sdk_root: Path, repo_root: Path) -> list[str]:
     sdk_files = list(sdk_root.rglob("*.uc"))
     mod_files = sorted((repo_root / "AutoplayXCom2" / "Src").rglob("*.uc"))
     if not mod_files:
         raise ValueError("No mod source files found in repository.")
     classes = {file.stem.casefold() for file in sdk_files + mod_files}
+    class_paths = {file.stem.casefold(): file for file in sdk_files + mod_files}
     source = {file: without_comments(file.read_text(encoding="utf-8-sig", errors="replace"))
               for file in mod_files}
     failures = []
@@ -74,6 +113,17 @@ def audit(sdk_root: Path, repo_root: Path) -> list[str]:
             failures.append(f"{file.name}:{line}: UnrealScript forbids direct out bool parameters; use a result struct.")
         for line in forbidden_bare_stop_calls(raw_source):
             failures.append(f"{file.name}:{line}: bare Stop(...) conflicts with the state statement; use StopAutoplay.")
+        inherited = set()
+        parent = re.search(r'\bextends\s+(\w+)', without_comments(raw_source), re.I)
+        visited = set()
+        while parent and parent[1].casefold() in class_paths and parent[1].casefold() not in visited:
+            parent_name = parent[1].casefold()
+            visited.add(parent_name)
+            parent_source = class_paths[parent_name].read_text(encoding='utf-8-sig', errors='replace')
+            inherited.update(declared_config_properties(parent_source))
+            parent = re.search(r'\bextends\s+(\w+)', without_comments(parent_source), re.I)
+        for line, name in forbidden_config_defaults(raw_source, inherited):
+            failures.append(f"{file.name}:{line}: config property {name} must be initialized in INI, not defaultproperties.")
     for file, contents in source.items():
         for name in sorted(set(re.findall(r"\bclass\s*'([A-Za-z_]\w*)'", contents, re.I))):
             if name.casefold() not in classes:
@@ -92,11 +142,20 @@ def audit(sdk_root: Path, repo_root: Path) -> list[str]:
             ability_count += 1
             if name.casefold() not in literals:
                 failures.append(f"{file.name}: configured ability name absent from SDK factories: {name}")
+    config_path = repo_root / 'AutoplayXCom2/Config/XComAutoplayXCom2.ini'
+    for section, key, name in read_config_entries(config_path):
+        if section.casefold() == 'autoplayxcom2.apx_combatplanner' and re.fullmatch(
+                r'(?:Attack|Heal|Stabilize|Reload|Overwatch|Hunker)Abilities', key, re.I):
+            ability_count += 1
+            if name.casefold() not in literals:
+                failures.append(f"{config_path.name}: configured ability name absent from SDK factories: {name}")
+    if ability_count == 0:
+        failures.append('No configured combat abilities found in source or INI.')
     for name in ("X2Ability_ReaperAbilitySet", "X2Ability_TemplarAbilitySet", "X2Ability_SkirmisherAbilitySet"):
         if name.casefold() not in classes:
             failures.append(f"WOTC source marker missing: {name}")
     if not failures:
-        print(f"PASS: {len(mod_files)} mod classes, SDK class references, {ability_count} configured ability names, WOTC markers and known parameter/Stop restrictions.")
+        print(f"PASS: {len(mod_files)} mod classes, SDK class references, {ability_count} configured ability names, WOTC markers and known parameter/Stop/config restrictions.")
         print("Not checked by this tool: member signatures, compilation, native behavior or in-game mission completion.")
     return failures
 

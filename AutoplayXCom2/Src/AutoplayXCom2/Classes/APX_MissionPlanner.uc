@@ -457,9 +457,3 @@ static function bool ChooseMove(XComGameState_Unit UnitState,
     Score = 20 + FMin(60, BestScore - CurrentScore);
     return true;
 }
-
-defaultproperties
-{
-    MaxCandidateTiles=96
-    PreferredCombatRangeTiles=9
-}

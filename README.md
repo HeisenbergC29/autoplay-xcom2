@@ -2,7 +2,7 @@
 
 Mod w UnrealScript automatyzujący działania oddziału w misji. Docelowa platforma: **Windows, XCOM 2: War of the Chosen z oficjalnymi dodatkami** (także Alien Hunters, Shen’s Last Gift i Tactical Legacy Pack). Nie jest przeznaczony dla podstawowego XCOM 2 bez WOTC ani trybu wieloosobowego.
 
-**Stan: wersja rozwojowa, bez potwierdzonej poprawnej kompilacji moda.** Repozytorium zawiera własne źródła moda i narzędzia budowania. Nie zawiera plików gry, SDK ani gotowego `.u`. Nie potwierdzono działania w grze ani pełnego ukończenia wszystkich typów misji. Sama obecność dodatków nie oznacza obsługi wszystkich ich skryptowanych etapów. Kod sprawdzono względem przesłanych oryginalnych źródeł WOTC, a następnie otrzymano logi rzeczywistej próby budowania na Windows: [wyniki kontroli SDK i kompilacji](docs/SDK-AUDIT.pl.md).
+**Stan: wersja rozwojowa. Log Windows potwierdził kompilację i zapis `.u`, ale wykazał odrzucenie ustawień konfiguracji.** W aktualnych źródłach przeniesiono je do INI; ta poprawka wymaga ponownego zbudowania. Repozytorium nie zawiera plików gry, SDK ani gotowego `.u`. Nie potwierdzono działania w grze ani pełnego ukończenia wszystkich typów misji. Sama obecność dodatków nie oznacza obsługi wszystkich ich skryptowanych etapów. Szczegóły: [wyniki kontroli SDK i kompilacji](docs/SDK-AUDIT.pl.md).
 
 ## Sterowanie
 
@@ -37,7 +37,7 @@ Mod nie dodaje punktów akcji, nie zmienia trafień, nie zabija wrogów komendą
 To **nie jest jeszcze pełny autopilot wszystkich misji**. Do ukończenia wymagania potrzebne są kompilacja, testy i dopracowanie zachowania na konkretnych mapach:
 
 - Planer obszarowy obsługuje wyłącznie zwykłe granaty Frag/Alien i domyślnie wymaga dwóch widocznych przeciwników. Broń ciężka, stożki, ogień, kwas, EMP, dym i pozostałe efekty trwałe wymagają osobnych reguł. Pełne skutki zawalania konstrukcji wymagają testów w grze.
-- Brak planowania zasadzki całego oddziału, oszczędzania zasobów na kolejne etapy i pełnego wykorzystania każdej umiejętności DLC. Listy obsługiwanych umiejętności są jawne w `APX_CombatPlanner.uc`.
+- Brak planowania zasadzki całego oddziału, oszczędzania zasobów na kolejne etapy i pełnego wykorzystania każdej umiejętności DLC. Listy obsługiwanych umiejętności są jawne w `Config/XComAutoplayXCom2.ini`.
 - Eksploracja używa próbkowania siatki mapy. Nie gwarantuje odwiedzenia każdego małego pomieszczenia ani znalezienia wroga, który przemieścił się na wcześniej odwiedzony teren. Gdy nie znajduje osiągalnego celu, automat oddaje sterowanie.
 - Nietypowe cele Kismet, wieloetapowe Lost Towers / Alien Nest, twierdze Wybranych, obrona Avengera, finał i wyzwania Legacy **nie mają potwierdzonej obsługi końca do końca**. Może być potrzebne ręczne przejście etapu lub ewakuacja.
 - Wyznaczanie ewakuacji wymaga istniejącego, ukończonego celu strategicznego i dostępnej zwykłej zdolności gry. Mod nie wybiera ścieżek dialogowych i nie zamyka ogólnych komunikatów. Nie uznaje pustej listy celów za powód do opuszczenia misji.
@@ -70,7 +70,7 @@ Po skompilowaniu użyj [instrukcji instalacji](AutoplayXCom2/INSTALL.pl.md), do�
 
 ## Weryfikacja
 
-Wykonano kontrolę oryginalnych źródeł SDK przesłanych przez użytkownika, składni PowerShell oraz testy zabezpieczeń plikowych, zawartości paczki i konwersji polskiej lokalizacji. Otrzymane logi Windows potwierdzają sukces budowania bazowych pakietów SDK (0 błędów). W kolejnych próbach moda wykryto niedozwolone parametry `out bool` oraz konflikt niekwalifikowanych wywołań `Stop(...)` z poleceniem stanu. Parametry zastąpiono strukturą wyniku, a funkcję zatrzymywania nazwano `StopAutoplay` we wszystkich miejscach; oba problemy mają testy regresji. **Ponowna kompilacja poprawionego moda i testy w grze pozostają wymagane.** Lokalne środowisko ma źródła SDK, ale nie kompilator Windows ani grę.
+Wykonano kontrolę oryginalnych źródeł SDK przesłanych przez użytkownika, składni PowerShell oraz testy zabezpieczeń plikowych, zawartości paczki i konwersji polskiej lokalizacji. Po poprawkach `out bool` i `Stop(...)` otrzymany log Windows potwierdził zapis `AutoplayXCom2.u`: **0 błędów, 67 ostrzeżeń**. Osiem dotyczyło zasobów SDK, a 59 odrzuconych przypisań `config` w naszym `defaultproperties`. Wszystkie te wartości, w tym 27 nazw umiejętności, znajdują się teraz w INI; testy kontrolują ich kompletność i brak odrzucanych przypisań. **Ponowne zbudowanie po migracji konfiguracji i testy w grze pozostają wymagane.** Lokalne środowisko ma źródła SDK, ale nie kompilator Windows ani grę.
 
 ```powershell
 # Przenośne testy ochrony istniejących plików SDK (bez kompilatora):

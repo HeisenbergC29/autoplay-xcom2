@@ -181,8 +181,3 @@ static function bool ChoosePlacement(XComGameState_Unit UnitState,
     Score = 280.0;
     return true;
 }
-
-defaultproperties
-{
-    MaxCandidateTiles=96
-}

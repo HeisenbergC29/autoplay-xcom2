@@ -543,15 +543,6 @@ function RecordAction(XComGameState_Unit UnitState, AvailableAction Action, int 
 
 defaultproperties
 {
-    ToggleKey=F8
-    DecisionInterval=0.75
-    MaxActionsPerTurn=128
-    MaxSameActionPerTurn=8
-    AutoEndTurn=true
-    AutoCompleteOwnedHacks=true
-    ExploreUnseenMap=true
-    AutoPlaceEvac=true
-    UseExplosiveGrenades=true
     bEnabled=false
     bAlwaysTick=true
     bHidden=true

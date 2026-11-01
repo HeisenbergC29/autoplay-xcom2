@@ -417,15 +417,3 @@ function bool ChooseMove(XComGameState_Unit UnitState,
     }
     return false;
 }
-
-defaultproperties
-{
-    GridSpacing=4
-    MaxMapSamples=8192
-    MaxSamplesPerDecision=512
-    MaxFrontiers=64
-    MaxPathAttempts=6
-    MaxPathLength=2048
-    MaxRememberedFailures=256
-    MaxTrackedUnits=32
-}

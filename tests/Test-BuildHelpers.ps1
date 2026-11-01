@@ -21,12 +21,12 @@ if ($parseErrors.Count -gt 0) {
     throw ('build.ps1 has parser errors: ' + ($parseErrors.Message -join '; '))
 }
 
-# Load only filesystem helpers; do not execute the Windows-only entrypoint.
+# Load only testable helpers; do not execute the Windows-only entrypoint.
 $definitions = $ast.FindAll({
     param($node)
     $node -is [System.Management.Automation.Language.FunctionDefinitionAst]
 }, $true)
-foreach ($helperName in @('Reset-OwnedDirectory', 'Copy-MissingSdkSources', 'Convert-LocalizationForGame', 'Copy-ModPayload')) {
+foreach ($helperName in @('Reset-OwnedDirectory', 'Copy-MissingSdkSources', 'Convert-LocalizationForGame', 'Copy-ModPayload', 'Assert-SdkCompilerResult')) {
     $definition = @($definitions | Where-Object Name -eq $helperName)
     if ($definition.Count -ne 1) { throw "Expected exactly one $helperName helper." }
     Invoke-Expression $definition[0].Extent.Text
@@ -54,6 +54,57 @@ function Assert-True([bool] $Condition, [string] $Message) {
 $fixture = Join-Path ([IO.Path]::GetTempPath()) ('APX build helper tests ' + [guid]::NewGuid().ToString('N'))
 New-Item -ItemType Directory -Path $fixture | Out-Null
 try {
+    # Validate synthetic runner output without executing or faking a compiler.
+    # The game SDK's asset warnings are allowed; rejected config defaults in
+    # this mod are not, even when the native summary reports zero errors.
+    $sdkWarnings = (0..7 | ForEach-Object {
+        "C:\SDK\Development\Src\DLC_2\Classes\Fixture$_.uc(1) : Warning, Unresolved reference to StaticMesh 'Fixture.Asset$_'"
+    }) -join [Environment]::NewLine
+    $resultCases = @(
+        @{
+            Name = 'zero errors and eight SDK asset warnings'
+            ExitCode = 0
+            Log = $sdkWarnings + "`nSuccess - 0 error(s), 8 warning(s) (0 Unique Errors, 8 Unique Warnings)"
+            Allowed = $true
+        },
+        @{
+            Name = 'own config assignment rejection despite zero errors'
+            ExitCode = 0
+            Log = "C:\SDK\Development\Src\AutoplayXCom2\Classes\Fixture.uc(9) : Warning, Import failed for 'AttackAbilities': property is config (fixture)`nSuccess - 0 error(s), 1 warning(s)"
+            Allowed = $false
+        },
+        @{
+            Name = 'own config assignment rejection with forward slashes'
+            ExitCode = 0
+            Log = "AutoplayXCom2/Classes/Fixture.uc(9) : Warning, Import failed for 'ToggleKey': property is config`nSuccess - 0 error(s), 1 warning(s)"
+            Allowed = $false
+        },
+        @{
+            Name = 'nonzero exit code with no error text'
+            ExitCode = 7
+            Log = 'Compiler process ended.'
+            Allowed = $false
+        },
+        @{
+            Name = 'compiler error despite zero exit code'
+            ExitCode = 0
+            Log = "C:\SDK\Development\Src\AutoplayXCom2\Classes\Fixture.uc(1) : Error, Fixture error`nFailure - 1 error(s), 0 warning(s)"
+            Allowed = $false
+        },
+        @{
+            Name = 'crash despite zero exit code'
+            ExitCode = 0
+            Log = 'Crash Detected'
+            Allowed = $false
+        }
+    )
+    foreach ($resultCase in $resultCases) {
+        $accepted = $true
+        try { Assert-SdkCompilerResult -LogText $resultCase.Log -ExitCode $resultCase.ExitCode }
+        catch { $accepted = $false }
+        Assert-True ($accepted -eq $resultCase.Allowed) ("Unexpected compiler-result decision: " + $resultCase.Name)
+    }
+
     # An unknown directory is never reset, including all its nested files.
     $unknown = Join-Path $fixture 'unknown'
     $unknownChild = Join-Path $unknown 'nested'
@@ -156,7 +207,7 @@ try {
     try { Copy-ModPayload $payloadSource $payloadOutput } catch { $refused = $true }
     Assert-True $refused 'Packaging accepted a missing installation document.'
 
-    Write-Host 'PASS: build.ps1 parses; unknown trees preserved; SDK patches preserved; Polish UTF-16LE repeatable; install document included; source omitted from distribution.'
+    Write-Host 'PASS: build.ps1 parses; compiler failures and rejected own config blocked; SDK asset warnings allowed; unknown trees and SDK patches preserved; Polish UTF-16LE repeatable; correct distribution payload.'
 }
 finally {
     Remove-Item -LiteralPath $fixture -Recurse -Force
