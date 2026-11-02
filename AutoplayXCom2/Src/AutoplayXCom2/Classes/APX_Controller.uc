@@ -1,6 +1,6 @@
 // One runtime-only actor per tactical HUD. Never serialized into a campaign.
 class APX_Controller extends Actor config(AutoplayXCom2)
-    dependson(X2GameRuleset, XComGameState, XComGameStateContext_Ability, APX_SquadPlanner);
+    dependson(X2GameRuleset, XComGameState, XComGameStateContext_Ability);
 
 var config name ToggleKey;
 var config float DecisionInterval;
@@ -672,20 +672,19 @@ function bool HandleOwnedHack(float DeltaTime)
 
 function MakeDecision(XComTacticalController PC)
 {
-    local XComGameState_Unit UnitState, BestUnit;
+    local XComGameState_Unit UnitState, BestUnit, AmbushUnit;
     local XComGameState_Player PlayerState;
     local XComGameState_Ability Ability;
     local XComGameStateContext_Ability SubmittedContext;
     local StateObjectReference PlayerRef;
-    local AvailableAction Candidate, BestAction;
-    local array<TTile> CandidatePath, BestPath;
+    local AvailableAction Candidate, BestAction, AmbushAction;
+    local array<TTile> CandidatePath, BestPath, AmbushPath;
     local array<vector> CandidateLocations, BestLocations;
     local vector CandidateAim, BestAim;
-    local int TargetIndex, BestTargetIndex, ChosenTargetID;
-    local float Score, BestScore;
+    local int TargetIndex, BestTargetIndex, ChosenTargetID, AmbushTargetIndex;
+    local float Score, BestScore, AmbushScore;
     local bool bMove, bArea, bHavePlan, bSuccess, bCanExplore, bCombatThreats;
     local bool bVisibleThreats, bContactSearch, bCandidateMove, bGrenadeCandidate;
-    local AmbushPreparation AmbushPlan;
 
     PlayerRef = `TACTICALRULES.GetCachedUnitActionPlayerRef();
     PlayerState = XComGameState_Player(`XCOMHISTORY.GetGameStateForObjectID(PlayerRef.ObjectID));
@@ -869,20 +868,21 @@ function MakeDecision(XComTacticalController PC)
                 Ability.GetMyTemplate().Hostility == eHostility_Offensive,
                 AmbushPreparationActions, Clamp(class'APX_SquadPlanner'.default.MaxPreparationActionsPerTurn, 0, 12)))
         {
-            if (class'APX_SquadPlanner'.static.ChoosePreparation(PlayerRef.ObjectID, BestUnit, AmbushPlan)
-                && ((AmbushPlan.bMove && CanUseMove(AmbushPlan.UnitState, AmbushPlan.Path))
-                    || (!AmbushPlan.bMove && CanUseAction(AmbushPlan.UnitState, AmbushPlan.Action, AmbushPlan.TargetIndex))))
+            if (class'APX_SquadPlanner'.static.ChoosePreparation(PlayerRef.ObjectID, BestUnit,
+                AmbushUnit, AmbushAction, AmbushTargetIndex, AmbushPath, AmbushScore)
+                && ((AmbushPath.Length > 1 && CanUseMove(AmbushUnit, AmbushPath))
+                    || (AmbushPath.Length == 0 && CanUseAction(AmbushUnit, AmbushAction, AmbushTargetIndex))))
             {
                 if (MissionRecorder != none)
                     MissionRecorder.Marker("ambush_setup", "opener=" $ BestUnit.ObjectID
-                        @ "unit=" $ AmbushPlan.UnitState.ObjectID @ "move=" $ AmbushPlan.bMove);
-                BestUnit = AmbushPlan.UnitState;
-                BestAction = AmbushPlan.Action;
-                BestTargetIndex = AmbushPlan.TargetIndex;
-                BestPath = AmbushPlan.Path;
-                BestScore = AmbushPlan.Score;
+                        @ "unit=" $ AmbushUnit.ObjectID @ "move=" $ string(AmbushPath.Length > 1));
+                BestUnit = AmbushUnit;
+                BestAction = AmbushAction;
+                BestTargetIndex = AmbushTargetIndex;
+                BestPath = AmbushPath;
+                BestScore = AmbushScore;
                 BestLocations.Length = 0;
-                bMove = AmbushPlan.bMove;
+                bMove = AmbushPath.Length > 1;
                 bArea = false;
                 ++AmbushPreparationActions;
             }

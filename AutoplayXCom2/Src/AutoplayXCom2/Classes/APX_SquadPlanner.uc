@@ -293,17 +293,26 @@ static function bool ChoosePreparationMove(XComGameState_Unit Soldier,
     return Path.Length > 1;
 }
 
+// Keep the result struct private to this class's compilation boundary. The
+// controller uses stock types, as the other planners do, so it does not need
+// a DependsOn edge to another mod class just to parse a local declaration.
 static function bool ChoosePreparation(int PlayerID, XComGameState_Unit Opener,
-    out AmbushPreparation Preparation)
+    out XComGameState_Unit PreparedUnit, out AvailableAction PreparedAction,
+    out int PreparedTargetIndex, out array<TTile> PreparedPath, out float PreparedScore)
 {
     local XComGameState_Unit Soldier;
     local array<StateObjectReference> VisibleEnemies;
-    local AmbushPreparation Candidate, EmptyPreparation;
-    local AvailableAction OverwatchAction;
+    local AmbushPreparation Preparation, Candidate, EmptyPreparation;
+    local AvailableAction OverwatchAction, EmptyAction;
     local array<TTile> PreparationPath;
     local int PointCost, SelfIndex;
     local bool bUsefulShot;
 
+    PreparedUnit = none;
+    PreparedAction = EmptyAction;
+    PreparedTargetIndex = INDEX_NONE;
+    PreparedPath.Length = 0;
+    PreparedScore = -10000.0;
     Preparation = EmptyPreparation;
     if (Opener == none || !SquadIsConcealed(PlayerID))
         return false;
@@ -337,5 +346,12 @@ static function bool ChoosePreparation(int PlayerID, XComGameState_Unit Opener,
         if (!Preparation.bFound || Candidate.Score > Preparation.Score)
             Preparation = Candidate;
     }
-    return Preparation.bFound;
+    if (!Preparation.bFound)
+        return false;
+    PreparedUnit = Preparation.UnitState;
+    PreparedAction = Preparation.Action;
+    PreparedTargetIndex = Preparation.TargetIndex;
+    PreparedPath = Preparation.Path;
+    PreparedScore = Preparation.Score;
+    return true;
 }

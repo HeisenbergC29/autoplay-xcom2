@@ -23,6 +23,9 @@ Pokazał strzał z ukrycia przed przygotowaniem reszty oddziału oraz odrzucanie
 sensownego granatu na pojedynczy cel. Bieżąca rewizja `mission-report-v4` dodaje
 koordynację otwarcia zasadzki i ostrożny wyjątek dla takiego granatu.
 [Analiza wykorzystania AI przeciwników i zakres nowego planera](docs/native-ai-and-ambush.pl.md).
+Po zgłoszonym błędzie `Unparsed class ... DependsOn ... APX_Controller` usunięto
+nową zależność kompilacji między kontrolerem a strukturą planera zasadzki.
+Poprawione źródła wymagają ponownego zbudowania na Windows.
 
 **Stan: alpha; według najnowszego zgłoszenia użytkownika mod już wydaje rozkazy, ale przegrywa Gatecrasher na Legendzie i Dowódcy.** Bieżące źródła poprawiają ocenę osłon, zagrożeń i flankowania, dobieranie celów, granaty oraz wsparcie oddziału. Ta zmiana **wymaga nowej kompilacji i prób w grze**; nie ma jeszcze potwierdzenia poprawy wyniku misji. [Opis taktyki, kompilacja z zachowanym SDK i lista prób](docs/tactics-update.pl.md). Nie potwierdzono pełnego ukończenia wszystkich misji DLC.
 

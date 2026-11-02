@@ -43,6 +43,22 @@ po ujawnieniu ani pewnego trafienia z reakcji. Ukryte jednostki nie służą do
 wyznaczania stref wykrycia; mogą nadal spowodować nieoczekiwane ujawnienie.
 Natywna kompilacja i zachowanie w grze pozostają do potwierdzenia.
 
+## Poprawka po logu kompilacji `b891b9d`
+
+Próba na Windows zatrzymała się przed analizą funkcji: `Unparsed class
+'X2GameRuleset' found while validating DependsOn entries for 'APX_Controller'`.
+Nowe połączenie kontrolera z typem struktury planera wymagało dodatkowego
+`DependsOn`. Poprawka przywraca wcześniejszą listę zależności kontrolera,
+a strukturę przygotowania pozostawia wewnątrz planera. Kontroler otrzymuje
+jednostkę, akcję, indeks celu, ścieżkę i ocenę przez zwykłe parametry wyjściowe.
+Pusta ścieżka oznacza overwatch, a ścieżka z co najmniej dwoma polami — ruch.
+Reguły wyboru przygotowania pozostają takie same.
+
+Log zawiera jeden błąd i osiem ostrzeżeń bibliotek SDK. Ostrzeżenia nie są
+przyczyną przerwania tej próby. Po pobraniu poprawionych źródeł ponów budowanie
+na zachowanym SDK bez `-BuildBase`, jeśli baza jest już gotowa. Przenośne testy
+i przegląd interfejsów przechodzą; poprawka wymaga ponownej kompilacji Windows.
+
 ## Granaty i pozostałe granice
 
 Pojedynczy cel nie musi już zawsze mieć mniej HP niż minimalne obrażenia
