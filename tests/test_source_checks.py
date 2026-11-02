@@ -118,5 +118,38 @@ class CoverQueryOutArgumentTests(unittest.TestCase):
                 self.assertEqual(CHECKS.invalid_cover_query_arguments(file.read_text()), [])
 
 
+class LogMacroConditionTests(unittest.TestCase):
+    def test_rejects_multiline_empty_conditions_reported_by_compiler(self):
+        source = (
+            '`log("APXREC|seq=" $ Sequence\n'
+            '    $ "|max_records=" $ MaxRecords,\n'
+            '    , \'AutoplayXCom2\');\n'
+            '`LOG(BuildMessage(A, B),\r\n    , \'AutoplayXCom2\');\n'
+        )
+        self.assertEqual(CHECKS.multiline_empty_log_conditions(source), [1, 4])
+
+    def test_accepts_explicit_conditions_in_wrapped_macro_calls(self):
+        source = (
+            '`log("APXREC|value=(,)" $ Value,\n true, \'AutoplayXCom2\');\n'
+            '`log(BuildMessage(A, B),\n bEnabled && Check(A, B), \'AutoplayXCom2\');\n'
+        )
+        self.assertEqual(CHECKS.multiline_empty_log_conditions(source), [])
+
+    def test_accepts_stock_single_line_omitted_conditions(self):
+        source = '`log("message",,\'Tag\');\n`log("message", , \'Tag\');\n`log("message");'
+        self.assertEqual(CHECKS.multiline_empty_log_conditions(source), [])
+
+    def test_ignores_comments_and_literal_log_examples(self):
+        source = ('/* `log(Value,\n , Tag); */\n'
+                  'var string Example = "`log(Value, , Tag)";\n'
+                  '// `log(Value,\n// , Tag);\n')
+        self.assertEqual(CHECKS.multiline_empty_log_conditions(source), [])
+
+    def test_current_mod_has_no_multiline_empty_log_conditions(self):
+        for file in (ROOT / 'AutoplayXCom2/Src').rglob('*.uc'):
+            with self.subTest(file=file.name):
+                self.assertEqual(CHECKS.multiline_empty_log_conditions(file.read_text()), [])
+
+
 if __name__ == "__main__":
     unittest.main()

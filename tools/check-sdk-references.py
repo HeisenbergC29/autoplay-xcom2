@@ -86,6 +86,37 @@ def invalid_cover_query_arguments(source: str) -> list[tuple[int, int]]:
     return failures
 
 
+def multiline_empty_log_conditions(source: str) -> list[int]:
+    """Catch the blank macro condition that WOTC expands into an empty if.
+
+    Omitted conditions on a single line are used throughout stock SDK sources.
+    A newline between the two commas instead reaches the hardcoded macro as a
+    nonempty argument. Use an explicit true condition when wrapping log calls.
+    """
+    tokens = re.compile(r'//[^\n]*|/\*.*?\*/|"(?:\\.|[^"\\])*"|\x27[^\x27\n]*\x27', re.S)
+    masked = tokens.sub(lambda match: re.sub(r'[^\n]', ' ', match[0]), source)
+    failures = []
+    for call in re.finditer(r'`log\s*\(', masked, re.I):
+        depth = 0
+        commas = []
+        for index in range(call.end(), len(masked)):
+            char = masked[index]
+            if char in '([{':
+                depth += 1
+            elif char in ')]}':
+                if depth == 0:
+                    break
+                depth -= 1
+            elif char == ',' and depth == 0:
+                commas.append(index)
+                if len(commas) == 2:
+                    condition = source[commas[0] + 1:commas[1]]
+                    if not condition.strip() and '\n' in condition:
+                        failures.append(source.count('\n', 0, call.start()) + 1)
+                    break
+    return failures
+
+
 def find_sdk_root(path: Path) -> Path:
     for candidate in (path, path / "Development" / "SrcOrig", path / "Development" / "Src"):
         if (candidate / "XComGame" / "Classes").is_dir():
@@ -149,6 +180,8 @@ def audit(sdk_root: Path, repo_root: Path) -> list[str]:
             failures.append(f"{file.name}:{line}: bare Stop(...) conflicts with the state statement; use StopAutoplay.")
         for line, argument in invalid_cover_query_arguments(raw_source):
             failures.append(f"{file.name}:{line}: GetCoverTypeForTarget argument {argument} must be a vector variable for const out; assign expressions to locals first.")
+        for line in multiline_empty_log_conditions(raw_source):
+            failures.append(f"{file.name}:{line}: empty log macro condition spans a newline; use an explicit true condition to avoid an empty if.")
         inherited = set()
         parent = re.search(r'\bextends\s+(\w+)', without_comments(raw_source), re.I)
         visited = set()

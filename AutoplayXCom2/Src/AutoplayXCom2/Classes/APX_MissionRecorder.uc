@@ -44,16 +44,14 @@ function Emit(string EventName, string Fields)
         {
             ++Sequence;
             `log("APXREC|v=1|session=" $ SessionID $ "|seq=" $ Sequence
-                $ "|event=limit|decision=" $ Decision $ "|max_records=" $ MaxRecords,
-                , 'AutoplayXCom2');
+                $ "|event=limit|decision=" $ Decision $ "|max_records=" $ MaxRecords, true, 'AutoplayXCom2');
             bLimitReported = true;
         }
         return;
     }
     ++Sequence;
     `log("APXREC|v=1|session=" $ SessionID $ "|seq=" $ Sequence
-        $ "|event=" $ Safe(EventName) $ "|decision=" $ Decision $ Fields,
-        , 'AutoplayXCom2');
+        $ "|event=" $ Safe(EventName) $ "|decision=" $ Decision $ Fields, true, 'AutoplayXCom2');
 }
 
 function Start(int PlayerID)
