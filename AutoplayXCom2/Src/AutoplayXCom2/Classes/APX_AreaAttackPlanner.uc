@@ -8,6 +8,65 @@ var config int MaxCandidateCenters;
 var config float SafetyBufferTiles;
 var private XComPrecomputedPath PreviewPath;
 
+struct GrenadeScanDiagnostics
+{
+    var int Available;
+    var int Supported;
+    var int Centers;
+    var int Evaluated;
+    var int Accepted;
+    var int RangeRejected;
+    var int VisibilityRejected;
+    var int VisualizerRejected;
+    var int TrajectoryRejected;
+    var int BlastRejected;
+    var int TargetsRejected;
+    var int ScoreRejected;
+    var int Unsupported;
+};
+
+var private GrenadeScanDiagnostics Scan;
+var private bool bCollectDiagnostics;
+var private string LastScanReason;
+var private string LastBlastReason;
+
+// One summary per unit/decision, not one log line per candidate center. The
+// controller attaches it to that decision's recorder session.
+function string GetDiagnosticSummary()
+{
+    return "available=" $ Scan.Available $ " supported=" $ Scan.Supported
+        $ " centers=" $ Scan.Centers $ " evaluated=" $ Scan.Evaluated
+        $ " accepted=" $ Scan.Accepted $ " range=" $ Scan.RangeRejected
+        $ " visibility=" $ Scan.VisibilityRejected $ " visualizer=" $ Scan.VisualizerRejected
+        $ " trajectory=" $ Scan.TrajectoryRejected $ " blast=" $ Scan.BlastRejected
+        $ " targets=" $ Scan.TargetsRejected $ " score=" $ Scan.ScoreRejected
+        $ " unsupported=" $ Scan.Unsupported $ " last=" $ LastScanReason;
+}
+
+function RejectScan(name Stage, string Reason)
+{
+    if (!bCollectDiagnostics)
+        return;
+    LastScanReason = Reason;
+    switch (Stage)
+    {
+    case 'range': ++Scan.RangeRejected; break;
+    case 'visibility': ++Scan.VisibilityRejected; break;
+    case 'visualizer': ++Scan.VisualizerRejected; break;
+    case 'trajectory': ++Scan.TrajectoryRejected; break;
+    case 'blast': ++Scan.BlastRejected; break;
+    case 'targets': ++Scan.TargetsRejected; break;
+    case 'score': ++Scan.ScoreRejected; break;
+    default: ++Scan.Unsupported; break;
+    }
+}
+
+function bool EndScan(bool bFound)
+{
+    bCollectDiagnostics = false;
+    return bFound;
+}
+
 // The controller must call Cleanup when its tactical HUD is removed.
 function Cleanup()
 {
@@ -53,18 +112,29 @@ function bool GetSupportedGrenade(XComGameState_Unit UnitState,
     AbilityName = Ability.GetMyTemplateName();
     if (AbilityName != 'ThrowGrenade' && AbilityName != 'LaunchGrenade')
         return false;
+    if (bCollectDiagnostics)
+        ++Scan.Available;
     Template = Ability.GetMyTemplate();
     if (Template == none || Template.Hostility != eHostility_Offensive
         || Template.TargetingMethod != class'X2TargetingMethod_Grenade'
         || X2AbilityTarget_Cursor(Template.AbilityTargetStyle) == none)
+    {
+        RejectScan('unsupported', "targeting_contract");
         return false;
+    }
     Radius = X2AbilityMultiTarget_Radius(Template.AbilityMultiTargetStyle);
     // Cone and focus-dependent radius subclasses need their own target solver.
     if (Radius == none || Radius.Class != class'X2AbilityMultiTarget_Radius')
+    {
+        RejectScan('unsupported', "radius_style");
         return false;
+    }
     SourceWeapon = Ability.GetSourceWeapon();
     if (SourceWeapon == none)
+    {
+        RejectScan('unsupported', "source_weapon");
         return false;
+    }
     Ammo = Ability.GetSourceAmmo();
     if (Ammo != none)
         Grenade = X2GrenadeTemplate(Ammo.GetMyTemplate());
@@ -74,7 +144,14 @@ function bool GetSupportedGrenade(XComGameState_Unit UnitState,
         Grenade = X2GrenadeTemplate(SourceWeapon.GetMyTemplate());
     // These two SDK templates have direct explosive damage and no persistent
     // poison, fire, smoke, EMP immunity exceptions, or delayed proximity trigger.
-    return Grenade != none && (Grenade.DataName == 'FragGrenade' || Grenade.DataName == 'AlienGrenade');
+    if (Grenade == none || (Grenade.DataName != 'FragGrenade' && Grenade.DataName != 'AlienGrenade'))
+    {
+        RejectScan('unsupported', "grenade_template");
+        return false;
+    }
+    if (bCollectDiagnostics)
+        ++Scan.Supported;
+    return true;
 }
 
 function bool IsLegalLocation(XComGameState_Unit UnitState,
@@ -86,15 +163,26 @@ function bool IsLegalLocation(XComGameState_Unit UnitState,
 
     Visualizer = XGUnit(UnitState.GetVisualizer());
     if (Visualizer == none)
+    {
+        RejectScan('visualizer', "unit_visualizer");
         return false;
+    }
     Ability.GetValidWeaponRange(MinRange, MaxRange);
     Distance = VSize(Location - Visualizer.GetGameStateLocation());
     if (Distance < MinRange || (MaxRange > 0.0 && Distance >= MaxRange))
+    {
+        RejectScan('range', "outside_weapon_range");
         return false;
+    }
     Tile = `XWORLD.GetTileCoordinatesFromPosition(Location);
     // Never choose blind grenade targets, even when a native cursor permits it.
-    return class'X2TacticalVisibilityHelpers'.static.CanSquadSeeLocation(
-        UnitState.ControllingPlayer.ObjectID, Tile);
+    if (!class'X2TacticalVisibilityHelpers'.static.CanSquadSeeLocation(
+        UnitState.ControllingPlayer.ObjectID, Tile))
+    {
+        RejectScan('visibility', "landing_not_visible");
+        return false;
+    }
+    return true;
 }
 
 function bool ComputeImpact(XComGameState_Unit UnitState,
@@ -105,20 +193,59 @@ function bool ComputeImpact(XComGameState_Unit UnitState,
     local XGWeapon WeaponVisualizer;
     local XComWeapon WeaponEntity;
     local X2WeaponTemplate WeaponTemplate;
+    local XGUnit UnitVisualizer;
     local TTile SnapTile;
 
-    if (PathActor == none || !IsLegalLocation(UnitState, Ability, AimLocation))
+    if (PathActor == none)
+    {
+        RejectScan('trajectory', "preview_path_unavailable");
+        return false;
+    }
+    if (!IsLegalLocation(UnitState, Ability, AimLocation))
         return false;
     SourceWeapon = Ability.GetSourceWeapon();
     if (SourceWeapon == none)
         return false;
     WeaponVisualizer = XGWeapon(SourceWeapon.GetVisualizer());
     WeaponTemplate = X2WeaponTemplate(SourceWeapon.GetMyTemplate());
-    if (WeaponVisualizer == none || WeaponTemplate == none)
+    if (WeaponTemplate == none)
+    {
+        RejectScan('unsupported', "weapon_template");
         return false;
+    }
+    // Stock grenade targeting initializes the stowed item's visualizer/entity
+    // on demand. The player need not manually open grenade targeting first.
+    UnitVisualizer = XGUnit(UnitState.GetVisualizer());
+    if (UnitVisualizer == none)
+    {
+        RejectScan('visualizer', "unit_visualizer");
+        return false;
+    }
+    if (WeaponVisualizer == none)
+    {
+        class'XGItem'.static.CreateVisualizer(SourceWeapon);
+        WeaponVisualizer = XGWeapon(SourceWeapon.GetVisualizer());
+    }
+    if (WeaponVisualizer == none)
+    {
+        RejectScan('visualizer', "grenade_visualizer");
+        return false;
+    }
     WeaponEntity = WeaponVisualizer.GetEntity();
-    if (WeaponEntity == none || WeaponEntity.m_kPawn == none)
+    if (WeaponEntity == none)
+        WeaponEntity = XComWeapon(WeaponVisualizer.CreateEntity(SourceWeapon));
+    if (WeaponEntity == none)
+    {
+        RejectScan('visualizer', "grenade_entity");
         return false;
+    }
+    if (WeaponEntity.m_kPawn == none)
+        WeaponEntity.m_kPawn = UnitVisualizer.GetPawn();
+    if (WeaponEntity.m_kPawn == none)
+    {
+        RejectScan('visualizer', "throwing_pawn");
+        return false;
+    }
 
     // Same native pipeline as XGAIBehavior.PrecomputeGrenadePath. Use a private
     // hidden actor while evaluating; only PrepareForActivation touches the global
@@ -128,20 +255,30 @@ function bool ComputeImpact(XComGameState_Unit UnitState,
     PathActor.m_bBlasterBomb = false;
     PathActor.iNumKeyframes = 0;
     PathActor.TouchEvents.Length = 0;
+    PathActor.ClearOverrideTargetLocation();
     PathActor.SetWeaponAndTargetLocation(WeaponEntity, UnitState.GetTeam(),
         AimLocation, WeaponTemplate.WeaponPrecomputedPathData);
     PathActor.CalculateTrajectoryToTarget(WeaponTemplate.WeaponPrecomputedPathData);
     if (PathActor.iNumKeyframes <= 0)
+    {
+        RejectScan('trajectory', "no_trajectory");
         return false;
+    }
     if (!TrajectoryIsSafe(PathActor))
+    {
+        RejectScan('trajectory', "unsafe_trajectory");
         return false;
+    }
     Impact = PathActor.GetEndPosition();
     // Match stock X2TargetingMethod_Grenade.GetSplashRadiusCenter's tile snap.
     SnapTile = `XWORLD.GetTileCoordinatesFromPosition(Impact);
     while (SnapTile.Z >= 0 && !`XWORLD.GetFloorPositionForTile(SnapTile, Impact))
         --SnapTile.Z;
     if (SnapTile.Z < 0)
+    {
+        RejectScan('trajectory', "no_landing_floor");
         return false;
+    }
     return IsLegalLocation(UnitState, Ability, Impact);
 }
 
@@ -200,6 +337,12 @@ function bool HasDangerousScenery(Actor TargetActor)
         || Destructible.AffectedChildren.Length > 0;
 }
 
+function bool RejectBlast(string Reason)
+{
+    LastBlastReason = Reason;
+    return false;
+}
+
 function bool TrajectoryIsSafe(XComPrecomputedPath PathActor)
 {
     local int Index;
@@ -246,21 +389,22 @@ function bool BlastIsSafe(XComGameState_Unit UnitState,
     local Actor TileActor;
     local float SafeRadius;
 
+    LastBlastReason = "none";
     Radius.GetTargetedStateObjects(Ability, Impact, RawTargets);
     foreach RawTargets(TargetObject)
     {
         if (TargetObject == none)
-            return false;
+            return RejectBlast("missing_target_object");
         if (class'Helpers'.static.IsObjectiveTarget(TargetObject.ObjectID))
-            return false;
+            return RejectBlast("objective_in_blast");
         OtherUnit = XComGameState_Unit(TargetObject);
         if (IsProtectedUnit(UnitState, OtherUnit))
-            return false;
+            return RejectBlast("protected_unit_in_blast");
         Interactive = XComGameState_InteractiveObject(TargetObject);
         if (Interactive != none && Interactive.GetRequiresObjectiveGlint())
-            return false;
+            return RejectBlast("interactive_objective_in_blast");
         if (HasDangerousScenery(TargetObject.GetVisualizer()))
-            return false;
+            return RejectBlast("dangerous_scenery_in_blast");
     }
 
     SafeRadius = Radius.GetTargetRadius(Ability) + `TILESTOUNITS(FMax(0.0, SafetyBufferTiles));
@@ -271,7 +415,7 @@ function bool BlastIsSafe(XComGameState_Unit UnitState,
     {
         if (IsProtectedUnit(UnitState, OtherUnit)
             && FootprintNearImpact(X2GameRulesetVisibilityInterface(OtherUnit), Impact, SafeRadius))
-            return false;
+            return RejectBlast("protected_unit_near_blast");
     }
     foreach `XCOMHISTORY.IterateByClassType(class'XComGameState_ObjectiveInfo', Objective)
     {
@@ -285,26 +429,26 @@ function bool BlastIsSafe(XComGameState_Unit UnitState,
         if (Interactive != none && (Interactive.bRemovedFromPlay || Interactive.bBroken))
             continue;
         if (FootprintNearImpact(X2GameRulesetVisibilityInterface(ObjectiveOwner), Impact, SafeRadius))
-            return false;
+            return RejectBlast("objective_near_blast");
     }
     foreach `XCOMHISTORY.IterateByClassType(class'XComGameState_InteractiveObject', Interactive)
     {
         if (Interactive.IsEnabled && !Interactive.bRemovedFromPlay && !Interactive.bBroken
             && Interactive.GetRequiresObjectiveGlint()
             && FootprintNearImpact(X2GameRulesetVisibilityInterface(Interactive), Impact, SafeRadius))
-            return false;
+            return RejectBlast("interactive_objective_near_blast");
     }
 
     Radius.GetValidTilesForLocation(Ability, Impact, BlastTiles);
     if (BlastTiles.Length == 0)
-        return false;
+        return RejectBlast("no_blast_tiles");
     foreach BlastTiles(Tile)
     {
         TileActors = `XWORLD.GetActorsOnTile(Tile, true);
         foreach TileActors(TileActor)
         {
             if (HasDangerousScenery(TileActor))
-                return false;
+                return RejectBlast("dangerous_scenery_on_blast_tile");
         }
     }
     return true;
@@ -457,16 +601,30 @@ function bool EvaluateImpact(XComGameState_Unit UnitState,
     Locations.Length = 0;
     Score = -10000.0;
     if (!BlastIsSafe(UnitState, Ability, Radius, Impact))
+    {
+        RejectScan('blast', LastBlastReason);
         return false;
+    }
     Ability.GatherAdditionalAbilityTargetsForLocation(Impact, Target);
     if (Target.PrimaryTarget.ObjectID != 0 || Target.AdditionalTargets.Length == 0
         || Radius.CheckFilteredMultiTargets(Ability, Target) != 'AA_Success')
+    {
+        RejectScan('targets', "native_target_filter");
         return false;
+    }
     Score = ScoreBlast(UnitState, Ability, Grenade, Target, VisibleEnemies);
     if (Score <= -1000.0)
+    {
+        RejectScan('score', "not_worth_limited_grenade");
         return false;
+    }
     Ability.GatherAbilityTargetLocationsForLocation(Impact, Target, Locations);
-    return Locations.Length == 1;
+    if (Locations.Length != 1)
+    {
+        RejectScan('targets', "target_location_contract");
+        return false;
+    }
+    return true;
 }
 
 function AddCenter(vector Center, out array<vector> Centers)
@@ -504,14 +662,21 @@ function bool ChooseAction(XComGameState_Unit UnitState,
     local int First, Second;
     local float CandidateScore;
     local bool bFound;
+    local GrenadeScanDiagnostics EmptyScan;
 
+    Scan = EmptyScan;
+    LastScanReason = "none";
+    bCollectDiagnostics = true;
     Action = EmptyAction;
     TargetIndex = INDEX_NONE;
     Locations.Length = 0;
     Score = -10000.0;
     if (UnitState == none || !UnitState.IsAbleToAct() || `TACTICALRULES == none
         || !`TACTICALRULES.GetGameRulesCache_Unit(UnitState.GetReference(), UnitCache))
-        return false;
+    {
+        RejectScan('unsupported', "unit_or_cache_unavailable");
+        return EndScan(false);
+    }
     class'X2TacticalVisibilityHelpers'.static.GetAllVisibleEnemiesForPlayer(
         UnitState.ControllingPlayer.ObjectID, VisibleEnemies);
     foreach VisibleEnemies(EnemyRef)
@@ -530,18 +695,30 @@ function bool ChooseAction(XComGameState_Unit UnitState,
         for (Second = First + 1; Second < EnemyCenters.Length; ++Second)
             AddCenter((EnemyCenters[First] + EnemyCenters[Second]) * 0.5, Centers);
     }
-    if (Centers.Length == 0 || !EnsurePreviewPath())
-        return false;
+    Scan.Centers = Centers.Length;
+    if (Centers.Length == 0)
+    {
+        LastScanReason = "no_visible_centers";
+        return EndScan(false);
+    }
+    if (!EnsurePreviewPath())
+    {
+        RejectScan('trajectory', "preview_path_unavailable");
+        return EndScan(false);
+    }
     foreach UnitCache.AvailableActions(Candidate)
     {
         if (!GetSupportedGrenade(UnitState, Candidate, Ability, Grenade, Radius))
             continue;
         foreach Centers(Center)
         {
+            ++Scan.Evaluated;
             if (!ComputeImpact(UnitState, Ability, Center, PreviewPath, Impact)
                 || !EvaluateImpact(UnitState, Ability, Grenade, Radius, Impact,
-                    VisibleEnemies, Target, CandidateLocations, CandidateScore)
-                || CandidateScore <= Score)
+                    VisibleEnemies, Target, CandidateLocations, CandidateScore))
+                continue;
+            ++Scan.Accepted;
+            if (CandidateScore <= Score)
                 continue;
             Action = Candidate;
             Action.AvailableTargets.Length = 0;
@@ -553,7 +730,7 @@ function bool ChooseAction(XComGameState_Unit UnitState,
             bFound = true;
         }
     }
-    return bFound;
+    return EndScan(bFound);
 }
 
 function bool PrepareForActivation(XComGameState_Unit UnitState,

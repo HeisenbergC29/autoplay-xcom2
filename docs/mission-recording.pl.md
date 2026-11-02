@@ -4,6 +4,8 @@ Ta wersja dodaje zapis decyzji do logu gry. To rejestr diagnostyczny, nie film
 ani odtwarzalny replay silnika. Ma pokazać, jakie akcje były dostępne, co wybrał
 automat i co rzeczywiście wydarzyło się po rozkazach.
 
+[Analiza pierwszego raportu z Gatecrashera i wynikające z niej poprawki](report-2026-11-02.pl.md).
+
 ## Co się zmieniło w taktyce
 
 - Overwatch konkuruje ze słabymi strzałami, zamiast zawsze otrzymywać minimalną
@@ -18,6 +20,10 @@ automat i co rzeczywiście wydarzyło się po rozkazach.
   wejścia w kolejną grupę podczas trwającej walki, ale nie gwarantuje jego braku.
 - Podczas marszu do celu i eksploracji brana jest pod uwagę osłona na końcu
   ruchu. Zachowane są ograniczenia AP, wsparcia i niebezpiecznych pól.
+- Po utracie widoczności niedawni przeciwnicy są pamiętani przez dwie tury.
+  Poszukiwanie ich ostatniej widocznej pozycji odbywa się krótkimi krokami;
+  częściowe przeładowanie nie wypiera wtedy overwatch. Ocena spekulacyjnego
+  ruchu została ograniczona, aby nie wypierała dobrego strzału.
 
 Przycisk Skyranger oznacza wezwanie ewakuacji, jeśli misja na nią pozwala.
 Ewakuacja nie oznacza zwycięstwa w Gatecrasherze. Automat korzysta ze strefy
@@ -109,6 +115,8 @@ Ustawienia w `Config\XComAutoplayXCom2.ini`:
 EnableMissionRecording=true
 RecordCandidateScores=true
 RecordingInterval=1.0
+ContactMemoryTurns=2
+ContactSearchDistance=4.0
 
 [AutoplayXCom2.APX_MissionRecorder]
 MaxRecords=20000

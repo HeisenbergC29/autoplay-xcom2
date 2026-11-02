@@ -25,6 +25,8 @@ var private string PreparedChoiceFields;
 var private bool bStarted;
 var private bool bFinished;
 var private bool bLimitReported;
+var private bool bEndPending;
+var private int LastEndHistory;
 
 function string Safe(string Value)
 {
@@ -75,7 +77,7 @@ function Start(int PlayerID)
     bStarted = true;
     Emit("start", "|player=" $ PlayerID $ "|mission=" $ Safe(Mission)
         $ "|difficulty=" $ `TacticalDifficultySetting $ "|history=" $ HistoryCursor
-        $ "|revision=defense-recording-v1");
+        $ "|revision=mission-report-v2");
     Observe("start");
 }
 
@@ -269,7 +271,7 @@ function RecordResults()
     local StateObjectReference TargetRef;
     local int EndIndex, SourceID, TargetID, TargetIndex;
     local bool bOwnAction, bOwnTarget, bSourceVisible;
-    local string AbilityName;
+    local string AbilityName, SourceScope;
 
     EndIndex = Min(`XCOMHISTORY.GetCurrentHistoryIndex(),
         HistoryCursor + Clamp(MaxHistoryFramesPerObserve, 16, 2048));
@@ -299,6 +301,11 @@ function RecordResults()
             class'X2TacticalVisibilityHelpers'.static.GetAllVisibleEnemiesForPlayer(
                 OwnerPlayerID, BeforeActionEnemies, HistoryCursor - 1);
         bSourceVisible = bOwnAction || VisibleEnemies.Find('ObjectID', SourceID) != INDEX_NONE;
+        SourceScope = "unseen_other";
+        if (bOwnAction)
+            SourceScope = "friendly";
+        else if (bSourceVisible)
+            SourceScope = "visible_enemy";
         AbilityName = "unseen_attack";
         if (bSourceVisible)
             AbilityName = string(Context.InputContext.AbilityTemplateName);
@@ -314,10 +321,12 @@ function RecordResults()
         if (Context.InterruptionStatus == eInterruptionStatus_Interrupt)
         {
             Emit("interrupted", "|history=" $ HistoryCursor $ "|source=" $ SourceID
+                $ "|source_scope=" $ SourceScope
                 $ "|target=" $ TargetID $ "|ability=" $ Safe(AbilityName));
             continue;
         }
         Emit("result", "|history=" $ HistoryCursor $ "|source=" $ SourceID
+            $ "|source_scope=" $ SourceScope
             $ "|target=" $ TargetID $ "|ability=" $ Safe(AbilityName)
             $ "|hit=" $ string(Context.ResultContext.HitResult)
             $ "|chance=" $ Context.ResultContext.CalculatedHitChance
@@ -333,6 +342,7 @@ function RecordResults()
             if (TargetIndex >= Context.ResultContext.MultiTargetHitResults.Length)
                 continue;
             Emit("result_target", "|history=" $ HistoryCursor $ "|source=" $ SourceID
+                $ "|source_scope=" $ SourceScope
                 $ "|target=" $ TargetID $ "|ability=" $ Safe(AbilityName)
                 $ "|target_index=" $ TargetIndex
                 $ "|hit=" $ string(Context.ResultContext.MultiTargetHitResults[TargetIndex])
@@ -405,11 +415,23 @@ function CandidateAction(XComGameState_Unit UnitState, string Kind,
 
 function string MoveFields(XComGameState_Unit UnitState, const out array<TTile> Path, float Score)
 {
+    local array<StateObjectReference> VisibleEnemies;
+    local TTile Destination;
+    local float CurrentRisk, CandidateRisk, SupportScore;
+
     if (Path.Length == 0)
         return "|kind=move|unit=" $ UnitState.ObjectID $ "|score=" $ Score $ "|path_tiles=0";
+    Destination = Path[Path.Length - 1];
+    class'APX_MissionPlanner'.static.GetVisibleThreats(UnitState, VisibleEnemies);
+    CurrentRisk = class'APX_MissionPlanner'.static.ExposureRisk(UnitState, UnitState.TileLocation, VisibleEnemies);
+    CandidateRisk = class'APX_MissionPlanner'.static.ExposureRisk(UnitState, Destination, VisibleEnemies);
+    SupportScore = class'APX_MissionPlanner'.static.SquadPositionScore(UnitState, Destination);
     return "|kind=move|unit=" $ UnitState.ObjectID $ "|score=" $ Score
         $ "|path_tiles=" $ Path.Length $ "|x=" $ Path[Path.Length - 1].X
-        $ "|y=" $ Path[Path.Length - 1].Y $ "|z=" $ Path[Path.Length - 1].Z;
+        $ "|y=" $ Path[Path.Length - 1].Y $ "|z=" $ Path[Path.Length - 1].Z
+        $ "|ap_before=" $ UnitState.NumActionPoints() $ "|visible_threats=" $ VisibleEnemies.Length
+        $ "|current_risk=" $ CurrentRisk $ "|candidate_risk=" $ CandidateRisk
+        $ "|support_score=" $ SupportScore;
 }
 
 function CandidateMove(XComGameState_Unit UnitState, const out array<TTile> Path, float Score)
@@ -456,13 +478,32 @@ function Finish(string Reason)
 
     if (!bStarted || bFinished)
         return;
-    Observe("finish");
     if (`XCOMHISTORY != none)
     {
         PendingHistory = Max(0, `XCOMHISTORY.GetCurrentHistoryIndex() - HistoryCursor);
         BattleData = XComGameState_BattleData(`XCOMHISTORY.GetSingleGameStateObjectForClass(
             class'XComGameState_BattleData', true));
     }
+    // HasTacticalGameEnded can become true while the last action and winner
+    // are still being committed. The controller retries Finish on later ticks.
+    // Wait for authoritative battle data instead of freezing a partial snapshot
+    // and treating the default false bLocalPlayerWon value as a loss.
+    if (Reason == "tactical_game_ended"
+        && (BattleData == none || BattleData.VictoriousPlayer.ObjectID == 0))
+    {
+        if (!bEndPending || LastEndHistory != HistoryCursor + PendingHistory)
+        {
+            bEndPending = true;
+            LastEndHistory = HistoryCursor + PendingHistory;
+            Observe("ending");
+            Emit("ending", "|reason=" $ Safe(Reason) $ "|outcome=unknown"
+                $ "|history=" $ LastEndHistory);
+        }
+        return;
+    }
+    Observe("finish");
+    if (`XCOMHISTORY != none)
+        PendingHistory = Max(0, `XCOMHISTORY.GetCurrentHistoryIndex() - HistoryCursor);
     Outcome = "unknown";
     if (BattleData != none && BattleData.VictoriousPlayer.ObjectID != 0)
         Outcome = BattleData.bLocalPlayerWon ? "win" : "loss";

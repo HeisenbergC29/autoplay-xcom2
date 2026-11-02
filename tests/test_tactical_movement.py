@@ -23,6 +23,8 @@ class TacticalMovementTests(unittest.TestCase):
         cls.firing_value = staticmethod(load_uc_function(SOURCE, 'FiringPositionValue'))
         cls.known_threat = staticmethod(load_uc_function(SOURCE, 'KnownThreatRisk'))
         cls.advance_endpoint = staticmethod(load_uc_function(SOURCE, 'AdvanceEndpointScore'))
+        cls.combat_score = staticmethod(load_uc_function(SOURCE, 'ScoreCombatReposition'))
+        cls.safe_expansion = staticmethod(load_uc_function(SOURCE, 'IsSafeCombatExpansion'))
 
     def exposure(self, cover_levels, health=1.0):
         risks = [self.risk(cover, 9.0, True, False) for cover in cover_levels]
@@ -96,6 +98,30 @@ class TacticalMovementTests(unittest.TestCase):
     def test_advance_prefers_nearby_cover_without_abandoning_progress(self):
         self.assertGreater(self.advance_endpoint(5, 2), self.advance_endpoint(7, 0))
         self.assertLess(self.advance_endpoint(2, 2), self.advance_endpoint(7, 0))
+
+    def test_report_rooftop_move_cannot_preempt_recorded_reliable_kill(self):
+        # Report D25/D26 produced movement score80 while D26 already offered
+        # the ally's 96% shot scored77.32. A huge positional delta must not
+        # pretend to be a near-certain elimination.
+        self.assertLess(self.combat_score(1000, 500, 0, 1), 77.32)
+        self.assertLess(self.combat_score(1000, 500, 0, 1), 50.9533)
+
+    def test_wounded_escape_can_preempt_poor_shot_without_unbounded_move_score(self):
+        healthy = self.combat_score(30, 42, 14, 1)
+        wounded = self.combat_score(30, 42, 14, 0.25)
+        self.assertGreater(wounded, healthy)
+        self.assertGreater(wounded, 26.8467)
+        self.assertLessEqual(self.combat_score(1000, 500, 0, 0.25), 62)
+
+    def test_report_first_rooftop_ascent_requires_an_established_ally(self):
+        self.assertFalse(self.safe_expansion(True, 4, False))
+        self.assertTrue(self.safe_expansion(True, 4, True))
+        self.assertTrue(self.safe_expansion(True, 1, False))
+        self.assertTrue(self.safe_expansion(True, -4, False))
+
+    def test_previously_seen_but_currently_unobserved_combat_expansion_is_rejected(self):
+        self.assertFalse(self.safe_expansion(False, 0, False))
+        self.assertFalse(self.safe_expansion(False, 4, True))
 
 
 if __name__ == '__main__':

@@ -97,17 +97,20 @@ def parse_record(line: str) -> dict | None:
 
 
 def action_family(ability: str) -> str:
-    if ability in {'Overwatch', 'PistolOverwatch', 'SniperRifleOverwatch', 'LongWatch'}:
+    # Unreal FName comparisons are case insensitive; its displayed spelling can
+    # be inherited from the first name interned by the engine (e.g. overwatch).
+    ability = ability.casefold()
+    if ability in {'overwatch', 'pistoloverwatch', 'sniperrifleoverwatch', 'longwatch'}:
         return 'overwatch'
-    if ability == 'HunkerDown':
+    if ability == 'hunkerdown':
         return 'hunker'
-    if ability in {'ThrowGrenade', 'LaunchGrenade'}:
+    if ability in {'throwgrenade', 'launchgrenade'}:
         return 'grenade'
-    if ability in {'Evac', 'PlaceEvacZone'}:
+    if ability in {'evac', 'placeevaczone'}:
         return 'evacuation'
-    if ability == 'Reload':
+    if ability == 'reload':
         return 'reload'
-    if ability == 'AidProtocol':
+    if ability == 'aidprotocol':
         return 'support'
     return 'other'
 
@@ -129,6 +132,43 @@ def summarize_session(session: str, records: list[dict]) -> dict:
     results = [record for record in result_frames
                if str(record.get('interruption', '')).casefold() != 'einterruptionstatus_interrupt']
     hit_results = Counter(str(record.get('hit', 'unknown')) for record in results)
+    known_friendly_ids = {record['id'] for record in records
+                          if record['event'] == 'unit' and record.get('scope') == 'friendly'
+                          and 'id' in record}
+    known_enemy_ids = {record['id'] for record in records
+                       if record['event'] == 'unit' and record.get('scope') == 'visible_enemy'
+                       and 'id' in record}
+
+    def source_scope(record):
+        explicit = record.get('source_scope')
+        if explicit in {'friendly', 'visible_enemy', 'unseen_other'}:
+            return explicit
+        # Older recorder revisions lack scope fields. Only classify recorded
+        # IDs, never assume that redacted source=0 identifies a hostile unit.
+        if record.get('source') in known_friendly_ids:
+            return 'friendly'
+        if record.get('source') in known_enemy_ids:
+            return 'visible_enemy'
+        return 'unknown'
+
+    results_by_source = {}
+    for result in results:
+        results_by_source.setdefault(source_scope(result), Counter())[str(result.get('hit', 'unknown'))] += 1
+    confirmed_eliminations = set()
+    for result in records:
+        if result['event'] not in {'result', 'result_target'}:
+            continue
+        before, after = result.get('target_hp_before'), result.get('target_hp_after')
+        target = result.get('target', 0)
+        if (not isinstance(before, (int, float)) or not isinstance(after, (int, float))
+                or before <= 0 or after > 0 or not isinstance(target, int) or target <= 0):
+            continue
+        scope = 'unknown'
+        if target in known_friendly_ids:
+            scope = 'friendly'
+        elif target in known_enemy_ids:
+            scope = 'visible_enemy'
+        confirmed_eliminations.add((scope, target))
     observed_losses = Counter()
     deaths = set()
     last_units = {}
@@ -154,12 +194,15 @@ def summarize_session(session: str, records: list[dict]) -> dict:
                           if record['event'] == 'unsupported'
                           or (record['event'] == 'candidate' and record.get('kind') in {'unsupported', 'unhandled'})
                           or (record['event'] == 'ability' and record.get('handler') == 'unhandled'
-                              and record.get('code') == 'AA_Success' and record.get('input') is True))
+                              and str(record.get('code', '')).casefold() == 'aa_success'
+                              and record.get('input') is True))
     warnings = []
     if not start:
         warnings.append('Recording starts mid-session; the start record is missing.')
     if not ends:
         warnings.append('No end record; mission outcome is unknown and the recording may be incomplete.')
+    elif str(outcome).casefold() not in {'win', 'loss'}:
+        warnings.append('The recorder ended without a confirmed native mission result; outcome remains unknown.')
     if sequence_gaps:
         warnings.append(f'{sequence_gaps} sequence numbers missing; observations are incomplete.')
     if events['limit']:
@@ -178,11 +221,18 @@ def summarize_session(session: str, records: list[dict]) -> dict:
         'action_families': dict(sorted(families.items())),
         'moves': sum(record.get('kind') in {'move', 'explore'} for record in accepted),
         'hit_results': dict(sorted(hit_results.items())),
-        'interrupted_result_frames': len(interrupted),
+        'hit_results_by_source': {scope: dict(sorted(counts.items()))
+                                  for scope, counts in sorted(results_by_source.items())},
+        'interrupted_result_frames': len(interrupted) + events['interrupted'],
         'recorded_misses': sum(count for hit, count in hit_results.items()
                                if hit.casefold() in {'miss', 'ehit_miss'}),
+        'recorded_misses_by_source': {
+            scope: sum(count for hit, count in counts.items() if hit.casefold() in {'miss', 'ehit_miss'})
+            for scope, counts in sorted(results_by_source.items())},
+        'visibility_loss_events': events['visibility_lost'],
         'observed_hp_loss': dict(sorted(observed_losses.items())),
         'observed_deaths': dict(sorted(Counter(scope for scope, _ in deaths).items())),
+        'confirmed_target_eliminations': dict(sorted(Counter(scope for scope, _ in confirmed_eliminations).items())),
         'low_chance_actions': weak_shots,
         'unsupported_abilities': dict(sorted(unsupported.items())),
         'warnings': warnings,
@@ -231,6 +281,8 @@ def analyze_logs(logs: list[tuple[str, str]]) -> dict:
             'Enemy snapshots contain only player-visible contacts; disappearance is not a confirmed kill.',
             'Candidate scores describe planner preferences, not proven reasons for victory or defeat.',
             'Missing logs or end markers do not establish a mission result.',
+            'Accepted actions are autoplay submissions; result records include friendly reactions and incoming actions too.',
+            'Result hit enums include non-attack abilities; they are not a weapon accuracy percentage.',
         ],
     }
 
@@ -242,6 +294,9 @@ def human_summary(report: dict) -> str:
                      f"difficulty={session['difficulty']}, outcome={session['outcome']}")
         lines.append(f"  Accepted actions={session['accepted_actions']}, moves={session['moves']}, "
                      f"recorded misses={session['recorded_misses']}")
+        if session['recorded_misses_by_source']:
+            lines.append('  Misses by source: ' + ', '.join(
+                f'{scope}={count}' for scope, count in session['recorded_misses_by_source'].items()))
         families = session['action_families']
         lines.append('  ' + ', '.join(f'{name}={families.get(name, 0)}'
                                      for name in ['overwatch', 'hunker', 'grenade', 'reload', 'support', 'evacuation']))

@@ -8,6 +8,11 @@ Aid Protocol, ostrożniejsze flankowanie oraz rejestr decyzji i wyników misji.
 jest instalowany z modem i działa po usunięciu pobranych źródeł. Zwycięstwo na
 Commanderze lub Legendzie nie jest jeszcze potwierdzone.
 
+[Pierwszy raport z gry](docs/report-2026-11-02.pl.md) ujawnił utratę pamięci
+kontaktu, zbyt wysoką ocenę ruchu na dach i brak propozycji granatów. Bieżący
+`main` zawiera poprawki tych mechanizmów oraz dokładniejsze dane diagnostyczne;
+wymaga nowej kompilacji i porównawczej próby w grze.
+
 **Stan: alpha; według najnowszego zgłoszenia użytkownika mod już wydaje rozkazy, ale przegrywa Gatecrasher na Legendzie i Dowódcy.** Bieżące źródła poprawiają ocenę osłon, zagrożeń i flankowania, dobieranie celów, granaty oraz wsparcie oddziału. Ta zmiana **wymaga nowej kompilacji i prób w grze**; nie ma jeszcze potwierdzenia poprawy wyniku misji. [Opis taktyki, kompilacja z zachowanym SDK i lista prób](docs/tactics-update.pl.md). Nie potwierdzono pełnego ukończenia wszystkich misji DLC.
 
 Dotychczasowy plik `.u` i konfigurację zweryfikowano; importy binarne prowadzą tylko do standardowych pakietów `Core`, `Engine`, `XComGame`. Repozytorium nie zawiera SDK ani plików gry. Szczegóły: [wyniki kontroli SDK i kompilacji](docs/SDK-AUDIT.pl.md).

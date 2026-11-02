@@ -95,6 +95,24 @@ class MissionRecorderContracts(unittest.TestCase):
         self.assertLess(tick.index('MissionRecorder.Observe('), tick.index('if (!bEnabled)'))
         self.assertIn('MissionRecorder.Finish(', function_body(controller, 'Destroyed'))
 
+    def test_native_end_waits_for_committed_winner_before_finalizing(self):
+        finish = function_body(SOURCE, 'Finish')
+        pending = finish.index('Reason == "tactical_game_ended"')
+        observe_finish = finish.index('Observe("finish")')
+        self.assertIn('BattleData.VictoriousPlayer.ObjectID == 0', finish[pending:observe_finish])
+        self.assertIn('Observe("ending")', finish[pending:observe_finish])
+        self.assertIn('return;', finish[pending:observe_finish])
+        self.assertGreater(finish.index('bFinished = true'), observe_finish)
+        self.assertIn('LastEndHistory', finish[pending:observe_finish])
+
+    def test_result_scope_preserves_friendly_vs_incoming_without_unredacting_sources(self):
+        results = function_body(SOURCE, 'RecordResults')
+        self.assertIn('SourceScope = "friendly"', results)
+        self.assertIn('SourceScope = "visible_enemy"', results)
+        self.assertIn('SourceScope = "unseen_other"', results)
+        self.assertIn('|source_scope=', results)
+        self.assertIn('SourceID = 0;', results)
+
 
 @unittest.skipUnless(os.environ.get('APX_SDK_SOURCE_ROOT'), 'Set APX_SDK_SOURCE_ROOT to check native recorder declarations')
 class RecorderSDKContracts(unittest.TestCase):

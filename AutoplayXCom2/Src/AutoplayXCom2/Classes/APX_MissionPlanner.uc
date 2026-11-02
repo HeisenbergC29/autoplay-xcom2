@@ -506,6 +506,45 @@ static function bool IsKnownCombatTile(TTile Tile)
     return FogStatus != eFOWTileStatus_NeverSeen;
 }
 
+static function bool IsSafeCombatExpansion(bool bCurrentlyVisible,
+    float VerticalRise, bool bHasElevatedSupport)
+{
+    if (!bCurrentlyVisible)
+        return false;
+    // Do not establish a new rooftop firing position during an active fight.
+    // A squadmate already holding that level provides a known support anchor.
+    return VerticalRise <= 1.0 || bHasElevatedSupport;
+}
+
+static function bool IsSupportedCombatDestination(XComGameState_Unit UnitState, TTile Tile)
+{
+    local XComGameState_Unit Friendly;
+    local bool bVisible, bElevatedSupport;
+
+    bVisible = class'X2TacticalVisibilityHelpers'.static.CanSquadSeeLocation(
+        UnitState.ControllingPlayer.ObjectID, Tile);
+    if (Tile.Z > UnitState.TileLocation.Z + 1)
+    {
+        foreach `XCOMHISTORY.IterateByClassType(class'XComGameState_Unit', Friendly)
+        {
+            if (Friendly.ObjectID == UnitState.ObjectID || !Friendly.IsAlive()
+                || Friendly.IsIncapacitated() || Friendly.bRemovedFromPlay
+                || Friendly.GetAssociatedPlayerID() != UnitState.GetAssociatedPlayerID()
+                || Friendly.GetTeam() != eTeam_XCom || Friendly.IsCivilian()
+                || Friendly.GetMyTemplate().bIsCosmetic)
+                continue;
+            if (Abs(Friendly.TileLocation.Z - Tile.Z) <= 1
+                && TileDistance(Friendly.TileLocation, Tile) <= 8.0)
+            {
+                bElevatedSupport = true;
+                break;
+            }
+        }
+    }
+    return IsSafeCombatExpansion(bVisible, float(Tile.Z - UnitState.TileLocation.Z),
+        bElevatedSupport);
+}
+
 static function float OffensivePositionScore(XComGameState_Unit UnitState, TTile Tile,
     array<StateObjectReference> VisibleEnemies)
 {
@@ -564,6 +603,21 @@ static function bool IsUsefulReposition(float PositionGain, float CurrentRisk,
         return false;
     // Do not trade a safe firing position for a speculative flank.
     return CandidateRisk <= CurrentRisk + 3.0;
+}
+
+static function float ScoreCombatReposition(float PositionGain, float CurrentRisk,
+    float CandidateRisk, float HealthFraction)
+{
+    local float RiskReduction, Result;
+
+    // The old unbounded-delta scale repeatedly scored moves at 80, even above
+    // an ally's 96% kill. Position utility is a heuristic, not damage removed.
+    RiskReduction = FMax(0.0, CurrentRisk - CandidateRisk);
+    Result = 16.0 + FMin(14.0, FMax(0.0, PositionGain) * 0.35)
+        + FMin(16.0, RiskReduction * 0.3);
+    if (HealthFraction < 0.5 && RiskReduction >= 8.0)
+        Result += 16.0;
+    return Result;
 }
 
 static function bool HasLegalMove(XComGameState_Unit UnitState)
@@ -654,7 +708,7 @@ static function bool ChooseMove(XComGameState_Unit UnitState,
     local MissionGoal Goal;
     local bool bCombatGoal, bSafe, bRequireSupport;
     local int Index, PathIndex, SampleIndex, SampleCount;
-    local float CurrentScore, CandidateScore, BestScore, CurrentRisk, CandidateRisk, PathCost, StartSupport;
+    local float CurrentScore, CandidateScore, BestScore, CurrentRisk, CandidateRisk, PathCost, StartSupport, BestRisk;
 
     Path.Length = 0;
     Score = 0;
@@ -663,7 +717,7 @@ static function bool ChooseMove(XComGameState_Unit UnitState,
         return false;
     GoalTile = Goal.Tile;
     bCombatGoal = Goal.bCombat;
-    bRequireSupport = !bCombatGoal && !ShouldEvacuate(UnitState);
+    bRequireSupport = !ShouldEvacuate(UnitState);
     StartSupport = NearestSupportDistance(UnitState, UnitState.TileLocation);
     // Preserve the last action for overwatch while advancing into fog. Valid
     // evacuation is allowed because it may be this soldier's final chance.
@@ -694,6 +748,7 @@ static function bool ChooseMove(XComGameState_Unit UnitState,
     CurrentScore = PositionScore(UnitState, UnitState.TileLocation, GoalTile, bCombatGoal, VisibleEnemies);
     BestScore = CurrentScore + FMax(1.0, default.MinimumPositionGain);
     CurrentRisk = ExposureRisk(UnitState, UnitState.TileLocation, VisibleEnemies);
+    BestRisk = CurrentRisk;
 
     // Include the closest goal tile and distribute the remaining samples over
     // the entire native list, even when tile count is just above the budget.
@@ -707,6 +762,7 @@ static function bool ChooseMove(XComGameState_Unit UnitState,
         if (TileDistance(Tile, UnitState.TileLocation) < 1
             || class'XComPath'.static.TileContainsHazard(UnitState, Tile)
             || (bCombatGoal && !IsKnownCombatTile(Tile))
+            || (bCombatGoal && !IsSupportedCombatDestination(UnitState, Tile))
             || PathCost < 0.0 || PathCost > UnitVisualizer.GetMobility()
             || (bRequireSupport && !IsSupportedAdvanceDestination(StartSupport,
                 NearestSupportDistance(UnitState, Tile))))
@@ -731,6 +787,8 @@ static function bool ChooseMove(XComGameState_Unit UnitState,
         {
             if (class'XComPath'.static.TileContainsHazard(UnitState, CandidatePath[PathIndex])
                 || (bCombatGoal && !IsKnownCombatTile(CandidatePath[PathIndex]))
+                || (bCombatGoal && !class'X2TacticalVisibilityHelpers'.static.CanSquadSeeLocation(
+                    UnitState.ControllingPlayer.ObjectID, CandidatePath[PathIndex]))
                 || (bRequireSupport && !IsSupportedAdvanceStep(StartSupport,
                     NearestSupportDistance(UnitState, CandidatePath[PathIndex]))))
             {
@@ -741,11 +799,16 @@ static function bool ChooseMove(XComGameState_Unit UnitState,
         if (bSafe)
         {
             BestScore = CandidateScore;
+            BestRisk = CandidateRisk;
             Path = CandidatePath;
         }
     }
     if (Path.Length < 2)
         return false;
-    Score = 20 + FMin(60, BestScore - CurrentScore);
+    if (bCombatGoal)
+        Score = ScoreCombatReposition(BestScore - CurrentScore, CurrentRisk, BestRisk,
+            UnitState.GetCurrentStat(eStat_HP) / FMax(1.0, UnitState.GetMaxStat(eStat_HP)));
+    else
+        Score = 20 + FMin(60, BestScore - CurrentScore);
     return true;
 }

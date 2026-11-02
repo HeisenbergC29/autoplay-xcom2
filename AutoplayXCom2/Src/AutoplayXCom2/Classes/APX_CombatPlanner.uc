@@ -13,7 +13,8 @@ var config int MinimumHitChance;
 var config float EmergencyHealthFraction;
 
 static function bool ChooseAction(XComGameState_Unit UnitState,
-    out AvailableAction Action, out int TargetIndex, out float Score)
+    out AvailableAction Action, out int TargetIndex, out float Score,
+    optional bool bRecentContact)
 {
     local XComGameStateHistory History;
     local GameRulesCache_Unit UnitCache;
@@ -132,7 +133,7 @@ static function bool ChooseAction(XComGameState_Unit UnitState,
             SelfIndex = FindSelfTarget(Candidate, UnitState.ObjectID);
             if (Candidate.AvailableTargets.Length > 0 && SelfIndex == INDEX_NONE)
                 continue;
-            CandidateScore = ScoreSelfAction(UnitState, Ability, AbilityName, VisibleEnemies);
+            CandidateScore = ScoreSelfAction(UnitState, Ability, AbilityName, VisibleEnemies, bRecentContact);
             if (CandidateScore > Score)
             {
                 Action = Candidate;
@@ -434,7 +435,7 @@ static function int FindSelfTarget(AvailableAction Action, int UnitID)
 
 static function float ScoreSelfAction(XComGameState_Unit UnitState,
     XComGameState_Ability Ability, name AbilityName,
-    array<StateObjectReference> VisibleEnemies)
+    array<StateObjectReference> VisibleEnemies, optional bool bRecentContact)
 {
     local XComGameState_Item Weapon;
     local int RangedThreats, NearbyMelee;
@@ -448,8 +449,8 @@ static function float ScoreSelfAction(XComGameState_Unit UnitState,
         if (Weapon == none || Weapon.Ammo >= Weapon.GetClipSize())
             return -10000.0;
         if (Weapon.Ammo == 0)
-            return VisibleEnemies.Length > 0 ? 35.0 : 18.0;
-        return VisibleEnemies.Length > 0 ? 3.0 : 12.0;
+            return ScoreEmptyReload(VisibleEnemies.Length > 0, bRecentContact);
+        return ScorePartialReload(VisibleEnemies.Length > 0, bRecentContact);
     }
     if (default.OverwatchAbilities.Find(AbilityName) == INDEX_NONE
         && default.HunkerAbilities.Find(AbilityName) == INDEX_NONE)
@@ -459,10 +460,26 @@ static function float ScoreSelfAction(XComGameState_Unit UnitState,
     HealthFraction = UnitState.GetCurrentStat(eStat_HP)
         / FMax(1.0, UnitState.GetMaxStat(eStat_HP));
     if (default.OverwatchAbilities.Find(AbilityName) != INDEX_NONE)
-        return ScoreOverwatchDefense(VisibleEnemies.Length > 0,
+        return ScoreOverwatchDefense(VisibleEnemies.Length > 0 || bRecentContact,
             UnitState.IsConcealed(), HealthFraction, RangedRisk, NearbyMelee);
     return ScoreHunkerDefense(HealthFraction, RangedRisk, RangedThreats,
         NearbyMelee, UnitState.IsBurning(), UnitState.IsConcealed());
+}
+
+static function float ScorePartialReload(bool bVisibleEnemy, bool bRecentContact)
+{
+    if (bRecentContact)
+        return 1.0;
+    if (bVisibleEnemy)
+        return 3.0;
+    return 12.0;
+}
+
+static function float ScoreEmptyReload(bool bVisibleEnemy, bool bRecentContact)
+{
+    if (bVisibleEnemy || bRecentContact)
+        return 35.0;
+    return 18.0;
 }
 
 // Evaluate ranged exposure separately: hunker does not turn an approaching

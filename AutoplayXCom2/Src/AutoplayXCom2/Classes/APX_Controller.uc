@@ -13,6 +13,8 @@ var config bool UseExplosiveGrenades;
 var config bool EnableMissionRecording;
 var config bool RecordCandidateScores;
 var config float RecordingInterval;
+var config int ContactMemoryTurns;
+var config float ContactSearchDistance;
 
 var localized string StatusOff;
 var localized string StatusActive;
@@ -42,6 +44,15 @@ struct VisitedPosition
     var TTile Tile;
 };
 
+// Positions are copied only while the contact is visible. Never refresh a
+// lost contact from its live (hidden) unit state.
+struct RecentContact
+{
+    var int UnitID;
+    var TTile LastSeenTile;
+    var int LastSeenTurn;
+};
+
 var private bool bEnabled;
 var private bool bToggleWasDown;
 var private float UntilDecision;
@@ -63,6 +74,126 @@ var private APX_ExplorationPlanner ExplorationPlanner;
 var private APX_AreaAttackPlanner AreaPlanner;
 var private APX_MissionRecorder MissionRecorder;
 var private float UntilObservation;
+var private array<RecentContact> RecentContacts;
+
+static function bool IsContactFresh(int CurrentTurn, int SeenTurn, int MemoryTurns)
+{
+    return CurrentTurn >= SeenTurn && CurrentTurn - SeenTurn <= MemoryTurns;
+}
+
+function bool RefreshContacts(int PlayerID, int CurrentTurn)
+{
+    local XComGameState_Unit SourceUnit, Enemy;
+    local array<StateObjectReference> VisibleEnemies;
+    local StateObjectReference EnemyRef;
+    local RecentContact Contact;
+    local int Index;
+    local bool bVisible, bFoundSource;
+
+    foreach `XCOMHISTORY.IterateByClassType(class'XComGameState_Unit', SourceUnit)
+    {
+        if (SourceUnit.GetAssociatedPlayerID() == PlayerID && SourceUnit.IsAlive()
+            && SourceUnit.GetTeam() == eTeam_XCom && !SourceUnit.GetMyTemplate().bIsCosmetic)
+        {
+            bFoundSource = true;
+            break;
+        }
+    }
+    if (!bFoundSource)
+        return false;
+    class'X2TacticalVisibilityHelpers'.static.GetAllVisibleEnemiesForPlayer(PlayerID, VisibleEnemies);
+    foreach VisibleEnemies(EnemyRef)
+    {
+        Enemy = XComGameState_Unit(`XCOMHISTORY.GetGameStateForObjectID(EnemyRef.ObjectID));
+        if (!class'APX_CombatPlanner'.static.IsVisibleHostile(SourceUnit, Enemy, VisibleEnemies))
+            continue;
+        bVisible = true;
+        Index = RecentContacts.Find('UnitID', Enemy.ObjectID);
+        if (Index == INDEX_NONE)
+        {
+            if (RecentContacts.Length >= 128)
+                RecentContacts.Remove(0, 1);
+            Contact.UnitID = Enemy.ObjectID;
+            RecentContacts.AddItem(Contact);
+            Index = RecentContacts.Length - 1;
+        }
+        RecentContacts[Index].LastSeenTile = Enemy.TileLocation;
+        RecentContacts[Index].LastSeenTurn = CurrentTurn;
+    }
+    for (Index = RecentContacts.Length - 1; Index >= 0; --Index)
+    {
+        if (!IsContactFresh(CurrentTurn, RecentContacts[Index].LastSeenTurn,
+            Clamp(ContactMemoryTurns, 0, 8)))
+            RecentContacts.Remove(Index, 1);
+    }
+    return bVisible;
+}
+
+function bool ChooseContactSearchMove(XComGameState_Unit UnitState,
+    out array<TTile> Path, out float Score)
+{
+    local XGUnit Visualizer;
+    local TTile GoalTile;
+    local int Index, BestIndex, BestPathIndex;
+    local float Distance, BestDistance, EndpointValue, BestEndpointValue;
+
+    Path.Length = 0;
+    Score = 0.0;
+    if (UnitState.NumActionPoints() < 2 || UnitState.IsCivilian()
+        || !class'APX_MissionPlanner'.static.HasLegalMove(UnitState))
+        return false;
+    BestIndex = INDEX_NONE;
+    BestDistance = 100000.0;
+    for (Index = 0; Index < RecentContacts.Length; ++Index)
+    {
+        Distance = class'APX_MissionPlanner'.static.TileDistance(
+            UnitState.TileLocation, RecentContacts[Index].LastSeenTile);
+        if (Distance > 2.0 && Distance < BestDistance)
+        {
+            BestDistance = Distance;
+            BestIndex = Index;
+        }
+    }
+    if (BestIndex == INDEX_NONE)
+        return false;
+    GoalTile = RecentContacts[BestIndex].LastSeenTile;
+    Visualizer = XGUnit(UnitState.GetVisualizer());
+    if (Visualizer == none || Visualizer.m_kReachableTilesCache == none)
+        return false;
+    Visualizer.m_kReachableTilesCache.UpdateTileCacheIfNeeded();
+    if (!class'APX_MissionPlanner'.static.ChooseRoutePrefix(UnitState, Visualizer, GoalTile, Path))
+        return false;
+    // Investigate the last observed position in short steps, preserving a
+    // response. A lost contact is not permission to make a blind rooftop push.
+    for (Index = 1; Index < Path.Length; ++Index)
+    {
+        if (class'APX_MissionPlanner'.static.TileDistance(UnitState.TileLocation, Path[Index])
+            > FClamp(ContactSearchDistance, 1.0, 6.0)
+            || Path[Index].Z > UnitState.TileLocation.Z + 1)
+        {
+            Path.Remove(Index, Path.Length - Index);
+            break;
+        }
+    }
+    if (Path.Length < 2)
+        return false;
+    BestPathIndex = 1;
+    BestEndpointValue = -100000.0;
+    for (Index = 1; Index < Path.Length; ++Index)
+    {
+        EndpointValue = class'APX_MissionPlanner'.static.AdvanceEndpointScore(float(Index),
+            class'APX_MissionPlanner'.static.AdvanceCoverLevel(UnitState, Path[Index], GoalTile));
+        if (EndpointValue > BestEndpointValue)
+        {
+            BestEndpointValue = EndpointValue;
+            BestPathIndex = Index;
+        }
+    }
+    if (BestPathIndex < Path.Length - 1)
+        Path.Remove(BestPathIndex + 1, Path.Length - BestPathIndex - 1);
+    Score = 20.0;
+    return true;
+}
 
 static function APX_Controller GetOrCreate()
 {
@@ -488,6 +619,7 @@ function MakeDecision(XComTacticalController PC)
     local int TargetIndex, BestTargetIndex, ChosenTargetID;
     local float Score, BestScore;
     local bool bMove, bArea, bHavePlan, bSuccess, bCanExplore, bCombatThreats;
+    local bool bVisibleThreats, bContactSearch, bCandidateMove, bGrenadeCandidate;
 
     PlayerRef = `TACTICALRULES.GetCachedUnitActionPlayerRef();
     PlayerState = XComGameState_Player(`XCOMHISTORY.GetGameStateForObjectID(PlayerRef.ObjectID));
@@ -516,6 +648,11 @@ function MakeDecision(XComTacticalController PC)
         AreaPlanner = new(self) class'APX_AreaAttackPlanner';
     if (MissionRecorder != none)
         MissionRecorder.BeginDecision();
+    bVisibleThreats = RefreshContacts(PlayerRef.ObjectID, PlayerState.PlayerTurnCount);
+    bContactSearch = !bVisibleThreats && RecentContacts.Length > 0;
+    bCombatThreats = bVisibleThreats || bContactSearch;
+    if (bContactSearch && MissionRecorder != none)
+        MissionRecorder.Marker("recent_contacts", "count=" $ RecentContacts.Length);
 
     BestScore = -10000.0;
     foreach `XCOMHISTORY.IterateByClassType(class'XComGameState_Unit', UnitState)
@@ -530,7 +667,7 @@ function MakeDecision(XComTacticalController PC)
             || class'APX_MissionPlanner'.static.HasCombatThreats(UnitState);
         if (!UnitState.IsAbleToAct())
             continue;
-        if (class'APX_CombatPlanner'.static.ChooseAction(UnitState, Candidate, TargetIndex, Score)
+        if (class'APX_CombatPlanner'.static.ChooseAction(UnitState, Candidate, TargetIndex, Score, bContactSearch)
             && TraceCandidateAction(UnitState, "combat", Candidate, TargetIndex, Score)
             && Score > BestScore && CanUseAction(UnitState, Candidate, TargetIndex))
         {
@@ -576,9 +713,16 @@ function MakeDecision(XComTacticalController PC)
             }
         }
         CandidateLocations.Length = 0;
-        if (UseExplosiveGrenades && AreaPlanner != none
-            && AreaPlanner.ChooseAction(UnitState, Candidate, TargetIndex,
-                CandidateLocations, CandidateAim, Score)
+        bGrenadeCandidate = false;
+        if (UseExplosiveGrenades && AreaPlanner != none)
+        {
+            bGrenadeCandidate = AreaPlanner.ChooseAction(UnitState, Candidate, TargetIndex,
+                CandidateLocations, CandidateAim, Score);
+            if (MissionRecorder != none)
+                MissionRecorder.Marker("grenade_scan", "unit=" $ UnitState.ObjectID
+                    @ AreaPlanner.GetDiagnosticSummary());
+        }
+        if (bGrenadeCandidate
             && TraceCandidateAction(UnitState, "grenade", Candidate, TargetIndex, Score)
             && Score > BestScore && CanUseAction(UnitState, Candidate, TargetIndex))
         {
@@ -593,7 +737,11 @@ function MakeDecision(XComTacticalController PC)
             bHavePlan = true;
         }
         CandidatePath.Length = 0;
-        if (class'APX_MissionPlanner'.static.ChooseMove(UnitState, CandidatePath, Score)
+        if (bContactSearch && !class'APX_MissionPlanner'.static.ShouldEvacuate(UnitState))
+            bCandidateMove = ChooseContactSearchMove(UnitState, CandidatePath, Score);
+        else
+            bCandidateMove = class'APX_MissionPlanner'.static.ChooseMove(UnitState, CandidatePath, Score);
+        if (bCandidateMove
             && TraceCandidateMove(UnitState, CandidatePath, Score)
             && Score > BestScore && CanUseMove(UnitState, CandidatePath))
         {

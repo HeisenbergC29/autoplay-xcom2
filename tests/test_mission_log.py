@@ -22,6 +22,61 @@ def record(seq, event, fields='', session='s1'):
 
 
 class MissionLogTests(unittest.TestCase):
+    def test_result_health_proves_elimination_without_a_dead_visibility_snapshot(self):
+        report = LOG.analyze_logs([('Launch.log', '\n'.join([
+            record(1, 'start'),
+            record(2, 'unit', 'id=9|scope=visible_enemy|hp=4|alive=true'),
+            record(3, 'result', 'source=1|target=9|hit=eHit_Success|target_hp_before=4|target_hp_after=0'),
+            record(4, 'result_target', 'source=1|target=9|hit=eHit_Success|target_hp_before=4|target_hp_after=0'),
+            record(5, 'visibility_lost', 'id=9'),
+        ]))])
+        session = report['sessions'][0]
+        self.assertEqual(session['observed_deaths'], {})
+        self.assertEqual(session['confirmed_target_eliminations'], {'visible_enemy': 1})
+
+    def test_real_fname_casing_does_not_hide_five_overwatch_orders(self):
+        lines = [record(1, 'start', 'mission=SabotageCC|difficulty=3')]
+        for sequence, spelling in enumerate(['overwatch', 'Overwatch', 'OVERWATCH', 'overwatch', 'overwatch'], 2):
+            lines.append(record(sequence, 'chosen', f'kind=action|unit=1|ability={spelling}|accepted=True'))
+        lines.append(record(7, 'end', 'reason=tactical_game_ended|outcome=unknown'))
+        session = LOG.analyze_logs([('Launch.log', '\n'.join(lines))])['sessions'][0]
+        self.assertEqual(session['action_families'], {'overwatch': 5})
+        self.assertEqual(session['abilities']['overwatch'], 3)
+        self.assertEqual(session['abilities']['OVERWATCH'], 1)
+        self.assertTrue(any('confirmed native mission result' in warning for warning in session['warnings']))
+        for spelling, family in [('hunkerDOWN', 'hunker'), ('THROWGRENADE', 'grenade'),
+                                 ('placeevaczone', 'evacuation'), ('reload', 'reload'),
+                                 ('aidprotocol', 'support'), ('LONGWATCH', 'overwatch')]:
+            with self.subTest(spelling=spelling):
+                self.assertEqual(LOG.action_family(spelling), family)
+
+    def test_autoplay_orders_and_friendly_or_incoming_results_are_distinct(self):
+        session = LOG.analyze_logs([('Launch.log', '\n'.join([
+            record(1, 'start'),
+            record(2, 'unit', 'id=1|scope=friendly|hp=4|alive=true'),
+            record(3, 'unit', 'id=9|scope=visible_enemy|hp=4|alive=true'),
+            record(4, 'chosen', 'kind=action|unit=1|ability=overwatch|accepted=true'),
+            record(5, 'result', 'source=1|target=9|ability=OverwatchShot|hit=eHit_Miss'),
+            record(6, 'result', 'source=9|target=1|ability=StandardShot|hit=eHit_Miss'),
+            record(7, 'result', 'source=0|target=1|ability=unseen_attack|hit=eHit_Success|source_scope=unseen_other'),
+            record(8, 'visibility_lost', 'id=9'),
+        ]))])['sessions'][0]
+        self.assertEqual(session['accepted_actions'], 1)
+        self.assertEqual(session['recorded_misses'], 2)
+        self.assertEqual(session['recorded_misses_by_source'],
+                         {'friendly': 1, 'unseen_other': 0, 'visible_enemy': 1})
+        self.assertEqual(session['visibility_loss_events'], 1)
+
+    def test_dedicated_interrupted_event_counts_without_counting_a_miss(self):
+        session = LOG.analyze_logs([('Launch.log', '\n'.join([
+            record(1, 'start'),
+            record(2, 'interrupted', 'source=1|target=9|ability=StandardShot'),
+            record(3, 'result', 'source=1|target=9|ability=StandardShot|hit=eHit_Success|interruption=eInterruptionStatus_Resume'),
+        ]))])['sessions'][0]
+        self.assertEqual(session['interrupted_result_frames'], 1)
+        self.assertEqual(session['recorded_misses'], 0)
+        self.assertEqual(session['hit_results'], {'eHit_Success': 1})
+
     def test_known_outcome_can_still_have_incomplete_action_history(self):
         report = LOG.analyze_logs([('Launch.log', '\n'.join([
             record(1, 'start'),
