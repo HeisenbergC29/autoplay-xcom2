@@ -94,3 +94,36 @@ python .\tools\check-compiled-package.py .\release\AutoplayXCom2-WOTC-0.1.0-alph
 ```
 
 Ta kontrola oraz 14 testów parsera dotyczą struktury pliku, ścieżek ZIP, zależności i spójności hashy, nie wykonywania bytecode. Sprawdzenie paczki **nie potwierdza konkretnego numeru builda Steam, uruchomienia moda ani wykonania misji**. Następny etap to próba na docelowym czystym WOTC użytkownika.
+
+## Uzupełnienie SDK w nowym środowisku — 02.11.2026
+
+Po odtworzeniu commitu `ed74176` i przygotowaniu `mission-report-v6` otrzymano
+`Development.rar` (15 468 196 bajtów), SHA-256:
+
+```text
+04ad9ed9c7296dd04f390c67e5dec5dfa89337800af1d3cc1915d9890ad6fb43
+```
+
+Archiwum rozpakowano poza repozytorium, po sprawdzeniu ścieżek i typów wpisów.
+`SrcOrig` zawiera 4144 pliki źródłowe SDK. Wszystkie odpowiadające im pliki
+w `Src` są bajtowo identyczne. Dodatkowe pliki w `Src` to znacznik narzędzia
+budowania i 11 klas AutoplayXCom2; wszystkie te klasy odpowiadają commitowi
+`ed74176`, a rejestrator deklaruje `mission-report-v5`. Potwierdza to wersję
+źródeł pozostawionych w SDK przy poprzednim budowaniu.
+
+Kontrola bieżących źródeł v6 z `APX_SDK_SOURCE_ROOT` wskazującym przesłany
+`Development/SrcOrig` zakończyła się wynikiem **176 testów Python zaliczonych,
+0 pominiętych**. Wcześniejsze 7 pominięć z braku SDK zostało usunięte.
+`check-sdk-references.py` potwierdził 11 klas moda, obecność odwołań do klas
+SDK, 29 skonfigurowanych nazw zdolności i znaczniki WOTC, bez zgłoszonych
+niezgodności. Wszystkie trzy zestawy PowerShell przeszły wcześniej dla v6.
+
+Ręcznie sprawdzono sygnatury `GetCoverTypeForTarget`, `CanSeeTileToTile`
+i deklarację `GameRulesCache_VisibilityInfo` używane przez wspólną funkcję
+ryzyka v6. Argumenty i istniejące zależności klas są zgodne. Źródła potwierdzają
+także klasyfikację Faceless jako jednostki walczącej wyłącznie wręcz;
+nie ma podstaw do dodawania wyjątku zastępującego tę klasyfikację.
+
+Do tej weryfikacji nie brakuje kolejnych źródeł SDK. Pliki SDK pozostają
+poza repozytorium i paczką moda. Kompilacja Windows i próba v6 w grze nadal
+wymagają uruchomienia na komputerze z SDK WOTC i grą.

@@ -161,8 +161,9 @@ wyłącznie z łącznego wyniku.
 Granica 12 pól w obecnej ocenie ryzyka wręcz pozostaje bez zmian do czasu
 osobnego sprawdzenia osiągalności ataku. Poprawka nie wyjaśnia wszystkich
 późniejszych odwrotów i nie usuwa ograniczeń bezpieczeństwa granatów.
-Weryfikacja: 169 testów Python zaliczonych, 7 pominiętych z braku pełnych źródeł
-SDK; wszystkie trzy zestawy PowerShell zaliczone. Kompilacja Windows
+Weryfikacja po otrzymaniu `Development.rar`: 176 testów Python zaliczonych,
+bez pominięć; kontrola odwołań do SDK i wszystkie trzy zestawy PowerShell
+zaliczone. [Szczegóły weryfikacji SDK](SDK-AUDIT.pl.md). Kompilacja Windows
 i wynik następnej próby w grze pozostają niepotwierdzone; zmiana nie gwarantuje
 zwycięstwa.
 

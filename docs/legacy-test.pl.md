@@ -5,6 +5,9 @@ pierwszą misję `ChallengeAbductionGasStation` na v5, zakończoną porażką.
 V6 ujednolica ocenę ostrzału za przeszkodą przy ruchu i obronie oraz dodaje
 dokładniejsze dane o zagrożeniach. [Analiza poprzedniej próby](report-2026-11-02-legacy.pl.md).
 Nie ma jeszcze kompilacji Windows ani wyniku v6 w grze.
+Weryfikacja źródeł z przesłanym `Development.rar`: 176 testów Python zaliczonych
+bez pominięć oraz poprawna kontrola odwołań do SDK. Nie potrzeba kolejnych
+plików SDK do tej kontroli.
 
 ## Zbudowanie na zachowanym SDK
 
