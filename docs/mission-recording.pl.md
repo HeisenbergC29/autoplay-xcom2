@@ -8,6 +8,7 @@ automat i co rzeczywiście wydarzyło się po rozkazach.
 [Analiza drugiej próby i rewizja `mission-report-v3`](report-2026-11-02-second.pl.md).
 [Analiza trzeciej próby i rewizja `mission-report-v4`](report-2026-11-02-third.pl.md).
 [Czwarta próba: zasadzka działa, granat użyty, misja przegrana](report-2026-11-02-fourth.pl.md).
+[Pierwsza misja Legacy Operations: wynik v5 i przygotowanie v6](report-2026-11-02-legacy.pl.md).
 
 ## Co się zmieniło w taktyce
 
@@ -128,6 +129,15 @@ pozycji strzelca, bez wychylania. Używane zapytanie o LOS nie wypełnia natywne
 `TargetCover`; osłona jest liczona osobnym `GetCoverTypeForTarget`. Listy podglądów
 mają limit 64 wpisów na akcję i nie są emitowane dla każdej propozycji ruchu.
 Dane nie obejmują ukrytych kontaktów ani przyszłego ruchu przeciwnika.
+
+Od `mission-report-v6` `move_threat_preview` zawiera też `enemy_template`,
+`melee_only`, `current_distance`, `destination_distance`, `current_threat_risk`
+i `destination_threat_risk`. Ryzyko jest wkładem pojedynczego widocznego wroga
+z tej samej funkcji, której używa planer, przed łączeniem zagrożeń i mnożnikiem
+zdrowia. Wartości nie są procentem trafienia ani prognozą obrażeń. Przeciwnik
+wręcz może mieć wkład zero przez obecną granicę dystansu 12 pól; sam wpis osłony
+nie oznacza, że chroni ona przed jego atakiem. Wycenę Aid Protocol, hunker
+i overwatch ujednolicono z ruchem w zakresie przeszkód zasłaniających ostrzał.
 
 Podgląd nie przewiduje ukrytego losowania. Zniknięcie przeciwnika z pola widzenia
 nie jest uznawane za zabicie. Brak końcowego wpisu albo osiągnięcie limitu

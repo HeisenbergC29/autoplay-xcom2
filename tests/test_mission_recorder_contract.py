@@ -144,6 +144,13 @@ class MissionRecorderContracts(unittest.TestCase):
         self.assertNotIn('.TargetCover', preview)
         self.assertNotIn('_native_cover=', preview)
         self.assertIn('bDestinationLOS && DestinationVisibility.bVisibleFromDefault', preview)
+        # Per-contact values must come from the planner, so a future report
+        # can distinguish ranged cover changes from melee distance changes.
+        self.assertIn('ThreatRiskAtTile(UnitState, Enemy, CurrentTile)', preview)
+        self.assertIn('ThreatRiskAtTile(UnitState, Enemy, DestinationTile)', preview)
+        for field in ('enemy_template', 'melee_only', 'current_distance',
+                      'destination_distance', 'current_threat_risk', 'destination_threat_risk'):
+            self.assertIn('|' + field + '=', preview)
 
     def test_unknown_outcome_is_not_a_loss_and_observation_survives_user_stop(self):
         finish = function_body(SOURCE, 'Finish')

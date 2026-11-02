@@ -489,14 +489,10 @@ static function float DefensiveRisk(XComGameState_Unit UnitState,
 {
     local XComGameState_Unit Enemy;
     local StateObjectReference EnemyRef;
-    local vector UnitLocation, EnemyLocation;
-    local float Distance, Angle, Risk, TotalRisk, WorstRisk;
-    local ECoverType Cover;
-    local int CoverLevel;
+    local float Distance, Risk, TotalRisk, WorstRisk;
 
     RangedThreats = 0;
     NearbyMelee = 0;
-    UnitLocation = `XWORLD.GetPositionFromTileCoordinates(UnitState.TileLocation);
     foreach VisibleEnemies(EnemyRef)
     {
         Enemy = XComGameState_Unit(`XCOMHISTORY.GetGameStateForObjectID(EnemyRef.ObjectID));
@@ -510,15 +506,10 @@ static function float DefensiveRisk(XComGameState_Unit UnitState,
             continue;
         }
         ++RangedThreats;
-        EnemyLocation = `XWORLD.GetPositionFromTileCoordinates(Enemy.TileLocation);
-        Cover = `XWORLD.GetCoverTypeForTarget(EnemyLocation, UnitLocation, Angle);
-        CoverLevel = 0;
-        if (Cover == CT_MidLevel)
-            CoverLevel = 1;
-        if (Cover == CT_Standing)
-            CoverLevel = 2;
-        Risk = class'APX_MissionPlanner'.static.DirectionalRisk(CoverLevel, Distance,
-            UnitState.GetMyTemplate().bCanTakeCover, false);
+        // The same obstruction discount as movement: otherwise Aid Protocol
+        // can displace an escape by valuing an obstructed shot as fully open.
+        Risk = class'APX_MissionPlanner'.static.ThreatRiskAtTile(
+            UnitState, Enemy, UnitState.TileLocation);
         TotalRisk += Risk;
         WorstRisk = FMax(WorstRisk, Risk);
     }

@@ -29,9 +29,16 @@ Poprawione źródła wymagają ponownego zbudowania na Windows.
 
 [Czwarty raport](docs/report-2026-11-02-fourth.pl.md) potwierdza działanie zasadzki,
 trafiony overwatch i użycie granatu w `mission-report-v4`; misja nadal została
-przegrana. Bieżące źródła `mission-report-v5` dopuszczają bezpieczne dogonienie
+przegrana. Źródła `mission-report-v5` dopuszczają bezpieczne dogonienie
 strzelca otwierającego przed ujawnieniem i zapisują podgląd konkretnych celów
 wybranego granatu oraz geometrycznej osłony i LOS przy ruchu.
+
+[Próba pierwszej misji Legacy Operations „Blast From the Past”](docs/report-2026-11-02-legacy.pl.md)
+na `mission-report-v5` także zakończyła się porażką. Bieżące źródła
+`mission-report-v6` ujednolicają ocenę zagrożeń za przeszkodami przy ruchu,
+Aid Protocol, hunker i overwatch oraz zapisują wkład ryzyka każdego widocznego
+przeciwnika. [Instrukcja kolejnej próby Legacy](docs/legacy-test.pl.md).
+Wymagana jest nowa kompilacja; wynik w grze nie jest jeszcze potwierdzony.
 
 **Stan: alpha; według najnowszego zgłoszenia użytkownika mod już wydaje rozkazy, ale przegrywa Gatecrasher na Legendzie i Dowódcy.** Bieżące źródła poprawiają ocenę osłon, zagrożeń i flankowania, dobieranie celów, granaty oraz wsparcie oddziału. Ta zmiana **wymaga nowej kompilacji i prób w grze**; nie ma jeszcze potwierdzenia poprawy wyniku misji. [Opis taktyki, kompilacja z zachowanym SDK i lista prób](docs/tactics-update.pl.md). Nie potwierdzono pełnego ukończenia wszystkich misji DLC.
 

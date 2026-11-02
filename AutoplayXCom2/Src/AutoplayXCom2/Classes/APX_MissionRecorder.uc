@@ -78,7 +78,7 @@ function Start(int PlayerID)
     bStarted = true;
     Emit("start", "|player=" $ PlayerID $ "|mission=" $ Safe(Mission)
         $ "|difficulty=" $ `TacticalDifficultySetting $ "|history=" $ HistoryCursor
-        $ "|revision=mission-report-v5");
+        $ "|revision=mission-report-v6");
     Observe("start");
 }
 
@@ -624,6 +624,11 @@ function RecordMoveThreatPreviews(XComGameState_Unit UnitState, const out array<
         bCurrentDefaultView = bCurrentLOS && CurrentVisibility.bVisibleFromDefault;
         bDestinationDefaultView = bDestinationLOS && DestinationVisibility.bVisibleFromDefault;
         Emit("move_threat_preview", "|source=" $ UnitState.ObjectID $ "|enemy=" $ Enemy.ObjectID
+            $ "|enemy_template=" $ Enemy.GetMyTemplateName() $ "|melee_only=" $ Enemy.IsMeleeOnly()
+            $ "|current_distance=" $ class'APX_MissionPlanner'.static.TileDistance(CurrentTile, EnemyTile)
+            $ "|destination_distance=" $ class'APX_MissionPlanner'.static.TileDistance(DestinationTile, EnemyTile)
+            $ "|current_threat_risk=" $ class'APX_MissionPlanner'.static.ThreatRiskAtTile(UnitState, Enemy, CurrentTile)
+            $ "|destination_threat_risk=" $ class'APX_MissionPlanner'.static.ThreatRiskAtTile(UnitState, Enemy, DestinationTile)
             $ "|current_cover=" $ CurrentCover $ "|destination_cover=" $ DestinationCover
             $ "|current_los=" $ bCurrentLOS $ "|destination_los=" $ bDestinationLOS
             $ "|current_default_view=" $ bCurrentDefaultView

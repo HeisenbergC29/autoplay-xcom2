@@ -340,38 +340,48 @@ static function float KnownThreatRisk(float Risk, bool bClearLOS, bool bMeleeOnl
     return Risk;
 }
 
-static function float ExposureRisk(XComGameState_Unit UnitState, TTile Tile,
-    array<StateObjectReference> VisibleEnemies)
+// Shared per-contact estimate for movement, defensive actions and diagnostics.
+// Callers must first restrict Enemy to their player-visible hostile contacts.
+static function float ThreatRiskAtTile(XComGameState_Unit UnitState,
+    XComGameState_Unit Enemy, TTile Tile)
 {
-    local StateObjectReference EnemyRef;
-    local XComGameState_Unit Enemy;
     local vector TargetLocation, EnemyLocation;
-    local float Angle, Risk, SumRisk, WorstRisk;
+    local float Angle, Risk;
     local ECoverType Cover;
     local int CoverLevel;
     local GameRulesCache_VisibilityInfo Visibility;
     local TTile EnemyTile;
     local bool bClearLOS;
 
+    if (UnitState == none || Enemy == none || !Enemy.IsAlive()
+        || Enemy.IsIncapacitated() || Enemy.bRemovedFromPlay || !UnitState.IsEnemyUnit(Enemy))
+        return 0.0;
     TargetLocation = `XWORLD.GetPositionFromTileCoordinates(Tile);
+    EnemyLocation = `XWORLD.GetPositionFromTileCoordinates(Enemy.TileLocation);
+    Cover = `XWORLD.GetCoverTypeForTarget(EnemyLocation, TargetLocation, Angle);
+    CoverLevel = 0;
+    if (Cover == CT_Standing)
+        CoverLevel = 2;
+    else if (Cover == CT_MidLevel)
+        CoverLevel = 1;
+    Risk = DirectionalRisk(CoverLevel, TileDistance(Tile, Enemy.TileLocation),
+        UnitState.GetMyTemplate().bCanTakeCover, Enemy.IsMeleeOnly());
+    EnemyTile = Enemy.TileLocation;
+    bClearLOS = `XWORLD.CanSeeTileToTile(EnemyTile, Tile, Visibility);
+    return KnownThreatRisk(Risk, bClearLOS, Enemy.IsMeleeOnly());
+}
+
+static function float ExposureRisk(XComGameState_Unit UnitState, TTile Tile,
+    array<StateObjectReference> VisibleEnemies)
+{
+    local StateObjectReference EnemyRef;
+    local XComGameState_Unit Enemy;
+    local float Risk, SumRisk, WorstRisk;
+
     foreach VisibleEnemies(EnemyRef)
     {
         Enemy = XComGameState_Unit(`XCOMHISTORY.GetGameStateForObjectID(EnemyRef.ObjectID));
-        if (Enemy == none || !Enemy.IsAlive() || Enemy.IsIncapacitated()
-            || Enemy.bRemovedFromPlay || !UnitState.IsEnemyUnit(Enemy))
-            continue;
-        EnemyLocation = `XWORLD.GetPositionFromTileCoordinates(Enemy.TileLocation);
-        Cover = `XWORLD.GetCoverTypeForTarget(EnemyLocation, TargetLocation, Angle);
-        CoverLevel = 0;
-        if (Cover == CT_Standing)
-            CoverLevel = 2;
-        else if (Cover == CT_MidLevel)
-            CoverLevel = 1;
-        Risk = DirectionalRisk(CoverLevel, TileDistance(Tile, Enemy.TileLocation),
-            UnitState.GetMyTemplate().bCanTakeCover, Enemy.IsMeleeOnly());
-        EnemyTile = Enemy.TileLocation;
-        bClearLOS = `XWORLD.CanSeeTileToTile(EnemyTile, Tile, Visibility);
-        Risk = KnownThreatRisk(Risk, bClearLOS, Enemy.IsMeleeOnly());
+        Risk = ThreatRiskAtTile(UnitState, Enemy, Tile);
         SumRisk += Risk;
         WorstRisk = FMax(WorstRisk, Risk);
     }

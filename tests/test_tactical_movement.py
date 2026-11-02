@@ -49,6 +49,17 @@ class TacticalMovementTests(unittest.TestCase):
         self.assertGreater(self.risk(2, 3, True, True), self.risk(2, 9, True, True))
         self.assertEqual(self.risk(2, 20, True, True), 0)
 
+    def test_legacy_cover_drop_is_explained_by_sectoid_not_faceless(self):
+        # D21: Faceless at(42,20) and(45,18,z5), Central moves from(30,17)
+        # to(30,20). Both melee contacts contribute zero at the cutoff12.
+        # Sectoid(44,16) changes from open to full cover. This explains the
+        # recorded total without changing stock melee classification.
+        for distance in ((12 ** 2 + 3 ** 2) ** 0.5, 12, 15):
+            self.assertEqual(self.risk(0, distance, True, True), 0)
+            self.assertEqual(self.risk(2, distance, True, True), 0)
+        self.assertAlmostEqual(self.exposure([0], 3 / 7), 56.4)
+        self.assertAlmostEqual(self.exposure([2], 3 / 7), 5.64)
+
     def test_coverless_units_do_not_chase_cover_bonus(self):
         self.assertEqual(self.risk(0, 9, False, False), self.risk(2, 9, False, False))
 

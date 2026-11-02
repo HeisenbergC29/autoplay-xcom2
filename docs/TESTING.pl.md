@@ -1,6 +1,12 @@
 # Testy odbiorcze
 
-Najnowszy wynik zgłoszony przez użytkownika: **PASS** — mod wydaje rozkazy;
+Najnowszy materiał to [porażka pierwszej misji Legacy Operations na v5](report-2026-11-02-legacy.pl.md).
+Kolejną próbę v6 wykonaj według [instrukcji Legacy](legacy-test.pl.md).
+Zmiana ujednolica ocenę ostrzału za przeszkodą, bez zmiany progu ryzyka wręcz.
+Przenośne testy v6 przeszły; kompilacja Windows i próba w grze pozostają
+**NIEURUCHOMIONE** dla tej rewizji.
+
+Dotychczasowy wynik zgłoszony przez użytkownika: **PASS** — mod wydaje rozkazy;
 **FAIL** — przegrywa Gatecrasher na Legendzie i Dowódcy. Dawna paczka 0.1.0 alpha
 miała blokadę HUD-u. Bieżące zmiany taktyczne mają testy numerycznych heurystyk,
 ale ich kompilacja i próby w grze pozostają **NIEURUCHOMIONE**.
