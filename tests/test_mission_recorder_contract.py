@@ -79,12 +79,71 @@ class MissionRecorderContracts(unittest.TestCase):
                         decision.index('ActivateAbility_ReturnContext('))
         self.assertLess(decision.index('MissionRecorder.PrepareChosenMove('),
                         decision.index('PC.GameStateMoveUnitSingle('))
+        self.assertLess(decision.index('MissionRecorder.PrepareChosenArea('),
+                        decision.index('ActivateAbility_ReturnContext('))
         for name in ('ChosenAction', 'ChosenMove'):
             body = function_body(SOURCE, name)
             self.assertIn('PreparedChoiceFields', body)
             self.assertNotIn('ActionFields(', body)
             self.assertNotIn('MoveFields(', body)
         self.assertIn('PreparedChoiceFields = "";', function_body(SOURCE, 'BeginDecision'))
+
+    def test_selected_grenade_uses_affected_units_and_native_secondary_damage_preview(self):
+        area = function_body(SOURCE, 'RecordAreaTargetPreviews')
+        self.assertIn('SelectedTarget = Action.AvailableTargets[TargetIndex];', area)
+        self.assertIn('foreach SelectedTarget.AdditionalTargets(TargetRef)', area)
+        self.assertIn('Grenade.LaunchedGrenadeEffects', area)
+        self.assertIn('Grenade.ThrownGrenadeEffects', area)
+        self.assertIn('Effect.GetDamagePreview(TargetRef, Ability, false,', area)
+        self.assertNotIn('Ability.GetDamagePreview(', area)
+        self.assertIn('PreviewDamageAfterArmor(', area)
+        self.assertIn('if (bFalloff)\n            MinTotal = 0.0;', area)
+        for field in ('preview_raw_min_damage', 'preview_raw_max_damage',
+                      'preview_min_damage', 'preview_max_damage', 'explosive_falloff'):
+            self.assertIn('|'+field+'=', area)
+
+    def test_grenade_preview_redacts_unknown_targets_before_reading_health(self):
+        area = function_body(SOURCE, 'RecordAreaTargetPreviews')
+        own = area.index('bOwnTarget = IsOwnUnitAt(TargetRef.ObjectID, CurrentHistory);')
+        visible = area.index("VisibleUnits.Find('ObjectID', TargetRef.ObjectID) == INDEX_NONE")
+        target = area.index('TargetUnit = XComGameState_Unit(')
+        damage = area.index('Effect.GetDamagePreview(')
+        self.assertLess(own, visible)
+        self.assertLess(visible, target)
+        self.assertLess(target, damage)
+        self.assertIn('GetAllVisibleObjectsForPlayer(OwnerPlayerID, VisibleUnits)', area)
+        self.assertIn('Count >= 64', area)
+        self.assertNotIn('IterateByClassType', area)
+
+    def test_area_choice_preserves_actual_selected_center_separately_from_scan_summary(self):
+        prepare = function_body(SOURCE, 'PrepareChosenArea')
+        self.assertIn('ActionFields(UnitState, "area",', prepare)
+        self.assertIn('|aim_x=', prepare)
+        self.assertIn('Impact = Locations[0];', prepare)
+        self.assertIn('|impact_x=', prepare)
+        self.assertIn('RecordAreaTargetPreviews(UnitState, Action, TargetIndex)', prepare)
+        self.assertIn('|preview_targets=', prepare)
+        reason = function_body(SOURCE, 'ActionFields')
+        self.assertIn("Ability.GetMyTemplateName() == 'ThrowGrenade'", reason)
+        self.assertIn("Ability.GetMyTemplateName() == 'LaunchGrenade'", reason)
+        self.assertIn('Reason = "explosive_area_attack";', reason)
+
+    def test_move_threat_traces_are_selected_only_visible_and_bounded(self):
+        prepare = function_body(SOURCE, 'PrepareChosenMove')
+        candidates = function_body(SOURCE, 'CandidateMove')
+        preview = function_body(SOURCE, 'RecordMoveThreatPreviews')
+        self.assertIn('RecordMoveThreatPreviews(UnitState, Path)', prepare)
+        self.assertNotIn('RecordMoveThreatPreviews(', candidates)
+        self.assertIn('GetVisibleThreats(UnitState, VisibleEnemies)', preview)
+        self.assertIn('IsVisibleHostile(UnitState, Enemy, VisibleEnemies)', preview)
+        self.assertIn('Count >= 64', preview)
+        self.assertNotIn('IterateByClassType', preview)
+        self.assertIn('GetCoverTypeForTarget(EnemyLocation, CurrentLocation, Angle)', preview)
+        self.assertIn('GetCoverTypeForTarget(EnemyLocation, DestinationLocation, Angle)', preview)
+        self.assertIn('CanSeeTileToTile(EnemyTile, DestinationTile, DestinationVisibility)', preview)
+        self.assertNotIn('.TargetCover', preview)
+        self.assertNotIn('_native_cover=', preview)
+        self.assertIn('bDestinationLOS && DestinationVisibility.bVisibleFromDefault', preview)
 
     def test_unknown_outcome_is_not_a_loss_and_observation_survives_user_stop(self):
         finish = function_body(SOURCE, 'Finish')
@@ -116,6 +175,18 @@ class MissionRecorderContracts(unittest.TestCase):
 
 @unittest.skipUnless(os.environ.get('APX_SDK_SOURCE_ROOT'), 'Set APX_SDK_SOURCE_ROOT to check native recorder declarations')
 class RecorderSDKContracts(unittest.TestCase):
+    def test_tile_visibility_contract_does_not_supply_native_target_cover(self):
+        sdk = CHECKS.find_sdk_root(Path(os.environ['APX_SDK_SOURCE_ROOT']))
+        bind = (sdk / 'XComGame/Classes/X2Effect_GetOverHere.uc').read_text(encoding='utf-8-sig')
+        self.assertIn('CanSeeTileToTile does not update TargetCover', bind)
+        self.assertIn('OutVisibilityInfo.bVisibleFromDefault', bind)
+        preview = function_body(SOURCE, 'RecordMoveThreatPreviews')
+        self.assertNotIn('.TargetCover', preview)
+        self.assertIn('GetCoverTypeForTarget(EnemyLocation, DestinationLocation, Angle)', preview)
+        planner = (CLASSES / 'APX_MissionPlanner.uc').read_text(encoding='utf-8-sig')
+        exposure = function_body(CHECKS.without_comments(planner), 'ExposureRisk')
+        self.assertNotIn('Visibility.TargetCover', exposure)
+
     def test_recorder_history_visibility_time_and_outcome_declarations_exist(self):
         sdk = CHECKS.find_sdk_root(Path(os.environ['APX_SDK_SOURCE_ROOT']))
         files = {name: (sdk / 'XComGame/Classes' / (name + '.uc')).read_text(encoding='utf-8-sig')

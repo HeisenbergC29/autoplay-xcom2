@@ -7,6 +7,7 @@ automat i co rzeczywiście wydarzyło się po rozkazach.
 [Analiza pierwszego raportu z Gatecrashera i wynikające z niej poprawki](report-2026-11-02.pl.md).
 [Analiza drugiej próby i rewizja `mission-report-v3`](report-2026-11-02-second.pl.md).
 [Analiza trzeciej próby i rewizja `mission-report-v4`](report-2026-11-02-third.pl.md).
+[Czwarta próba: zasadzka działa, granat użyty, misja przegrana](report-2026-11-02-fourth.pl.md).
 
 ## Co się zmieniło w taktyce
 
@@ -29,6 +30,9 @@ automat i co rzeczywiście wydarzyło się po rozkazach.
 - Przy ukrytym oddziale atak może zostać poprzedzony przygotowaniem pozycji
   pozostałych żołnierzy i overwatch. Strzelec otwierający zachowuje akcję;
   przygotowanie ma limit sześciu poleceń na turę.
+- Tylni żołnierze bez osiągalnej linii ostrzału mogą przed ujawnieniem dogonić
+  strzelca otwierającego. Ruch musi materialnie skrócić odległość, zachować AP
+  i nie zwiększać ocenianego ryzyka; nadal obowiązują kontrole wykrycia i trasy.
 - Bezpieczny granat na pojedynczy cel może konkurować ze słabym strzałem,
   jeśli ma duże obrażenia z szansą zabicia albo sprawdzone dobicie sojusznika.
 
@@ -108,6 +112,22 @@ Podsumowania `grenade_scan` rozróżniają dopuszczone i odrzucone okazje na
 pojedynczy cel (`single_opportunities`, `single_rejected`) oraz ostatnie minimalne
 i maksymalne obrażenia, HP celu i ocenę dostępnego zwykłego strzału. Liczniki
 dotyczą sprawdzanych punktów w kolejnych decyzjach, a nie liczby rzuconych granatów.
+
+Rewizja `mission-report-v5` dodaje `area_target_preview` dla wybranego granatu:
+identyfikatory znanych celów, HP/tarcze i przewidywane obrażenia surowe oraz po
+pancerzu. Główny cel granatu ma prawidłowo ID 0; opis trafionych jednostek znajduje
+się w tych osobnych wpisach. `chosen` zapisuje także punkt celowania i lądowania.
+Podgląd poprzedza aktywację, a faktyczne przyjęcie i obrażenia potwierdzają dopiero
+`chosen.accepted` i późniejsze `result_target`. Pola `last_single_*` opisują ostatni
+sprawdzany punkt skanu, który może być inny od wybranego.
+
+Dla wybranego ruchu `move_threat_preview` pokazuje geometryczną osłonę
+obecnej/docelowej pozycji względem każdego widocznego wroga oraz LOS. Pola
+`current_default_view` i `destination_default_view` opisują widoczność z domyślnej
+pozycji strzelca, bez wychylania. Używane zapytanie o LOS nie wypełnia natywnego
+`TargetCover`; osłona jest liczona osobnym `GetCoverTypeForTarget`. Listy podglądów
+mają limit 64 wpisów na akcję i nie są emitowane dla każdej propozycji ruchu.
+Dane nie obejmują ukrytych kontaktów ani przyszłego ruchu przeciwnika.
 
 Podgląd nie przewiduje ukrytego losowania. Zniknięcie przeciwnika z pola widzenia
 nie jest uznawane za zabicie. Brak końcowego wpisu albo osiągnięcie limitu

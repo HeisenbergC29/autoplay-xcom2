@@ -78,6 +78,25 @@ class AmbushPolicyTests(unittest.TestCase):
         self.assertTrue(detected(True, 36, 18, 5, True))
         self.assertFalse(detected(True, 400, 18, 5, True))
 
+    def test_fourth_report_rear_soldiers_may_catch_up_without_immediate_los(self):
+        catchup = load_uc_function(SQUAD, 'CatchupProgress')
+        # D20: opener(25,34), rear409(12,34), rear415(14,33).
+        # Recorded move proposal(19,33) closed the gap without immediate LOS;
+        # full native concealment/path safety must still admit the proposal.
+        gap409 = 13.0
+        gap415 = (11 ** 2 + 1) ** 0.5
+        destination_gap = (6 ** 2 + 1) ** 0.5
+        self.assertGreater(catchup(gap409, destination_gap, 13.903, 4.2049, 8), 0)
+        self.assertGreater(catchup(gap415, destination_gap, 15.1013, 4.2049, 8), 0)
+
+    def test_catchup_cannot_extend_gap_increase_risk_or_shuffle_nearby_supporters(self):
+        catchup = load_uc_function(SQUAD, 'CatchupProgress')
+        self.assertLess(catchup(6, 3, 20, 4, 8), -1000)
+        self.assertLess(catchup(13, 14, 20, 4, 8), -1000)
+        self.assertLess(catchup(13, 12, 20, 4, 8), -1000)
+        self.assertLess(catchup(13, 6, 4, 20, 8), -1000)
+        self.assertEqual(catchup(13, 6, 4, 4, 8), 12)
+
     def test_preparation_rejects_destructive_path_traversals(self):
         destructive = load_uc_function(SQUAD, 'IsDestructiveTraversal')
         for name in ('eTraversal_BreakWindow', 'eTraversal_KickDoor', 'eTraversal_BreakWall'):

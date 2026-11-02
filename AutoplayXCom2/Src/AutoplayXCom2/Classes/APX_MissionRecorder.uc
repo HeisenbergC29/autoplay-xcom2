@@ -1,7 +1,8 @@
 // Runtime-only diagnostic observer. Never changes state, rolls RNG or issues orders.
 // Records only the local squad and contacts visible to that player.
 class APX_MissionRecorder extends Object config(AutoplayXCom2)
-    dependson(X2GameRuleset, XComGameState_Ability, X2TacticalGameRulesetDataStructures);
+    dependson(X2GameRuleset, XComGameState_Ability, X2TacticalGameRulesetDataStructures,
+        X2GameRulesetVisibilityDataStructures);
 
 var config int MaxRecords;
 var config int MaxHistoryFramesPerObserve;
@@ -77,7 +78,7 @@ function Start(int PlayerID)
     bStarted = true;
     Emit("start", "|player=" $ PlayerID $ "|mission=" $ Safe(Mission)
         $ "|difficulty=" $ `TacticalDifficultySetting $ "|history=" $ HistoryCursor
-        $ "|revision=mission-report-v4");
+        $ "|revision=mission-report-v5");
     Observe("start");
 }
 
@@ -388,6 +389,8 @@ function string ActionFields(XComGameState_Unit UnitState, string Kind,
     {
         AbilityName = string(Ability.GetMyTemplateName());
         Reason = class'APX_CombatPlanner'.static.GetActionReason(UnitState, Ability.GetMyTemplateName());
+        if (Ability.GetMyTemplateName() == 'ThrowGrenade' || Ability.GetMyTemplateName() == 'LaunchGrenade')
+            Reason = "explosive_area_attack";
     }
     if (TargetIndex >= 0 && TargetIndex < Action.AvailableTargets.Length)
     {
@@ -447,9 +450,186 @@ function PrepareChosenAction(XComGameState_Unit UnitState, AvailableAction Actio
     PreparedChoiceFields = ActionFields(UnitState, "action", Action, TargetIndex, Score);
 }
 
+// Freeze the chosen center and each known affected unit, not the last center
+// considered by the area planner. These records are previews; chosen.accepted
+// and subsequent result_target records establish submission and actual damage.
+function PrepareChosenArea(XComGameState_Unit UnitState, AvailableAction Action,
+    int TargetIndex, float Score, vector AimLocation, const out array<vector> Locations)
+{
+    local vector Impact;
+    local int PreviewTargets;
+
+    if (UnitState == none || UnitState.GetAssociatedPlayerID() != OwnerPlayerID)
+        return;
+    PreparedChoiceFields = ActionFields(UnitState, "area", Action, TargetIndex, Score)
+        $ "|aim_x=" $ AimLocation.X $ "|aim_y=" $ AimLocation.Y $ "|aim_z=" $ AimLocation.Z;
+    if (Locations.Length == 1)
+    {
+        Impact = Locations[0];
+        PreparedChoiceFields $= "|impact_x=" $ Impact.X $ "|impact_y=" $ Impact.Y $ "|impact_z=" $ Impact.Z;
+    }
+    PreviewTargets = RecordAreaTargetPreviews(UnitState, Action, TargetIndex);
+    PreparedChoiceFields $= "|preview_targets=" $ PreviewTargets;
+}
+
+function int RecordAreaTargetPreviews(XComGameState_Unit UnitState,
+    AvailableAction Action, int TargetIndex)
+{
+    local XComGameState_Ability Ability;
+    local X2AbilityTemplate Template;
+    local XComGameState_Item SourceWeapon, Ammo;
+    local X2GrenadeTemplate Grenade;
+    local AvailableTarget SelectedTarget;
+    local array<StateObjectReference> VisibleUnits;
+    local StateObjectReference TargetRef;
+    local XComGameState_Unit TargetUnit;
+    local array<X2Effect> Effects;
+    local X2Effect Effect;
+    local WeaponDamageValue MinDamage, MaxDamage, EmptyDamage;
+    local float RawMin, RawMax, MinTotal, MaxTotal, Armor;
+    local int AllowsShield, Count, CurrentHistory;
+    local bool bOwnTarget, bFalloff;
+    local string Scope;
+
+    if (UnitState == none || UnitState.GetAssociatedPlayerID() != OwnerPlayerID
+        || TargetIndex < 0 || TargetIndex >= Action.AvailableTargets.Length)
+        return 0;
+    Ability = XComGameState_Ability(`XCOMHISTORY.GetGameStateForObjectID(Action.AbilityObjectRef.ObjectID));
+    if (Ability == none || Ability.OwnerStateObject.ObjectID != UnitState.ObjectID
+        || (Ability.GetMyTemplateName() != 'ThrowGrenade' && Ability.GetMyTemplateName() != 'LaunchGrenade'))
+        return 0;
+    Template = Ability.GetMyTemplate();
+    SourceWeapon = Ability.GetSourceWeapon();
+    if (Template == none || SourceWeapon == none)
+        return 0;
+    Ammo = Ability.GetSourceAmmo();
+    if (Ammo != none)
+        Grenade = X2GrenadeTemplate(Ammo.GetMyTemplate());
+    else if (Template.bUseLaunchedGrenadeEffects)
+        Grenade = X2GrenadeTemplate(SourceWeapon.GetLoadedAmmoTemplate(Ability));
+    else if (Template.bUseThrownGrenadeEffects)
+        Grenade = X2GrenadeTemplate(SourceWeapon.GetMyTemplate());
+    if (Grenade == none || (Grenade.DataName != 'FragGrenade' && Grenade.DataName != 'AlienGrenade'))
+        return 0;
+    if (Template.bUseLaunchedGrenadeEffects)
+        Effects = Grenade.LaunchedGrenadeEffects;
+    else
+        Effects = Grenade.ThrownGrenadeEffects;
+    SelectedTarget = Action.AvailableTargets[TargetIndex];
+    CurrentHistory = `XCOMHISTORY.GetCurrentHistoryIndex();
+    class'X2TacticalVisibilityHelpers'.static.GetAllVisibleObjectsForPlayer(OwnerPlayerID, VisibleUnits);
+    bFalloff = `SecondWaveEnabled('ExplosiveFalloff');
+    foreach SelectedTarget.AdditionalTargets(TargetRef)
+    {
+        if (Count >= 64)
+            break;
+        // Test visibility before reading target health, armor or effects.
+        bOwnTarget = IsOwnUnitAt(TargetRef.ObjectID, CurrentHistory);
+        if (!bOwnTarget && VisibleUnits.Find('ObjectID', TargetRef.ObjectID) == INDEX_NONE)
+            continue;
+        TargetUnit = XComGameState_Unit(`XCOMHISTORY.GetGameStateForObjectID(TargetRef.ObjectID));
+        if (TargetUnit == none || TargetUnit.GetMyTemplate().bIsCosmetic)
+            continue;
+        RawMin = 0.0;
+        RawMax = 0.0;
+        MinTotal = 0.0;
+        MaxTotal = 0.0;
+        Armor = TargetUnit.GetArmorMitigationForUnitFlag();
+        foreach Effects(Effect)
+        {
+            if (Effect == none)
+                continue;
+            MinDamage = EmptyDamage;
+            MaxDamage = EmptyDamage;
+            AllowsShield = 0;
+            // Grenades use secondary effects. Ability.GetDamagePreview on the
+            // empty primary target would misleadingly report zero damage.
+            Effect.GetDamagePreview(TargetRef, Ability, false, MinDamage, MaxDamage, AllowsShield);
+            RawMin += MinDamage.Damage;
+            RawMax += MaxDamage.Damage;
+            if (X2Effect_ApplyWeaponDamage(Effect) != none
+                && X2Effect_ApplyWeaponDamage(Effect).bIgnoreArmor)
+            {
+                MinTotal += MinDamage.Damage;
+                MaxTotal += MaxDamage.Damage;
+            }
+            else
+            {
+                MinTotal += class'APX_CombatPlanner'.static.PreviewDamageAfterArmor(
+                    MinDamage.Damage, Armor, MinDamage.Pierce, 1);
+                MaxTotal += class'APX_CombatPlanner'.static.PreviewDamageAfterArmor(
+                    MaxDamage.Damage, Armor, MaxDamage.Pierce, 1);
+            }
+        }
+        // The stock preview omits explosive falloff. Preserve the raw preview
+        // and flag its limitation; do not present its minimum as a safe floor.
+        if (bFalloff)
+            MinTotal = 0.0;
+        Scope = bOwnTarget ? "friendly" : "visible";
+        Emit("area_target_preview", "|source=" $ UnitState.ObjectID $ "|target=" $ TargetRef.ObjectID
+            $ "|ability=" $ Ability.GetMyTemplateName() $ "|target_scope=" $ Scope
+            $ "|target_hp=" $ TargetUnit.GetCurrentStat(eStat_HP)
+            $ "|target_shield=" $ TargetUnit.GetCurrentStat(eStat_ShieldHP)
+            $ "|preview_raw_min_damage=" $ RawMin $ "|preview_raw_max_damage=" $ RawMax
+            $ "|preview_min_damage=" $ MinTotal $ "|preview_max_damage=" $ MaxTotal
+            $ "|explosive_falloff=" $ bFalloff);
+        ++Count;
+    }
+    return Count;
+}
+
 function PrepareChosenMove(XComGameState_Unit UnitState, const out array<TTile> Path, float Score)
 {
     PreparedChoiceFields = MoveFields(UnitState, Path, Score);
+    RecordMoveThreatPreviews(UnitState, Path);
+}
+
+// Selected moves only: candidate scans do not multiply the per-enemy traces.
+// These previews use the same currently visible enemy list as movement scoring.
+function RecordMoveThreatPreviews(XComGameState_Unit UnitState, const out array<TTile> Path)
+{
+    local array<StateObjectReference> VisibleEnemies;
+    local StateObjectReference EnemyRef;
+    local XComGameState_Unit Enemy;
+    local TTile CurrentTile, DestinationTile, EnemyTile;
+    local vector CurrentLocation, DestinationLocation, EnemyLocation;
+    local GameRulesCache_VisibilityInfo CurrentVisibility, DestinationVisibility;
+    local float Angle;
+    local string CurrentCover, DestinationCover;
+    local bool bCurrentLOS, bDestinationLOS, bCurrentDefaultView, bDestinationDefaultView;
+    local int Count;
+
+    if (UnitState == none || UnitState.GetAssociatedPlayerID() != OwnerPlayerID || Path.Length < 2)
+        return;
+    CurrentTile = UnitState.TileLocation;
+    DestinationTile = Path[Path.Length - 1];
+    CurrentLocation = `XWORLD.GetPositionFromTileCoordinates(CurrentTile);
+    DestinationLocation = `XWORLD.GetPositionFromTileCoordinates(DestinationTile);
+    class'APX_MissionPlanner'.static.GetVisibleThreats(UnitState, VisibleEnemies);
+    foreach VisibleEnemies(EnemyRef)
+    {
+        if (Count >= 64)
+            break;
+        Enemy = XComGameState_Unit(`XCOMHISTORY.GetGameStateForObjectID(EnemyRef.ObjectID));
+        if (!class'APX_CombatPlanner'.static.IsVisibleHostile(UnitState, Enemy, VisibleEnemies))
+            continue;
+        EnemyTile = Enemy.TileLocation;
+        EnemyLocation = `XWORLD.GetPositionFromTileCoordinates(EnemyTile);
+        CurrentCover = string(`XWORLD.GetCoverTypeForTarget(EnemyLocation, CurrentLocation, Angle));
+        DestinationCover = string(`XWORLD.GetCoverTypeForTarget(EnemyLocation, DestinationLocation, Angle));
+        bCurrentLOS = `XWORLD.CanSeeTileToTile(EnemyTile, CurrentTile, CurrentVisibility);
+        bDestinationLOS = `XWORLD.CanSeeTileToTile(EnemyTile, DestinationTile, DestinationVisibility);
+        // Stock Bind validation uses bVisibleFromDefault from this query but
+        // explicitly checks cover separately: tile LOS does not fill TargetCover.
+        bCurrentDefaultView = bCurrentLOS && CurrentVisibility.bVisibleFromDefault;
+        bDestinationDefaultView = bDestinationLOS && DestinationVisibility.bVisibleFromDefault;
+        Emit("move_threat_preview", "|source=" $ UnitState.ObjectID $ "|enemy=" $ Enemy.ObjectID
+            $ "|current_cover=" $ CurrentCover $ "|destination_cover=" $ DestinationCover
+            $ "|current_los=" $ bCurrentLOS $ "|destination_los=" $ bDestinationLOS
+            $ "|current_default_view=" $ bCurrentDefaultView
+            $ "|destination_default_view=" $ bDestinationDefaultView);
+        ++Count;
+    }
 }
 
 function ChosenAction(XComGameState_Unit UnitState, AvailableAction Action,

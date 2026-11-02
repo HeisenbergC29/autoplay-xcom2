@@ -28,6 +28,11 @@ Indywidualne ukrycie jednego Reapera po ujawnieniu reszty nie uruchamia tej regu
 - Wybrany strzelec otwierający jest pomijany podczas przygotowań i zachowuje AP.
 - Pozostali mogą wykonać niebieski ruch do linii ostrzału, jeśli mają co najmniej
   dwa standardowe AP, dostępny overwatch i zapas AP na jego koszt.
+- Od `mission-report-v5`, jeśli nie ma bezpiecznej pozycji z linią ostrzału dla
+  danego żołnierza, możliwy jest ruch doganiający. Wymaga dystansu większego od
+  limitu wsparcia (domyślnie 8 pól), zbliżenia do strzelca o co najmniej 2 pola
+  i braku wzrostu ocenianego ryzyka. Nadal pozostawia AP i przechodzi pełne
+  kontrole trasy. Nie daje pewności strzału po przemieszczeniu się wrogów.
 - Ruch wymaga natywnej ścieżki, obecnie widocznych pól, wsparcia oddziału,
   braku zagrożeń oraz kontroli stref wykrycia widocznych jednostek i urządzeń.
   Odrzucane są trasy wybijające okna, otwierające drzwi kopnięciem lub niszczące
@@ -41,7 +46,9 @@ Indywidualne ukrycie jednego Reapera po ujawnieniu reszty nie uruchamia tej regu
 Nie jest to plan wielu tur. Nie przewiduje nieznanej trasy patrolu, ruchu wroga
 po ujawnieniu ani pewnego trafienia z reakcji. Ukryte jednostki nie służą do
 wyznaczania stref wykrycia; mogą nadal spowodować nieoczekiwane ujawnienie.
-Natywna kompilacja i zachowanie w grze pozostają do potwierdzenia.
+Raport `mission-report-v4` potwierdza przygotowanie i trafiony strzał reakcyjny,
+ale misja została przegrana. Zmiany `mission-report-v5` wymagają nowej kompilacji
+Windows i próby w grze.
 
 ## Poprawka po logu kompilacji `b891b9d`
 
@@ -58,6 +65,10 @@ Log zawiera jeden błąd i osiem ostrzeżeń bibliotek SDK. Ostrzeżenia nie są
 przyczyną przerwania tej próby. Po pobraniu poprawionych źródeł ponów budowanie
 na zachowanym SDK bez `-BuildBase`, jeśli baza jest już gotowa. Przenośne testy
 i przegląd interfejsów przechodzą; poprawka wymaga ponownej kompilacji Windows.
+
+Późniejszy [czwarty raport](report-2026-11-02-fourth.pl.md) zawiera działającą
+rewizję `mission-report-v4` i wykonane polecenia zasadzki. Nie jest to już stan
+„nie uruchamia się”, lecz nadal nieudana taktyka wymagająca dalszych prób.
 
 ## Granaty i pozostałe granice
 

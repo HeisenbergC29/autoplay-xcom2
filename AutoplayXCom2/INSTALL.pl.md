@@ -8,8 +8,10 @@ Nowsze źródła zawierają również zmiany taktyki po zgłoszonych przegranych
 Gatecrashera. Wymagają własnej nowej kompilacji i próby na Dowódcy/Legendzie.
 Instrukcja `docs/tactics-update.pl.md` opisuje budowanie z zachowanym SDK.
 Rewizja `mission-report-v4` przygotowuje pozostałych żołnierzy do zasadzki przed
-strzałem z ukrycia i poprawia ocenę granatu na pojedynczy cel. Nie ma jeszcze
-potwierdzonego wyniku tej rewizji w grze.
+strzałem z ukrycia i poprawia ocenę granatu na pojedynczy cel.
+Raport z `mission-report-v4` potwierdził wykonanie zasadzki i granatu, ale misja
+została przegrana. Bieżące źródła `mission-report-v5` poprawiają doganianie oddziału
+przed ujawnieniem oraz szczegółowość podglądów osłon i granatów w raporcie.
 
 ## Wymagania
 
@@ -128,9 +130,11 @@ Raport ZIP pojawi się w `<Dokumenty>\AutoplayXCom2-Reports`. Skrypt działa tak
 po usunięciu pobranego folderu źródeł. Załącz raport do zgłoszenia wraz z poziomem
 trudności, wynikiem misji i stratami. Szczegóły: `docs/mission-recording.pl.md`
 w repozytorium. To zapis diagnostyczny, nie film ani replay.
-W nowym raporcie wpis `revision=mission-report-v4` identyfikuje tę wersję.
+W nowym raporcie wpis `revision=mission-report-v5` identyfikuje tę wersję.
 Znaczniki `ambush_setup` pokazują przygotowania, a `grenade_scan` zawiera również
 liczby ocenionych okazji do granatu na pojedynczy cel i ostatni podgląd obrażeń.
+`area_target_preview` opisuje cele wybranego granatu; `move_threat_preview`
+pozwala sprawdzić osłony wybranych ruchów. Podglądy nie są gwarancją wyniku akcji.
 
 - Stałe „PAUSED: SCREEN / MENU” na zwykłym HUD-zie w wersji `0.1.0-alpha`: pobierz aktualne źródła, ponownie zbuduj i zastąp cały folder moda; sama zmiana INI nie wystarczy. Po aktualizacji uruchom grę ponownie.
 - Jeśli aktualna kompilacja nadal czeka, prześlij `Launch.log` z `<Dokumenty>\My Games\XCOM2 War of the Chosen\XComGame\Logs`. Wpisy `AutoplayXCom2: Waiting:` oraz `UI stack:` wskazują rozpoznaną przyczynę; powtarzane są tylko po zmianie przyczyny.

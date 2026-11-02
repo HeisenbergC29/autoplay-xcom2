@@ -38,6 +38,18 @@ static function float PreparationScore(bool bMove, bool bUsefulShot, bool bFirin
     return -10000.0;
 }
 
+static function float CatchupProgress(float CurrentDistance, float CandidateDistance,
+    float CurrentRisk, float CandidateRisk, float SupportDistance)
+{
+    // A rear soldier may be too far to gain LOS in one blue move. Let them
+    // close a material gap before the opener reveals the squad, keeping 1 AP.
+    if (CurrentDistance <= FMax(4.0, SupportDistance))
+        return -10000.0;
+    if (CurrentDistance - CandidateDistance < 2.0 || CandidateRisk > CurrentRisk)
+        return -10000.0;
+    return FMin(12.0, (CurrentDistance - CandidateDistance) * 2.0);
+}
+
 static function bool DetectedOnTile(bool bClearLOS, float DistanceSquared,
     float SightRadius, float DetectionRadius, bool bIgnoresDetectionDistance)
 {
@@ -246,14 +258,16 @@ static function bool HasFiringLane(XComGameState_Unit Soldier, TTile Tile,
     return false;
 }
 
-static function bool ChoosePreparationMove(XComGameState_Unit Soldier,
+static function bool ChoosePreparationMove(XComGameState_Unit Soldier, XComGameState_Unit Opener,
     const out array<StateObjectReference> VisibleEnemies, out array<TTile> Path)
 {
     local XGUnit Visualizer;
-    local array<TTile> Tiles, CandidatePath;
-    local TTile Tile;
+    local array<TTile> Tiles, CandidatePath, RoutePath;
+    local TTile Tile, OpenerTile;
     local int Index, Sample, SampleCount;
     local float Cost, Value, BestValue, CurrentSupport;
+    local float CurrentDistance, CandidateDistance, CurrentRisk, CandidateRisk, CatchupValue;
+    local bool bFiringLane, bBestFiringLane;
 
     Path.Length = 0;
     if (Soldier.NumActionPoints() < 2 || !class'APX_MissionPlanner'.static.HasLegalMove(Soldier))
@@ -263,9 +277,17 @@ static function bool ChoosePreparationMove(XComGameState_Unit Soldier,
         return false;
     Visualizer.m_kReachableTilesCache.UpdateTileCacheIfNeeded();
     Visualizer.m_kReachableTilesCache.GetAllPathableTiles(Tiles, Visualizer.GetMobility());
+    OpenerTile = Opener.TileLocation;
+    // Include a route prefix toward the known friendly opener so bounded
+    // sampling cannot omit every catch-up point behind a corner. The ordinary
+    // route is only a proposal: concealment/path checks below still apply.
+    if (class'APX_MissionPlanner'.static.ChooseRoutePrefix(Soldier, Visualizer, OpenerTile, RoutePath))
+        Tiles.InsertItem(0, RoutePath[RoutePath.Length - 1]);
     SampleCount = Min(Tiles.Length, Clamp(default.MaxCandidateTiles, 1, 128));
     BestValue = -100000.0;
     CurrentSupport = class'APX_MissionPlanner'.static.NearestSupportDistance(Soldier, Soldier.TileLocation);
+    CurrentDistance = class'APX_MissionPlanner'.static.TileDistance(Soldier.TileLocation, OpenerTile);
+    CurrentRisk = class'APX_MissionPlanner'.static.ExposureRisk(Soldier, Soldier.TileLocation, VisibleEnemies);
     for (Sample = 0; Sample < SampleCount; ++Sample)
     {
         Index = Sample * Max(0, Tiles.Length - 1) / Max(1, SampleCount - 1);
@@ -274,21 +296,33 @@ static function bool ChoosePreparationMove(XComGameState_Unit Soldier,
         if (Tile == Soldier.TileLocation || Cost < 0.0 || Cost > Visualizer.GetMobility()
             || Tile.Z > Soldier.TileLocation.Z + 1
             || !class'APX_MissionPlanner'.static.IsSupportedAdvanceDestination(CurrentSupport,
-                class'APX_MissionPlanner'.static.NearestSupportDistance(Soldier, Tile))
-            || !HasFiringLane(Soldier, Tile, VisibleEnemies))
+                class'APX_MissionPlanner'.static.NearestSupportDistance(Soldier, Tile)))
             continue;
+        bFiringLane = HasFiringLane(Soldier, Tile, VisibleEnemies);
+        if (!bFiringLane && bBestFiringLane)
+            continue;
+        CatchupValue = 0.0;
+        if (!bFiringLane)
+        {
+            CandidateDistance = class'APX_MissionPlanner'.static.TileDistance(Tile, OpenerTile);
+            CandidateRisk = class'APX_MissionPlanner'.static.ExposureRisk(Soldier, Tile, VisibleEnemies);
+            CatchupValue = CatchupProgress(CurrentDistance, CandidateDistance, CurrentRisk,
+                CandidateRisk, class'APX_MissionPlanner'.default.SquadSupportDistance);
+            if (CatchupValue < 0.0)
+                continue;
+        }
         Value = class'APX_MissionPlanner'.static.PositionScore(Soldier, Tile, Tile, true, VisibleEnemies) - Cost * 0.25;
-        if (Value <= BestValue)
+        Value += CatchupValue;
+        // Prefer an established line whenever both kinds of safe move exist.
+        if (bFiringLane == bBestFiringLane && Value <= BestValue)
             continue;
         CandidatePath.Length = 0;
         if (!Visualizer.m_kReachableTilesCache.BuildPathToTile(Tile, CandidatePath)
             || !PreparationPathIsSafe(Soldier, CandidatePath))
             continue;
-        if (Value > BestValue)
-        {
-            BestValue = Value;
-            Path = CandidatePath;
-        }
+        BestValue = Value;
+        bBestFiringLane = bFiringLane;
+        Path = CandidatePath;
     }
     return Path.Length > 1;
 }
@@ -333,7 +367,7 @@ static function bool ChoosePreparation(int PlayerID, XComGameState_Unit Opener,
         Candidate.UnitState = Soldier;
         bUsefulShot = HasUsefulShot(Soldier);
         if (CanStageMove(Soldier.NumActionPoints(), PointCost, bUsefulShot)
-            && ChoosePreparationMove(Soldier, VisibleEnemies, PreparationPath))
+            && ChoosePreparationMove(Soldier, Opener, VisibleEnemies, PreparationPath))
         {
             Candidate.Path = PreparationPath;
             Candidate.bMove = true;

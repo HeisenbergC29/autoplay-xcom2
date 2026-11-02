@@ -22,6 +22,15 @@ strzałem około 80%; wyjątek dla granatu nie powinien wypierać dobrego strza�
 ani omijać kontroli sojuszników i obiektów celu. Prześlij raport również po
 zwycięstwie, aby dało się ocenić wynik całej misji.
 
+Rewizja `mission-report-v5`: przy tylnym żołnierzu ponad 8 pól od strzelca
+otwierającego i poza zasięgiem wzroku celu sprawdź bezpieczny ruch doganiający
+przed atakiem. Przybliżenie poniżej 2 pól lub wzrost ryzyka nie powinny wystarczyć.
+Po ruchu nadal ma pozostać AP; limit przygotowań nie może powodować pętli.
+Sprawdź geometryczną osłonę i LOS w `move_threat_preview`, w tym widoczność
+z domyślnej pozycji oraz sytuację wymagającą wychylenia strzelca.
+Przy granacie sprawdź, czy `area_target_preview` odpowiada wybranemu punktowi
+i późniejszym `result_target`, także przy aktywnym Explosive Falloff.
+
 Wyniki zapisuj osobno: PASS / FAIL / NIEURUCHOMIONY. Kompilacja nie potwierdza działania. Zacznij od osobnego testowego zapisu bez Ironman, z WOTC i wszystkimi oficjalnymi dodatkami, bez innych modów.
 
 ## Kompilacja i wejście

@@ -921,6 +921,9 @@ function MakeDecision(XComTacticalController PC)
     {
         if (bMove)
             MissionRecorder.PrepareChosenMove(BestUnit, BestPath, BestScore);
+        else if (bArea)
+            MissionRecorder.PrepareChosenArea(BestUnit, BestAction, BestTargetIndex, BestScore,
+                BestAim, BestLocations);
         else
             MissionRecorder.PrepareChosenAction(BestUnit, BestAction, BestTargetIndex, BestScore);
     }

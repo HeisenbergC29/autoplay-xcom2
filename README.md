@@ -27,6 +27,12 @@ Po zgłoszonym błędzie `Unparsed class ... DependsOn ... APX_Controller` usuni
 nową zależność kompilacji między kontrolerem a strukturą planera zasadzki.
 Poprawione źródła wymagają ponownego zbudowania na Windows.
 
+[Czwarty raport](docs/report-2026-11-02-fourth.pl.md) potwierdza działanie zasadzki,
+trafiony overwatch i użycie granatu w `mission-report-v4`; misja nadal została
+przegrana. Bieżące źródła `mission-report-v5` dopuszczają bezpieczne dogonienie
+strzelca otwierającego przed ujawnieniem i zapisują podgląd konkretnych celów
+wybranego granatu oraz geometrycznej osłony i LOS przy ruchu.
+
 **Stan: alpha; według najnowszego zgłoszenia użytkownika mod już wydaje rozkazy, ale przegrywa Gatecrasher na Legendzie i Dowódcy.** Bieżące źródła poprawiają ocenę osłon, zagrożeń i flankowania, dobieranie celów, granaty oraz wsparcie oddziału. Ta zmiana **wymaga nowej kompilacji i prób w grze**; nie ma jeszcze potwierdzenia poprawy wyniku misji. [Opis taktyki, kompilacja z zachowanym SDK i lista prób](docs/tactics-update.pl.md). Nie potwierdzono pełnego ukończenia wszystkich misji DLC.
 
 Dotychczasowy plik `.u` i konfigurację zweryfikowano; importy binarne prowadzą tylko do standardowych pakietów `Core`, `Engine`, `XComGame`. Repozytorium nie zawiera SDK ani plików gry. Szczegóły: [wyniki kontroli SDK i kompilacji](docs/SDK-AUDIT.pl.md).
@@ -75,7 +81,7 @@ Mod nie dodaje punktów akcji, nie zmienia trafień, nie zabija wrogów komendą
 To **nie jest jeszcze pełny autopilot wszystkich misji**. Do ukończenia wymagania potrzebne są kompilacja, testy i dopracowanie zachowania na konkretnych mapach:
 
 - Planer obszarowy obsługuje wyłącznie zwykłe granaty Frag/Alien. Domyślnie wymaga dwóch widocznych przeciwników. Pojedynczy cel dopuszcza przy gwarantowanym dobiciu albo wyraźnej przewadze nad zwykłym strzałem: duże pewne obrażenia z szansą zabicia lub dostępne, sprawdzone dobicie przez sojusznika. Broń ciężka, stożki, ogień, kwas, EMP, dym i pozostałe efekty trwałe wymagają osobnych reguł. Pełne skutki zawalania konstrukcji wymagają testów w grze.
-- Planer zasadzki przygotowuje otwarcie w bieżącej turze, gdy cały zdolny do walki oddział zachowuje ukrycie drużynowe. Nie planuje wielu tur, tras patroli ani oszczędzania zasobów na kolejne etapy. Nie przewiduje ukrytych wrogów i nie gwarantuje odpalenia każdej reakcji. [Dokładny zakres i ustawienia](docs/native-ai-and-ambush.pl.md).
+- Planer zasadzki przygotowuje otwarcie w bieżącej turze, gdy cały zdolny do walki oddział zachowuje ukrycie drużynowe. Dopuszcza też bezpieczne dogonienie strzelca przez tył oddziału, gdy jeden ruch nie wystarcza do uzyskania linii ostrzału. Nie planuje wielu tur, tras patroli ani oszczędzania zasobów na kolejne etapy. Nie przewiduje ukrytych wrogów i nie gwarantuje odpalenia każdej reakcji. [Dokładny zakres i ustawienia](docs/native-ai-and-ambush.pl.md).
 - Pełne wykorzystanie każdej umiejętności DLC wymaga osobnych planerów i testów. Listy obsługiwanych umiejętności są jawne w `Config/XComAutoplayXCom2.ini`.
 - Eksploracja używa próbkowania siatki mapy. Nie gwarantuje odwiedzenia każdego małego pomieszczenia ani znalezienia wroga, który przemieścił się na wcześniej odwiedzony teren. Gdy nie znajduje osiągalnego celu, automat oddaje sterowanie.
 - Nietypowe cele Kismet, wieloetapowe Lost Towers / Alien Nest, twierdze Wybranych, obrona Avengera, finał i wyzwania Legacy **nie mają potwierdzonej obsługi końca do końca**. Może być potrzebne ręczne przejście etapu lub ewakuacja.
