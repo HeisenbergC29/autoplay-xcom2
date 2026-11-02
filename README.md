@@ -15,8 +15,14 @@ wymaga nowej kompilacji i porównawczej próby w grze.
 
 [Drugi raport](docs/report-2026-11-02-second.pl.md) potwierdził kolejną porażkę
 i ujawnił koszt odwrotów ostatnim AP, pamiętanie potwierdzonych zabitych oraz
-brak punktów celowania granatem przy krawędzi zasięgu. Bieżąca rewizja
-`mission-report-v3` poprawia te przypadki; wynik w grze nie jest jeszcze znany.
+brak punktów celowania granatem przy krawędzi zasięgu. Poprawki weszły do
+rewizji `mission-report-v3`.
+
+[Trzeci raport](docs/report-2026-11-02-third.pl.md) ponownie zakończył się porażką.
+Pokazał strzał z ukrycia przed przygotowaniem reszty oddziału oraz odrzucanie
+sensownego granatu na pojedynczy cel. Bieżąca rewizja `mission-report-v4` dodaje
+koordynację otwarcia zasadzki i ostrożny wyjątek dla takiego granatu.
+[Analiza wykorzystania AI przeciwników i zakres nowego planera](docs/native-ai-and-ambush.pl.md).
 
 **Stan: alpha; według najnowszego zgłoszenia użytkownika mod już wydaje rozkazy, ale przegrywa Gatecrasher na Legendzie i Dowódcy.** Bieżące źródła poprawiają ocenę osłon, zagrożeń i flankowania, dobieranie celów, granaty oraz wsparcie oddziału. Ta zmiana **wymaga nowej kompilacji i prób w grze**; nie ma jeszcze potwierdzenia poprawy wyniku misji. [Opis taktyki, kompilacja z zachowanym SDK i lista prób](docs/tactics-update.pl.md). Nie potwierdzono pełnego ukończenia wszystkich misji DLC.
 
@@ -46,6 +52,7 @@ Przycisk używa oryginalnych elementów UI, bez zastępowania plików Flash. Po�
 | Niszczenie celów | Zwykłe strzały do widocznych obiektów oznaczonych przez grę jako wrogie cele misji, np. przekaźniki; bez atakowania neutralnej scenerii |
 | Granaty | Frag/Alien rzucane i wystrzeliwane, natywna trajektoria i promień wybuchu, ocena grup widocznych wrogów; kontrola sojuszników, cywilów, celów misji i niebezpiecznych obiektów na trasie i w wybuchu |
 | Wsparcie | Leczenie i stabilizacja, przeładowanie, overwatch, hunker down |
+| Zasadzka | Przed atakiem z ukrycia: zachowanie strzelca otwierającego, krótkie ruchy pozostałych do linii ostrzału i legalny overwatch; ograniczony budżet przygotowań |
 | Ruch | Legalne niebieskie ruchy, trasowanie A*, ocena osłon względem widocznych wrogów, kontrola ognia/kwasu i innych zagrożeń na trasie |
 | Eksploracja | Gdy brak znanych celów i przydatnych akcji: ograniczone obliczeniowo próbkowanie niezbadanych pól mapy i podział celów między żołnierzy; bez odczytu pozycji ukrytych wrogów |
 | Cele | Rozpoznawane interakcje: ładunki, skrzynie, dowody, obiekty misji, oznaczanie zasobów, wybrane obiekty fabularne, przenoszenie VIP-a i podejście do cywilów |
@@ -64,8 +71,9 @@ Mod nie dodaje punktów akcji, nie zmienia trafień, nie zabija wrogów komendą
 
 To **nie jest jeszcze pełny autopilot wszystkich misji**. Do ukończenia wymagania potrzebne są kompilacja, testy i dopracowanie zachowania na konkretnych mapach:
 
-- Planer obszarowy obsługuje wyłącznie zwykłe granaty Frag/Alien. Domyślnie wymaga dwóch widocznych przeciwników, z wyjątkiem pojedynczego celu, któremu minimalne przewidywane obrażenia wystarczają do zabicia. Broń ciężka, stożki, ogień, kwas, EMP, dym i pozostałe efekty trwałe wymagają osobnych reguł. Pełne skutki zawalania konstrukcji wymagają testów w grze.
-- Brak planowania zasadzki całego oddziału, oszczędzania zasobów na kolejne etapy i pełnego wykorzystania każdej umiejętności DLC. Listy obsługiwanych umiejętności są jawne w `Config/XComAutoplayXCom2.ini`.
+- Planer obszarowy obsługuje wyłącznie zwykłe granaty Frag/Alien. Domyślnie wymaga dwóch widocznych przeciwników. Pojedynczy cel dopuszcza przy gwarantowanym dobiciu albo wyraźnej przewadze nad zwykłym strzałem: duże pewne obrażenia z szansą zabicia lub dostępne, sprawdzone dobicie przez sojusznika. Broń ciężka, stożki, ogień, kwas, EMP, dym i pozostałe efekty trwałe wymagają osobnych reguł. Pełne skutki zawalania konstrukcji wymagają testów w grze.
+- Planer zasadzki przygotowuje otwarcie w bieżącej turze, gdy cały zdolny do walki oddział zachowuje ukrycie drużynowe. Nie planuje wielu tur, tras patroli ani oszczędzania zasobów na kolejne etapy. Nie przewiduje ukrytych wrogów i nie gwarantuje odpalenia każdej reakcji. [Dokładny zakres i ustawienia](docs/native-ai-and-ambush.pl.md).
+- Pełne wykorzystanie każdej umiejętności DLC wymaga osobnych planerów i testów. Listy obsługiwanych umiejętności są jawne w `Config/XComAutoplayXCom2.ini`.
 - Eksploracja używa próbkowania siatki mapy. Nie gwarantuje odwiedzenia każdego małego pomieszczenia ani znalezienia wroga, który przemieścił się na wcześniej odwiedzony teren. Gdy nie znajduje osiągalnego celu, automat oddaje sterowanie.
 - Nietypowe cele Kismet, wieloetapowe Lost Towers / Alien Nest, twierdze Wybranych, obrona Avengera, finał i wyzwania Legacy **nie mają potwierdzonej obsługi końca do końca**. Może być potrzebne ręczne przejście etapu lub ewakuacja.
 - Wyznaczanie ewakuacji wymaga istniejącego, ukończonego celu strategicznego i dostępnej zwykłej zdolności gry. Mod nie wybiera ścieżek dialogowych i nie zamyka ogólnych komunikatów. Nie uznaje pustej listy celów za powód do opuszczenia misji.

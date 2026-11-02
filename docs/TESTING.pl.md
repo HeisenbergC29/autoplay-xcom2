@@ -13,6 +13,15 @@ ZIP z `Diagnostics\Collect-MissionRecording.ps1` i poziom trudności. Test
 rejestratora wymaga prawdziwej gry: obecność testów analizy logów nie potwierdza,
 że nowy kod skompilował się i zarejestrował rzeczywistą misję.
 
+Rewizja `mission-report-v4`: z zapisu sprzed pierwszego ataku sprawdź, czy
+przedni strzelec zachowuje akcję, a pozostali ustawiają się i włączają overwatch
+przed ujawnieniem oddziału. Sprawdź także brak bezpiecznej trasy, brak dostępnego
+overwatch i wyczerpany budżet przygotowań: atak musi móc nastąpić bez zapętlenia.
+Porównaj bezpieczny Frag 3–4 przeciw 4 HP ze strzałem około 30%, potem z dobrym
+strzałem około 80%; wyjątek dla granatu nie powinien wypierać dobrego strzału
+ani omijać kontroli sojuszników i obiektów celu. Prześlij raport również po
+zwycięstwie, aby dało się ocenić wynik całej misji.
+
 Wyniki zapisuj osobno: PASS / FAIL / NIEURUCHOMIONY. Kompilacja nie potwierdza działania. Zacznij od osobnego testowego zapisu bez Ironman, z WOTC i wszystkimi oficjalnymi dodatkami, bez innych modów.
 
 ## Kompilacja i wejście

@@ -24,6 +24,8 @@ struct GrenadeScanDiagnostics
     var int TargetsRejected;
     var int ScoreRejected;
     var int Unsupported;
+    var int SingleOpportunities;
+    var int SingleRejected;
 };
 
 var private GrenadeScanDiagnostics Scan;
@@ -36,6 +38,10 @@ var private int DeepestRejection;
 var private float ScanMinRange;
 var private float ScanMaxRange;
 var private float NearestAimDistance;
+var private float LastSingleMin;
+var private float LastSingleMax;
+var private float LastSingleHealth;
+var private float LastOrdinaryScore;
 
 // One summary per unit/decision, not one log line per candidate center. The
 // controller attaches it to that decision's recorder session.
@@ -50,7 +56,10 @@ function string GetDiagnosticSummary()
         $ " unsupported=" $ Scan.Unsupported $ " last=" $ LastScanReason
         $ " range_reason=" $ ScanRangeReason $ " blast_reason=" $ ScanBlastReason
         $ " min_range_units=" $ ScanMinRange $ " max_range_units=" $ ScanMaxRange
-        $ " nearest_aim_units=" $ NearestAimDistance;
+        $ " nearest_aim_units=" $ NearestAimDistance
+        $ " single_opportunities=" $ Scan.SingleOpportunities $ " single_rejected=" $ Scan.SingleRejected
+        $ " last_single_min=" $ LastSingleMin $ " last_single_max=" $ LastSingleMax
+        $ " last_single_hp=" $ LastSingleHealth $ " last_ordinary_score=" $ LastOrdinaryScore;
 }
 
 static function int RejectionPriority(name Stage)
@@ -512,6 +521,9 @@ function float ScoreBlast(XComGameState_Unit UnitState, XComGameState_Ability Ab
     local WeaponDamageValue MinDamage, MaxDamage, EmptyDamage;
     local int AllowsShield, Count, LethalCount;
     local float MinTotal, MaxTotal, Health, Armor, Result;
+    local float SingleMin, SingleMax, SingleHealth, OrdinaryScore;
+    local XComGameState_Unit SingleEnemy;
+    local bool bSingleFollowup, bSingleOpportunity;
 
     if (Ability.GetMyTemplate().bUseLaunchedGrenadeEffects)
         Effects = Grenade.LaunchedGrenadeEffects;
@@ -560,6 +572,10 @@ function float ScoreBlast(XComGameState_Unit UnitState, XComGameState_Ability Ab
         if (`SecondWaveEnabled('ExplosiveFalloff'))
             MinTotal = 0.0;
         ++Count;
+        SingleMin = MinTotal;
+        SingleMax = MaxTotal;
+        SingleHealth = Health;
+        SingleEnemy = Enemy;
         if (MinTotal >= Health)
             ++LethalCount;
         Result += class'APX_CombatPlanner'.static.ScoreDamage(MinTotal, MaxTotal,
@@ -570,17 +586,136 @@ function float ScoreBlast(XComGameState_Unit UnitState, XComGameState_Ability Ab
         if (MinTotal < Health)
             Result += CoverOpeningValue(UnitState, Enemy);
     }
-    return ScoreGrenadeOutcome(Count, LethalCount, Max(1, MinimumTargets), Result);
+    if (Count == 1 && LethalCount == 0 && MinimumTargets > 1)
+    {
+        OrdinaryScore = BestOrdinaryAttackScore(UnitState, VisibleEnemies);
+        bSingleFollowup = HasQualifiedFollowup(UnitState, SingleEnemy,
+            FMax(0.0, SingleHealth - SingleMin));
+        bSingleOpportunity = IsUsefulSingleGrenade(SingleMin, SingleMax, SingleHealth,
+            bSingleFollowup, Result - 18.0, OrdinaryScore);
+        if (bCollectDiagnostics)
+        {
+            LastSingleMin = SingleMin;
+            LastSingleMax = SingleMax;
+            LastSingleHealth = SingleHealth;
+            LastOrdinaryScore = OrdinaryScore;
+            if (bSingleOpportunity)
+                ++Scan.SingleOpportunities;
+            else
+                ++Scan.SingleRejected;
+        }
+    }
+    return ScoreGrenadeOutcome(Count, LethalCount, Max(1, MinimumTargets), Result, bSingleOpportunity);
 }
 
-// A certain single kill may justify the limited grenade; damage-only use still
-// requires the configured group size. Rifle kills win ties by saving the item.
+// A reliable finisher or a substantial singleton advantage may justify the
+// limited grenade. Rifle kills win ties by saving the item.
 static function float ScoreGrenadeOutcome(int Count, int LethalCount,
-    int RequiredTargets, float DamageValue)
+    int RequiredTargets, float DamageValue, optional bool bSingleOpportunity)
 {
-    if (Count == 0 || (Count < RequiredTargets && LethalCount == 0))
+    if (Count == 0 || (Count < RequiredTargets && LethalCount == 0 && !bSingleOpportunity))
         return -10000.0;
     return DamageValue - 18.0;
+}
+
+static function bool IsUsefulSingleGrenade(float MinDamage, float MaxDamage,
+    float Health, bool bQualifiedFollowup, float GrenadeScore, float OrdinaryScore)
+{
+    if (Health <= 0.0 || MinDamage <= 0.0 || GrenadeScore < OrdinaryScore + 12.0)
+        return false;
+    // The report's safe 3-4 damage frag against 4 HP is much more reliable
+    // than a 30% rifle shot. Do not require a guaranteed minimum-damage kill.
+    if (MinDamage >= Health * 0.75 && MaxDamage >= Health)
+        return true;
+    return bQualifiedFollowup;
+}
+
+function float BestOrdinaryAttackScore(XComGameState_Unit UnitState,
+    const out array<StateObjectReference> VisibleEnemies)
+{
+    local GameRulesCache_Unit Cache;
+    local AvailableAction Candidate;
+    local AvailableTarget Target;
+    local XComGameState_Ability Ability;
+    local XComGameState_Unit Enemy;
+    local name AbilityName;
+    local float BestScore;
+
+    BestScore = 0.0;
+    if (!`TACTICALRULES.GetGameRulesCache_Unit(UnitState.GetReference(), Cache))
+        return BestScore;
+    foreach Cache.AvailableActions(Candidate)
+    {
+        if (Candidate.AvailableCode != 'AA_Success' || !Candidate.bInputTriggered || Candidate.bFreeAim)
+            continue;
+        Ability = XComGameState_Ability(`XCOMHISTORY.GetGameStateForObjectID(Candidate.AbilityObjectRef.ObjectID));
+        if (Ability == none)
+            continue;
+        AbilityName = Ability.GetMyTemplateName();
+        if (AbilityName != 'StandardShot' && AbilityName != 'SniperStandardFire' && AbilityName != 'PistolStandardShot')
+            continue;
+        foreach Candidate.AvailableTargets(Target)
+        {
+            Enemy = XComGameState_Unit(`XCOMHISTORY.GetGameStateForObjectID(Target.PrimaryTarget.ObjectID));
+            if (class'APX_CombatPlanner'.static.IsVisibleHostile(UnitState, Enemy, VisibleEnemies))
+                BestScore = FMax(BestScore, class'APX_CombatPlanner'.static.ScoreAttack(Ability, Target, Enemy));
+        }
+    }
+    return BestScore;
+}
+
+function bool HasQualifiedFollowup(XComGameState_Unit SourceUnit, XComGameState_Unit Enemy,
+    float RemainingHealth)
+{
+    local XComGameState_Unit Ally;
+    local XComGameState_Ability Shot;
+    local GameRulesCache_Unit Cache;
+    local AvailableAction Candidate;
+    local AvailableTarget Target;
+    local ShotBreakdown Breakdown;
+    local WeaponDamageValue MinDamage, MaxDamage;
+    local int Chance, AllowsShield;
+    local float Armor, MinHPDamage;
+    local name AbilityName;
+
+    if (RemainingHealth <= 0.0)
+        return false;
+    foreach `XCOMHISTORY.IterateByClassType(class'XComGameState_Unit', Ally)
+    {
+        if (Ally.ObjectID == SourceUnit.ObjectID || !Ally.IsAbleToAct()
+            || Ally.GetAssociatedPlayerID() != SourceUnit.GetAssociatedPlayerID()
+            || Ally.GetTeam() != eTeam_XCom || Ally.GetMyTemplate().bIsCosmetic
+            || !`TACTICALRULES.GetGameRulesCache_Unit(Ally.GetReference(), Cache))
+            continue;
+        foreach Cache.AvailableActions(Candidate)
+        {
+            if (Candidate.AvailableCode != 'AA_Success' || !Candidate.bInputTriggered || Candidate.bFreeAim)
+                continue;
+            Shot = XComGameState_Ability(`XCOMHISTORY.GetGameStateForObjectID(Candidate.AbilityObjectRef.ObjectID));
+            if (Shot == none)
+                continue;
+            AbilityName = Shot.GetMyTemplateName();
+            if (AbilityName != 'StandardShot' && AbilityName != 'SniperStandardFire' && AbilityName != 'PistolStandardShot')
+                continue;
+            foreach Candidate.AvailableTargets(Target)
+            {
+                if (Target.PrimaryTarget.ObjectID != Enemy.ObjectID)
+                    continue;
+                Chance = Shot.GetShotBreakdown(Target, Breakdown);
+                if (Chance < 50)
+                    continue;
+                Shot.GetDamagePreview(Target.PrimaryTarget, MinDamage, MaxDamage, AllowsShield);
+                Armor = Enemy.GetArmorMitigationForUnitFlag();
+                if (class'APX_CombatPlanner'.static.AbilityIgnoresArmor(Shot.GetMyTemplate()))
+                    Armor = 0.0;
+                MinHPDamage = class'APX_CombatPlanner'.static.PreviewDamageAfterArmor(
+                    MinDamage.Damage, Armor, MinDamage.Pierce, 1);
+                if (MinHPDamage >= RemainingHealth)
+                    return true;
+            }
+        }
+    }
+    return false;
 }
 
 function float CoverOpeningValue(XComGameState_Unit SourceUnit, XComGameState_Unit Enemy)
@@ -792,6 +927,10 @@ function bool ChooseAction(XComGameState_Unit UnitState,
     ScanMinRange = -1.0;
     ScanMaxRange = -1.0;
     NearestAimDistance = -1.0;
+    LastSingleMin = -1.0;
+    LastSingleMax = -1.0;
+    LastSingleHealth = -1.0;
+    LastOrdinaryScore = -1.0;
     bCollectDiagnostics = true;
     Action = EmptyAction;
     TargetIndex = INDEX_NONE;

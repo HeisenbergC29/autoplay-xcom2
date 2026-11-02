@@ -1,0 +1,341 @@
+// Bounded concealed-ambush preparation using stock player-visible previews.
+// This planner never transfers units to an AI player or runs an enemy tree.
+class APX_SquadPlanner extends Object config(AutoplayXCom2)
+    dependson(X2GameRuleset, X2TacticalGameRulesetDataStructures,
+        X2GameRulesetVisibilityDataStructures, XGTacticalGameCoreNativeBase);
+
+var config int MaxCandidateTiles;
+var config int MaxPreparationActionsPerTurn;
+
+struct AmbushPreparation
+{
+    var XComGameState_Unit UnitState;
+    var AvailableAction Action;
+    var int TargetIndex;
+    var array<TTile> Path;
+    var float Score;
+    var bool bMove;
+    var bool bFound;
+};
+
+static function bool CanPrepare(bool bSquadConcealed, bool bOffensive,
+    int PreparationCount, int PreparationLimit)
+{
+    return bSquadConcealed && bOffensive && PreparationCount < PreparationLimit;
+}
+
+static function bool CanStageMove(int StandardAP, int ReactionCost, bool bUsefulShot)
+{
+    return StandardAP >= 2 && StandardAP > ReactionCost && !bUsefulShot;
+}
+
+static function float PreparationScore(bool bMove, bool bUsefulShot, bool bFiringLane)
+{
+    if (bMove)
+        return 30.0;
+    if (bUsefulShot || bFiringLane)
+        return 25.0;
+    return -10000.0;
+}
+
+static function bool DetectedOnTile(bool bClearLOS, float DistanceSquared,
+    float SightRadius, float DetectionRadius, bool bIgnoresDetectionDistance)
+{
+    if (!bClearLOS || DistanceSquared > SightRadius * SightRadius)
+        return false;
+    return bIgnoresDetectionDistance || DistanceSquared <= DetectionRadius * DetectionRadius;
+}
+
+static function bool IsLocalSoldier(XComGameState_Unit UnitState, int PlayerID)
+{
+    return UnitState != none && UnitState.GetAssociatedPlayerID() == PlayerID
+        && UnitState.GetTeam() == eTeam_XCom && UnitState.IsAlive()
+        && !UnitState.IsIncapacitated() && !UnitState.IsCivilian()
+        && !UnitState.GetMyTemplate().bIsCosmetic && !UnitState.bRemovedFromPlay;
+}
+
+static function bool SquadIsConcealed(int PlayerID)
+{
+    local XComGameState_Unit Soldier;
+    local int Count;
+
+    foreach `XCOMHISTORY.IterateByClassType(class'XComGameState_Unit', Soldier)
+    {
+        if (!IsLocalSoldier(Soldier, PlayerID))
+            continue;
+        ++Count;
+        if (!Soldier.IsSquadConcealed())
+            return false;
+    }
+    return Count > 1;
+}
+
+static function bool HasUsefulShot(XComGameState_Unit Soldier)
+{
+    local GameRulesCache_Unit Cache;
+    local AvailableAction Candidate;
+    local AvailableTarget Target;
+    local XComGameState_Ability Ability;
+    local XComGameState_Unit Enemy;
+    local ShotBreakdown Breakdown;
+    local array<StateObjectReference> VisibleEnemies;
+    local name AbilityName;
+
+    if (!`TACTICALRULES.GetGameRulesCache_Unit(Soldier.GetReference(), Cache))
+        return false;
+    class'APX_MissionPlanner'.static.GetVisibleThreats(Soldier, VisibleEnemies);
+    foreach Cache.AvailableActions(Candidate)
+    {
+        if (Candidate.AvailableCode != 'AA_Success' || !Candidate.bInputTriggered || Candidate.bFreeAim)
+            continue;
+        Ability = XComGameState_Ability(`XCOMHISTORY.GetGameStateForObjectID(Candidate.AbilityObjectRef.ObjectID));
+        if (Ability == none)
+            continue;
+        AbilityName = Ability.GetMyTemplateName();
+        if (AbilityName != 'StandardShot' && AbilityName != 'PistolStandardShot' && AbilityName != 'SniperStandardFire')
+            continue;
+        foreach Candidate.AvailableTargets(Target)
+        {
+            Enemy = XComGameState_Unit(`XCOMHISTORY.GetGameStateForObjectID(Target.PrimaryTarget.ObjectID));
+            if (class'APX_CombatPlanner'.static.IsVisibleHostile(Soldier, Enemy, VisibleEnemies)
+                && Ability.GetShotBreakdown(Target, Breakdown) >= 35)
+                return true;
+        }
+    }
+    return false;
+}
+
+static function bool FindOverwatch(XComGameState_Unit Soldier,
+    out AvailableAction Action, out int TargetIndex, out int PointCost)
+{
+    local GameRulesCache_Unit Cache;
+    local AvailableAction Candidate;
+    local XComGameState_Ability Ability;
+    local X2AbilityCost Cost;
+    local X2AbilityCost_ActionPoints APCost;
+    local int SelfIndex, CostPoints;
+
+    PointCost = 100;
+    TargetIndex = INDEX_NONE;
+    if (!`TACTICALRULES.GetGameRulesCache_Unit(Soldier.GetReference(), Cache))
+        return false;
+    foreach Cache.AvailableActions(Candidate)
+    {
+        if (Candidate.AvailableCode != 'AA_Success' || !Candidate.bInputTriggered || Candidate.bFreeAim)
+            continue;
+        Ability = XComGameState_Ability(`XCOMHISTORY.GetGameStateForObjectID(Candidate.AbilityObjectRef.ObjectID));
+        if (Ability == none || Ability.GetMyTemplate() == none
+            || class'APX_CombatPlanner'.default.OverwatchAbilities.Find(Ability.GetMyTemplateName()) == INDEX_NONE)
+            continue;
+        SelfIndex = class'APX_CombatPlanner'.static.FindSelfTarget(Candidate, Soldier.ObjectID);
+        if (Candidate.AvailableTargets.Length > 0 && SelfIndex == INDEX_NONE)
+            continue;
+        CostPoints = 1;
+        foreach Ability.GetMyTemplate().AbilityCosts(Cost)
+        {
+            APCost = X2AbilityCost_ActionPoints(Cost);
+            if (APCost != none)
+                CostPoints = Max(CostPoints, APCost.GetPointCost(Ability, Soldier));
+        }
+        if (CostPoints < PointCost)
+        {
+            Action = Candidate;
+            TargetIndex = SelfIndex;
+            PointCost = CostPoints;
+        }
+    }
+    return PointCost < 100;
+}
+
+static function bool IsDestructiveTraversal(name TraversalName)
+{
+    return TraversalName == 'eTraversal_BreakWindow' || TraversalName == 'eTraversal_KickDoor'
+        || TraversalName == 'eTraversal_BreakWall' || TraversalName == 'eTraversal_Phasing';
+}
+
+static function bool PreparationPathIsSafe(XComGameState_Unit Soldier,
+    const out array<TTile> Path)
+{
+    local array<PathPoint> Points;
+    local PathPoint Point;
+    local array<StateObjectReference> VisibleObjects;
+    local StateObjectReference DetectorRef;
+    local XComGameState_Unit Detector;
+    local XComGameState_InteractiveObject DetectionObject;
+    local GameRulesCache_VisibilityInfo Visibility;
+    local TTile Tile, DetectorTile;
+    local vector TilePosition, DetectorPosition;
+    local int Index;
+    local float DetectionDistance, SightDistance, StartSupport;
+
+    if (Path.Length < 2)
+        return false;
+    StartSupport = class'APX_MissionPlanner'.static.NearestSupportDistance(Soldier, Soldier.TileLocation);
+    class'X2PathSolver'.static.GetPathPointsFromPath(Soldier, Path, Points);
+    if (Points.Length < 2)
+        return false;
+    foreach Points(Point)
+    {
+        if (IsDestructiveTraversal(name(string(Point.Traversal))))
+            return false;
+    }
+    // Only currently visible objects can contribute detection positions. This
+    // also includes visible civilians and security devices which can reveal a
+    // concealed soldier. Do not enumerate hidden objects to get their ranges.
+    class'X2TacticalVisibilityHelpers'.static.GetAllVisibleObjectsForPlayer(
+        Soldier.GetAssociatedPlayerID(), VisibleObjects, , -1, true);
+    for (Index = 1; Index < Path.Length; ++Index)
+    {
+        Tile = Path[Index];
+        if (!class'APX_MissionPlanner'.static.IsKnownCombatTile(Tile)
+            || !class'X2TacticalVisibilityHelpers'.static.CanSquadSeeLocation(Soldier.GetAssociatedPlayerID(), Tile)
+            || class'XComPath'.static.TileContainsHazard(Soldier, Tile)
+            || Tile.Z > Soldier.TileLocation.Z + 1
+            || !class'APX_MissionPlanner'.static.IsSupportedAdvanceStep(StartSupport,
+                class'APX_MissionPlanner'.static.NearestSupportDistance(Soldier, Tile)))
+            return false;
+        foreach VisibleObjects(DetectorRef)
+        {
+            DetectionObject = XComGameState_InteractiveObject(`XCOMHISTORY.GetGameStateForObjectID(DetectorRef.ObjectID));
+            if (DetectionObject != none && !DetectionObject.bRemovedFromPlay
+                && !DetectionObject.bHasBeenHacked && DetectionObject.DetectionRange > 0.0)
+            {
+                TilePosition = `XWORLD.GetPositionFromTileCoordinates(Tile);
+                DetectorTile = DetectionObject.TileLocation;
+                DetectorPosition = `XWORLD.GetPositionFromTileCoordinates(DetectorTile);
+                if (VSizeSq(TilePosition - DetectorPosition) <= Square(DetectionObject.DetectionRange))
+                    return false;
+            }
+            Detector = XComGameState_Unit(`XCOMHISTORY.GetGameStateForObjectID(DetectorRef.ObjectID));
+            if (Detector == none || !Detector.IsAlive() || Detector.GetMyTemplate().bIsCosmetic
+                || !Soldier.UnitBreaksConcealment(Detector))
+                continue;
+            DetectorTile = Detector.TileLocation;
+            if (!`XWORLD.CanSeeTileToTile(DetectorTile, Tile, Visibility))
+                continue;
+            SightDistance = `METERSTOUNITS(Detector.GetVisibilityRadius());
+            DetectionDistance = Soldier.GetConcealmentDetectionDistance(Detector);
+            if (DetectedOnTile(true, Visibility.DefaultTargetDist, SightDistance,
+                DetectionDistance, Detector.DoesUnitBreaksConcealmentIgnoringDistance()))
+                return false;
+        }
+    }
+    return true;
+}
+
+static function bool HasFiringLane(XComGameState_Unit Soldier, TTile Tile,
+    const out array<StateObjectReference> VisibleEnemies)
+{
+    local XComGameState_Unit Enemy;
+    local StateObjectReference EnemyRef;
+    local GameRulesCache_VisibilityInfo Visibility;
+    local TTile EnemyTile;
+    local float SightDistance;
+
+    SightDistance = `METERSTOUNITS(Soldier.GetVisibilityRadius());
+    foreach VisibleEnemies(EnemyRef)
+    {
+        Enemy = XComGameState_Unit(`XCOMHISTORY.GetGameStateForObjectID(EnemyRef.ObjectID));
+        if (!class'APX_CombatPlanner'.static.IsVisibleHostile(Soldier, Enemy, VisibleEnemies))
+            continue;
+        EnemyTile = Enemy.TileLocation;
+        if (`XWORLD.CanSeeTileToTile(Tile, EnemyTile, Visibility)
+            && Visibility.DefaultTargetDist <= Square(SightDistance))
+            return true;
+    }
+    return false;
+}
+
+static function bool ChoosePreparationMove(XComGameState_Unit Soldier,
+    const out array<StateObjectReference> VisibleEnemies, out array<TTile> Path)
+{
+    local XGUnit Visualizer;
+    local array<TTile> Tiles, CandidatePath;
+    local TTile Tile;
+    local int Index, Sample, SampleCount;
+    local float Cost, Value, BestValue, CurrentSupport;
+
+    Path.Length = 0;
+    if (Soldier.NumActionPoints() < 2 || !class'APX_MissionPlanner'.static.HasLegalMove(Soldier))
+        return false;
+    Visualizer = XGUnit(Soldier.GetVisualizer());
+    if (Visualizer == none || Visualizer.m_kReachableTilesCache == none)
+        return false;
+    Visualizer.m_kReachableTilesCache.UpdateTileCacheIfNeeded();
+    Visualizer.m_kReachableTilesCache.GetAllPathableTiles(Tiles, Visualizer.GetMobility());
+    SampleCount = Min(Tiles.Length, Clamp(default.MaxCandidateTiles, 1, 128));
+    BestValue = -100000.0;
+    CurrentSupport = class'APX_MissionPlanner'.static.NearestSupportDistance(Soldier, Soldier.TileLocation);
+    for (Sample = 0; Sample < SampleCount; ++Sample)
+    {
+        Index = Sample * Max(0, Tiles.Length - 1) / Max(1, SampleCount - 1);
+        Tile = Tiles[Index];
+        Cost = Visualizer.m_kReachableTilesCache.GetPathCostToTile(Tile);
+        if (Tile == Soldier.TileLocation || Cost < 0.0 || Cost > Visualizer.GetMobility()
+            || Tile.Z > Soldier.TileLocation.Z + 1
+            || !class'APX_MissionPlanner'.static.IsSupportedAdvanceDestination(CurrentSupport,
+                class'APX_MissionPlanner'.static.NearestSupportDistance(Soldier, Tile))
+            || !HasFiringLane(Soldier, Tile, VisibleEnemies))
+            continue;
+        Value = class'APX_MissionPlanner'.static.PositionScore(Soldier, Tile, Tile, true, VisibleEnemies) - Cost * 0.25;
+        if (Value <= BestValue)
+            continue;
+        CandidatePath.Length = 0;
+        if (!Visualizer.m_kReachableTilesCache.BuildPathToTile(Tile, CandidatePath)
+            || !PreparationPathIsSafe(Soldier, CandidatePath))
+            continue;
+        if (Value > BestValue)
+        {
+            BestValue = Value;
+            Path = CandidatePath;
+        }
+    }
+    return Path.Length > 1;
+}
+
+static function bool ChoosePreparation(int PlayerID, XComGameState_Unit Opener,
+    out AmbushPreparation Preparation)
+{
+    local XComGameState_Unit Soldier;
+    local array<StateObjectReference> VisibleEnemies;
+    local AmbushPreparation Candidate, EmptyPreparation;
+    local AvailableAction OverwatchAction;
+    local array<TTile> PreparationPath;
+    local int PointCost, SelfIndex;
+    local bool bUsefulShot;
+
+    Preparation = EmptyPreparation;
+    if (Opener == none || !SquadIsConcealed(PlayerID))
+        return false;
+    class'APX_MissionPlanner'.static.GetVisibleThreats(Opener, VisibleEnemies);
+    if (VisibleEnemies.Length == 0)
+        return false;
+    foreach `XCOMHISTORY.IterateByClassType(class'XComGameState_Unit', Soldier)
+    {
+        if (!IsLocalSoldier(Soldier, PlayerID) || Soldier.ObjectID == Opener.ObjectID
+            || !Soldier.IsAbleToAct() || Soldier.NumAllReserveActionPoints() > 0
+            || Soldier.NumActionPoints() == 0)
+            continue;
+        Candidate = EmptyPreparation;
+        if (!FindOverwatch(Soldier, OverwatchAction, SelfIndex, PointCost))
+            continue;
+        Candidate.Action = OverwatchAction;
+        Candidate.TargetIndex = SelfIndex;
+        Candidate.UnitState = Soldier;
+        bUsefulShot = HasUsefulShot(Soldier);
+        if (CanStageMove(Soldier.NumActionPoints(), PointCost, bUsefulShot)
+            && ChoosePreparationMove(Soldier, VisibleEnemies, PreparationPath))
+        {
+            Candidate.Path = PreparationPath;
+            Candidate.bMove = true;
+        }
+        Candidate.Score = PreparationScore(Candidate.bMove, bUsefulShot,
+            HasFiringLane(Soldier, Soldier.TileLocation, VisibleEnemies));
+        if (Candidate.Score < 0.0)
+            continue;
+        Candidate.bFound = true;
+        if (!Preparation.bFound || Candidate.Score > Preparation.Score)
+            Preparation = Candidate;
+    }
+    return Preparation.bFound;
+}

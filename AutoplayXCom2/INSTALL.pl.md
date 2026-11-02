@@ -7,6 +7,9 @@ W opublikowanej paczce `0.1.0-alpha` wykryto błąd: zwykły HUD blokuje wydawan
 Nowsze źródła zawierają również zmiany taktyki po zgłoszonych przegranych
 Gatecrashera. Wymagają własnej nowej kompilacji i próby na Dowódcy/Legendzie.
 Instrukcja `docs/tactics-update.pl.md` opisuje budowanie z zachowanym SDK.
+Rewizja `mission-report-v4` przygotowuje pozostałych żołnierzy do zasadzki przed
+strzałem z ukrycia i poprawia ocenę granatu na pojedynczy cel. Nie ma jeszcze
+potwierdzonego wyniku tej rewizji w grze.
 
 ## Wymagania
 
@@ -96,6 +99,11 @@ AutoCompleteOwnedHacks=true
 ExploreUnseenMap=true
 AutoPlaceEvac=true
 UseExplosiveGrenades=true
+CoordinateConcealedAmbush=true
+
+[AutoplayXCom2.APX_SquadPlanner]
+MaxCandidateTiles=64
+MaxPreparationActionsPerTurn=6
 
 [AutoplayXCom2.APX_UITacticalControl]
 OffsetX=-220.0
@@ -120,6 +128,9 @@ Raport ZIP pojawi się w `<Dokumenty>\AutoplayXCom2-Reports`. Skrypt działa tak
 po usunięciu pobranego folderu źródeł. Załącz raport do zgłoszenia wraz z poziomem
 trudności, wynikiem misji i stratami. Szczegóły: `docs/mission-recording.pl.md`
 w repozytorium. To zapis diagnostyczny, nie film ani replay.
+W nowym raporcie wpis `revision=mission-report-v4` identyfikuje tę wersję.
+Znaczniki `ambush_setup` pokazują przygotowania, a `grenade_scan` zawiera również
+liczby ocenionych okazji do granatu na pojedynczy cel i ostatni podgląd obrażeń.
 
 - Stałe „PAUSED: SCREEN / MENU” na zwykłym HUD-zie w wersji `0.1.0-alpha`: pobierz aktualne źródła, ponownie zbuduj i zastąp cały folder moda; sama zmiana INI nie wystarczy. Po aktualizacji uruchom grę ponownie.
 - Jeśli aktualna kompilacja nadal czeka, prześlij `Launch.log` z `<Dokumenty>\My Games\XCOM2 War of the Chosen\XComGame\Logs`. Wpisy `AutoplayXCom2: Waiting:` oraz `UI stack:` wskazują rozpoznaną przyczynę; powtarzane są tylko po zmianie przyczyny.

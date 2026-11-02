@@ -77,7 +77,7 @@ function Start(int PlayerID)
     bStarted = true;
     Emit("start", "|player=" $ PlayerID $ "|mission=" $ Safe(Mission)
         $ "|difficulty=" $ `TacticalDifficultySetting $ "|history=" $ HistoryCursor
-        $ "|revision=mission-report-v3");
+        $ "|revision=mission-report-v4");
     Observe("start");
 }
 

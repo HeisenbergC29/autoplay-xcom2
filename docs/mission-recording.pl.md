@@ -6,6 +6,7 @@ automat i co rzeczywiście wydarzyło się po rozkazach.
 
 [Analiza pierwszego raportu z Gatecrashera i wynikające z niej poprawki](report-2026-11-02.pl.md).
 [Analiza drugiej próby i rewizja `mission-report-v3`](report-2026-11-02-second.pl.md).
+[Analiza trzeciej próby i rewizja `mission-report-v4`](report-2026-11-02-third.pl.md).
 
 ## Co się zmieniło w taktyce
 
@@ -25,6 +26,11 @@ automat i co rzeczywiście wydarzyło się po rozkazach.
   Poszukiwanie ich ostatniej widocznej pozycji odbywa się krótkimi krokami;
   częściowe przeładowanie nie wypiera wtedy overwatch. Ocena spekulacyjnego
   ruchu została ograniczona, aby nie wypierała dobrego strzału.
+- Przy ukrytym oddziale atak może zostać poprzedzony przygotowaniem pozycji
+  pozostałych żołnierzy i overwatch. Strzelec otwierający zachowuje akcję;
+  przygotowanie ma limit sześciu poleceń na turę.
+- Bezpieczny granat na pojedynczy cel może konkurować ze słabym strzałem,
+  jeśli ma duże obrażenia z szansą zabicia albo sprawdzone dobicie sojusznika.
 
 Przycisk Skyranger oznacza wezwanie ewakuacji, jeśli misja na nią pozwala.
 Ewakuacja nie oznacza zwycięstwa w Gatecrasherze. Automat korzysta ze strefy
@@ -97,6 +103,11 @@ pozycje i stan własnego oddziału, kontakty widoczne dla gracza, dostępność
 zdolności, najlepsze kandydatury z każdego planera, wybraną akcję i ocenę,
 podgląd trafienia i surowych obrażeń oraz rzeczywiste wyniki akcji z historii.
 Śledzone są także pauzy, odrzucenie rozkazu i koniec obserwacji.
+Rewizja `mission-report-v4` dodaje znaczniki `ambush_setup` i `ambush_opening`.
+Podsumowania `grenade_scan` rozróżniają dopuszczone i odrzucone okazje na
+pojedynczy cel (`single_opportunities`, `single_rejected`) oraz ostatnie minimalne
+i maksymalne obrażenia, HP celu i ocenę dostępnego zwykłego strzału. Liczniki
+dotyczą sprawdzanych punktów w kolejnych decyzjach, a nie liczby rzuconych granatów.
 
 Podgląd nie przewiduje ukrytego losowania. Zniknięcie przeciwnika z pola widzenia
 nie jest uznawane za zabicie. Brak końcowego wpisu albo osiągnięcie limitu
@@ -118,6 +129,11 @@ RecordCandidateScores=true
 RecordingInterval=1.0
 ContactMemoryTurns=2
 ContactSearchDistance=4.0
+CoordinateConcealedAmbush=true
+
+[AutoplayXCom2.APX_SquadPlanner]
+MaxCandidateTiles=64
+MaxPreparationActionsPerTurn=6
 
 [AutoplayXCom2.APX_MissionRecorder]
 MaxRecords=20000

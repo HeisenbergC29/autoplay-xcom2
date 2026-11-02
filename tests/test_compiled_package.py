@@ -107,6 +107,12 @@ class CompiledTableTests(unittest.TestCase):
         report = CHECKS.parse_ue3_package(data)
         self.assertIn("APX_MissionRecorder", report["own_classes"])
 
+    def test_accepts_squad_planner_without_external_mod_dependencies(self):
+        data, _ = table_fixture(extra_classes={"APX_MissionRecorder": "Object", "APX_SquadPlanner": "Object"})
+        report = CHECKS.parse_ue3_package(data)
+        self.assertIn("APX_SquadPlanner", report["own_classes"])
+        self.assertEqual(set(report["import_roots"]), {'Core', 'Engine', 'XComGame'})
+
     def test_rejects_unknown_additional_class(self):
         data, _ = table_fixture(extra_classes={"UnrelatedClass": "Object"})
         with self.assertRaisesRegex(CHECKS.InvalidPackage, "unexpected mod classes"):

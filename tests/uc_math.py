@@ -13,7 +13,21 @@ def load_uc_function(path: Path, name: str):
     match = re.search(r'\bfunction\s+(?:float|int|bool)\s+' + re.escape(name) + r'\s*\((.*?)\)\s*\{', source, re.S)
     if not match:
         raise ValueError(f'Numeric helper not found: {name}')
-    parameters = [part.strip().split()[-1] for part in match[1].split(',') if part.strip()]
+    parameters = []
+    for part in match[1].split(','):
+        words = part.strip().split()
+        if not words:
+            continue
+        parameter = words[-1]
+        if 'optional' in words:
+            # UE3 defaults omitted scalar inputs to their type's zero value.
+            if 'bool' in words:
+                parameter += '=False'
+            elif 'float' in words or 'int' in words:
+                parameter += '=0'
+            else:
+                raise ValueError('Only optional numeric/bool inputs are supported')
+        parameters.append(parameter)
     start = match.end()
     depth = 1
     end = start

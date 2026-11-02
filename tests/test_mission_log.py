@@ -26,13 +26,16 @@ class MissionLogTests(unittest.TestCase):
         report = LOG.analyze_logs([('Launch.log', '\n'.join([
             record(1, 'start'),
             record(2, 'marker', 'kind=grenade_scan|details=unit=410 available=1 supported=1 evaluated=3 accepted=0 range=2 blast=1 last=outside_weapon_range'),
-            record(3, 'marker', 'kind=grenade_scan|details=unit=428 available=1 supported=1 evaluated=4 accepted=0 range=3 blast=1 edge_centers=2 range_reason=outside_weapon_range blast_reason=protected_unit_near_blast'),
+            record(3, 'marker', 'kind=grenade_scan|details=unit=428 available=1 supported=1 evaluated=4 accepted=0 range=3 blast=1 edge_centers=2 single_opportunities=1 single_rejected=2 last_single_min=3.0 last_single_max=4.0 last_single_hp=4.0 last_ordinary_score=27.6 range_reason=outside_weapon_range blast_reason=protected_unit_near_blast'),
         ]))])
         diagnostic = report['sessions'][0]['grenade_diagnostics']
         self.assertEqual(diagnostic['scans'], 2)
         self.assertEqual(diagnostic['totals']['range'], 5)
         self.assertEqual(diagnostic['totals']['blast'], 2)
         self.assertEqual(diagnostic['totals']['accepted'], 0)
+        self.assertEqual(diagnostic['totals']['single_opportunities'], 1)
+        self.assertEqual(diagnostic['totals']['single_rejected'], 2)
+        self.assertNotIn('last_single_hp', diagnostic['totals'])
         self.assertEqual(diagnostic['reason_observations'],
                          {'outside_weapon_range': 1, 'protected_unit_near_blast': 1})
         self.assertIn('range=5', LOG.human_summary(report))

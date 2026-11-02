@@ -203,7 +203,8 @@ def summarize_session(session: str, records: list[dict]) -> dict:
     for scan in grenade_scans:
         fields = dict(re.findall(r'\b([a-z_]+)=([^\s]+)', str(scan.get('details', ''))))
         for key in ('available', 'supported', 'evaluated', 'accepted', 'edge_centers',
-                    'range', 'visibility', 'visualizer', 'trajectory', 'blast', 'targets', 'score', 'unsupported'):
+                    'range', 'visibility', 'visualizer', 'trajectory', 'blast', 'targets', 'score', 'unsupported',
+                    'single_opportunities', 'single_rejected'):
             if fields.get(key, '').isdecimal():
                 grenade_totals[key] += int(fields[key])
         for key in ('range_reason', 'blast_reason'):

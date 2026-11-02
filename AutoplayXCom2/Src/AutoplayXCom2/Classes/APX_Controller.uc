@@ -1,6 +1,6 @@
 // One runtime-only actor per tactical HUD. Never serialized into a campaign.
 class APX_Controller extends Actor config(AutoplayXCom2)
-    dependson(X2GameRuleset, XComGameState, XComGameStateContext_Ability);
+    dependson(X2GameRuleset, XComGameState, XComGameStateContext_Ability, APX_SquadPlanner);
 
 var config name ToggleKey;
 var config float DecisionInterval;
@@ -16,6 +16,7 @@ var config bool RecordCandidateScores;
 var config float RecordingInterval;
 var config int ContactMemoryTurns;
 var config float ContactSearchDistance;
+var config bool CoordinateConcealedAmbush;
 
 var localized string StatusOff;
 var localized string StatusActive;
@@ -78,6 +79,7 @@ var private float UntilObservation;
 var private array<RecentContact> RecentContacts;
 var private bool bContactHistoryInitialized;
 var private int ContactHistoryCursor;
+var private int AmbushPreparationActions;
 
 static function bool IsContactFresh(int CurrentTurn, int SeenTurn, int MemoryTurns)
 {
@@ -683,6 +685,7 @@ function MakeDecision(XComTacticalController PC)
     local float Score, BestScore;
     local bool bMove, bArea, bHavePlan, bSuccess, bCanExplore, bCombatThreats;
     local bool bVisibleThreats, bContactSearch, bCandidateMove, bGrenadeCandidate;
+    local AmbushPreparation AmbushPlan;
 
     PlayerRef = `TACTICALRULES.GetCachedUnitActionPlayerRef();
     PlayerState = XComGameState_Player(`XCOMHISTORY.GetGameStateForObjectID(PlayerRef.ObjectID));
@@ -697,6 +700,7 @@ function MakeDecision(XComTacticalController PC)
         ActionUses.Length = 0;
         VisitedPositions.Length = 0;
         bEndTurnRequested = false;
+        AmbushPreparationActions = 0;
     }
     if (bEndTurnRequested)
         return;
@@ -851,6 +855,40 @@ function MakeDecision(XComTacticalController PC)
         {
             Status = StatusWaiting;
             return;
+        }
+    }
+
+    // Reserve the chosen opener. Other concealed soldiers can establish firing
+    // lanes and legal reaction shots before an individual attack reveals them.
+    if (CoordinateConcealedAmbush && bHavePlan && !bMove && BestUnit != none)
+    {
+        Ability = XComGameState_Ability(`XCOMHISTORY.GetGameStateForObjectID(BestAction.AbilityObjectRef.ObjectID));
+        if (Ability != none && Ability.GetMyTemplate() != none
+            && class'APX_SquadPlanner'.static.CanPrepare(
+                class'APX_SquadPlanner'.static.SquadIsConcealed(PlayerRef.ObjectID),
+                Ability.GetMyTemplate().Hostility == eHostility_Offensive,
+                AmbushPreparationActions, Clamp(class'APX_SquadPlanner'.default.MaxPreparationActionsPerTurn, 0, 12)))
+        {
+            if (class'APX_SquadPlanner'.static.ChoosePreparation(PlayerRef.ObjectID, BestUnit, AmbushPlan)
+                && ((AmbushPlan.bMove && CanUseMove(AmbushPlan.UnitState, AmbushPlan.Path))
+                    || (!AmbushPlan.bMove && CanUseAction(AmbushPlan.UnitState, AmbushPlan.Action, AmbushPlan.TargetIndex))))
+            {
+                if (MissionRecorder != none)
+                    MissionRecorder.Marker("ambush_setup", "opener=" $ BestUnit.ObjectID
+                        @ "unit=" $ AmbushPlan.UnitState.ObjectID @ "move=" $ AmbushPlan.bMove);
+                BestUnit = AmbushPlan.UnitState;
+                BestAction = AmbushPlan.Action;
+                BestTargetIndex = AmbushPlan.TargetIndex;
+                BestPath = AmbushPlan.Path;
+                BestScore = AmbushPlan.Score;
+                BestLocations.Length = 0;
+                bMove = AmbushPlan.bMove;
+                bArea = false;
+                ++AmbushPreparationActions;
+            }
+            else if (MissionRecorder != none)
+                MissionRecorder.Marker("ambush_opening", "unit=" $ BestUnit.ObjectID
+                    @ "preparations=" $ AmbushPreparationActions);
         }
     }
 
