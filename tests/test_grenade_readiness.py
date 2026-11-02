@@ -41,7 +41,7 @@ class GrenadeReadinessContracts(unittest.TestCase):
     def test_diagnostics_are_reset_per_scan_and_frozen_before_activation(self):
         choose = function_body(SOURCE, 'ChooseAction')
         self.assertIn('Scan = EmptyScan;', choose)
-        self.assertIn('Scan.Centers = Centers.Length;', choose)
+        self.assertIn('Scan.Centers += Centers.Length;', choose)
         self.assertIn('++Scan.Evaluated;', choose)
         self.assertIn('++Scan.Accepted;', choose)
         self.assertNotRegex(choose, r'\breturn\s+(?:false|bFound)\s*;')

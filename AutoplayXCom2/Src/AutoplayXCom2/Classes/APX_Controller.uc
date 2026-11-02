@@ -1,5 +1,6 @@
 // One runtime-only actor per tactical HUD. Never serialized into a campaign.
-class APX_Controller extends Actor config(AutoplayXCom2) dependson(X2GameRuleset);
+class APX_Controller extends Actor config(AutoplayXCom2)
+    dependson(X2GameRuleset, XComGameState, XComGameStateContext_Ability);
 
 var config name ToggleKey;
 var config float DecisionInterval;
@@ -75,6 +76,8 @@ var private APX_AreaAttackPlanner AreaPlanner;
 var private APX_MissionRecorder MissionRecorder;
 var private float UntilObservation;
 var private array<RecentContact> RecentContacts;
+var private bool bContactHistoryInitialized;
+var private int ContactHistoryCursor;
 
 static function bool IsContactFresh(int CurrentTurn, int SeenTurn, int MemoryTurns)
 {
@@ -127,6 +130,66 @@ function bool RefreshContacts(int PlayerID, int CurrentTurn)
             RecentContacts.Remove(Index, 1);
     }
     return bVisible;
+}
+
+// Clear only deaths observed as the result of our own action against a known,
+// visible target. Looking up lost enemies' CURRENT HP would reveal hidden state.
+function PruneObservedDefeats(int PlayerID)
+{
+    local XComGameState HistoryFrame;
+    local XComGameStateContext_Ability AbilityContext;
+    local XComGameState_Unit SourceUnit, BeforeUnit, AfterUnit;
+    local array<StateObjectReference> VisibleBefore, Targets;
+    local StateObjectReference TargetRef;
+    local int EndIndex, ContactIndex;
+
+    if (!bContactHistoryInitialized || RecentContacts.Length == 0)
+    {
+        ContactHistoryCursor = `XCOMHISTORY.GetCurrentHistoryIndex();
+        bContactHistoryInitialized = true;
+        return;
+    }
+    EndIndex = Min(`XCOMHISTORY.GetCurrentHistoryIndex(), ContactHistoryCursor + 512);
+    while (ContactHistoryCursor < EndIndex)
+    {
+        ++ContactHistoryCursor;
+        HistoryFrame = `XCOMHISTORY.GetGameStateFromHistory(ContactHistoryCursor);
+        if (HistoryFrame == none)
+            continue;
+        AbilityContext = XComGameStateContext_Ability(HistoryFrame.GetContext());
+        if (AbilityContext == none
+            || AbilityContext.InterruptionStatus == eInterruptionStatus_Interrupt)
+            continue;
+        SourceUnit = XComGameState_Unit(`XCOMHISTORY.GetGameStateForObjectID(
+            AbilityContext.InputContext.SourceObject.ObjectID, eReturnType_Reference, ContactHistoryCursor));
+        if (SourceUnit == none || SourceUnit.GetAssociatedPlayerID() != PlayerID
+            || SourceUnit.GetTeam() != eTeam_XCom)
+            continue;
+        VisibleBefore.Length = 0;
+        class'X2TacticalVisibilityHelpers'.static.GetAllVisibleEnemiesForPlayer(
+            PlayerID, VisibleBefore, ContactHistoryCursor - 1);
+        Targets = AbilityContext.InputContext.MultiTargets;
+        Targets.AddItem(AbilityContext.InputContext.PrimaryTarget);
+        foreach Targets(TargetRef)
+        {
+            ContactIndex = RecentContacts.Find('UnitID', TargetRef.ObjectID);
+            if (ContactIndex == INDEX_NONE
+                || VisibleBefore.Find('ObjectID', TargetRef.ObjectID) == INDEX_NONE)
+                continue;
+            BeforeUnit = XComGameState_Unit(`XCOMHISTORY.GetGameStateForObjectID(
+                TargetRef.ObjectID, eReturnType_Reference, ContactHistoryCursor - 1));
+            AfterUnit = XComGameState_Unit(`XCOMHISTORY.GetGameStateForObjectID(
+                TargetRef.ObjectID, eReturnType_Reference, ContactHistoryCursor));
+            if (BeforeUnit != none && AfterUnit != none
+                && BeforeUnit.IsAlive() && !AfterUnit.IsAlive())
+            {
+                RecentContacts.Remove(ContactIndex, 1);
+                if (MissionRecorder != none)
+                    MissionRecorder.Marker("contact_resolved", "unit=" $ TargetRef.ObjectID
+                        @ "history=" $ ContactHistoryCursor);
+            }
+        }
+    }
 }
 
 function bool ChooseContactSearchMove(XComGameState_Unit UnitState,
@@ -649,6 +712,7 @@ function MakeDecision(XComTacticalController PC)
     if (MissionRecorder != none)
         MissionRecorder.BeginDecision();
     bVisibleThreats = RefreshContacts(PlayerRef.ObjectID, PlayerState.PlayerTurnCount);
+    PruneObservedDefeats(PlayerRef.ObjectID);
     bContactSearch = !bVisibleThreats && RecentContacts.Length > 0;
     bCombatThreats = bVisibleThreats || bContactSearch;
     if (bContactSearch && MissionRecorder != none)

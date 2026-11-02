@@ -196,6 +196,20 @@ def summarize_session(session: str, records: list[dict]) -> dict:
                           or (record['event'] == 'ability' and record.get('handler') == 'unhandled'
                               and str(record.get('code', '')).casefold() == 'aa_success'
                               and record.get('input') is True))
+    grenade_scans = [record for record in records if record['event'] == 'marker'
+                     and record.get('kind') == 'grenade_scan']
+    grenade_totals = Counter()
+    grenade_reasons = Counter()
+    for scan in grenade_scans:
+        fields = dict(re.findall(r'\b([a-z_]+)=([^\s]+)', str(scan.get('details', ''))))
+        for key in ('available', 'supported', 'evaluated', 'accepted', 'edge_centers',
+                    'range', 'visibility', 'visualizer', 'trajectory', 'blast', 'targets', 'score', 'unsupported'):
+            if fields.get(key, '').isdecimal():
+                grenade_totals[key] += int(fields[key])
+        for key in ('range_reason', 'blast_reason'):
+            reason = fields.get(key)
+            if reason and reason != 'none':
+                grenade_reasons[reason] += 1
     warnings = []
     if not start:
         warnings.append('Recording starts mid-session; the start record is missing.')
@@ -235,6 +249,8 @@ def summarize_session(session: str, records: list[dict]) -> dict:
         'confirmed_target_eliminations': dict(sorted(Counter(scope for scope, _ in confirmed_eliminations).items())),
         'low_chance_actions': weak_shots,
         'unsupported_abilities': dict(sorted(unsupported.items())),
+        'grenade_diagnostics': {'scans': len(grenade_scans), 'totals': dict(sorted(grenade_totals.items())),
+                                'reason_observations': dict(sorted(grenade_reasons.items()))},
         'warnings': warnings,
         'records': records,
     }
@@ -302,6 +318,10 @@ def human_summary(report: dict) -> str:
                                      for name in ['overwatch', 'hunker', 'grenade', 'reload', 'support', 'evacuation']))
         if session['unsupported_abilities']:
             lines.append('  Recorded unsupported abilities: ' + ', '.join(session['unsupported_abilities']))
+        if session['grenade_diagnostics']['scans']:
+            totals = session['grenade_diagnostics']['totals']
+            lines.append('  Grenade scan checks: ' + ', '.join(
+                f'{key}={totals.get(key, 0)}' for key in ('supported', 'evaluated', 'accepted', 'range', 'trajectory', 'blast')))
         for warning in session['warnings']:
             lines.append('  Warning: ' + warning)
     if report['malformed_records']:

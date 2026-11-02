@@ -13,6 +13,11 @@ kontaktu, zbyt wysoką ocenę ruchu na dach i brak propozycji granatów. Bieżą
 `main` zawiera poprawki tych mechanizmów oraz dokładniejsze dane diagnostyczne;
 wymaga nowej kompilacji i porównawczej próby w grze.
 
+[Drugi raport](docs/report-2026-11-02-second.pl.md) potwierdził kolejną porażkę
+i ujawnił koszt odwrotów ostatnim AP, pamiętanie potwierdzonych zabitych oraz
+brak punktów celowania granatem przy krawędzi zasięgu. Bieżąca rewizja
+`mission-report-v3` poprawia te przypadki; wynik w grze nie jest jeszcze znany.
+
 **Stan: alpha; według najnowszego zgłoszenia użytkownika mod już wydaje rozkazy, ale przegrywa Gatecrasher na Legendzie i Dowódcy.** Bieżące źródła poprawiają ocenę osłon, zagrożeń i flankowania, dobieranie celów, granaty oraz wsparcie oddziału. Ta zmiana **wymaga nowej kompilacji i prób w grze**; nie ma jeszcze potwierdzenia poprawy wyniku misji. [Opis taktyki, kompilacja z zachowanym SDK i lista prób](docs/tactics-update.pl.md). Nie potwierdzono pełnego ukończenia wszystkich misji DLC.
 
 Dotychczasowy plik `.u` i konfigurację zweryfikowano; importy binarne prowadzą tylko do standardowych pakietów `Core`, `Engine`, `XComGame`. Repozytorium nie zawiera SDK ani plików gry. Szczegóły: [wyniki kontroli SDK i kompilacji](docs/SDK-AUDIT.pl.md).

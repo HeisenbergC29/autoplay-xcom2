@@ -606,7 +606,7 @@ static function bool IsUsefulReposition(float PositionGain, float CurrentRisk,
 }
 
 static function float ScoreCombatReposition(float PositionGain, float CurrentRisk,
-    float CandidateRisk, float HealthFraction)
+    float CandidateRisk, float HealthFraction, int StandardAP)
 {
     local float RiskReduction, Result;
 
@@ -617,6 +617,12 @@ static function float ScoreCombatReposition(float PositionGain, float CurrentRis
         + FMin(16.0, RiskReduction * 0.3);
     if (HealthFraction < 0.5 && RiskReduction >= 8.0)
         Result += 16.0;
+    // A last-AP retreat gives up this turn's shot or reaction. In the second
+    // report two healthy retreats scored 46 and displaced 46% attacks. Keep
+    // ordinary escapes useful when no attack exists, while reserving the high
+    // retreat priority for a wounded soldier materially reducing exposure.
+    if (StandardAP < 2 && !(HealthFraction < 0.5 && RiskReduction >= 8.0))
+        return FMin(26.0, Result);
     return Result;
 }
 
@@ -807,7 +813,8 @@ static function bool ChooseMove(XComGameState_Unit UnitState,
         return false;
     if (bCombatGoal)
         Score = ScoreCombatReposition(BestScore - CurrentScore, CurrentRisk, BestRisk,
-            UnitState.GetCurrentStat(eStat_HP) / FMax(1.0, UnitState.GetMaxStat(eStat_HP)));
+            UnitState.GetCurrentStat(eStat_HP) / FMax(1.0, UnitState.GetMaxStat(eStat_HP)),
+            UnitState.NumActionPoints());
     else
         Score = 20 + FMin(60, BestScore - CurrentScore);
     return true;

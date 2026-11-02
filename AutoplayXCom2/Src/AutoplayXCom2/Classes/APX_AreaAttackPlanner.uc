@@ -13,6 +13,7 @@ struct GrenadeScanDiagnostics
     var int Available;
     var int Supported;
     var int Centers;
+    var int EdgeCenters;
     var int Evaluated;
     var int Accepted;
     var int RangeRejected;
@@ -29,25 +30,64 @@ var private GrenadeScanDiagnostics Scan;
 var private bool bCollectDiagnostics;
 var private string LastScanReason;
 var private string LastBlastReason;
+var private string ScanBlastReason;
+var private string ScanRangeReason;
+var private int DeepestRejection;
+var private float ScanMinRange;
+var private float ScanMaxRange;
+var private float NearestAimDistance;
 
 // One summary per unit/decision, not one log line per candidate center. The
 // controller attaches it to that decision's recorder session.
 function string GetDiagnosticSummary()
 {
     return "available=" $ Scan.Available $ " supported=" $ Scan.Supported
-        $ " centers=" $ Scan.Centers $ " evaluated=" $ Scan.Evaluated
+        $ " centers=" $ Scan.Centers $ " edge_centers=" $ Scan.EdgeCenters $ " evaluated=" $ Scan.Evaluated
         $ " accepted=" $ Scan.Accepted $ " range=" $ Scan.RangeRejected
         $ " visibility=" $ Scan.VisibilityRejected $ " visualizer=" $ Scan.VisualizerRejected
         $ " trajectory=" $ Scan.TrajectoryRejected $ " blast=" $ Scan.BlastRejected
         $ " targets=" $ Scan.TargetsRejected $ " score=" $ Scan.ScoreRejected
-        $ " unsupported=" $ Scan.Unsupported $ " last=" $ LastScanReason;
+        $ " unsupported=" $ Scan.Unsupported $ " last=" $ LastScanReason
+        $ " range_reason=" $ ScanRangeReason $ " blast_reason=" $ ScanBlastReason
+        $ " min_range_units=" $ ScanMinRange $ " max_range_units=" $ ScanMaxRange
+        $ " nearest_aim_units=" $ NearestAimDistance;
+}
+
+static function int RejectionPriority(name Stage)
+{
+    if (Stage == 'score')
+        return 7;
+    if (Stage == 'targets')
+        return 6;
+    if (Stage == 'blast')
+        return 5;
+    if (Stage == 'trajectory')
+        return 4;
+    if (Stage == 'visualizer')
+        return 3;
+    if (Stage == 'visibility')
+        return 2;
+    if (Stage == 'range')
+        return 1;
+    return 0;
 }
 
 function RejectScan(name Stage, string Reason)
 {
     if (!bCollectDiagnostics)
         return;
-    LastScanReason = Reason;
+    // A later out-of-range center must not hide why a valid trajectory failed
+    // the collateral checks. Keep the most informative reached stage as well
+    // as separate range/blast reasons.
+    if (RejectionPriority(Stage) >= DeepestRejection)
+    {
+        LastScanReason = Reason;
+        DeepestRejection = RejectionPriority(Stage);
+    }
+    if (Stage == 'range')
+        ScanRangeReason = Reason;
+    if (Stage == 'blast')
+        ScanBlastReason = Reason;
     switch (Stage)
     {
     case 'range': ++Scan.RangeRejected; break;
@@ -169,6 +209,13 @@ function bool IsLegalLocation(XComGameState_Unit UnitState,
     }
     Ability.GetValidWeaponRange(MinRange, MaxRange);
     Distance = VSize(Location - Visualizer.GetGameStateLocation());
+    if (bCollectDiagnostics)
+    {
+        ScanMinRange = MinRange;
+        ScanMaxRange = MaxRange;
+        if (NearestAimDistance < 0.0 || Distance < NearestAimDistance)
+            NearestAimDistance = Distance;
+    }
     if (Distance < MinRange || (MaxRange > 0.0 && Distance >= MaxRange))
     {
         RejectScan('range', "outside_weapon_range");
@@ -644,6 +691,80 @@ function AddCenter(vector Center, out array<vector> Centers)
     Centers.AddItem(FloorCenter);
 }
 
+// Aim inside the throw range while keeping the visible target inside the
+// prospective blast. This only proposes a point: floor snapping, real landing,
+// cover blocking and protected-object checks still decide whether it is legal.
+static function float EdgeAimDistance(float EnemyDistance, float MaxRange,
+    float BlastRadius, float Margin)
+{
+    local float LegalRange;
+
+    if (MaxRange <= 0.0 || BlastRadius <= 0.0 || EnemyDistance <= 0.0)
+        return -1.0;
+    LegalRange = FMax(0.0, MaxRange - FMax(0.0, Margin));
+    if (EnemyDistance > LegalRange + BlastRadius)
+        return -1.0;
+    return FMin(LegalRange, FMax(0.0, EnemyDistance - BlastRadius * 0.75));
+}
+
+function BuildCandidateCenters(XComGameState_Unit UnitState,
+    XComGameState_Ability Ability, X2AbilityMultiTarget_Radius Radius,
+    const out array<vector> EnemyCenters, out array<vector> Centers)
+{
+    local array<vector> DirectCenters, EdgeCenters, MidpointCenters;
+    local XGUnit UnitVisualizer;
+    local vector SourceLocation, EnemyCenter, Delta, EdgeCenter;
+    local float MinRange, MaxRange, BlastRadius, Distance, AimDistance;
+    local int First, Second, Index, MarginIndex, Budget;
+
+    Centers.Length = 0;
+    UnitVisualizer = XGUnit(UnitState.GetVisualizer());
+    if (UnitVisualizer == none)
+        return;
+    SourceLocation = UnitVisualizer.GetGameStateLocation();
+    Ability.GetValidWeaponRange(MinRange, MaxRange);
+    BlastRadius = Radius.GetTargetRadius(Ability);
+    Budget = Clamp(MaxCandidateCenters, 1, 64);
+    foreach EnemyCenters(EnemyCenter)
+    {
+        AddCenter(EnemyCenter, DirectCenters);
+        Delta = EnemyCenter - SourceLocation;
+        Distance = VSize(Delta);
+        // Two interior margins tolerate different floor-grid snaps near the
+        // range boundary. Neither changes the ability's actual maximum range.
+        for (MarginIndex = 0; MarginIndex < 2; ++MarginIndex)
+        {
+            AimDistance = EdgeAimDistance(Distance, MaxRange, BlastRadius,
+                `TILESTOUNITS(0.25 + float(MarginIndex) * 0.5));
+            if (AimDistance < 0.0)
+                continue;
+            EdgeCenter = SourceLocation + Normal(Delta) * AimDistance;
+            AddCenter(EdgeCenter, EdgeCenters);
+        }
+    }
+    for (First = 0; First < EnemyCenters.Length; ++First)
+    {
+        for (Second = First + 1; Second < EnemyCenters.Length; ++Second)
+            AddCenter((EnemyCenters[First] + EnemyCenters[Second]) * 0.5, MidpointCenters);
+    }
+    // Round-robin the three pools. Filling the budget with distant enemy
+    // centers first would silently exclude every useful range-edge proposal.
+    for (Index = 0; Index < Budget && Centers.Length < Budget; ++Index)
+    {
+        if (Index < DirectCenters.Length)
+            AddCenter(DirectCenters[Index], Centers);
+        if (Index < EdgeCenters.Length)
+        {
+            First = Centers.Length;
+            AddCenter(EdgeCenters[Index], Centers);
+            if (Centers.Length > First)
+                ++Scan.EdgeCenters;
+        }
+        if (Index < MidpointCenters.Length)
+            AddCenter(MidpointCenters[Index], Centers);
+    }
+}
+
 function bool ChooseAction(XComGameState_Unit UnitState,
     out AvailableAction Action, out int TargetIndex, out array<vector> Locations,
     out vector AimLocation, out float Score)
@@ -659,13 +780,18 @@ function bool ChooseAction(XComGameState_Unit UnitState,
     local XComGameState_Unit Enemy;
     local array<vector> Centers, EnemyCenters, CandidateLocations;
     local vector Center, Impact, EnemyCenter;
-    local int First, Second;
     local float CandidateScore;
     local bool bFound;
     local GrenadeScanDiagnostics EmptyScan;
 
     Scan = EmptyScan;
     LastScanReason = "none";
+    ScanRangeReason = "none";
+    ScanBlastReason = "none";
+    DeepestRejection = 0;
+    ScanMinRange = -1.0;
+    ScanMaxRange = -1.0;
+    NearestAimDistance = -1.0;
     bCollectDiagnostics = true;
     Action = EmptyAction;
     TargetIndex = INDEX_NONE;
@@ -686,17 +812,10 @@ function bool ChooseAction(XComGameState_Unit UnitState,
             continue;
         EnemyCenter = `XWORLD.GetPositionFromTileCoordinates(Enemy.TileLocation);
         EnemyCenters.AddItem(EnemyCenter);
-        AddCenter(EnemyCenter, Centers);
         if (EnemyCenters.Length >= Clamp(MaxCandidateCenters, 1, 64))
             break;
     }
-    for (First = 0; First < EnemyCenters.Length; ++First)
-    {
-        for (Second = First + 1; Second < EnemyCenters.Length; ++Second)
-            AddCenter((EnemyCenters[First] + EnemyCenters[Second]) * 0.5, Centers);
-    }
-    Scan.Centers = Centers.Length;
-    if (Centers.Length == 0)
+    if (EnemyCenters.Length == 0)
     {
         LastScanReason = "no_visible_centers";
         return EndScan(false);
@@ -710,6 +829,8 @@ function bool ChooseAction(XComGameState_Unit UnitState,
     {
         if (!GetSupportedGrenade(UnitState, Candidate, Ability, Grenade, Radius))
             continue;
+        BuildCandidateCenters(UnitState, Ability, Radius, EnemyCenters, Centers);
+        Scan.Centers += Centers.Length;
         foreach Centers(Center)
         {
             ++Scan.Evaluated;

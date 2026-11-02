@@ -22,6 +22,21 @@ def record(seq, event, fields='', session='s1'):
 
 
 class MissionLogTests(unittest.TestCase):
+    def test_grenade_scan_diagnostics_distinguish_range_from_blast_rejections(self):
+        report = LOG.analyze_logs([('Launch.log', '\n'.join([
+            record(1, 'start'),
+            record(2, 'marker', 'kind=grenade_scan|details=unit=410 available=1 supported=1 evaluated=3 accepted=0 range=2 blast=1 last=outside_weapon_range'),
+            record(3, 'marker', 'kind=grenade_scan|details=unit=428 available=1 supported=1 evaluated=4 accepted=0 range=3 blast=1 edge_centers=2 range_reason=outside_weapon_range blast_reason=protected_unit_near_blast'),
+        ]))])
+        diagnostic = report['sessions'][0]['grenade_diagnostics']
+        self.assertEqual(diagnostic['scans'], 2)
+        self.assertEqual(diagnostic['totals']['range'], 5)
+        self.assertEqual(diagnostic['totals']['blast'], 2)
+        self.assertEqual(diagnostic['totals']['accepted'], 0)
+        self.assertEqual(diagnostic['reason_observations'],
+                         {'outside_weapon_range': 1, 'protected_unit_near_blast': 1})
+        self.assertIn('range=5', LOG.human_summary(report))
+
     def test_result_health_proves_elimination_without_a_dead_visibility_snapshot(self):
         report = LOG.analyze_logs([('Launch.log', '\n'.join([
             record(1, 'start'),

@@ -12,6 +12,20 @@ COMBAT = CLASSES / 'APX_CombatPlanner.uc'
 
 
 class RecentContactTests(unittest.TestCase):
+    def test_confirmed_own_kills_clear_contact_memory_using_historical_visible_result(self):
+        source = CONTROLLER.read_text()
+        prune = function_body(source, 'PruneObservedDefeats')
+        self.assertIn('SourceUnit.GetAssociatedPlayerID() != PlayerID', prune)
+        self.assertIn("VisibleBefore.Find('ObjectID', TargetRef.ObjectID) == INDEX_NONE", prune)
+        self.assertIn('PlayerID, VisibleBefore, ContactHistoryCursor - 1', prune)
+        self.assertIn('TargetRef.ObjectID, eReturnType_Reference, ContactHistoryCursor)', prune)
+        self.assertIn('BeforeUnit.IsAlive() && !AfterUnit.IsAlive()', prune)
+        self.assertIn('RecentContacts.Remove(ContactIndex, 1)', prune)
+        self.assertIn('ContactHistoryCursor + 512', prune)
+        decision = function_body(source, 'MakeDecision')
+        self.assertLess(decision.index('PruneObservedDefeats('),
+                        decision.index('bContactSearch = !bVisibleThreats'))
+
     def test_surviving_contact_remains_relevant_next_turn_but_expires(self):
         fresh = load_uc_function(CONTROLLER, 'IsContactFresh')
         self.assertTrue(fresh(3, 2, 2))  # Report: turn 2 survivor, turn 3 no sight.

@@ -103,15 +103,39 @@ class TacticalMovementTests(unittest.TestCase):
         # Report D25/D26 produced movement score80 while D26 already offered
         # the ally's 96% shot scored77.32. A huge positional delta must not
         # pretend to be a near-certain elimination.
-        self.assertLess(self.combat_score(1000, 500, 0, 1), 77.32)
-        self.assertLess(self.combat_score(1000, 500, 0, 1), 50.9533)
+        self.assertLess(self.combat_score(1000, 500, 0, 1, 2), 77.32)
+        self.assertLess(self.combat_score(1000, 500, 0, 1, 2), 50.9533)
 
     def test_wounded_escape_can_preempt_poor_shot_without_unbounded_move_score(self):
-        healthy = self.combat_score(30, 42, 14, 1)
-        wounded = self.combat_score(30, 42, 14, 0.25)
+        healthy = self.combat_score(30, 42, 14, 1, 1)
+        wounded = self.combat_score(30, 42, 14, 0.25, 1)
         self.assertGreater(wounded, healthy)
         self.assertGreater(wounded, 26.8467)
-        self.assertLessEqual(self.combat_score(1000, 500, 0, 0.25), 62)
+        self.assertLessEqual(self.combat_score(1000, 500, 0, 0.25, 1), 62)
+
+    def test_second_report_healthy_last_ap_retreat_no_longer_displaces_ordinary_shot(self):
+        # D35: healthy U416, AP1, risk70.275->8.7825, movement46 versus
+        # an available 46% rifle attack scored39.6533. D36 repeated the trade.
+        first_retreat = self.combat_score(1000, 70.275, 8.7825, 1.0, 1)
+        second_retreat = self.combat_score(1000, 57.5862, 5.9807, 1.0, 1)
+        self.assertLess(first_retreat, 39.6533)
+        self.assertLess(second_retreat, 39.6533)
+        self.assertEqual(first_retreat, 26.0)
+        self.assertGreater(self.combat_score(1000, 70.275, 8.7825, 1.0, 2), first_retreat)
+
+    def test_healthy_last_ap_escape_still_beats_no_shot_or_speculative_shot(self):
+        attack_source = SOURCE.with_name('APX_CombatPlanner.uc')
+        score_damage = load_uc_function(attack_source, 'ScoreDamage')
+        retreat = self.combat_score(1000, 57.5862, 5.9807, 1.0, 1)
+        self.assertGreater(retreat, 17.0)  # Ordinary overwatch in contact.
+        self.assertGreater(retreat, score_damage(3, 5, 4, 25, 1.0, 0.0))
+
+    def test_wounded_last_ap_emergency_is_not_capped_like_healthy_escape(self):
+        wounded = self.combat_score(1000, 70.275, 8.7825, 0.25, 1)
+        healthy = self.combat_score(1000, 70.275, 8.7825, 1.0, 1)
+        self.assertGreater(wounded, 39.6533)
+        self.assertGreater(wounded, healthy)
+        self.assertTrue(self.reposition(20, 70.275, 8.7825, 1, 4))
 
     def test_report_first_rooftop_ascent_requires_an_established_ally(self):
         self.assertFalse(self.safe_expansion(True, 4, False))

@@ -5,6 +5,7 @@ ani odtwarzalny replay silnika. Ma pokazać, jakie akcje były dostępne, co wyb
 automat i co rzeczywiście wydarzyło się po rozkazach.
 
 [Analiza pierwszego raportu z Gatecrashera i wynikające z niej poprawki](report-2026-11-02.pl.md).
+[Analiza drugiej próby i rewizja `mission-report-v3`](report-2026-11-02-second.pl.md).
 
 ## Co się zmieniło w taktyce
 
