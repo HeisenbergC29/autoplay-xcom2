@@ -127,3 +127,19 @@ nie ma podstaw do dodawania wyjątku zastępującego tę klasyfikację.
 Do tej weryfikacji nie brakuje kolejnych źródeł SDK. Pliki SDK pozostają
 poza repozytorium i paczką moda. Kompilacja Windows i próba v6 w grze nadal
 wymagają uruchomienia na komputerze z SDK WOTC i grą.
+
+## Weryfikacja mission-report-v7 po drugim raporcie Legacy
+
+Nowa próba v6 potwierdziła wydawanie poleceń i rejestrację danych w grze,
+lecz zakończyła się porażką. Poprawki v7 obejmują bezpieczny ruch do ataku
+wręcz i wycenę utraconego ataku przy wydawaniu AP na ruch.
+
+Z przesłanym `Development/SrcOrig` zaliczono **189 testów Python, bez
+pominięć** oraz kontrolę odwołań (11 klas moda, 29 nazw zdolności).
+Sprawdzono źródłowy kontrakt `X2AbilityCost_ActionPoints`: `GetPointCost`,
+`ConsumeAllPoints`, typy dopuszczanych AP, kolejność ich zużywania i znaczenie
+`bFreeCost`. Projekcja zmienia tylko lokalną kopię AP. Ruch w niebieskim
+zasięgu korzysta ze zwykłego kosztu ruchu; nie modelujemy nowego LOS,
+reakcji przeciwnika ani wyniku kolejnych rzutów.
+
+Kompilacja Windows i wynik v7 w grze pozostają do potwierdzenia.

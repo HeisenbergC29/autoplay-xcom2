@@ -78,7 +78,7 @@ function Start(int PlayerID)
     bStarted = true;
     Emit("start", "|player=" $ PlayerID $ "|mission=" $ Safe(Mission)
         $ "|difficulty=" $ `TacticalDifficultySetting $ "|history=" $ HistoryCursor
-        $ "|revision=mission-report-v6");
+        $ "|revision=mission-report-v7");
     Observe("start");
 }
 
@@ -420,7 +420,7 @@ function string MoveFields(XComGameState_Unit UnitState, const out array<TTile> 
 {
     local array<StateObjectReference> VisibleEnemies;
     local TTile Destination;
-    local float CurrentRisk, CandidateRisk, SupportScore;
+    local float CurrentRisk, CandidateRisk, SupportScore, BestAttackNow, BestAttackAfterMove;
 
     if (Path.Length == 0)
         return "|kind=move|unit=" $ UnitState.ObjectID $ "|score=" $ Score $ "|path_tiles=0";
@@ -429,12 +429,16 @@ function string MoveFields(XComGameState_Unit UnitState, const out array<TTile> 
     CurrentRisk = class'APX_MissionPlanner'.static.ExposureRisk(UnitState, UnitState.TileLocation, VisibleEnemies);
     CandidateRisk = class'APX_MissionPlanner'.static.ExposureRisk(UnitState, Destination, VisibleEnemies);
     SupportScore = class'APX_MissionPlanner'.static.SquadPositionScore(UnitState, Destination);
+    class'APX_MissionPlanner'.static.GetMoveAttackOptions(UnitState, VisibleEnemies,
+        BestAttackNow, BestAttackAfterMove);
     return "|kind=move|unit=" $ UnitState.ObjectID $ "|score=" $ Score
         $ "|path_tiles=" $ Path.Length $ "|x=" $ Path[Path.Length - 1].X
         $ "|y=" $ Path[Path.Length - 1].Y $ "|z=" $ Path[Path.Length - 1].Z
         $ "|ap_before=" $ UnitState.NumActionPoints() $ "|visible_threats=" $ VisibleEnemies.Length
         $ "|current_risk=" $ CurrentRisk $ "|candidate_risk=" $ CandidateRisk
-        $ "|support_score=" $ SupportScore;
+        $ "|support_score=" $ SupportScore
+        $ "|best_attack_now=" $ BestAttackNow $ "|best_attack_after_move_ap=" $ BestAttackAfterMove
+        $ "|potential_attack_loss=" $ FMax(0.0, BestAttackNow - BestAttackAfterMove);
 }
 
 function CandidateMove(XComGameState_Unit UnitState, const out array<TTile> Path, float Score)

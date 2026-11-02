@@ -102,6 +102,13 @@ class MissionRecorderContracts(unittest.TestCase):
                       'preview_min_damage', 'preview_max_damage', 'explosive_falloff'):
             self.assertIn('|'+field+'=', area)
 
+    def test_move_trace_explains_loss_of_attack_eligibility_after_blue_move(self):
+        move = function_body(SOURCE, 'MoveFields')
+        self.assertIn('GetMoveAttackOptions(UnitState, VisibleEnemies,', move)
+        for field in ('best_attack_now', 'best_attack_after_move_ap', 'potential_attack_loss'):
+            self.assertIn('|' + field + '=', move)
+        self.assertIn('FMax(0.0, BestAttackNow - BestAttackAfterMove)', move)
+
     def test_grenade_preview_redacts_unknown_targets_before_reading_health(self):
         area = function_body(SOURCE, 'RecordAreaTargetPreviews')
         own = area.index('bOwnTarget = IsOwnUnitAt(TargetRef.ObjectID, CurrentHistory);')

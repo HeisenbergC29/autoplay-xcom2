@@ -13,9 +13,12 @@ Raport z `mission-report-v4` potwierdził wykonanie zasadzki i granatu, ale misj
 została przegrana. Źródła `mission-report-v5` poprawiają doganianie oddziału
 przed ujawnieniem oraz szczegółowość podglądów osłon i granatów w raporcie.
 Próba pierwszej misji Legacy Operations na v5 zakończyła się porażką.
-Bieżące `mission-report-v6` ujednolica ocenę zagrożeń za przeszkodami przy
+`mission-report-v6` ujednolica ocenę zagrożeń za przeszkodami przy
 ruchu i obronie oraz dodaje wkład ryzyka każdego widocznego przeciwnika.
-Wymaga nowej kompilacji; instrukcja próby to `docs/legacy-test.pl.md` w źródłach.
+Próba v6 również zakończyła się porażką. Bieżące `mission-report-v7` ogranicza
+szarże oddalające jednostkę od wsparcia i uwzględnia utratę legalnego ataku
+przez zużycie AP na ruch. Wymaga nowej kompilacji; instrukcja próby to
+`docs/legacy-test.pl.md` w źródłach.
 
 ## Wymagania
 
@@ -134,7 +137,7 @@ Raport ZIP pojawi się w `<Dokumenty>\AutoplayXCom2-Reports`. Skrypt działa tak
 po usunięciu pobranego folderu źródeł. Załącz raport do zgłoszenia wraz z poziomem
 trudności, wynikiem misji i stratami. Szczegóły: `docs/mission-recording.pl.md`
 w repozytorium. To zapis diagnostyczny, nie film ani replay.
-W nowym raporcie wpis `revision=mission-report-v6` identyfikuje tę wersję.
+W nowym raporcie wpis `revision=mission-report-v7` identyfikuje tę wersję.
 Znaczniki `ambush_setup` pokazują przygotowania, a `grenade_scan` zawiera również
 liczby ocenionych okazji do granatu na pojedynczy cel i ostatni podgląd obrażeń.
 `area_target_preview` opisuje cele wybranego granatu; `move_threat_preview`

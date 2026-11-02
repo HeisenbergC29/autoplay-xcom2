@@ -1,13 +1,14 @@
-# Kolejna próba „Blast From the Past” — mission-report-v6
+# Kolejna próba „Blast From the Past” — mission-report-v7
 
-Źródła kontynuują commit `ed74176`. Najnowszy przesłany raport już zawiera
-pierwszą misję `ChallengeAbductionGasStation` na v5, zakończoną porażką.
-V6 ujednolica ocenę ostrzału za przeszkodą przy ruchu i obronie oraz dodaje
-dokładniejsze dane o zagrożeniach. [Analiza poprzedniej próby](report-2026-11-02-legacy.pl.md).
-Nie ma jeszcze kompilacji Windows ani wyniku v6 w grze.
-Weryfikacja źródeł z przesłanym `Development.rar`: 176 testów Python zaliczonych
-bez pominięć oraz poprawna kontrola odwołań do SDK. Nie potrzeba kolejnych
-plików SDK do tej kontroli.
+Źródła kontynuują commit `ed74176` oraz v6. Najnowszy przesłany raport zawiera
+próbę `ChallengeAbductionGasStation` na v6, zakończoną porażką w turze 5.
+V7 obejmuje ograniczenia wsparcia i bezpieczeństwa trasy przy ruchu do ataku
+wręcz oraz koszt utraty dostępnego ataku przez wydanie AP na niebieski ruch.
+[Analiza poprzedniej próby](report-2026-11-02-legacy-v6.pl.md).
+Nie ma jeszcze kompilacji Windows ani wyniku v7 w grze. Pełne źródła SDK
+z przesłanego `Development.rar` pozostają dostępne do kontroli zgodności.
+Kontrola v7: 189 testów Python zaliczonych bez pominięć oraz poprawny audyt
+odwołań do SDK. Do tej kontroli nie potrzeba kolejnych plików.
 
 ## Zbudowanie na zachowanym SDK
 
@@ -32,7 +33,7 @@ uruchom grę ponownie. Źródła możesz później usunąć; SDK zachowaj.
    próby; w jej logu `difficulty=2` (Dowódca). Jeśli masz zapis sprzed pierwszego
    kontaktu z tej próby, użyj go do porównania.
 2. Po uzyskaniu sterowania włącz autoplay klawiszem F8. W `Launch.log` sprawdź
-   `revision=mission-report-v6`; obecność v5 oznacza uruchomienie starszego kodu.
+   `revision=mission-report-v7`; obecność v5/v6 oznacza uruchomienie starszego kodu.
 3. Pozwól misji dojść do wyniku. Jeśli potrzebna będzie ręczna interwencja,
    zapisz jej moment i powód. Raport po zwycięstwie jest równie przydatny.
 4. Po misji, przed ponownym uruchomieniem gry, otwórz PowerShell w folderze
@@ -48,14 +49,20 @@ pobranych źródeł moda.
 
 ## Co porównać w raporcie
 
-- Aid Protocol przy wrogu zasłoniętym przeszkodą: na lokalnych danych decyzji 5
-  z v5 jego ocena spada z 32.8 do 21.88, poniżej odwrotu ocenionego na 26.
-  Inny przebieg misji może dać inne akcje i wartości.
-- Ruchy Centrala: `move_threat_preview` podaje osobno `melee_only`, dystans
-  i wkład każdego wroga. Sprawdź, czy odwrót oddala od Faceless i czy pozostaje
-  możliwość skutecznego ataku. Samo dojście do osłony nie chroni przed pazurami.
+- Szarża Centrala: poprzednia trasa kończyła się ponad 10 pól od najbliższego
+  sojusznika, przy początkowym dystansie 1 pola. Taki atak powinien zostać
+  odrzucony przez te same ograniczenia wsparcia co zwykły ruch. Nadal możliwy
+  jest wspierany, bezpieczny atak wręcz.
+- Ruch snajpera: w poprzedniej decyzji 6 zużywał AP potrzebne do strzału
+  karabinem. Porównaj wycenę ataku przed ruchem i przy pozostałych AP.
+  Pola `best_attack_now`, `best_attack_after_move_ap`, `potential_attack_loss`
+  pokazują porównanie tego samego bieżącego zestawu celów przy obu budżetach AP.
+  Zwykły strzał wymagający 1 AP, brak celu i awaryjny odwrót rannego powinny
+  zachować dotychczasowe możliwości.
+- `move_threat_preview` nadal podaje `melee_only`, dystans i wkład każdego
+  widocznego wroga. Ocena AP nie przewiduje nowego LOS ani pewnego trafienia.
 - Granaty: dotychczas odrzucały je zasięg i bezpieczeństwo. Te ograniczenia
   pozostają aktywne; zero granatów samo nie wskazuje błędu punktacji.
 
-Próg 12 pól w ocenie ryzyka wręcz pozostaje heurystyką. V6 nie przewiduje
+Próg 12 pól w ocenie ryzyka wręcz pozostaje heurystyką. V7 nie przewiduje
 pełnej trasy i obszaru ataku Faceless ani nie gwarantuje zwycięstwa.

@@ -153,6 +153,8 @@ static function bool HasRequiredMeleePath(XComGameState_Unit SourceUnit,
     local array<TTile> Destinations, Path;
     local XGUnit UnitVisualizer;
     local int Index;
+    local float StartSupport;
+    local bool bRequireSupport;
 
     RiskPenalty = 0.0;
     if (AbilityTemplate.TargetingMethod == none || !AbilityTemplate.TargetingMethod.default.ProvidesPath)
@@ -171,6 +173,17 @@ static function bool HasRequiredMeleePath(XComGameState_Unit SourceUnit,
     if (Destinations[0] == SourceUnit.TileLocation)
         return true;
 
+    // A moving attack must obey the same formation and visible-terrain
+    // limits as a normal combat move, even when the target is a likely kill.
+    bRequireSupport = !class'APX_MissionPlanner'.static.ShouldEvacuate(SourceUnit);
+    StartSupport = class'APX_MissionPlanner'.static.NearestSupportDistance(
+        SourceUnit, SourceUnit.TileLocation);
+    if (!class'APX_MissionPlanner'.static.IsKnownCombatTile(Destinations[0])
+        || !class'APX_MissionPlanner'.static.IsSupportedCombatDestination(SourceUnit, Destinations[0])
+        || (bRequireSupport && !class'APX_MissionPlanner'.static.IsSupportedAdvanceDestination(
+            StartSupport, class'APX_MissionPlanner'.static.NearestSupportDistance(SourceUnit, Destinations[0]))))
+        return false;
+
     // This is the same destination/path selection used by ActivateAbility_Internal
     // when an AI activates a moving-melee ability without a supplied path.
     if (!UnitVisualizer.m_kReachableTilesCache.BuildPathToTile(Destinations[0], Path)
@@ -178,7 +191,12 @@ static function bool HasRequiredMeleePath(XComGameState_Unit SourceUnit,
         return false;
     for (Index = 1; Index < Path.Length; ++Index)
     {
-        if (class'XComPath'.static.TileContainsHazard(SourceUnit, Path[Index]))
+        if (class'XComPath'.static.TileContainsHazard(SourceUnit, Path[Index])
+            || !class'APX_MissionPlanner'.static.IsKnownCombatTile(Path[Index])
+            || !class'X2TacticalVisibilityHelpers'.static.CanSquadSeeLocation(
+                SourceUnit.ControllingPlayer.ObjectID, Path[Index])
+            || (bRequireSupport && !class'APX_MissionPlanner'.static.IsSupportedAdvanceStep(
+                StartSupport, class'APX_MissionPlanner'.static.NearestSupportDistance(SourceUnit, Path[Index]))))
             return false;
     }
     // Melee spends its own AP and can strand the attacker beside other aliens.

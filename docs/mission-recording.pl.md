@@ -9,6 +9,7 @@ automat i co rzeczywiście wydarzyło się po rozkazach.
 [Analiza trzeciej próby i rewizja `mission-report-v4`](report-2026-11-02-third.pl.md).
 [Czwarta próba: zasadzka działa, granat użyty, misja przegrana](report-2026-11-02-fourth.pl.md).
 [Pierwsza misja Legacy Operations: wynik v5 i przygotowanie v6](report-2026-11-02-legacy.pl.md).
+[Kolejna próba Legacy: wynik v6 i poprawki v7](report-2026-11-02-legacy-v6.pl.md).
 
 ## Co się zmieniło w taktyce
 
@@ -138,6 +139,17 @@ zdrowia. Wartości nie są procentem trafienia ani prognozą obrażeń. Przeciwn
 wręcz może mieć wkład zero przez obecną granicę dystansu 12 pól; sam wpis osłony
 nie oznacza, że chroni ona przed jego atakiem. Wycenę Aid Protocol, hunker
 i overwatch ujednolicono z ruchem w zakresie przeszkód zasłaniających ostrzał.
+
+Od `mission-report-v7` kandydaci i wybrane ruchy zawierają `best_attack_now`,
+`best_attack_after_move_ap` oraz `potential_attack_loss`. To najlepsze oceny
+obecnie legalnych, bezpiecznych ataków dystansowych przed ruchem i przy AP
+pozostałych po niebieskim ruchu. Porównanie używa bieżących celów i pozycji,
+bez przewidywania nowej widoczności, zasięgu lub trafienia. Dodatnia różnica
+obniża ocenę zwykłego ruchu bojowego; zachowano wyjątek awaryjnego odwrotu
+rannego żołnierza. Pole `potential_attack_loss` opisuje potencjalną utratę,
+więc także przy ewakuacji i ruchu poza walką nie oznacza automatycznie kary
+zastosowanej do końcowego wyniku ruchu. Szarże muszą ponadto przejść te same
+kontrole znanego terenu, wsparcia, wysokości i bezpiecznej trasy co zwykły ruch.
 
 Podgląd nie przewiduje ukrytego losowania. Zniknięcie przeciwnika z pola widzenia
 nie jest uznawane za zabicie. Brak końcowego wpisu albo osiągnięcie limitu

@@ -1,10 +1,10 @@
 # Testy odbiorcze
 
-Najnowszy materiał to [porażka pierwszej misji Legacy Operations na v5](report-2026-11-02-legacy.pl.md).
-Kolejną próbę v6 wykonaj według [instrukcji Legacy](legacy-test.pl.md).
-Zmiana ujednolica ocenę ostrzału za przeszkodą, bez zmiany progu ryzyka wręcz.
-Przenośne testy v6 przeszły; kompilacja Windows i próba w grze pozostają
-**NIEURUCHOMIONE** dla tej rewizji.
+Najnowszy materiał to [porażka pierwszej misji Legacy Operations na v6](report-2026-11-02-legacy-v6.pl.md).
+Kolejną próbę v7 wykonaj według [instrukcji Legacy](legacy-test.pl.md).
+V7 obejmuje bezpieczną trasę i wsparcie przy szarży oraz koszt utraty ataku
+po ruchu. Wynik v6 potwierdza działanie kodu i raportowania w grze;
+kompilacja Windows i próba v7 pozostają **NIEURUCHOMIONE**.
 
 Dotychczasowy wynik zgłoszony przez użytkownika: **PASS** — mod wydaje rozkazy;
 **FAIL** — przegrywa Gatecrasher na Legendzie i Dowódcy. Dawna paczka 0.1.0 alpha

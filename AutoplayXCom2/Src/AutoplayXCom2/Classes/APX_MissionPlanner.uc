@@ -636,6 +636,155 @@ static function float ScoreCombatReposition(float PositionGain, float CurrentRis
     return Result;
 }
 
+// Project only the blue move's AP cost into a local copy. The stock movement
+// builder applies this ordinary cost; path-cost increases are outside blue range.
+// Match the native preference for specific AP types before standard points.
+static function bool ActionPointsAfterBlueMove(XComGameState_Unit UnitState,
+    out array<name> RemainingPoints)
+{
+    local XComGameState_Ability MoveAbility;
+    local StateObjectReference MoveRef;
+    local X2AbilityCost Cost;
+    local X2AbilityCost_ActionPoints APCost;
+    local int TypeIndex, PointIndex, PointCost, Consumed;
+
+    RemainingPoints.Length = 0;
+    if (UnitState == none)
+        return false;
+    RemainingPoints = UnitState.ActionPoints;
+    MoveRef = UnitState.FindAbility('StandardMove');
+    MoveAbility = XComGameState_Ability(`XCOMHISTORY.GetGameStateForObjectID(
+        MoveRef.ObjectID));
+    if (MoveAbility == none || MoveAbility.GetMyTemplate() == none)
+        return false;
+    foreach MoveAbility.GetMyTemplate().AbilityCosts(Cost)
+    {
+        APCost = X2AbilityCost_ActionPoints(Cost);
+        if (APCost == none || APCost.bFreeCost)
+            continue;
+        if (APCost.ConsumeAllPoints(MoveAbility, UnitState))
+        {
+            RemainingPoints.Length = 0;
+            continue;
+        }
+        PointCost = APCost.GetPointCost(MoveAbility, UnitState);
+        Consumed = 0;
+        for (TypeIndex = APCost.AllowedTypes.Length - 1;
+            TypeIndex >= 0 && Consumed < PointCost; --TypeIndex)
+        {
+            for (PointIndex = RemainingPoints.Length - 1;
+                PointIndex >= 0 && Consumed < PointCost; --PointIndex)
+            {
+                if (RemainingPoints[PointIndex] == APCost.AllowedTypes[TypeIndex])
+                {
+                    RemainingPoints.Remove(PointIndex, 1);
+                    ++Consumed;
+                }
+            }
+        }
+        if (Consumed < PointCost)
+            return false;
+    }
+    return true;
+}
+
+static function bool CanAttackWithActionPoints(XComGameState_Ability Ability,
+    XComGameState_Unit UnitState, const out array<name> Points)
+{
+    local X2AbilityCost Cost;
+    local X2AbilityCost_ActionPoints APCost;
+    local int TypeIndex, PointIndex, AllowedPoints;
+
+    if (Ability == none || Ability.GetMyTemplate() == none || UnitState == none)
+        return false;
+    foreach Ability.GetMyTemplate().AbilityCosts(Cost)
+    {
+        APCost = X2AbilityCost_ActionPoints(Cost);
+        if (APCost == none)
+            continue;
+        // bFreeCost skips consumption, but native CanAfford still checks the
+        // required points. Do not grant free abilities unavailable at zero AP.
+        AllowedPoints = 0;
+        for (TypeIndex = 0; TypeIndex < APCost.AllowedTypes.Length; ++TypeIndex)
+        {
+            for (PointIndex = 0; PointIndex < Points.Length; ++PointIndex)
+            {
+                if (Points[PointIndex] == APCost.AllowedTypes[TypeIndex])
+                    ++AllowedPoints;
+            }
+        }
+        if (AllowedPoints < APCost.GetPointCost(Ability, UnitState))
+            return false;
+    }
+    return true;
+}
+
+// Compare AP eligibility on the current legal target list, not future LOS,
+// range, ammo changes or a speculative flank at the destination. No AP or
+// game-state objects are changed. Moving melee is handled by its own planner.
+static function GetMoveAttackOptions(XComGameState_Unit UnitState,
+    const out array<StateObjectReference> VisibleEnemies,
+    out float BestNow, out float BestAfterMove)
+{
+    local GameRulesCache_Unit Cache;
+    local AvailableAction Candidate;
+    local AvailableTarget Target;
+    local XComGameState_Ability Ability;
+    local X2AbilityTemplate Template;
+    local XComGameState_Unit TargetUnit;
+    local array<name> RemainingPoints;
+    local float Value;
+    local bool bAffordableAfterMove;
+
+    BestNow = 0.0;
+    BestAfterMove = 0.0;
+    if (UnitState == none || `TACTICALRULES == none || VisibleEnemies.Length == 0
+        || !ActionPointsAfterBlueMove(UnitState, RemainingPoints)
+        || !`TACTICALRULES.GetGameRulesCache_Unit(UnitState.GetReference(), Cache))
+        return;
+    foreach Cache.AvailableActions(Candidate)
+    {
+        if (!Candidate.bInputTriggered || Candidate.AvailableCode != 'AA_Success'
+            || Candidate.bFreeAim)
+            continue;
+        Ability = XComGameState_Ability(`XCOMHISTORY.GetGameStateForObjectID(Candidate.AbilityObjectRef.ObjectID));
+        if (Ability == none || Ability.OwnerStateObject.ObjectID != UnitState.ObjectID
+            || class'APX_CombatPlanner'.default.AttackAbilities.Find(Ability.GetMyTemplateName()) == INDEX_NONE)
+            continue;
+        Template = Ability.GetMyTemplate();
+        if (Template == none || Template.AbilityToHitCalc == none
+            || Template.AbilityToHitCalc.IsA('X2AbilityToHitCalc_StandardMelee')
+            || (Template.TargetingMethod != none && Template.TargetingMethod.default.ProvidesPath)
+            || (Template.AbilityTargetStyle != none && Template.AbilityTargetStyle.IsA('X2AbilityTarget_MovingMelee')))
+            continue;
+        if (Template.AbilityMultiTargetStyle != none
+            && !Template.AbilityMultiTargetStyle.IsA('X2AbilityMultiTarget_Volt')
+            && !Template.AbilityMultiTargetStyle.IsA('X2AbilityMultiTarget_BurstFire'))
+            continue;
+        bAffordableAfterMove = CanAttackWithActionPoints(Ability, UnitState, RemainingPoints);
+        foreach Candidate.AvailableTargets(Target)
+        {
+            TargetUnit = XComGameState_Unit(`XCOMHISTORY.GetGameStateForObjectID(Target.PrimaryTarget.ObjectID));
+            if (!class'APX_CombatPlanner'.static.IsVisibleHostile(UnitState, TargetUnit, VisibleEnemies)
+                || !class'APX_CombatPlanner'.static.AdditionalTargetsAreSafe(UnitState, Target, VisibleEnemies))
+                continue;
+            Value = class'APX_CombatPlanner'.static.ScoreAttack(Ability, Target, TargetUnit);
+            BestNow = FMax(BestNow, Value);
+            if (bAffordableAfterMove)
+                BestAfterMove = FMax(BestAfterMove, Value);
+        }
+    }
+}
+
+static function float MoveOpportunityPenalty(float BestNow, float BestAfterMove,
+    float HealthFraction, float RiskReduction)
+{
+    // Preserve the existing emergency escape for a wounded, exposed soldier.
+    if (HealthFraction < 0.5 && RiskReduction >= 8.0)
+        return 0.0;
+    return FMax(0.0, BestNow - BestAfterMove);
+}
+
 static function bool HasLegalMove(XComGameState_Unit UnitState)
 {
     local GameRulesCache_Unit UnitCache;
@@ -725,6 +874,7 @@ static function bool ChooseMove(XComGameState_Unit UnitState,
     local bool bCombatGoal, bSafe, bRequireSupport;
     local int Index, PathIndex, SampleIndex, SampleCount;
     local float CurrentScore, CandidateScore, BestScore, CurrentRisk, CandidateRisk, PathCost, StartSupport, BestRisk;
+    local float BestAttackNow, BestAttackAfterMove, HealthFraction;
 
     Path.Length = 0;
     Score = 0;
@@ -822,9 +972,14 @@ static function bool ChooseMove(XComGameState_Unit UnitState,
     if (Path.Length < 2)
         return false;
     if (bCombatGoal)
+    {
+        HealthFraction = UnitState.GetCurrentStat(eStat_HP) / FMax(1.0, UnitState.GetMaxStat(eStat_HP));
         Score = ScoreCombatReposition(BestScore - CurrentScore, CurrentRisk, BestRisk,
-            UnitState.GetCurrentStat(eStat_HP) / FMax(1.0, UnitState.GetMaxStat(eStat_HP)),
-            UnitState.NumActionPoints());
+            HealthFraction, UnitState.NumActionPoints());
+        GetMoveAttackOptions(UnitState, VisibleEnemies, BestAttackNow, BestAttackAfterMove);
+        Score -= MoveOpportunityPenalty(BestAttackNow, BestAttackAfterMove,
+            HealthFraction, CurrentRisk - BestRisk);
+    }
     else
         Score = 20 + FMin(60, BestScore - CurrentScore);
     return true;

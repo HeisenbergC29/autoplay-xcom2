@@ -2,6 +2,13 @@
 
 Mod w UnrealScript automatyzujący działania oddziału w misji. Docelowy profil użytkownika: **aktualne XCOM 2 Collection ze Steam na Windows, uruchamiane jako War of the Chosen, z oficjalnymi dodatkami i wyłącznie tym modem**. Nie wymaga Highlandera ani innych modów. Nie jest przeznaczony dla podstawowego XCOM 2 bez WOTC ani trybu wieloosobowego. [Szczegóły zgodności](docs/COMPATIBILITY.pl.md).
 
+**Cel projektu:** jeden autoplay wszystkich misji taktycznych tego profilu,
+obejmujący walkę, cele, interakcje, kolejne etapy i ewakuację, prowadzący do
+legalnego zwycięstwa. Próby Gatecrashera i Legacy rozwijają wspólny mod.
+Wyjątek dla scenariusza obiektywnie niemożliwego wymaga uzasadnienia stanem
+misji; sama porażka aktualnego planera tego nie dowodzi. Postęp mierzymy
+pełnymi misjami ukończonymi w grze. Obecna alpha nie realizuje jeszcze całości.
+
 **Nowa wersja do prób Gatecrashera:** poprawiona ocena overwatch i przyczajenia,
 Aid Protocol, ostrożniejsze flankowanie oraz rejestr decyzji i wyników misji.
 [Jak zebrać raport po grze](docs/mission-recording.pl.md). Skrypt zbierający raport
@@ -34,11 +41,17 @@ strzelca otwierającego przed ujawnieniem i zapisują podgląd konkretnych celó
 wybranego granatu oraz geometrycznej osłony i LOS przy ruchu.
 
 [Próba pierwszej misji Legacy Operations „Blast From the Past”](docs/report-2026-11-02-legacy.pl.md)
-na `mission-report-v5` także zakończyła się porażką. Bieżące źródła
+na `mission-report-v5` także zakończyła się porażką. Źródła
 `mission-report-v6` ujednolicają ocenę zagrożeń za przeszkodami przy ruchu,
 Aid Protocol, hunker i overwatch oraz zapisują wkład ryzyka każdego widocznego
 przeciwnika. [Instrukcja kolejnej próby Legacy](docs/legacy-test.pl.md).
-Wymagana jest nowa kompilacja; wynik w grze nie jest jeszcze potwierdzony.
+V6 zostało uruchomione w kolejnej próbie opisanej poniżej.
+
+[Próba v6](docs/report-2026-11-02-legacy-v6.pl.md) potwierdziła działanie nowej
+ochrony i diagnostyki, ale skończyła się porażką. Bieżące `mission-report-v7`
+stosuje ograniczenia wsparcia i trasy również do szarż wręcz oraz uwzględnia
+utratę możliwości ataku po ruchu, np. strzału karabinem wymagającego dwóch AP.
+V7 wymaga nowej kompilacji i próby; wynik misji pozostaje do sprawdzenia.
 
 **Stan: alpha; według najnowszego zgłoszenia użytkownika mod już wydaje rozkazy, ale przegrywa Gatecrasher na Legendzie i Dowódcy.** Bieżące źródła poprawiają ocenę osłon, zagrożeń i flankowania, dobieranie celów, granaty oraz wsparcie oddziału. Ta zmiana **wymaga nowej kompilacji i prób w grze**; nie ma jeszcze potwierdzenia poprawy wyniku misji. [Opis taktyki, kompilacja z zachowanym SDK i lista prób](docs/tactics-update.pl.md). Nie potwierdzono pełnego ukończenia wszystkich misji DLC.
 
