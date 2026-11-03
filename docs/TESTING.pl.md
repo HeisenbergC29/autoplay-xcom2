@@ -1,15 +1,16 @@
 # Testy odbiorcze
 
-Najnowszy [raport v10 — SabotageCC](report-2026-11-03-v10-sabotage.pl.md):
-trudność 3, **FAIL** w turze 12. Licznik „—” odpowiada brakowi natywnej
-punktacji; 55 rozkazów przyjętych, zero odrzuceń, jeden granat.
-W v11 sprawdź niezależną dostępność liczb: znany wynik gry bez maksimum
-ma pozostać widoczny jako `1200/—`, także `0/—` i wartości ujemne.
-Zwykłe misje otrzymują teraz ocenę porównawczą `~wartość/—`; jej wygląd
-i naliczanie w grze pozostają **NIEURUCHOMIONE**. Sprawdź początkowe premie
-6000 za żołnierza, pierwszą ranę, potwierdzoną śmierć, zabicie i jawny cel.
-F8 nie powinno zerować licznika. Wczytanie zapisu może wymagać kilku odświeżeń
-na przejrzenie historii; brakujące zdarzenia nie mogą tworzyć fikcyjnych punktów.
+Najnowszy [raport v11](report-2026-11-03-v11-score.pl.md): `SabotageCC`,
+trudność 3, **FAIL** w turze 6. Licznik porównawczy zaczynał od `~24000`.
+To błędna konwencja v1, a nie przyznane punkty Legacy. W v12 HUD i analizator
+używają profilu v2 bez premii początkowych. Kompilacja i próba korekty w grze
+pozostają **NIEURUCHOMIONE**.
+
+Sprawdź początek zwykłej misji `~0/—`, pierwszą ranę −1000, ponowne obrażenia
+bez kolejnej tej samej kary, potwierdzoną stratę −5000, zabicie i jawny cel.
+Wykrwawienie nie może udawać śmierci. F8 nie powinno zerować licznika.
+Wczytanie zapisu może wymagać kilku odświeżeń na przejrzenie historii;
+brakujące zdarzenia nie mogą tworzyć fikcyjnych punktów.
 
 Wcześniejszy materiał to [ponowna próba GasStation na v9](report-2026-11-03-legacy-v9.pl.md):
 Dowódca, **FAIL** w turze 7, wynik gry **−10000** przy maksymalnej puli 46000.
@@ -18,8 +19,8 @@ Ten sam raport zawiera zwycięstwo v8 w `SabotageCC` na trudności 3.
 Wcześniejsze zwycięstwo v8 w pierwszej misji Legacy pozostaje osobną próbą;
 Cemetery nadal nie ma udokumentowanej próby autoplaya.
 V10 działało w zwykłej niepunktowanej misji. Wyświetlanie liczb Legacy
-i nowa poprawka v11 nadal wymagają kompilacji Windows i próby w grze.
-[Instrukcja Legacy](legacy-test.pl.md) · [Licznik v10/v11](score-display-v10.pl.md).
+i nowa poprawka v12 nadal wymagają kompilacji Windows i próby w grze.
+[Instrukcja Legacy](legacy-test.pl.md) · [Licznik v12](score-display-v10.pl.md).
 
 Dotychczasowy wynik zgłoszony przez użytkownika: **PASS** — mod wydaje rozkazy;
 **PASS** — pierwsza misja Legacy na v8; **FAIL** — dotychczasowe próby
@@ -66,11 +67,11 @@ Wyniki zapisuj osobno: PASS / FAIL / NIEURUCHOMIONY. Kompilacja nie potwierdza d
 
 ## UI
 
-- V10/v11: nad przyciskiem widoczne `punkty/maksimum`, z wielkością czcionki
+- V12: nad przyciskiem widoczne `punkty/maksimum`, z wielkością czcionki
   przycisku. Sprawdź odświeżanie przy OFF, po zwinięciu przycisku i po wczytaniu
   zapisu ze środka misji. W kolejnym etapie Legacy wynik nie obejmuje wcześniejszych
   misji, a maksimum nie maleje po zabiciach i stratach. Ujemny wynik ma zachować
-  minus. W v11 zwykła misja bez punktacji pokazuje `~wartość/—`; natywny
+  minus. W v12 zwykła misja bez punktacji pokazuje `~wartość/—`; natywny
   wynik bez maksimum daje `wartość/—`. Pole przepuszcza kliknięcia mapy.
 - W zwykłej turze XCOM z dostępnymi akcjami włącz autoplay. Nakładka tury i licznik celu misji (`UITurnOverlay`, `UISpecialMissionHUD`) nie mogą powodować stałej pauzy; automat powinien wydać legalny rozkaz.
 - Sprawdź rzeczywiste menu, dialog, sekwencję blokującą sterowanie i ręczne celowanie. Nowe rozkazy mają czekać; po zamknięciu menu lub anulowaniu celowania automat może wznowić pracę. Ekrany znajdujące się pod HUD-em nie powinny samodzielnie powodować pauzy.
@@ -125,11 +126,14 @@ i pozostałe kategorie nadal wymagają prób, szczególnie późniejsze etapy sk
 
 ## Punktacja każdej symulacji
 
-Uruchom analizator v9 dla każdego raportu, także Gatecrashera i innych misji
+Uruchom analizator v12 dla każdego raportu, także Gatecrashera i innych misji
 bez oficjalnych punktów. Sprawdź obecność `game_scoring.comparison` z profilem
-`wotc_legacy_observed_v1`, listą składowych i brakujących danych. Jest to wspólna
+`wotc_legacy_observed_v2`, listą składowych i brakujących danych. Jest to wspólna
 miara porównawcza oparta na regułach gry; nie dodaje punktów do stanu misji.
 Wcześniej podane ręcznie wartości zostały zastąpione regułami odczytanymi z gry.
+V2 zaczyna od zera; baza +6000 na kwalifikowanego żołnierza w v1 została
+usunięta jako niepoparte założenie. Archiwalny v1 zachowujemy osobno.
+Nie porównuj sum obu profili bez przeliczenia.
 
 Przypadki analizy: pierwsza rana kontra ponowne obrażenia i leczenie, śmierć
 kontra wykrwawienie, potwierdzone fabularne wyłączenie, przeciwnik przejęty

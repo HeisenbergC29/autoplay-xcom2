@@ -73,7 +73,7 @@ nieznanych przeciwników ani ukrytych celów.
 
 Analizator stosuje profil `wotc_legacy_observed_v1` do każdej sesji, również
 Gatecrashera i innych misji bez punktacji w grze. Parametry i pochodzenie są
-zapisane w [legacy-score-rules.json](../tools/legacy-score-rules.json).
+zapisane w [archiwalnym legacy-score-rules-v1.json](../tools/legacy-score-rules-v1.json).
 Wspólny profil zachowuje stałą skalę między próbami; odczytane reguły konkretnej
 misji są dodatkowo zachowywane w `native_rules_observed`.
 

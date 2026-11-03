@@ -1,6 +1,6 @@
 {
-  "profile_id": "wotc_legacy_observed_v1",
-  "label": "Game-derived Legacy comparison profile v1",
+  "profile_id": "wotc_legacy_observed_v2",
+  "label": "Game-derived zero-based comparison profile v2",
   "is_official_game_score": false,
   "provenance": [
     {
@@ -16,28 +16,107 @@
     {
       "source": "XComGameState_LadderProgress.uc: OnUnitDamage / OnUnitKilled / OnUnitUnconscious",
       "meaning": "Only the first injury loses the uninjured allowance. Healing does not refund it. Death and confirmed LadderUnkillable knockout are losses."
+    },
+    {
+      "source": "AutoplayXCom2-20261103-225232-18035b97.zip / Logs/Launch-backup-2026.11.03-20.51.09.log:299-314",
+      "meaning": "Observed Legacy starts at cumulative score 0. SoldierScoring category maxima do not establish an initial award; v2 starts the comparison at zero."
     }
   ],
   "comparison_conventions": {
     "turn_decay": "max(min_points, starting_points - max(0, turn - turn_offset) * decrease_per_turn)",
     "turn_decay_is_native_reconstruction": false,
     "note": "The received SDK exposes AddKillMail and objective scoring as native functions. The boundary convention above defines this comparison profile; an observed native score always takes precedence.",
-    "soldier_allowance": "Each confirmed eligible observed soldier starts with the uninjured and survival allowances, then loses each at most once in the comparison.",
     "objective_coverage": "Only explicit recorded objective completions are scored; victory does not imply that every optional objective was completed.",
     "unknown_enemy_origin": "Ordinary-enemy points are a provisional observed component until spawned/reinforcement origin is known.",
-    "completion_scope": "A complete comparison covers the included categories and public observations only; it is never the complete native game score."
+    "completion_scope": "A complete comparison covers the included categories and public observations only; it is never the complete native game score.",
+    "soldier_scoring": "Starts at zero. Only witnessed first injury and confirmed soldier loss subtract the configured amounts once; no initial or inferred end-of-mission soldier award is granted.",
+    "version_change": "v1 added an unsupported 6000-point initial allowance per eligible observed soldier. v2 removes that allowance. Totals from the two profile versions are not directly comparable."
   },
-  "excluded_native_components": ["disabled_enemy_awards", "restart_penalties", "native_ladder_bonuses", "real_time_bonus_disabled_in_this_profile"],
-  "objective": {"starting_points": 10000, "min_points": 5000, "decrease_per_turn": 1000, "turn_offset": 1},
-  "soldier": {"uninjured_bonus": 1000, "survival_bonus": 5000},
-  "civilian": {"rescued_bonus": 1000},
-  "time": {"points_per_interval": 250, "interval_seconds": 60, "enabled": false},
-  "enemy_default": {"starting_points": 500, "min_points": 100, "decrease_per_turn": 100, "turn_offset": 1, "spawned_points": 0, "reinforcement_points": 50, "disabled_points": 500, "min_disabled_points": 100},
+  "excluded_native_components": [
+    "disabled_enemy_awards",
+    "restart_penalties",
+    "native_ladder_bonuses",
+    "real_time_bonus_disabled_in_this_profile"
+  ],
+  "objective": {
+    "starting_points": 10000,
+    "min_points": 5000,
+    "decrease_per_turn": 1000,
+    "turn_offset": 1
+  },
+  "soldier": {
+    "uninjured_bonus": 1000,
+    "survival_bonus": 5000
+  },
+  "civilian": {
+    "rescued_bonus": 1000
+  },
+  "time": {
+    "points_per_interval": 250,
+    "interval_seconds": 60,
+    "enabled": false
+  },
+  "enemy_default": {
+    "starting_points": 500,
+    "min_points": 100,
+    "decrease_per_turn": 100,
+    "turn_offset": 1,
+    "spawned_points": 0,
+    "reinforcement_points": 50,
+    "disabled_points": 500,
+    "min_disabled_points": 100
+  },
   "enemies": {
-    "Faceless": {"starting_points": 1500, "min_points": 1000, "decrease_per_turn": 100, "turn_offset": 1, "spawned_points": 0, "reinforcement_points": 0, "disabled_points": 1000, "min_disabled_points": 1000},
-    "Viper": {"starting_points": 1500, "min_points": 1000, "decrease_per_turn": 100, "turn_offset": 1, "spawned_points": 0, "reinforcement_points": 0, "disabled_points": 1000, "min_disabled_points": 1000},
-    "Sectoid": {"starting_points": 1500, "min_points": 1000, "decrease_per_turn": 100, "turn_offset": 1, "spawned_points": 0, "reinforcement_points": 0, "disabled_points": 1000, "min_disabled_points": 1000},
-    "PsiZombieCivilian": {"starting_points": 1500, "min_points": 1000, "decrease_per_turn": 100, "turn_offset": 1, "spawned_points": 0, "reinforcement_points": 0, "disabled_points": 1000, "min_disabled_points": 1000},
-    "Muton": {"starting_points": 3000, "min_points": 2000, "decrease_per_turn": 200, "turn_offset": 1, "spawned_points": 0, "reinforcement_points": 0, "disabled_points": 2000, "min_disabled_points": 2000}
-  }
+    "Faceless": {
+      "starting_points": 1500,
+      "min_points": 1000,
+      "decrease_per_turn": 100,
+      "turn_offset": 1,
+      "spawned_points": 0,
+      "reinforcement_points": 0,
+      "disabled_points": 1000,
+      "min_disabled_points": 1000
+    },
+    "Viper": {
+      "starting_points": 1500,
+      "min_points": 1000,
+      "decrease_per_turn": 100,
+      "turn_offset": 1,
+      "spawned_points": 0,
+      "reinforcement_points": 0,
+      "disabled_points": 1000,
+      "min_disabled_points": 1000
+    },
+    "Sectoid": {
+      "starting_points": 1500,
+      "min_points": 1000,
+      "decrease_per_turn": 100,
+      "turn_offset": 1,
+      "spawned_points": 0,
+      "reinforcement_points": 0,
+      "disabled_points": 1000,
+      "min_disabled_points": 1000
+    },
+    "PsiZombieCivilian": {
+      "starting_points": 1500,
+      "min_points": 1000,
+      "decrease_per_turn": 100,
+      "turn_offset": 1,
+      "spawned_points": 0,
+      "reinforcement_points": 0,
+      "disabled_points": 1000,
+      "min_disabled_points": 1000
+    },
+    "Muton": {
+      "starting_points": 3000,
+      "min_points": 2000,
+      "decrease_per_turn": 200,
+      "turn_offset": 1,
+      "spawned_points": 0,
+      "reinforcement_points": 0,
+      "disabled_points": 2000,
+      "min_disabled_points": 2000
+    }
+  },
+  "initial_soldier_allowance": false
 }

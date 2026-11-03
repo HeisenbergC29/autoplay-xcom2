@@ -29,11 +29,11 @@ Licznik HUD pokazuje natywny wynik **bieżącej misji**, gdy gra go prowadzi.
 W Legacy odejmuje wynik przeniesiony na start etapu; zapis
 `game_score.cumulative_score` pozostaje surowym wynikiem drabinki. To różne
 wartości w kolejnych etapach. V10 pokazywało „—” w zwykłych misjach.
-V11 pokazuje tam częściową ocenę porównawczą `~wartość/—`, według tego samego
-profilu co analizator. Początkowe premie wynoszą 6000 na kwalifikowanego
-obserwowanego żołnierza, więc czterech daje `~24000/—` przed stratami.
-Tylda oznacza ocenę porównawczą, nie wynik gry. Zakres obserwacji HUD-u
-i logu może się różnić, szczególnie po wczytaniu zapisu.
+Od v11 HUD może pokazywać tam częściową ocenę porównawczą `~wartość/—`.
+V12 i domyślny analizator używają profilu `wotc_legacy_observed_v2` od zera,
+bez błędnej bazy +6000 na żołnierza ze starego v1. Tylda oznacza ocenę
+porównawczą, nie wynik gry. Zakres obserwacji HUD-u i logu może się różnić,
+szczególnie po wczytaniu zapisu.
 
 ## Co się zmieniło w taktyce
 
@@ -76,7 +76,7 @@ wynikały z konkretnej misji.
 
 ## Zbudowanie i pierwsza próba
 
-1. Pobierz aktualne źródła v11, rozpakuj je i zbuduj jak poprzednio na zachowanym
+1. Pobierz aktualne źródła v12, rozpakuj je i zbuduj jak poprzednio na zachowanym
    SDK WOTC. Bez `-BuildBase`, jeśli pakiety bazowe są już przygotowane.
 2. Zainstaluj nowy `dist\AutoplayXCom2.zip` i uruchom grę ponownie. Stara paczka
    z `release` nie zawiera rejestratora.
@@ -236,8 +236,9 @@ Zdarzenia punktacji:
 Analiza dodaje `game_scoring` do każdej sesji. `official` zawiera rzeczywisty
 odczyt gry, gdy był dostępny; `recording_delta` to różnica z okresu rejestracji
 od F8, a nie dowód punktów za całą misję. `comparison` stosuje stały profil
-`wotc_legacy_observed_v1`, opisany wraz z pochodzeniem parametrów w
-`tools/legacy-score-rules.json`. Przy brakach zwraca `status=partial`,
+`wotc_legacy_observed_v2`, opisany wraz z pochodzeniem parametrów w
+`tools/legacy-score-rules.json`. V1 pozostaje w `tools/legacy-score-rules-v1.json`;
+wyników różnych profili nie porównujemy wprost. Przy brakach zwraca `status=partial`,
 `observed_subtotal` i listę `missing_components`; `total` pozostaje nieznany.
 Składniki natywne pozostawione poza zakresem wspólnego profilu opisuje osobna
 lista `excluded_native_components`. Nie uzupełniamy brakujących celów,
@@ -285,3 +286,14 @@ Od `mission-report-v11` znany natywny wynik i nieznane maksimum dają
 `~wartość/—`. Pojedyncze „—” oznacza brak dostępnego odczytu w trybie gry
 prowadzącej punktację, np. bez pewnego stanu początkowego Legacy.
 [Wyjaśnienie na raporcie SabotageCC](report-2026-11-03-v10-sabotage.pl.md).
+
+Od `mission-report-v12` ocena porównawcza zaczyna od zera. Kara za pierwszą
+ranę i potwierdzoną stratę jest odejmowana od tej bazy; nie ma początkowej
+premii 6000 ani zakładanych premii końcowych. Stare `hud_score` z v11 zachowuje
+oryginalny tekst v1, podczas gdy nowa analiza może obliczyć osobny wynik v2.
+[Raport potwierdzający źródło przesunięcia](report-2026-11-03-v11-score.pl.md).
+
+Od v12 wpis `hud_score` z oceną porównawczą zawiera też
+`comparison_profile=wotc_legacy_observed_v2`. Historyczne odczyty v11
+pochodzą z profilu v1; nie należy porównywać ich liczbowo z v2 bez
+ponownego przeliczenia tych samych zdarzeń.

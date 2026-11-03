@@ -90,7 +90,7 @@ function Start(int PlayerID)
     bStarted = true;
     Emit("start", "|player=" $ PlayerID $ "|mission=" $ Safe(Mission)
         $ "|difficulty=" $ `TacticalDifficultySetting $ "|history=" $ HistoryCursor
-        $ "|revision=mission-report-v11");
+        $ "|revision=mission-report-v12");
     // F8 starts observation, not the mission. Even turn one may already have
     // processed damage, objectives or native starting allowances.
     Emit("scoring_coverage", "|complete=false|reason=recording_begins_at_f8"
@@ -360,10 +360,15 @@ function RecordScoreDeltas(XComGameState HistoryState)
 // missing-value glyph. A fresh recorder observes its first value after F8.
 function RecordHUDScore(string DisplayText)
 {
+    local string Fields;
+
     if (!bStarted || bFinished || DisplayText == LastHUDScore)
         return;
     LastHUDScore = DisplayText;
-    Emit("hud_score", "|display=" $ Safe(DisplayText));
+    Fields = "|display=" $ Safe(DisplayText);
+    if (Left(DisplayText, 1) == "~")
+        Fields $= "|comparison_profile=" $ class'APX_ComparisonScore'.static.GetProfileID();
+    Emit("hud_score", Fields);
 }
 
 function Marker(string Kind, string Details)

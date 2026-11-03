@@ -1,4 +1,4 @@
-// Runtime observation of the frozen wotc_legacy_observed_v1 comparison profile.
+// Runtime observation of the zero-based wotc_legacy_observed_v2 comparison profile.
 // Always partial: this is not a native score, and never supplies tactical orders.
 class APX_ComparisonScore extends Object
     dependson(XComGameState, XComGameStateContext_Ability,
@@ -32,6 +32,11 @@ var private array<string> CompletedObjectives;
 var private array<int> ObjectivePoints;
 var private array<int> RescuedCivilianIDs;
 
+static function string GetProfileID()
+{
+    return "wotc_legacy_observed_v2";
+}
+
 // These values mirror tools/legacy-score-rules.json, not a mode's native table.
 static function int DecayedPoints(int StartingPoints, int MinimumPoints,
     int DecreasePerTurn, int TurnOffset, int Turn)
@@ -58,7 +63,8 @@ static function int SoldierPoints(bool bEligible, bool bWounded, bool bLost)
 
     if (!bEligible)
         return 0;
-    Points = 6000;
+    // Native injury/loss values are deductions, not points granted at entry.
+    Points = 0;
     if (bWounded)
         Points -= 1000;
     if (bLost)

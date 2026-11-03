@@ -70,19 +70,16 @@ porażką w turze 7, z wynikiem gry −10000. Ten sam raport zawiera też wygran
 v8 w `SabotageCC` na trudności 3.
 [Zakres zmian, reguły punktacji i ograniczenia v9](docs/tactics-v9.pl.md).
 
-Bieżące **`mission-report-v11`** pokazuje nad przyciskiem punkty bieżącej misji
-i maksymalną pulę, z taką samą wielkością czcionki. Działa także przy wyłączonym
-autoplay. Znany natywny wynik pozostaje widoczny bez maksimum, np. `1200/—`.
-W misjach bez punktacji gry wyświetla częściową ocenę porównawczą ze wspólnego
-profilu, np. `~5200/—`. Tylda odróżnia ją od oficjalnych punktów, a maksimum
-pozostaje nieznane. Profil przyznaje na początku premie za obserwowanych
-żołnierzy: czterech kwalifikowanych żołnierzy daje `~24000/—` przed stratami.
-To premie porównawcze, które mogą zostać utracone, a nie zdobyte punkty gry.
-[Najnowszy raport v10](docs/report-2026-11-03-v10-sabotage.pl.md) dotyczy
-niepunktowanego `SabotageCC`: porażka w turze 12, trzy zgony i jeden żołnierz
-wykrwawiający się na końcu. Kierunek osłony jest oceniany osobno względem
-każdego widocznego przeciwnika.
-[Zasady licznika i próba v11](docs/score-display-v10.pl.md).
+Bieżące **`mission-report-v12`** usuwa błędne premie początkowe z oceny
+porównawczej. Licznik w misjach bez punktacji gry zaczyna od `~0/—`, a punkty
+zmieniają się za zaobserwowane zabicia, cele, ratunek cywilów, rany i straty.
+Wartości 1000 i 5000 są używane jako kary, bez przyznawania z góry 6000
+na żołnierza. Natywna punktacja Legacy i Challenge Mode pozostaje odczytem gry.
+[Raport v11](docs/report-2026-11-03-v11-score.pl.md) potwierdził wyświetlenie
+starej bazy `~24000` w `SabotageCC`; nie była to premia startowa Legacy.
+Nowy profil `wotc_legacy_observed_v2` jest używany przez HUD i analizator;
+archiwalny v1 zachowujemy osobno. Wyników różnych profili nie porównujemy
+bez przeliczenia. [Zasady licznika i próba v12](docs/score-display-v10.pl.md).
 Nowe źródła wymagają kompilacji Windows i sprawdzenia w grze.
 
 **Stan: alpha; v8 wygrało pierwszą misję Legacy Operations na Dowódcy.**
@@ -183,11 +180,10 @@ potwierdziła **0 błędów i 8 ostrzeżeń SDK**, zarówno dla bazy, jak i moda
 Dotyczy to wcześniejszej kompilacji. Przechowywany ZIP ma kompletną konfigurację,
 27 nazw zdolności, obie lokalizacje i prawidłowy `.u`; jego 464 importy prowadzą
 tylko do `Core`, `Engine` i `XComGame`, a dziewięć klas moda jest obecnych.
-Najnowszy raport użytkownika potwierdza uruchomienie v10 w zwykłym
-`SabotageCC`: porażka, licznik bez natywnych punktów. Ratunek i wynik −10000
-z v9 oraz wcześniejsze zwycięstwa v8 pozostają osobnymi próbami.
-Licznik porównawczy i rozdzielenie odczytów w v11 wymagają nowej kompilacji
-i sprawdzenia w grze. Obecne
+Najnowszy raport potwierdza uruchomienie v11 w zwykłym `SabotageCC`,
+porażkę w turze 6 i działanie starej oceny porównawczej. Jej początkowe
+6000 na żołnierza było błędnym założeniem usuniętym w v12. Nowa wersja wymaga
+kompilacji i sprawdzenia w grze. Obecne
 środowisko Linux pozwala uruchamiać testy Python i PowerShell, ale nie zawiera
 SDK Windows ani działającej gry.
 

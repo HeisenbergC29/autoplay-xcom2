@@ -26,6 +26,12 @@ class LiveComparisonTests(unittest.TestCase):
         cls.soldier = staticmethod(load_uc_function(SOURCE, 'SoldierPoints'))
         cls.objective = staticmethod(load_uc_function(SOURCE, 'CompletedObjectivePoints'))
 
+    def test_runtime_profile_id_matches_the_default_report_profile(self):
+        body = function_body(self.source, 'GetProfileID')
+        match = re.fullmatch(r'\s*return "([^"]+)";\s*', body)
+        self.assertIsNotNone(match)
+        self.assertEqual(match[1], self.profile['profile_id'])
+
     def test_enemy_points_match_frozen_profile_across_turn_decay_boundaries(self):
         for template in (*self.profile['enemies'], 'AdvTrooperM1', 'UnobservedModEnemy'):
             rule = self.profile['enemies'].get(template, self.profile['enemy_default'])
@@ -36,27 +42,29 @@ class LiveComparisonTests(unittest.TestCase):
                     self.assertEqual(self.enemy(template, turn), expected)
         self.assertEqual(self.enemy('Sectoid', -1), 0)
 
-    def test_objectives_and_soldier_allowances_match_the_report_profile(self):
+    def test_objectives_and_soldier_penalties_match_the_report_profile(self):
         rule = self.profile['objective']
         for turn in (0, 1, 2, 5, 6, 20):
             self.assertEqual(self.objective(turn), max(rule['min_points'], rule['starting_points']
                              - max(0, turn - rule['turn_offset']) * rule['decrease_per_turn']))
         self.assertEqual(self.objective(-1), 0)
+        self.assertEqual(self.profile['profile_id'], 'wotc_legacy_observed_v2')
+        self.assertFalse(self.profile['initial_soldier_allowance'])
         soldier = self.profile['soldier']
         for wounded in (False, True):
             for lost in (False, True):
-                expected = (soldier['uninjured_bonus'] + soldier['survival_bonus']
-                            - wounded * soldier['uninjured_bonus'] - lost * soldier['survival_bonus'])
+                expected = (-wounded * soldier['uninjured_bonus']
+                            - lost * soldier['survival_bonus'])
                 self.assertEqual(self.soldier(True, wounded, lost), expected)
                 self.assertEqual(self.soldier(False, wounded, lost), 0)
 
-    def test_latest_report_component_example_is_5200_and_not_official_zero(self):
+    def test_prior_report_recomputes_to_negative_18800_without_initial_allowances(self):
         # Four eligible soldiers, all injured, three confirmed deaths, two
         # ordinary/default troopers killed after their minimum-point boundary.
         observed = 3 * self.soldier(True, True, True) + self.soldier(True, True, False)
         observed += self.enemy('AdvTrooperM1', 7) + self.enemy('AdvTrooperM1', 12)
-        self.assertEqual(observed, 5200)
-        self.assertEqual(4 * self.soldier(True, False, False), 24000)
+        self.assertEqual(observed, -18800)
+        self.assertEqual(4 * self.soldier(True, False, False), 0)
 
     def test_soldier_injury_death_and_eligibility_only_use_owned_native_metrics(self):
         observe = function_body(self.source, 'ObserveUnit')

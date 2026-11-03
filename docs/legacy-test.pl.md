@@ -1,4 +1,4 @@
-# Próba Legacy i licznika punktów — v11
+# Próba Legacy i licznika punktów — v12
 
 Pierwsza misja `ChallengeAbductionGasStation` została wcześniej ukończona
 zwycięstwem na v8: Dowódca, 14 tur, dwóch poległych.
@@ -6,12 +6,14 @@ zwycięstwem na v8: Dowódca, 14 tur, dwóch poległych.
 Raport v9 obejmuje ponowną próbę GasStation: porażkę w turze 7,
 ratunek snajpera oraz natywny wynik −10000 przy maksymalnej puli 46000.
 [Raport v9](report-2026-11-03-legacy-v9.pl.md).
-Najnowszy [raport v10](report-2026-11-03-v10-sabotage.pl.md) dotyczy zwykłego
-`SabotageCC`, bez punktacji gry; misja została przegrana.
+Najnowszy [raport v11](report-2026-11-03-v11-score.pl.md) dotyczy zwykłego
+`SabotageCC`: porażka w turze 6 i potwierdzona błędna baza `~24000` starego
+licznika porównawczego. W archiwum jest także natywny start Legacy od 0.
 
-Do kolejnej próby **zbuduj i zainstaluj v11**. Zachowuje dostępny natywny
+Do kolejnej próby **zbuduj i zainstaluj v12**. Zachowuje dostępny natywny
 wynik bez maksimum, np. `1200/—`. W niepunktowanych misjach udostępnia
-częściową ocenę porównawczą, np. `~5200/—`, według wspólnego profilu raportów.
+częściową ocenę porównawczą zaczynającą od `~0/—`, według profilu v2.
+Usuwa początkowe 6000 na żołnierza, które nie było potwierdzoną premią Legacy.
 [Zasady działania i granice licznika](score-display-v10.pl.md).
 Pełne źródła SDK z przesłanego `Development.rar` pozostają dostępne do kontroli zgodności.
 Do kontroli źródeł i kontraktów SDK nie potrzeba kolejnych plików.
@@ -35,15 +37,15 @@ uruchom grę ponownie. Źródła możesz później usunąć; SDK zachowaj.
 ## Przebieg porównawczy
 
 1. Uruchom wybrany zapis Legacy Operations „Blast From the Past” na nowej
-   v11. Dla kontynuacji wcześniejszego zwycięstwa oczekiwany jest
-   `ChallengeAbductionCemetery`, etap 2; ponowienie najnowszej przegranej
-   dotyczy `ChallengeAbductionGasStation`, etap 1. Zapisz etap i trudność.
+   v12. Dla kontynuacji wcześniejszego zwycięstwa oczekiwany jest
+   `ChallengeAbductionCemetery`, etap 2; próba GasStation dotyczy
+   `ChallengeAbductionGasStation`, etap 1. Zapisz etap i trudność.
 2. Po uzyskaniu sterowania, przed F8, sprawdź licznik nad przyciskiem.
    Powinien działać przy wyłączonym autoplay, używać tej samej wielkości
    czcionki i przepuszczać kliknięcia mapy. Maksimum nie powinno maleć po
    zabiciach; w drugim etapie licznik nie może doliczać punktów poprzedniej misji.
 3. Włącz autoplay klawiszem F8. Automat startuje wyłączony po zmianie misji.
-   W `Launch.log` sprawdź `revision=mission-report-v11`; inna rewizja oznacza
+   W `Launch.log` sprawdź `revision=mission-report-v12`; inna rewizja oznacza
    uruchomienie starszego kodu. Pozwól misji dojść do wyniku; zapisz ewentualne
    ręczne działania, ich moment i powód.
 4. Po misji, przed ponownym uruchomieniem gry, otwórz PowerShell w folderze
@@ -60,12 +62,12 @@ zapisz go osobno. V9 odczytuje oficjalne `CumulativeScore` bieżącego etapu;
 zmiana między odczytami obejmuje okres rejestracji od F8, który może być krótszy
 od całej misji. Pole `score` w decyzjach jest oceną planera. Przy braku odczytu
 oficjalnego wpisujemy „niezarejestrowana”, bez utożsamiania z `MaxScore`.
-Analizator stosuje ponadto stały profil porównawczy `wotc_legacy_observed_v1`
+Analizator stosuje ponadto stały profil porównawczy `wotc_legacy_observed_v2`
 do każdej misji, także niepunktowanej w grze. Niepełne obserwacje pozostają
 oznaczone jako częściowe; wartości podane wcześniej ręcznie nie są regułami.
-W misji niepunktowanej HUD v11 pokazuje tę skalę jako `~wartość/—`.
-Początkowe premie 6000 za każdego kwalifikowanego obserwowanego żołnierza
-nie są zdobytymi punktami gry; czterech żołnierzy daje `~24000/—` przed stratami.
+W misji niepunktowanej HUD v12 pokazuje tę skalę jako `~wartość/—`, od zera.
+Nie przyznaje premii początkowej ani nie zakłada nieobserwowanych premii na
+koniec. Profil v1 pozostaje archiwalny; nie porównuj jego sum wprost z v2.
 Ocena może rosnąć i maleć. Do raportu dopisz widoczny licznik, zwłaszcza po
 wczytaniu zapisu: zakres obserwacji może różnić się od analizatora.
 Zbieranie raportu działa po usunięciu pobranych źródeł moda.
@@ -110,4 +112,4 @@ Zbieranie raportu działa po usunięciu pobranych źródeł moda.
 
 Nowy zasięg wręcz jest geometrycznym przybliżeniem możliwego ataku, bez
 planowania rzeczywistej przyszłej trasy. Nieznane style zachowują poprzednią
-heurystykę. V10 nie gwarantuje zwycięstwa ani bezpiecznej reakcji łańcuchowej.
+heurystykę. V12 nie gwarantuje zwycięstwa ani bezpiecznej reakcji łańcuchowej.

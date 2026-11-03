@@ -47,12 +47,66 @@ class GameScoringTests(unittest.TestCase):
         self.assertFalse(profile['comparison_conventions']['turn_decay_is_native_reconstruction'])
         self.assertTrue(profile['provenance'][0]['log_sha256'])
 
+    def test_zero_base_starts_at_zero_and_never_grants_automatic_end_bonuses(self):
+        soldiers = [friendly(id=identity, highest_hp=6, lowest_hp=6) for identity in range(1, 5)]
+        for outcome in ('win', 'loss'):
+            with self.subTest(outcome=outcome):
+                result = SCORING.comparison_score(events(
+                    {'event': 'start'}, {'event': 'phase', 'turn': 1},
+                    *soldiers, {'event': 'end', 'outcome': outcome}), SCORING.load_profile())
+                self.assertEqual(result['observed_subtotal'], 0)
+                self.assertEqual(result['components'], [])
+                self.assertEqual(component_points(result, 'soldier_allowance'), [])
+        empty = SCORING.comparison_score(events({'event': 'start'}, {'event': 'end'}),
+                                         SCORING.load_profile())
+        self.assertIsNone(empty['observed_subtotal'])
+
+    def test_human_summary_keeps_a_legitimate_zero_visible(self):
+        lines = '\n'.join((
+            'APXREC|v=1|session=zero|seq=1|event=start|mission=SabotageCC',
+            'APXREC|v=1|session=zero|seq=2|event=unit|scope=friendly|id=1|score_eligible=True|hp=6|max_hp=6|highest_hp=6|lowest_hp=6|alive=True',
+            'APXREC|v=1|session=zero|seq=3|event=end|outcome=win',
+        ))
+        report = LOG.analyze_logs([('Launch.log', lines)])
+        self.assertEqual(report['sessions'][0]['game_scoring']['comparison']['observed_subtotal'], 0)
+        self.assertIn('observed subtotal=0', LOG.human_summary(report))
+        self.assertNotIn('no award components could be reconstructed', LOG.human_summary(report))
+
+    def test_archived_v1_retains_old_allowance_only_when_explicitly_selected(self):
+        old_profile = SCORING.load_profile(ROOT / 'tools/legacy-score-rules-v1.json')
+        self.assertEqual(old_profile['profile_id'], 'wotc_legacy_observed_v1')
+        self.assertTrue(old_profile['initial_soldier_allowance'])
+        records = events({'event': 'start'}, {'event': 'phase', 'turn': 1},
+                         friendly(highest_hp=6, lowest_hp=6), {'event': 'end', 'outcome': 'win'})
+        legacy = SCORING.comparison_score(records, old_profile)
+        current = SCORING.comparison_score(records, SCORING.load_profile())
+        self.assertEqual(component_points(legacy, 'soldier_allowance'), [6000])
+        self.assertEqual(legacy['observed_subtotal'], 6000)
+        self.assertEqual(current['observed_subtotal'], 0)
+        self.assertEqual(component_points(current, 'soldier_allowance'), [])
+
+    def test_zero_base_report_components_preserve_negative_result(self):
+        initial = [friendly(id=identity, highest_hp=6, lowest_hp=6) for identity in range(1, 5)]
+        injured = [friendly(id=identity, hp=3, highest_hp=6, lowest_hp=3)
+                   for identity in range(1, 5)]
+        dead = [friendly(id=identity, hp=0, alive=False, highest_hp=6, lowest_hp=0)
+                for identity in range(1, 4)]
+        result = comparison(*initial, *injured, *dead,
+                            enemy(template='AdvTrooperM1', id=9),
+                            enemy(template='AdvTrooperM1', id=9, hp=0, alive=False, turn=7),
+                            enemy(template='AdvTrooperM1', id=10),
+                            enemy(template='AdvTrooperM1', id=10, hp=0, alive=False, turn=12))
+        self.assertEqual(result['observed_subtotal'], -18800)
+        self.assertEqual(component_points(result, 'soldier_allowance'), [])
+        self.assertEqual(component_points(result, 'first_injury_penalty'), [-1000] * 4)
+        self.assertEqual(component_points(result, 'soldier_loss_penalty'), [-5000] * 3)
+
     def test_injury_once_healing_no_refund_and_bleeding_not_death(self):
         result = comparison(friendly(), friendly(hp=4, highest_hp=6, lowest_hp=4),
                             friendly(hp=2, highest_hp=6, lowest_hp=2),
                             friendly(hp=6, highest_hp=6, lowest_hp=2),
                             friendly(hp=0, bleeding_out=True, incapacitated=True))
-        self.assertEqual(component_points(result, 'soldier_allowance'), [6000])
+        self.assertEqual(component_points(result, 'soldier_allowance'), [])
         self.assertEqual(component_points(result, 'first_injury_penalty'), [-1000])
         self.assertEqual(component_points(result, 'soldier_loss_penalty'), [])
 
@@ -141,7 +195,7 @@ class GameScoringTests(unittest.TestCase):
         result = comparison(friendly(), enemy(), enemy(hp=0, alive=False),
                             {'event': 'scoring_coverage', 'complete': True})
         self.assertEqual(result['status'], 'complete_for_comparison_convention')
-        self.assertEqual(result['total'], 7500)
+        self.assertEqual(result['total'], 1500)
         self.assertIn('restart_penalties', result['excluded_native_components'])
         self.assertFalse(result['is_official_game_score'])
 
@@ -181,10 +235,10 @@ class GameScoringTests(unittest.TestCase):
             result = SCORING.score_session(events({'event': 'start', 'mission': mission}, friendly(),
                                                   {'event': 'end', 'outcome': 'win'}),
                                            {'mission': mission, 'initial_max_score': 999999})
-            self.assertEqual(result['comparison']['profile_id'], 'wotc_legacy_observed_v1')
+            self.assertEqual(result['comparison']['profile_id'], 'wotc_legacy_observed_v2')
             self.assertIsNone(result['official']['cumulative_score'])
             self.assertIsNone(result['comparison']['total'])
-            self.assertEqual(result['comparison']['observed_subtotal'], 6000)
+            self.assertEqual(result['comparison']['observed_subtotal'], 0)
 
     def test_native_snapshots_and_delta_are_used_without_summing_opaque_ledger_fields(self):
         records = events({'event': 'game_score', 'source': 'legacy_runtime', 'phase': 'start',
@@ -235,7 +289,7 @@ class GameScoringTests(unittest.TestCase):
         self.assertEqual(scoring['official']['status'], 'not_recorded')
         self.assertIsNone(scoring['official']['cumulative_score'])
         self.assertIn('Native earned score was not recorded.', LOG.human_summary(report))
-        self.assertIn('Comparison (wotc_legacy_observed_v1): partial', LOG.human_summary(report))
+        self.assertIn('Comparison (wotc_legacy_observed_v2): partial', LOG.human_summary(report))
 
     def test_native_runtime_getters_augment_table_without_changing_comparison_profile(self):
         baseline = {'mission': 'GasStation', 'log_file': 'Launch.log', 'log_line': 3,
@@ -271,7 +325,7 @@ class GameScoringTests(unittest.TestCase):
         self.assertNotIn('Sectopod', baseline['enemies'])
         self.assertEqual(baseline['objectives'][0]['starting_points'], 10000)
         self.assertEqual(SCORING.score_session(records, rules)['comparison']['profile_id'],
-                         'wotc_legacy_observed_v1')
+                         'wotc_legacy_observed_v2')
         self.assertNotIn('Sectopod', SCORING.load_profile()['enemies'])
 
     def test_runtime_rules_work_without_startup_log_and_reject_other_mission_or_source(self):

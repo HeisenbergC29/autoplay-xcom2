@@ -310,8 +310,11 @@ def comparison_score(records: list[dict], profile: dict) -> dict:
                           unit=identity if isinstance(identity, int) else None, event_seq=record.get('seq'))
 
     for target in sorted(eligible):
-        component('soldier_allowance', profile['soldier']['uninjured_bonus'] + profile['soldier']['survival_bonus'],
-                  unit=target)
+        # Retain the explicit v1 convention only for archived comparisons.
+        # Native injury/loss weights do not establish an initial point award.
+        if profile.get('initial_soldier_allowance', False):
+            component('soldier_allowance', profile['soldier']['uninjured_bonus'] + profile['soldier']['survival_bonus'],
+                      unit=target)
         if target in wounded or target in inferred_wounded:
             component('first_injury_penalty', -profile['soldier']['uninjured_bonus'], unit=target)
         if target in lost:
@@ -377,7 +380,9 @@ def comparison_score(records: list[dict], profile: dict) -> dict:
         missing.add('pending_history_frames')
     if not unit_states:
         missing.add('unit_observations')
-    subtotal = sum(entry['points'] for entry in components) if components else None
+    # A witnessed eligible soldier with no scored events legitimately has zero
+    # in the corrected profile. No observations still mean an unknown subtotal.
+    subtotal = sum(entry['points'] for entry in components) if components or eligible else None
     return {'profile_id': profile['profile_id'], 'is_official_game_score': False,
             'status': 'partial' if missing else 'complete_for_comparison_convention',
             'observed_subtotal': subtotal, 'total': None if missing else subtotal,

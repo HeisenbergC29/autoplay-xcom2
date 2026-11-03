@@ -1,4 +1,4 @@
-# Licznik punktów nad przyciskiem — v10 / v11
+# Licznik punktów nad przyciskiem — v12
 
 Pole nad przyciskiem „Autoplay” pokazuje wynik bieżącej misji i maksimum,
 np. `0/46000`. Rozmiar czcionki jest odczytywany z przycisku. Pole odświeża
@@ -6,88 +6,88 @@ się co 0,25 s także przy wyłączonym autoplay i pozostaje widoczne po schowan
 przycisku. Nie przechwytuje kliknięć mapy ani nawigacji klawiaturą.
 Dotychczasowe położenie przycisku, statusu i znacznika pozostaje takie samo.
 
+## Korekta premii początkowych
+
+V11 przyznawało z góry 6000 na każdego kwalifikowanego żołnierza. To było
+błędne założenie naszego profilu porównawczego: parametry 1000 za brak ran
+oraz 5000 za przeżycie potraktowano jak przydział początkowy. Tabele gry
+opisywały nimi maksymalną pulę i kary, a zaobserwowany wynik Legacy zaczynał
+się od 0. [Raport v11](report-2026-11-03-v11-score.pl.md) potwierdza stare
+`~24000` w zwykłym `SabotageCC` oraz natywny start Legacy od zera.
+
+V12 usuwa tę bazę zarówno z HUD-u, jak i domyślnej analizy raportów. Nowy profil
+`wotc_legacy_observed_v2` zaczyna od `~0/—` przed zaobserwowanymi zdarzeniami:
+
+- pierwsza rana kwalifikowanego żołnierza: −1000, najwyżej raz;
+- potwierdzona strata: −5000, najwyżej raz;
+- zabicia, jawne zaliczenia celów i ratunek cywilów: dotychczasowe reguły v2;
+- brak przydziału początkowego i brak zakładanych premii końcowych.
+
+Leczenie nie cofa już naliczonej kary. Wykrwawienie i samo HP równe zero nie
+potwierdzają śmierci. Wynik może być ujemny.
+
+[Domyślny profil v2](../tools/legacy-score-rules.json) i archiwalny
+[profil v1](../tools/legacy-score-rules-v1.json) mają różne bazy. Sum obu wersji
+nie porównujemy bez przeliczenia. Historyczne logi v11 nadal zawierają stare
+wyświetlone wartości v1; nowy analizator może obliczyć dla nich osobną ocenę v2.
+
 ## Wynik gry
 
-W Legacy licznik pokazuje wkład **bieżącej misji**: aktualny wynik drabinki
-minus wynik przeniesiony do taktycznego stanu początkowego tego etapu.
-Nie zeruje się przy F8 i nie dolicza poprzednich misji po przejściu do
-następnego etapu. Brak pewnego odczytu stanu początkowego daje „—”.
+Odczyt natywnej punktacji nie jest zmieniany przez v12. W Legacy licznik
+pokazuje wkład bieżącej misji: aktualny wynik drabinki minus wynik przeniesiony
+na początek tego etapu. F8 nie zeruje licznika, a kolejny etap nie dolicza
+ponownie poprzedniej misji. Brak pewnego odczytu stanu początkowego daje „—”.
 
-Maksymalna pula pochodzi z natywnego odczytu używanego przez okno punktacji
-Legacy i jest zachowywana dla tej misji. Nie jest wpisana na stałe ani
-zmniejszana po zabiciach, ranach czy śmierciach. W natywnym Challenge Mode
-wyświetlana jest para wynik/maksimum z funkcji używanych przez podsumowanie gry.
-Od v11 znany wynik pozostaje widoczny bez maksimum, np. `1200/—` lub `0/—`.
+Maksymalna pula pochodzi z odczytu używanego przez okno punktacji Legacy
+i jest zachowywana dla misji. Nie jest wpisana na stałe ani zmniejszana po
+zabiciach, ranach czy stratach. W natywnym Challenge Mode używana jest para
+wynik/maksimum z funkcji podsumowania gry. Znany wynik bez maksimum pozostaje
+widoczny, np. `1200/—` lub `0/—`.
 
-Wynik może być ujemny. W [próbie v9](report-2026-11-03-legacy-v9.pl.md)
-gra rozpoczęła od 0 i zakończyła obserwowany okres na −10000 przy puli 46000.
-Odpowiadałoby to `-10000/46000`, bez ograniczania do zera. Ewentualne późniejsze
-premie pojawią się dopiero wtedy, gdy gra zaktualizuje wynik.
+Nie odtwarzamy nieobserwowanych końcowych rozliczeń gry. Ich pełna implementacja
+jest natywna; brak dowodu premii na starcie nie oznacza, że gra nigdy nie
+stosuje żadnych końcowych premii. HUD pokazuje natywny wynik po aktualizacji gry.
 
-## Ocena porównawcza w niepunktowanych misjach
+## Częściowa ocena w niepunktowanych misjach
 
-[Raport v10 z SabotageCC](report-2026-11-03-v10-sabotage.pl.md) nie zawierał
-natywnej punktacji. Wtedy HUD pokazywał „—”, a osobny analizator mógł wyliczyć
-częściową ocenę 5200. Po nowym wyborze użytkownika v11 udostępnia ocenę
-porównawczą również na HUD-zie takich misji, np. `~5200/—`.
+Tylda w `~wartość/—` oznacza ocenę porównawczą moda. Maksimum pozostaje nieznane.
+Ocena nie zastępuje liczb Legacy ani Challenge Mode i nie jest oficjalnym wynikiem.
 
-Tylda oznacza częściową ocenę moda według profilu
-`wotc_legacy_observed_v1` z [reguł raportów](../tools/legacy-score-rules.json).
-Maksimum pozostaje nieznane. Ta ocena nie zastępuje natywnych liczb Legacy
-ani Challenge Mode i nie jest oficjalnym wynikiem gry.
+Obserwator działa z HUD-em, również przed F8 i przy wyłączonym autoplay.
+Historia jest przeglądana porcjami, więc po wczytaniu wartość może dojść do
+aktualnego stanu po kilku odświeżeniach. Historyczna widoczność ogranicza
+informacje o wrogach, a zdarzenia celów sprzed utworzenia HUD-u lub wczytania
+zapisu mogą być nieobserwowane. Zniknięcie wroga nie oznacza zabicia.
+HUD i raport mogą mieć różne okna obserwacji i różne częściowe sumy.
 
-Profil zaczyna od premii 6000 za każdego obserwowanego kwalifikowanego
-żołnierza: 1000 za brak ran i 5000 za przeżycie. Czterech takich żołnierzy
-daje początkowo `~24000/—`. To przewidziane premie porównawcze, które można
-utracić, a nie zdobyte punkty gry. Pierwsza rana odbiera 1000 najwyżej raz;
-leczenie nie zwraca tej premii. Potwierdzona śmierć odbiera 5000 najwyżej raz.
-Wykrwawianie i samo HP równe zero nie potwierdzają śmierci.
-
-Do oceny dochodzą zaobserwowane potwierdzone zabicia, jawne zaliczenia celów
-i uratowani cywile. Stosowane są te same reguły typów i spadku punktów z turami
-co w analizatorze. Wynik może rosnąć i maleć. Obserwator działa z HUD-em,
-również przed F8 i przy wyłączonym autoplay.
-
-Ocena zawsze pozostaje częściowa: historyczna widoczność ogranicza informacje
-o przeciwnikach, a zdarzenia celów sprzed utworzenia HUD-u lub wczytania zapisu
-mogą być nieobserwowane. Przegląd historii odbywa się porcjami, więc po wczytaniu
-wartość może dojść do aktualnego stanu po kilku odświeżeniach. Zniknięcie wroga
-z widoku nie oznacza zabicia. Nie uzupełniamy braków fikcyjnymi zdarzeniami;
-HUD i raport mogą mieć różne okna obserwacji oraz różne częściowe sumy.
-
-Odczyty nie przyznają punktów, nie zmieniają stanów gry ani decyzji planera.
-Obserwator porównawczy usuwa swoje nasłuchy przy usunięciu HUD-u lub zmianie
-trybu; stan misji i wyłączenie autoplaya pozostają rozdzielone.
+Odczyty nie przyznają punktów grze, nie zmieniają jej stanów ani decyzji planera.
+Obserwator usuwa nasłuchy przy usunięciu HUD-u lub zmianie trybu. `hud_score`
+zachowuje tekst wyświetlony podczas rejestracji, a nie późniejszy wynik końcowy.
 
 ## Kierunek osłony
 
-V11 nie zmienia taktycznej oceny osłon. W walce planer pyta grę o osłonę
-od położenia **każdego widocznego przeciwnika** do rozważanego pola żołnierza.
+V12 nie zmienia taktycznej oceny osłon. W walce planer pyta grę o osłonę
+od położenia każdego widocznego przeciwnika do rozważanego pola żołnierza.
 Osłona od przodu nie zabezpiecza automatycznie flanki. Uwzględniane są także
 LOS i zagrożenie wręcz. Bez widocznych przeciwników eksploracja ocenia osłonę
 względem celu marszu; nie zna przyszłego kierunku ukrytych wrogów.
-[Telemetria tej oceny](report-2026-11-03-v10-sabotage.pl.md).
 
 ## Kompilacja i sprawdzenie
 
 Nowy kod wymaga kompilacji Windows według [instrukcji Legacy](legacy-test.pl.md).
-Rejestr uruchomionego autoplaya ma wskazywać `revision=mission-report-v11`.
-Testy źródeł i kontraktów SDK nie potwierdzają jeszcze wyglądu ani naliczania
-nowego licznika w prawdziwej grze.
+Rejestr uruchomionego autoplaya ma wskazywać `revision=mission-report-v12`.
+Testy źródeł i kontraktów SDK nie potwierdzają jeszcze naliczania w prawdziwej grze.
 
-Sprawdź:
-
-1. Początek Legacy: licznik przed F8, poprawna pula, zgodna wielkość czcionki.
-2. Zmianę wyniku po zabiciu i pierwszej ranie oraz wynik ujemny.
-3. Stałe maksimum po zabiciach i stratach; znany wynik bez maksimum jako `1200/—`.
+1. Zwykła misja: początek `~0/—`, bez 6000 za żołnierza.
+2. Pierwsza rana −1000, ponowne obrażenia bez kolejnej tej samej kary,
+   potwierdzona strata −5000, zabicie, jawny cel i ratunek cywila.
+3. Legacy: natywny start, zgodna pula, wynik ujemny i stałe maksimum.
 4. Kolejny etap i zapis ze środka misji: bez doliczania poprzedniego etapu
-   i bez zerowania po wczytaniu lub przełączeniu autoplaya.
+   i bez zerowania po wczytaniu lub F8.
 5. Widoczność przy OFF i schowanym przycisku, kliknięcia mapy pod licznikiem,
-   różne rozdzielczości i skalę UI.
-6. Zwykłą misję: `~wartość/—`, początkowe premie, jednorazową karę za ranę,
-   potwierdzone zgony i zabicia, cele poboczne i ratunek cywilów.
-7. Wczytanie zapisu, przejście do następnej misji i usunięcie HUD-u: bez
-   podwójnego naliczania zdarzeń albo pozostawionych nasłuchów.
+   różne rozdzielczości i skale UI.
+6. Usunięcie HUD-u lub zmiana trybu: bez podwójnego naliczania zdarzeń
+   i bez pozostawionych nasłuchów.
 
-Do raportu dopisz widoczne wartości i moment odczytu. Najnowsza próba v10
-zakończyła się porażką; zmiana licznika nie jest dowodem poprawy taktyki v11.
+Do raportu dopisz widoczną wartość i moment odczytu. Korekta licznika nie jest
+zmianą taktyki ani dowodem poprawy wyniku misji.

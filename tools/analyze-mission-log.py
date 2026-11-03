@@ -347,7 +347,7 @@ def human_summary(report: dict) -> str:
         else:
             lines.append('  Native earned score was not recorded.')
         comparison = scoring['comparison']
-        if comparison['scored_component_count']:
+        if comparison['observed_subtotal'] is not None:
             lines.append(f"  Comparison ({comparison['profile_id']}): {comparison['status']}, "
                          f"observed subtotal={comparison['observed_subtotal']}, total={comparison['total']}")
         else:

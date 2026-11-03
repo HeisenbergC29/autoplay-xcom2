@@ -294,3 +294,35 @@ zgodność wag licznika z profilem raportów, odnośniki dokumentacji i
 `git diff --check`. Zapis `hud_score` zachowuje dokładny tekst licznika,
 bez uruchamiania rejestratora ani wydawania rozkazów. Kompilacja Windows
 i próba nowego licznika w grze pozostają do wykonania.
+
+## V12 — usunięcie niepopartej bazy początkowej
+
+Początkowe 6000 punktów na żołnierza było konwencją naszego profilu v1,
+a nie odczytaną premią startową Legacy. W tabelach `SoldierScoring` wartości
+1000 i 5000 tworzyły składowe maksymalnej puli. `UILadderModeScoringDialog`
+pokazuje je jako ujemne kary; `XComGameState_LadderProgress.OnUnitDamage`
+i `OnUnitKilled` odejmują je przy ranie i stracie. Zaobserwowane natywne
+`game_score` na początku Legacy wynosi 0.
+
+V12 zaczyna ocenę porównawczą od zera w HUD-zie i domyślnym analizatorze.
+Pierwsza rana odejmuje 1000, potwierdzona strata 5000; każda kara występuje
+najwyżej raz na kwalifikowaną obserwowaną jednostkę. Wagi zabicia, celu
+i cywila nie zmieniają się. Nie są zakładane również nieobserwowane premie
+końcowe: pełna implementacja `AddTacticalGameEnd` pozostaje natywna.
+Natywne odczyty Legacy i Challenge Mode nie zostały zmienione.
+
+Nowy domyślny profil to `wotc_legacy_observed_v2` w
+`tools/legacy-score-rules.json`. Archiwalny v1 zachowano w
+`tools/legacy-score-rules-v1.json`; wyniki obu baz wymagają przeliczenia
+przed porównaniem. Historyczna telemetria v11 zachowuje swój oryginalny tekst.
+[Korekta i scenariusze v12](score-display-v10.pl.md) ·
+[Raport v11](report-2026-11-03-v11-score.pl.md).
+
+Kompilacja Windows oraz próba korekty licznika w grze pozostają do wykonania.
+
+Kontrola końcowa v12: **320 testów Python zaliczonych bez pominięć** z SDK,
+audyt 13 klas i 29 nazw zdolności oraz poprawne odnośniki dokumentacji
+i `git diff --check`. Na nowym raporcie odtworzono v1 subtotal 1400 oraz
+v2 subtotal −22600; natywny odczyt Legacy pozostał bez zmian. Wersja profilu
+jest teraz zapisywana przy porównawczych odczytach `hud_score`.
+Kompilacja Windows i próba v12 w grze pozostają do wykonania.
