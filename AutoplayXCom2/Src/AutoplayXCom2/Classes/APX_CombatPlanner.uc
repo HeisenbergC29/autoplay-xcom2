@@ -319,14 +319,112 @@ static function float BurstKillChance(float MinDamage, float MaxDamage,
     return EstimatedKillChance(MinDamage, MaxDamage, Health, 100.0) * AllHit;
 }
 
+// This is the same historical ownership lookup used by the stock mind-control
+// removal effect. Read only ownership of a currently visible affected unit,
+// never its old position or other hidden contacts.
+static function bool WasControlledByPlayerBeforeEffect(XComGameState_Unit UnitState,
+    XComGameState_Effect EffectState, int PlayerID)
+{
+    local XComGameState_Effect OriginalEffect;
+    local XComGameState OriginalState;
+    local XComGameState_Unit PreviousUnit;
+
+    if (UnitState == none || EffectState == none || PlayerID <= 0)
+        return false;
+    OriginalEffect = XComGameState_Effect(`XCOMHISTORY.GetOriginalGameStateRevision(EffectState.ObjectID));
+    if (OriginalEffect == none)
+        return false;
+    OriginalState = OriginalEffect.GetParentGameState();
+    if (OriginalState == none || OriginalState.HistoryIndex <= 0)
+        return false;
+    PreviousUnit = XComGameState_Unit(`XCOMHISTORY.GetGameStateForObjectID(
+        UnitState.ObjectID,, OriginalState.HistoryIndex - 1));
+    return PreviousUnit != none && PreviousUnit.ControllingPlayer.ObjectID == PlayerID;
+}
+
+// Count actual active links on visible contacts, rather than valuing an enemy
+// merely because its character template can create zombies or mind control.
+// A death-linked zombie is not also counted as a rescued ally if both effects
+// exist on it. No source effect is removed here; the game resolves every result.
+static function GetKnownSourceBenefits(XComGameState_Unit SourceUnit,
+    XComGameState_Unit Enemy, out int ReleasedAllies, out int LinkedEnemies)
+{
+    local array<StateObjectReference> VisibleEnemies;
+    local array<int> CountedTargets;
+    local StateObjectReference TargetRef, EffectRef, KillLinkedRef;
+    local XComGameState_Unit LinkedUnit;
+    local XComGameState_Effect EffectState;
+    local X2Effect_Persistent EffectTemplate;
+    local bool bCanEndZombie, bReleased, bLinked;
+    local int Index, PlayerID;
+
+    ReleasedAllies = 0;
+    LinkedEnemies = 0;
+    if (SourceUnit == none || Enemy == none)
+        return;
+    PlayerID = SourceUnit.ControllingPlayer.ObjectID;
+    class'X2TacticalVisibilityHelpers'.static.GetAllVisibleEnemiesForPlayer(PlayerID, VisibleEnemies);
+    if (!IsVisibleHostile(SourceUnit, Enemy, VisibleEnemies))
+        return;
+    KillLinkedRef = Enemy.FindAbility('KillSiredZombies');
+    bCanEndZombie = KillLinkedRef.ObjectID > 0;
+    for (Index = 0; Index < Min(64, VisibleEnemies.Length); ++Index)
+    {
+        TargetRef = VisibleEnemies[Index];
+        if (TargetRef.ObjectID == Enemy.ObjectID || CountedTargets.Find(TargetRef.ObjectID) != INDEX_NONE)
+            continue;
+        LinkedUnit = XComGameState_Unit(`XCOMHISTORY.GetGameStateForObjectID(TargetRef.ObjectID));
+        if (LinkedUnit == none || !LinkedUnit.IsAlive() || LinkedUnit.IsIncapacitated()
+            || LinkedUnit.bRemovedFromPlay || LinkedUnit.GetMyTemplate().bIsCosmetic
+            || !SourceUnit.IsEnemyUnit(LinkedUnit))
+            continue;
+        bReleased = false;
+        bLinked = false;
+        foreach LinkedUnit.AffectedByEffects(EffectRef)
+        {
+            EffectState = XComGameState_Effect(`XCOMHISTORY.GetGameStateForObjectID(EffectRef.ObjectID));
+            if (EffectState == none || EffectState.bRemoved
+                || EffectState.ApplyEffectParameters.SourceStateObjectRef.ObjectID != Enemy.ObjectID
+                || EffectState.ApplyEffectParameters.TargetStateObjectRef.ObjectID != LinkedUnit.ObjectID)
+                continue;
+            EffectTemplate = EffectState.GetX2Effect();
+            if (EffectTemplate == none)
+                continue;
+            if (bCanEndZombie && EffectTemplate.EffectName == class'X2Ability_Sectoid'.default.SireZombieLinkName)
+                bLinked = true;
+            if (X2Effect_MindControl(EffectTemplate) != none && EffectTemplate.bRemoveWhenSourceDies
+                && LinkedUnit.IsMindControlled()
+                && WasControlledByPlayerBeforeEffect(LinkedUnit, EffectState, PlayerID))
+                bReleased = true;
+        }
+        if (bLinked)
+            ++LinkedEnemies;
+        else if (bReleased)
+            ++ReleasedAllies;
+        if (bLinked || bReleased)
+            CountedTargets.AddItem(TargetRef.ObjectID);
+    }
+}
+
+// A source kill can remove further enemies or restore a controlled squadmate.
+// This bounded benefit is conditional on the actual attack's kill estimate;
+// restoration does not promise immediate AP: the stock effect clears the old
+// budget, then grants a fresh one only when the restored owner is on turn.
+static function float ScoreSourceBenefits(float KillChance, int ReleasedAllies, int LinkedEnemies)
+{
+    return FClamp(KillChance, 0.0, 1.0)
+        * FMin(90.0, float(Max(0, ReleasedAllies)) * 45.0 + float(Max(0, LinkedEnemies)) * 25.0);
+}
+
 static function float ScoreAttack(XComGameState_Ability Ability,
     AvailableTarget Target, XComGameState_Unit TargetUnit)
 {
     local ShotBreakdown Breakdown;
     local WeaponDamageValue MinDamage, MaxDamage;
     local X2AbilityMultiTarget_BurstFire BurstFire;
-    local int HitChance, AllowsShield, Shots;
-    local float Armor, Health, MinHPDamage, MaxHPDamage, Threat, Result;
+    local XComGameState_Unit SourceUnit;
+    local int HitChance, AllowsShield, Shots, ReleasedAllies, LinkedEnemies;
+    local float Armor, Health, MinHPDamage, MaxHPDamage, Threat, Result, KillChance;
 
     if (Ability.GetMyTemplate().AbilityToHitCalc == none)
         return -10000.0;
@@ -355,10 +453,21 @@ static function float ScoreAttack(XComGameState_Ability Ability,
         Threat = 0.6;
     Result = ScoreDamage(MinHPDamage, MaxHPDamage, Health, HitChance, Threat,
         1.0 - TargetUnit.GetCurrentStat(eStat_HP) / FMax(1.0, TargetUnit.GetMaxStat(eStat_HP)));
+    KillChance = EstimatedKillChance(MinHPDamage, MaxHPDamage, Health, HitChance);
     if (Shots > 1)
+    {
         Result += (BurstKillChance(MinHPDamage, MaxHPDamage, Health, HitChance, Shots)
-            - EstimatedKillChance(MinHPDamage, MaxHPDamage, Health, HitChance))
-            * 65.0 * FClamp(Threat, 0.6, 1.5);
+            - KillChance) * 65.0 * FClamp(Threat, 0.6, 1.5);
+        KillChance = BurstKillChance(MinHPDamage, MaxHPDamage, Health, HitChance, Shots);
+    }
+    SourceUnit = XComGameState_Unit(`XCOMHISTORY.GetGameStateForObjectID(Ability.OwnerStateObject.ObjectID));
+    // Multi-target actions need their own accounting so an affected linked
+    // unit is not valued again as a consequence of the primary source kill.
+    if (KillChance > 0.0 && Target.AdditionalTargets.Length == 0)
+    {
+        GetKnownSourceBenefits(SourceUnit, TargetUnit, ReleasedAllies, LinkedEnemies);
+        Result += ScoreSourceBenefits(KillChance, ReleasedAllies, LinkedEnemies);
+    }
     // Spend free attacks before turn-ending shots and conserve scarce attacks
     // when an ordinary shot gives essentially the same outcome.
     if (Ability.GetMyTemplateName() == 'LightningHands'

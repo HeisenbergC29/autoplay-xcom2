@@ -14,6 +14,7 @@ struct GrenadeScanDiagnostics
     var int Supported;
     var int Centers;
     var int EdgeCenters;
+    var int PairOffsetCenters;
     var int Evaluated;
     var int Accepted;
     var int RangeRejected;
@@ -42,19 +43,35 @@ var private float LastSingleMin;
 var private float LastSingleMax;
 var private float LastSingleHealth;
 var private float LastOrdinaryScore;
+var private array<StateObjectReference> ScanVisibleObjects;
+var private string LastFootprintGeometry;
+var private string ScanBlastBlockerKind;
+var private int ScanBlastBlockerID;
+var private string ScanBlastBlockerClass;
+var private string ScanBlastBlockerGeometry;
+var private bool ScanBlastBlockerRadial;
+var private int ScanBlastBlockerChildren;
+var private bool ScanBlastBlockerSurrounding;
+var private float ScanBlastSafeRadius;
+var private float LastBlastSafeRadius;
 
 // One summary per unit/decision, not one log line per candidate center. The
 // controller attaches it to that decision's recorder session.
 function string GetDiagnosticSummary()
 {
     return "available=" $ Scan.Available $ " supported=" $ Scan.Supported
-        $ " centers=" $ Scan.Centers $ " edge_centers=" $ Scan.EdgeCenters $ " evaluated=" $ Scan.Evaluated
+        $ " centers=" $ Scan.Centers $ " edge_centers=" $ Scan.EdgeCenters
+        $ " pair_offset_centers=" $ Scan.PairOffsetCenters $ " evaluated=" $ Scan.Evaluated
         $ " accepted=" $ Scan.Accepted $ " range=" $ Scan.RangeRejected
         $ " visibility=" $ Scan.VisibilityRejected $ " visualizer=" $ Scan.VisualizerRejected
         $ " trajectory=" $ Scan.TrajectoryRejected $ " blast=" $ Scan.BlastRejected
         $ " targets=" $ Scan.TargetsRejected $ " score=" $ Scan.ScoreRejected
         $ " unsupported=" $ Scan.Unsupported $ " last=" $ LastScanReason
         $ " range_reason=" $ ScanRangeReason $ " blast_reason=" $ ScanBlastReason
+        $ " blast_blocker_kind=" $ ScanBlastBlockerKind $ " blast_blocker_id=" $ ScanBlastBlockerID
+        $ " blast_blocker_class=" $ ScanBlastBlockerClass $ " blast_blocker_geometry=" $ ScanBlastBlockerGeometry
+        $ " blast_blocker_radial=" $ ScanBlastBlockerRadial $ " blast_blocker_children=" $ ScanBlastBlockerChildren
+        $ " blast_blocker_surrounding=" $ ScanBlastBlockerSurrounding $ " blast_safe_radius_units=" $ ScanBlastSafeRadius
         $ " min_range_units=" $ ScanMinRange $ " max_range_units=" $ ScanMaxRange
         $ " nearest_aim_units=" $ NearestAimDistance
         $ " single_opportunities=" $ Scan.SingleOpportunities $ " single_rejected=" $ Scan.SingleRejected
@@ -364,9 +381,11 @@ function bool FootprintNearImpact(X2GameRulesetVisibilityInterface VisibleObject
 
     // If a protected mission object has no spatial interface, no safe blast can
     // be established for this candidate. Tactical map objectives normally do.
+    LastFootprintGeometry = "no_interface";
     if (VisibleObject == none)
         return true;
     VisibleObject.GetVisibilityLocation(Tiles);
+    LastFootprintGeometry = "empty_footprint";
     if (Tiles.Length == 0)
         return true;
     foreach Tiles(Tile)
@@ -376,8 +395,12 @@ function bool FootprintNearImpact(X2GameRulesetVisibilityInterface VisibleObject
         // above the visible blast, even when it is excluded from direct targets.
         Delta.Z = 0.0;
         if (VSizeSq(Delta) <= Square(SafeRadius))
+        {
+            LastFootprintGeometry = "near_footprint";
             return true;
+        }
     }
+    LastFootprintGeometry = "clear_footprint";
     return false;
 }
 
@@ -393,9 +416,60 @@ function bool HasDangerousScenery(Actor TargetActor)
         || Destructible.AffectedChildren.Length > 0;
 }
 
-function bool RejectBlast(string Reason)
+// Diagnostics do not relax protection. Only own or currently player-visible
+// blocker identities are disclosed; hidden civilians retain redacted identity.
+function bool RejectBlast(string Reason, optional XComGameState_Unit SourceUnit,
+    optional XComGameState_BaseObject BlockerObject, optional Actor BlockerActor,
+    optional string Kind, optional string Geometry)
 {
+    local XComGameState_Unit BlockerUnit;
+    local XComDestructibleActor Destructible;
+    local int BlockerID;
+    local bool bKnown;
+
     LastBlastReason = Reason;
+    if (!bCollectDiagnostics)
+        return false;
+    ScanBlastBlockerKind = Kind;
+    ScanBlastBlockerID = 0;
+    ScanBlastBlockerClass = "redacted";
+    ScanBlastBlockerGeometry = Geometry;
+    ScanBlastSafeRadius = LastBlastSafeRadius;
+    ScanBlastBlockerRadial = false;
+    ScanBlastBlockerChildren = 0;
+    ScanBlastBlockerSurrounding = false;
+    if (BlockerObject != none)
+    {
+        BlockerID = BlockerObject.ObjectID;
+        BlockerUnit = XComGameState_Unit(BlockerObject);
+        if (SourceUnit != none && BlockerUnit != none)
+            bKnown = BlockerUnit.GetAssociatedPlayerID() == SourceUnit.GetAssociatedPlayerID();
+        if (BlockerActor == none)
+            BlockerActor = BlockerObject.GetVisualizer();
+    }
+    Destructible = XComDestructibleActor(BlockerActor);
+    if (Destructible != none)
+    {
+        if (BlockerID == 0)
+            BlockerID = Destructible.ObjectID;
+    }
+    bKnown = bKnown || (BlockerID > 0 && ScanVisibleObjects.Find('ObjectID', BlockerID) != INDEX_NONE);
+    if (bKnown)
+    {
+        if (Destructible != none)
+        {
+            // Expose these attributes only for a known blocker, just like its
+            // identity. Neither flag is treated as proven extra blast damage.
+            ScanBlastBlockerRadial = Destructible.HasRadialDamage();
+            ScanBlastBlockerChildren = Destructible.AffectedChildren.Length;
+            ScanBlastBlockerSurrounding = Destructible.bDestroysSurroundingArea;
+        }
+        ScanBlastBlockerID = BlockerID;
+        if (BlockerObject != none)
+            ScanBlastBlockerClass = string(BlockerObject.Class.Name);
+        else if (BlockerActor != none)
+            ScanBlastBlockerClass = string(BlockerActor.Class.Name);
+    }
     return false;
 }
 
@@ -446,24 +520,25 @@ function bool BlastIsSafe(XComGameState_Unit UnitState,
     local float SafeRadius;
 
     LastBlastReason = "none";
+    SafeRadius = Radius.GetTargetRadius(Ability) + `TILESTOUNITS(FMax(0.0, SafetyBufferTiles));
+    LastBlastSafeRadius = SafeRadius;
     Radius.GetTargetedStateObjects(Ability, Impact, RawTargets);
     foreach RawTargets(TargetObject)
     {
         if (TargetObject == none)
-            return RejectBlast("missing_target_object");
+            return RejectBlast("missing_target_object", UnitState, none, none, "missing_target", "native_targets");
         if (class'Helpers'.static.IsObjectiveTarget(TargetObject.ObjectID))
-            return RejectBlast("objective_in_blast");
+            return RejectBlast("objective_in_blast", UnitState, TargetObject, none, "objective", "native_targets");
         OtherUnit = XComGameState_Unit(TargetObject);
         if (IsProtectedUnit(UnitState, OtherUnit))
-            return RejectBlast("protected_unit_in_blast");
+            return RejectBlast("protected_unit_in_blast", UnitState, TargetObject, none, "protected_unit", "native_targets");
         Interactive = XComGameState_InteractiveObject(TargetObject);
         if (Interactive != none && Interactive.GetRequiresObjectiveGlint())
-            return RejectBlast("interactive_objective_in_blast");
+            return RejectBlast("interactive_objective_in_blast", UnitState, TargetObject, none, "interactive_objective", "native_targets");
         if (HasDangerousScenery(TargetObject.GetVisualizer()))
-            return RejectBlast("dangerous_scenery_in_blast");
+            return RejectBlast("dangerous_scenery_in_blast", UnitState, TargetObject, none, "scenery", "native_targets");
     }
 
-    SafeRadius = Radius.GetTargetRadius(Ability) + `TILESTOUNITS(FMax(0.0, SafetyBufferTiles));
     // Independent protection catches units omitted by filtered damage conditions
     // and protects floors/nearby civilians. Enemy locations are never harvested
     // here for candidate generation or score; only protected objects matter.
@@ -471,7 +546,7 @@ function bool BlastIsSafe(XComGameState_Unit UnitState,
     {
         if (IsProtectedUnit(UnitState, OtherUnit)
             && FootprintNearImpact(X2GameRulesetVisibilityInterface(OtherUnit), Impact, SafeRadius))
-            return RejectBlast("protected_unit_near_blast");
+            return RejectBlast("protected_unit_near_blast", UnitState, OtherUnit, none, "protected_unit", LastFootprintGeometry);
     }
     foreach `XCOMHISTORY.IterateByClassType(class'XComGameState_ObjectiveInfo', Objective)
     {
@@ -485,26 +560,26 @@ function bool BlastIsSafe(XComGameState_Unit UnitState,
         if (Interactive != none && (Interactive.bRemovedFromPlay || Interactive.bBroken))
             continue;
         if (FootprintNearImpact(X2GameRulesetVisibilityInterface(ObjectiveOwner), Impact, SafeRadius))
-            return RejectBlast("objective_near_blast");
+            return RejectBlast("objective_near_blast", UnitState, ObjectiveOwner, none, "objective", LastFootprintGeometry);
     }
     foreach `XCOMHISTORY.IterateByClassType(class'XComGameState_InteractiveObject', Interactive)
     {
         if (Interactive.IsEnabled && !Interactive.bRemovedFromPlay && !Interactive.bBroken
             && Interactive.GetRequiresObjectiveGlint()
             && FootprintNearImpact(X2GameRulesetVisibilityInterface(Interactive), Impact, SafeRadius))
-            return RejectBlast("interactive_objective_near_blast");
+            return RejectBlast("interactive_objective_near_blast", UnitState, Interactive, none, "interactive_objective", LastFootprintGeometry);
     }
 
     Radius.GetValidTilesForLocation(Ability, Impact, BlastTiles);
     if (BlastTiles.Length == 0)
-        return RejectBlast("no_blast_tiles");
+        return RejectBlast("no_blast_tiles", UnitState, none, none, "unknown", "empty_blast_tiles");
     foreach BlastTiles(Tile)
     {
         TileActors = `XWORLD.GetActorsOnTile(Tile, true);
         foreach TileActors(TileActor)
         {
             if (HasDangerousScenery(TileActor))
-                return RejectBlast("dangerous_scenery_on_blast_tile");
+                return RejectBlast("dangerous_scenery_on_blast_tile", UnitState, none, TileActor, "scenery", "blast_tile");
         }
     }
     return true;
@@ -842,14 +917,32 @@ static function float EdgeAimDistance(float EnemyDistance, float MaxRange,
     return FMin(LegalRange, FMax(0.0, EnemyDistance - BlastRadius * 0.75));
 }
 
+// Interior alternatives to a pair midpoint. A perpendicular offset can keep
+// both known enemies in the radius while avoiding a protected midpoint. Leave
+// a quarter of the geometric offset as snapping tolerance; native blast queries
+// still decide which objects are actually hit after floor/trajectory snapping.
+static function float PairAimOffsetSquared(float HorizontalDistance,
+    float HeightDifference, float BlastRadius)
+{
+    local float AvailableSquared;
+
+    if (HorizontalDistance <= 0.0 || BlastRadius <= 0.0)
+        return -1.0;
+    AvailableSquared = BlastRadius * BlastRadius
+        - (HorizontalDistance * HorizontalDistance + HeightDifference * HeightDifference) * 0.25;
+    if (AvailableSquared <= 0.0)
+        return -1.0;
+    return AvailableSquared * 0.5625;
+}
+
 function BuildCandidateCenters(XComGameState_Unit UnitState,
     XComGameState_Ability Ability, X2AbilityMultiTarget_Radius Radius,
     const out array<vector> EnemyCenters, out array<vector> Centers)
 {
-    local array<vector> DirectCenters, EdgeCenters, MidpointCenters;
+    local array<vector> DirectCenters, EdgeCenters, MidpointCenters, PairOffsetCenters;
     local XGUnit UnitVisualizer;
-    local vector SourceLocation, EnemyCenter, Delta, EdgeCenter;
-    local float MinRange, MaxRange, BlastRadius, Distance, AimDistance;
+    local vector SourceLocation, EnemyCenter, Delta, EdgeCenter, Midpoint, PairDelta, Perpendicular;
+    local float MinRange, MaxRange, BlastRadius, Distance, AimDistance, PairDistance, OffsetSquared;
     local int First, Second, Index, MarginIndex, Budget;
 
     Centers.Length = 0;
@@ -880,9 +973,25 @@ function BuildCandidateCenters(XComGameState_Unit UnitState,
     for (First = 0; First < EnemyCenters.Length; ++First)
     {
         for (Second = First + 1; Second < EnemyCenters.Length; ++Second)
-            AddCenter((EnemyCenters[First] + EnemyCenters[Second]) * 0.5, MidpointCenters);
+        {
+            Midpoint = (EnemyCenters[First] + EnemyCenters[Second]) * 0.5;
+            AddCenter(Midpoint, MidpointCenters);
+            PairDelta = EnemyCenters[Second] - EnemyCenters[First];
+            PairDelta.Z = 0.0;
+            PairDistance = VSize(PairDelta);
+            OffsetSquared = PairAimOffsetSquared(PairDistance,
+                EnemyCenters[Second].Z - EnemyCenters[First].Z, BlastRadius);
+            if (OffsetSquared <= 0.0)
+                continue;
+            Perpendicular.X = -PairDelta.Y / PairDistance;
+            Perpendicular.Y = PairDelta.X / PairDistance;
+            Perpendicular.Z = 0.0;
+            Perpendicular *= Sqrt(OffsetSquared);
+            AddCenter(Midpoint + Perpendicular, PairOffsetCenters);
+            AddCenter(Midpoint - Perpendicular, PairOffsetCenters);
+        }
     }
-    // Round-robin the three pools. Filling the budget with distant enemy
+    // Round-robin the pools. Filling the budget with distant enemy
     // centers first would silently exclude every useful range-edge proposal.
     for (Index = 0; Index < Budget && Centers.Length < Budget; ++Index)
     {
@@ -897,6 +1006,13 @@ function BuildCandidateCenters(XComGameState_Unit UnitState,
         }
         if (Index < MidpointCenters.Length)
             AddCenter(MidpointCenters[Index], Centers);
+        if (Index < PairOffsetCenters.Length)
+        {
+            First = Centers.Length;
+            AddCenter(PairOffsetCenters[Index], Centers);
+            if (Centers.Length > First)
+                ++Scan.PairOffsetCenters;
+        }
     }
 }
 
@@ -923,6 +1039,17 @@ function bool ChooseAction(XComGameState_Unit UnitState,
     LastScanReason = "none";
     ScanRangeReason = "none";
     ScanBlastReason = "none";
+    ScanVisibleObjects.Length = 0;
+    LastFootprintGeometry = "none";
+    ScanBlastBlockerKind = "none";
+    ScanBlastBlockerID = 0;
+    ScanBlastBlockerClass = "none";
+    ScanBlastBlockerGeometry = "none";
+    ScanBlastBlockerRadial = false;
+    ScanBlastBlockerChildren = 0;
+    ScanBlastBlockerSurrounding = false;
+    ScanBlastSafeRadius = -1.0;
+    LastBlastSafeRadius = -1.0;
     DeepestRejection = 0;
     ScanMinRange = -1.0;
     ScanMaxRange = -1.0;
@@ -944,6 +1071,8 @@ function bool ChooseAction(XComGameState_Unit UnitState,
     }
     class'X2TacticalVisibilityHelpers'.static.GetAllVisibleEnemiesForPlayer(
         UnitState.ControllingPlayer.ObjectID, VisibleEnemies);
+    class'X2TacticalVisibilityHelpers'.static.GetAllVisibleObjectsForPlayer(
+        UnitState.ControllingPlayer.ObjectID, ScanVisibleObjects);
     foreach VisibleEnemies(EnemyRef)
     {
         Enemy = XComGameState_Unit(`XCOMHISTORY.GetGameStateForObjectID(EnemyRef.ObjectID));

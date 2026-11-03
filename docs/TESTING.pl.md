@@ -1,10 +1,11 @@
 # Testy odbiorcze
 
-Najnowszy materiał to [porażka pierwszej misji Legacy Operations na v6](report-2026-11-02-legacy-v6.pl.md).
-Kolejną próbę v7 wykonaj według [instrukcji Legacy](legacy-test.pl.md).
-V7 obejmuje bezpieczną trasę i wsparcie przy szarży oraz koszt utraty ataku
-po ruchu. Wynik v6 potwierdza działanie kodu i raportowania w grze;
-kompilacja Windows i próba v7 pozostają **NIEURUCHOMIONE**.
+Najnowszy materiał to [porażka pierwszej misji Legacy Operations na v7](report-2026-11-02-legacy-v7.pl.md).
+Kolejną próbę v8 wykonaj według [instrukcji Legacy](legacy-test.pl.md).
+V8 obejmuje źródła kontroli i zombie, punkty granatu dla pary oraz zasięg
+zagrożenia wręcz. [Zakres zmian](tactics-v8.pl.md). Zaliczono 218 testów
+źródeł i scenariuszy z SDK, bez pominięć; kompilacja Windows i próba v8
+pozostają **NIEURUCHOMIONE**.
 
 Dotychczasowy wynik zgłoszony przez użytkownika: **PASS** — mod wydaje rozkazy;
 **FAIL** — przegrywa Gatecrasher na Legendzie i Dowódcy. Dawna paczka 0.1.0 alpha

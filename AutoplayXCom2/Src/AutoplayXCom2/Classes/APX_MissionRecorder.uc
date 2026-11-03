@@ -78,7 +78,7 @@ function Start(int PlayerID)
     bStarted = true;
     Emit("start", "|player=" $ PlayerID $ "|mission=" $ Safe(Mission)
         $ "|difficulty=" $ `TacticalDifficultySetting $ "|history=" $ HistoryCursor
-        $ "|revision=mission-report-v7");
+        $ "|revision=mission-report-v8");
     Observe("start");
 }
 
@@ -377,7 +377,7 @@ function string ActionFields(XComGameState_Unit UnitState, string Kind,
     local XComGameState_Unit TargetUnit;
     local ShotBreakdown Breakdown;
     local WeaponDamageValue MinDamage, MaxDamage;
-    local int TargetID, Chance, AllowsShield;
+    local int TargetID, Chance, AllowsShield, ReleasedAllies, LinkedEnemies;
     local string AbilityName, Reason;
 
     Ability = XComGameState_Ability(`XCOMHISTORY.GetGameStateForObjectID(
@@ -402,12 +402,15 @@ function string ActionFields(XComGameState_Unit UnitState, string Kind,
             Chance = Ability.GetShotBreakdown(Action.AvailableTargets[TargetIndex], Breakdown);
             Ability.GetDamagePreview(Action.AvailableTargets[TargetIndex].PrimaryTarget,
                 MinDamage, MaxDamage, AllowsShield);
+            class'APX_CombatPlanner'.static.GetKnownSourceBenefits(UnitState, TargetUnit,
+                ReleasedAllies, LinkedEnemies);
         }
     }
     return "|kind=" $ Safe(Kind) $ "|unit=" $ UnitState.ObjectID
         $ "|ability=" $ Safe(AbilityName) $ "|reason=" $ Safe(Reason) $ "|target=" $ TargetID
         $ "|target_index=" $ TargetIndex $ "|score=" $ Score $ "|chance=" $ Chance
-        $ "|raw_min_damage=" $ MinDamage.Damage $ "|raw_max_damage=" $ MaxDamage.Damage;
+        $ "|raw_min_damage=" $ MinDamage.Damage $ "|raw_max_damage=" $ MaxDamage.Damage
+        $ "|known_released_allies=" $ ReleasedAllies $ "|known_linked_enemies=" $ LinkedEnemies;
 }
 
 function CandidateAction(XComGameState_Unit UnitState, string Kind,
@@ -598,7 +601,7 @@ function RecordMoveThreatPreviews(XComGameState_Unit UnitState, const out array<
     local TTile CurrentTile, DestinationTile, EnemyTile;
     local vector CurrentLocation, DestinationLocation, EnemyLocation;
     local GameRulesCache_VisibilityInfo CurrentVisibility, DestinationVisibility;
-    local float Angle;
+    local float Angle, MeleeReach;
     local string CurrentCover, DestinationCover;
     local bool bCurrentLOS, bDestinationLOS, bCurrentDefaultView, bDestinationDefaultView;
     local int Count;
@@ -627,8 +630,10 @@ function RecordMoveThreatPreviews(XComGameState_Unit UnitState, const out array<
         // explicitly checks cover separately: tile LOS does not fill TargetCover.
         bCurrentDefaultView = bCurrentLOS && CurrentVisibility.bVisibleFromDefault;
         bDestinationDefaultView = bDestinationLOS && DestinationVisibility.bVisibleFromDefault;
+        MeleeReach = class'APX_MissionPlanner'.static.GetMeleeThreatReach(Enemy);
         Emit("move_threat_preview", "|source=" $ UnitState.ObjectID $ "|enemy=" $ Enemy.ObjectID
             $ "|enemy_template=" $ Enemy.GetMyTemplateName() $ "|melee_only=" $ Enemy.IsMeleeOnly()
+            $ "|melee_threat_reach=" $ MeleeReach
             $ "|current_distance=" $ class'APX_MissionPlanner'.static.TileDistance(CurrentTile, EnemyTile)
             $ "|destination_distance=" $ class'APX_MissionPlanner'.static.TileDistance(DestinationTile, EnemyTile)
             $ "|current_threat_risk=" $ class'APX_MissionPlanner'.static.ThreatRiskAtTile(UnitState, Enemy, CurrentTile)

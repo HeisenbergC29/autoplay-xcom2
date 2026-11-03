@@ -143,3 +143,26 @@ zasięgu korzysta ze zwykłego kosztu ruchu; nie modelujemy nowego LOS,
 reakcji przeciwnika ani wyniku kolejnych rzutów.
 
 Kompilacja Windows i wynik v7 w grze pozostają do potwierdzenia.
+
+## Weryfikacja v8 — 03.11.2026
+
+Po trzeciej próbie Legacy i sugestiach taktycznych zaliczono **218 testów
+Python bez pominięć**, korzystając z przesłanego `Development/SrcOrig`.
+Kontrola odwołań potwierdza nadal 11 klas moda i 29 skonfigurowanych zdolności.
+Wszystkie trzy zestawy PowerShell również przeszły: narzędzia budowania,
+zbieranie źródeł SDK i zbieranie raportu misji.
+
+Sprawdzono źródłowe kontrakty: usunięcie `X2Effect_MindControl` po śmierci
+źródła i przywracanie właściciela, `SireZombieLink`/`KillSiredZombies`, mobilność
+i jednostki zasięgu `MovingMelee`/`Cone`, a także typy i właściwości używane
+przy diagnostyce blokera granatu. Przywrócenie kontroli zeruje stare AP,
+a świeże przyznaje warunkowo, gdy trwa tura przywróconego właściciela.
+Planer nie zakłada dodatkowego natychmiastowego ataku.
+
+Lokalna tablica zasięgów wręcz powstaje przed pętlą kandydatów ruchu.
+Opcjonalne `const out array<float>` i ujemny domyślny parametr liczbowy mają
+odpowiedniki w składni SDK. Nie dodano wspólnych struktur klas APX ani nowych
+zależności `DependsOn` między nimi.
+
+Źródła SDK pozostają poza repozytorium. Kompilacja Windows i wynik v8 w grze
+pozostają do potwierdzenia; testy kontraktów nie uruchamiają silnika gry.

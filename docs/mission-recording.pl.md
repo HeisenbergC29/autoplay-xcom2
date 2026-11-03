@@ -10,6 +10,8 @@ automat i co rzeczywiście wydarzyło się po rozkazach.
 [Czwarta próba: zasadzka działa, granat użyty, misja przegrana](report-2026-11-02-fourth.pl.md).
 [Pierwsza misja Legacy Operations: wynik v5 i przygotowanie v6](report-2026-11-02-legacy.pl.md).
 [Kolejna próba Legacy: wynik v6 i poprawki v7](report-2026-11-02-legacy-v6.pl.md).
+[Trzecia próba Legacy: wynik v7 i dalsze problemy](report-2026-11-02-legacy-v7.pl.md).
+[V8: źródła kontroli, punkty AoE i zasięg wręcz](tactics-v8.pl.md).
 
 ## Co się zmieniło w taktyce
 
@@ -150,6 +152,26 @@ rannego żołnierza. Pole `potential_attack_loss` opisuje potencjalną utratę,
 więc także przy ewakuacji i ruchu poza walką nie oznacza automatycznie kary
 zastosowanej do końcowego wyniku ruchu. Szarże muszą ponadto przejść te same
 kontrole znanego terenu, wsparcia, wysokości i bezpiecznej trasy co zwykły ruch.
+
+Od `mission-report-v8` ataki zapisują `known_released_allies` i
+`known_linked_enemies`: znane widoczne jednostki powiązane aktywnym efektem
+z celem ataku. Liczniki opisują możliwe skutki jego śmierci, nie gwarantowany
+wynik, natychmiastowy strzał odzyskanej jednostki ani zastosowaną premię
+w każdej zdolności wielocelowej.
+
+`move_threat_preview.melee_threat_reach` podaje rozpoznany możliwy zasięg
+ruchu i ataku wręcz w polach. `-1` oznacza model nieobsługiwany. Wewnątrz
+rozpoznanego obszaru ryzyko pozostaje wysokie; jest to oszacowanie bez
+przyszłej trasy, ścian i decyzji wroga. Zasięgi są wyliczane raz na widoczny
+kontakt w danym przeszukiwaniu ruchu, bez globalnej pamięci między decyzjami.
+
+W `grenade_scan` dodano `pair_offset_centers` oraz
+`blast_blocker_kind/id/class/geometry`, `blast_blocker_radial/children/surrounding`
+i `blast_safe_radius_units`. Rozdziela to rzeczywistą bliskość chronionego
+obiektu od braku interfejsu/pustej geometrii oraz różne rodzaje propagacji
+zniszczeń. Dane szczegółowe dotyczą ostatniej blokady bezpieczeństwa w skanie,
+a niekoniecznie wybranego punktu. Tożsamość i właściwości niewidocznych obiektów
+pozostają zredagowane. [Interpretacja i granice v8](tactics-v8.pl.md).
 
 Podgląd nie przewiduje ukrytego losowania. Zniknięcie przeciwnika z pola widzenia
 nie jest uznawane za zabicie. Brak końcowego wpisu albo osiągnięcie limitu

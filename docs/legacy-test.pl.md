@@ -1,13 +1,14 @@
-# Kolejna próba „Blast From the Past” — mission-report-v7
+# Kolejna próba „Blast From the Past” — mission-report-v8
 
-Źródła kontynuują commit `ed74176` oraz v6. Najnowszy przesłany raport zawiera
-próbę `ChallengeAbductionGasStation` na v6, zakończoną porażką w turze 5.
-V7 obejmuje ograniczenia wsparcia i bezpieczeństwa trasy przy ruchu do ataku
-wręcz oraz koszt utraty dostępnego ataku przez wydanie AP na niebieski ruch.
-[Analiza poprzedniej próby](report-2026-11-02-legacy-v6.pl.md).
-Nie ma jeszcze kompilacji Windows ani wyniku v7 w grze. Pełne źródła SDK
+Źródła kontynuują commit `ed74176` oraz poprawki v6/v7. Najnowszy raport
+zawiera próbę `ChallengeAbductionGasStation` na v7, zakończoną porażką w turze 3.
+V8 obejmuje wycenę znanych skutków zabicia źródła kontroli, alternatywne punkty
+granatu dla pary wrogów oraz model możliwego zasięgu ataku wręcz.
+[Analiza poprzedniej próby](report-2026-11-02-legacy-v7.pl.md).
+[Opis nowych zasad i granic](tactics-v8.pl.md).
+Nie ma jeszcze kompilacji Windows ani wyniku v8 w grze. Pełne źródła SDK
 z przesłanego `Development.rar` pozostają dostępne do kontroli zgodności.
-Kontrola v7: 189 testów Python zaliczonych bez pominięć oraz poprawny audyt
+Kontrola v8: 218 testów Python zaliczonych bez pominięć oraz poprawny audyt
 odwołań do SDK. Do tej kontroli nie potrzeba kolejnych plików.
 
 ## Zbudowanie na zachowanym SDK
@@ -33,7 +34,7 @@ uruchom grę ponownie. Źródła możesz później usunąć; SDK zachowaj.
    próby; w jej logu `difficulty=2` (Dowódca). Jeśli masz zapis sprzed pierwszego
    kontaktu z tej próby, użyj go do porównania.
 2. Po uzyskaniu sterowania włącz autoplay klawiszem F8. W `Launch.log` sprawdź
-   `revision=mission-report-v7`; obecność v5/v6 oznacza uruchomienie starszego kodu.
+   `revision=mission-report-v8`; obecność v5/v6/v7 oznacza uruchomienie starszego kodu.
 3. Pozwól misji dojść do wyniku. Jeśli potrzebna będzie ręczna interwencja,
    zapisz jej moment i powód. Raport po zwycięstwie jest równie przydatny.
 4. Po misji, przed ponownym uruchomieniem gry, otwórz PowerShell w folderze
@@ -60,9 +61,18 @@ pobranych źródeł moda.
   Zwykły strzał wymagający 1 AP, brak celu i awaryjny odwrót rannego powinny
   zachować dotychczasowe możliwości.
 - `move_threat_preview` nadal podaje `melee_only`, dystans i wkład każdego
-  widocznego wroga. Ocena AP nie przewiduje nowego LOS ani pewnego trafienia.
+  widocznego wroga. Nowe `melee_threat_reach` pokazuje rozpoznany zasięg
+  ruchu i ataku. Odwrót wewnątrz niego powinien zachować wysokie zagrożenie
+  wręcz. Ocena AP nie przewiduje nowego LOS ani pewnego trafienia.
+- Jeśli sektoid lub inny widoczny przeciwnik ma aktywne więzi do zombie lub
+  kontrolowanego członka oddziału, sprawdź `known_released_allies` oraz
+  `known_linked_enemies` przy kandydatach ataków. Premia rośnie z szansą
+  dobicia źródła; samo istnienie więzi nie gwarantuje wyboru tego celu.
 - Granaty: dotychczas odrzucały je zasięg i bezpieczeństwo. Te ograniczenia
-  pozostają aktywne; zero granatów samo nie wskazuje błędu punktacji.
+  pozostają aktywne. `pair_offset_centers` pokazuje nowe propozycje dla pary,
+  a `blast_blocker_*` oraz `blast_safe_radius_units` wyjaśniają ostatnią
+  blokadę. Zero granatów samo nie wskazuje błędu punktacji.
 
-Próg 12 pól w ocenie ryzyka wręcz pozostaje heurystyką. V7 nie przewiduje
-pełnej trasy i obszaru ataku Faceless ani nie gwarantuje zwycięstwa.
+Nowy zasięg wręcz jest geometrycznym przybliżeniem możliwego ataku, bez
+planowania rzeczywistej przyszłej trasy. Nieznane style zachowują poprzednią
+heurystykę. V8 nie gwarantuje zwycięstwa ani bezpiecznej reakcji łańcuchowej.

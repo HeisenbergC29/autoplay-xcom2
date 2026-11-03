@@ -109,6 +109,16 @@ class MissionRecorderContracts(unittest.TestCase):
             self.assertIn('|' + field + '=', move)
         self.assertIn('FMax(0.0, BestAttackNow - BestAttackAfterMove)', move)
 
+    def test_source_links_and_recognized_melee_envelope_are_visible_in_diagnostics(self):
+        action = function_body(SOURCE, 'ActionFields')
+        preview = function_body(SOURCE, 'RecordMoveThreatPreviews')
+        self.assertIn('GetKnownSourceBenefits(UnitState, TargetUnit,', action)
+        for field in ('known_released_allies', 'known_linked_enemies'):
+            self.assertIn('|' + field + '=', action)
+        self.assertIn('GetMeleeThreatReach(Enemy)', preview)
+        self.assertIn('|melee_threat_reach=', preview)
+        self.assertLess(preview.index('IsVisibleHostile('), preview.index('GetMeleeThreatReach('))
+
     def test_grenade_preview_redacts_unknown_targets_before_reading_health(self):
         area = function_body(SOURCE, 'RecordAreaTargetPreviews')
         own = area.index('bOwnTarget = IsOwnUnitAt(TargetRef.ObjectID, CurrentHistory);')

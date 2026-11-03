@@ -48,10 +48,17 @@ przeciwnika. [Instrukcja kolejnej próby Legacy](docs/legacy-test.pl.md).
 V6 zostało uruchomione w kolejnej próbie opisanej poniżej.
 
 [Próba v6](docs/report-2026-11-02-legacy-v6.pl.md) potwierdziła działanie nowej
-ochrony i diagnostyki, ale skończyła się porażką. Bieżące `mission-report-v7`
+ochrony i diagnostyki, ale skończyła się porażką. `mission-report-v7`
 stosuje ograniczenia wsparcia i trasy również do szarż wręcz oraz uwzględnia
 utratę możliwości ataku po ruchu, np. strzału karabinem wymagającego dwóch AP.
-V7 wymaga nowej kompilacji i próby; wynik misji pozostaje do sprawdzenia.
+[Próba v7](docs/report-2026-11-02-legacy-v7.pl.md) zakończyła się porażką
+w turze 3, potwierdzając działanie kontroli szarży i kosztu AP.
+
+Bieżące **`mission-report-v8`** dodaje wycenę znanych skutków zabicia źródła
+kontroli umysłu lub psi zombie, alternatywne punkty granatu dla pary wrogów
+oraz bardziej zachowawczą ocenę odwrotu w zasięgu wręcz.
+[Opis zmian i ocena sugestii taktycznych](docs/tactics-v8.pl.md).
+V8 wymaga nowej kompilacji i próby w grze; zwycięstwo nadal nie jest potwierdzone.
 
 **Stan: alpha; według najnowszego zgłoszenia użytkownika mod już wydaje rozkazy, ale przegrywa Gatecrasher na Legendzie i Dowódcy.** Bieżące źródła poprawiają ocenę osłon, zagrożeń i flankowania, dobieranie celów, granaty oraz wsparcie oddziału. Ta zmiana **wymaga nowej kompilacji i prób w grze**; nie ma jeszcze potwierdzenia poprawy wyniku misji. [Opis taktyki, kompilacja z zachowanym SDK i lista prób](docs/tactics-update.pl.md). Nie potwierdzono pełnego ukończenia wszystkich misji DLC.
 
