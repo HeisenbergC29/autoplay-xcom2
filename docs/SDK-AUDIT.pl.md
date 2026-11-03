@@ -166,3 +166,22 @@ zależności `DependsOn` między nimi.
 
 Źródła SDK pozostają poza repozytorium. Kompilacja Windows i wynik v8 w grze
 pozostają do potwierdzenia; testy kontraktów nie uruchamiają silnika gry.
+
+## Potwierdzenie próby v8 i punktacja Legacy — 03.11.2026
+
+Raport `AutoplayXCom2-20261103-002926-7428f88e.zip` potwierdza uruchomienie
+`mission-report-v8` i zwycięstwo w `ChallengeAbductionGasStation` na Dowódcy,
+w turze 14. To potwierdzenie tej konkretnej misji, bez pełnego logu budowania
+i bez potwierdzenia całej drabinki. Dalsze szczegóły zawiera
+[raport zwycięstwa](report-2026-11-03-legacy-v8-win.pl.md).
+
+Odczytano także kod `XComGameState_LadderProgress`: wynik `CumulativeScore`
+przechodzi do następnego etapu; progi medali są sprawdzane po końcu całej
+drabinki. Pierwsze obrażenia odbierają premię za brak ran, a leczenie jej nie
+przywraca. Utrata lub odpowiednie wyłączenie żołnierza odbiera premię przeżycia.
+Punkty obejmują osobne reguły celów, przeciwników, ich pochodzenia i tur.
+
+W zwycięskim logu są startowe pule i reguły, ale brak oficjalnego zdobytego
+wyniku i medalu. Recorder v8 nie odczytuje tych wartości; nie rekonstruujemy
+ich z końcowego HP ani pól `score` decyzji. To doprecyzowanie dokumentacji
+nie zmienia kodu ani parametrów v8 i nie wymaga ponownej kompilacji.

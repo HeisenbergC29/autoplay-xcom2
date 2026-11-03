@@ -2,7 +2,8 @@
 
 Zmiany wynikają z [raportu v7](report-2026-11-02-legacy-v7.pl.md) i sugestii
 użytkownika. Dotyczą wspólnej logiki autoplaya dla misji WOTC i oficjalnych DLC.
-V8 wymaga zbudowania na Windows i kolejnej próby w grze.
+V8 zostało zbudowane i [wygrało pierwszą misję Legacy](report-2026-11-03-legacy-v8-win.pl.md).
+Kolejne etapy nadal wymagają prób na tej samej wersji.
 
 ## Kiedy atakować źródło kontroli
 
@@ -104,7 +105,8 @@ Nie wylicza dokładnej nowej szansy trafienia z docelowego pola.
   faktycznie wybranego rzutu. Ukryte jednostki pozostają zredagowane.
 
 Weryfikacja źródeł: 218 testów Python bez pominięć, audyt odwołań do SDK
-oraz trzy zestawy PowerShell zaliczone. Kompilacja Windows i wynik v8 w grze
-pozostają do potwierdzenia.
+oraz trzy zestawy PowerShell zaliczone. Raport użytkownika potwierdza
+`outcome=win` w pierwszej misji „Blast From the Past”; nie potwierdza jeszcze
+pełnej drabinki ani konkretnej punktacji lub medalu.
 
 [Instrukcja kompilacji i próby](legacy-test.pl.md).

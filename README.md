@@ -13,7 +13,7 @@ pełnymi misjami ukończonymi w grze. Obecna alpha nie realizuje jeszcze całoś
 Aid Protocol, ostrożniejsze flankowanie oraz rejestr decyzji i wyników misji.
 [Jak zebrać raport po grze](docs/mission-recording.pl.md). Skrypt zbierający raport
 jest instalowany z modem i działa po usunięciu pobranych źródeł. Zwycięstwo na
-Commanderze lub Legendzie nie jest jeszcze potwierdzone.
+Commanderze lub Legendzie w Gatecrasherze nie jest jeszcze potwierdzone.
 
 [Pierwszy raport z gry](docs/report-2026-11-02.pl.md) ujawnił utratę pamięci
 kontaktu, zbyt wysoką ocenę ruchu na dach i brak propozycji granatów. Bieżący
@@ -58,9 +58,17 @@ Bieżące **`mission-report-v8`** dodaje wycenę znanych skutków zabicia źród
 kontroli umysłu lub psi zombie, alternatywne punkty granatu dla pary wrogów
 oraz bardziej zachowawczą ocenę odwrotu w zasięgu wręcz.
 [Opis zmian i ocena sugestii taktycznych](docs/tactics-v8.pl.md).
-V8 wymaga nowej kompilacji i próby w grze; zwycięstwo nadal nie jest potwierdzone.
+[Raport v8](docs/report-2026-11-03-legacy-v8-win.pl.md) potwierdza pierwsze
+zwycięstwo: `ChallengeAbductionGasStation`, pierwsza misja „Blast From the Past”,
+Dowódca, 14 tur i dwóch poległych. W logu widać załadowanie kolejnej misji
+`ChallengeAbductionCemetery`; jej próba autoplaya pozostaje do wykonania.
+Do tej próby zachowujemy tę samą v8, bez nowej kompilacji.
 
-**Stan: alpha; według najnowszego zgłoszenia użytkownika mod już wydaje rozkazy, ale przegrywa Gatecrasher na Legendzie i Dowódcy.** Bieżące źródła poprawiają ocenę osłon, zagrożeń i flankowania, dobieranie celów, granaty oraz wsparcie oddziału. Ta zmiana **wymaga nowej kompilacji i prób w grze**; nie ma jeszcze potwierdzenia poprawy wyniku misji. [Opis taktyki, kompilacja z zachowanym SDK i lista prób](docs/tactics-update.pl.md). Nie potwierdzono pełnego ukończenia wszystkich misji DLC.
+**Stan: alpha; v8 wygrało pierwszą misję Legacy Operations na Dowódcy.**
+Pełna drabinka Legacy, wygrana Gatecrashera i wszystkie pozostałe rodzaje misji
+nadal wymagają osobnych prób. W Legacy zapisujemy oddzielnie zwycięstwo,
+straty i oficjalną punktację. Pole `score` w rejestrze decyzji jest oceną
+planera, nie wynikiem Legacy. [Instrukcja następnej próby](docs/legacy-test.pl.md).
 
 Dotychczasowy plik `.u` i konfigurację zweryfikowano; importy binarne prowadzą tylko do standardowych pakietów `Core`, `Engine`, `XComGame`. Repozytorium nie zawiera SDK ani plików gry. Szczegóły: [wyniki kontroli SDK i kompilacji](docs/SDK-AUDIT.pl.md).
 
@@ -151,8 +159,9 @@ potwierdziła **0 błędów i 8 ostrzeżeń SDK**, zarówno dla bazy, jak i moda
 Dotyczy to wcześniejszej kompilacji. Przechowywany ZIP ma kompletną konfigurację,
 27 nazw zdolności, obie lokalizacje i prawidłowy `.u`; jego 464 importy prowadzą
 tylko do `Core`, `Engine` i `XComGame`, a dziewięć klas moda jest obecnych.
-Najnowsze zgłoszenie użytkownika potwierdza wydawanie rozkazów po poprawce HUD-u.
-**Nowe zmiany taktyki nie mają jeszcze kompilacji ani wyniku w grze.** Obecne
+Najnowszy raport użytkownika potwierdza działanie v8 i zwycięstwo w pierwszej
+misji Legacy Operations. Nie dowodzi ukończenia pozostałych misji ani uzyskania
+konkretnego wyniku punktowego. Obecne
 środowisko Linux pozwala uruchamiać testy Python i PowerShell, ale nie zawiera
 SDK Windows ani działającej gry.
 

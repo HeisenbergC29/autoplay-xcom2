@@ -1,16 +1,16 @@
 # Testy odbiorcze
 
-Najnowszy materiał to [porażka pierwszej misji Legacy Operations na v7](report-2026-11-02-legacy-v7.pl.md).
-Kolejną próbę v8 wykonaj według [instrukcji Legacy](legacy-test.pl.md).
-V8 obejmuje źródła kontroli i zombie, punkty granatu dla pary oraz zasięg
-zagrożenia wręcz. [Zakres zmian](tactics-v8.pl.md). Zaliczono 218 testów
-źródeł i scenariuszy z SDK, bez pominięć; kompilacja Windows i próba v8
-pozostają **NIEURUCHOMIONE**.
+Najnowszy materiał to [zwycięstwo pierwszej misji Legacy Operations na v8](report-2026-11-03-legacy-v8-win.pl.md).
+`ChallengeAbductionGasStation`, Dowódca: **PASS**, 14 tur, dwóch poległych.
+Wynik punktowy i medal: **NIEZAREJESTROWANE**. Kolejna misja
+`ChallengeAbductionCemetery`: załadowana, próba autoplaya **NIEURUCHOMIONA**.
+Użyj tej samej v8 według [instrukcji Legacy](legacy-test.pl.md).
+Zaliczono także 218 testów źródeł i scenariuszy z SDK, bez pominięć.
 
 Dotychczasowy wynik zgłoszony przez użytkownika: **PASS** — mod wydaje rozkazy;
-**FAIL** — przegrywa Gatecrasher na Legendzie i Dowódcy. Dawna paczka 0.1.0 alpha
-miała blokadę HUD-u. Bieżące zmiany taktyczne mają testy numerycznych heurystyk,
-ale ich kompilacja i próby w grze pozostają **NIEURUCHOMIONE**.
+**PASS** — pierwsza misja Legacy na v8; **FAIL** — dotychczasowe próby
+Gatecrashera. Dawna paczka 0.1.0 alpha miała blokadę HUD-u. Wynik jednej misji
+nie potwierdza pełnej obsługi wszystkich etapów ani innych rodzajów misji.
 [Scenariusze taktyczne i kompilacja z zachowanym SDK](tactics-update.pl.md).
 
 Nowe próby powinny korzystać z wersji zawierającej [rejestr misji](mission-recording.pl.md).
@@ -74,7 +74,10 @@ Wyniki zapisuj osobno: PASS / FAIL / NIEURUCHOMIONY. Kompilacja nie potwierdza d
 
 ## Cele i zakończenie misji
 
-Każdy wiersz wymaga pełnego przebiegu od włączenia do prawidłowego zakończenia, bez ręcznej akcji. Obecna wersja **nie ma potwierdzenia żadnego z nich**; szczególnie późniejsze skryptowane etapy wymagają implementacji i prób.
+Każdy wiersz wymaga pełnego przebiegu od włączenia do prawidłowego zakończenia.
+Potwierdzono pierwszą misję Legacy, przy jednym włączeniu i zatrzymaniu dopiero
+na końcu; log nie jest pełnym audytem każdego wejścia gracza. Cała drabinka
+i pozostałe kategorie nadal wymagają prób, szczególnie późniejsze etapy skryptowane.
 
 | Rodzaj | Wymagane sprawdzenie |
 | --- | --- |
@@ -90,6 +93,23 @@ Każdy wiersz wymaga pełnego przebiegu od włączenia do prawidłowego zakończ
 | Alien Nest / Lost Towers | Przejścia pięter/etapów, boss, interakcje i zakończenie |
 | Twierdza Wybranego | Portal, komora, sarkofag, boss i zakończenie |
 | Obrona Avengera / finał | Cele na obiektach, etapy skryptowane i faktyczny wynik |
+
+## Punktacja Legacy
+
+Przy każdej misji zapisuj osobno: wynik, numer etapu, tury, zgony, wyłączenia
+i rany, oficjalny wynik punktowy misji oraz skumulowany, ewentualne restarty
+i ręczne działania. Medal zapisuj, gdy został faktycznie przyznany; SDK
+porównuje skumulowany wynik z progami po zakończeniu całej drabinki.
+
+Punkty zależą m.in. od celów, przeciwników, tur, obrażeń i przeżycia oddziału.
+Leczenie nie odtwarza utraconej premii za brak obrażeń. Fabularna jednostka
+pozostająca żywa po wyłączeniu może ponieść karę punktową jak za utratę.
+Nie należy odtwarzać wyniku tylko z końcowego HP i liczby zabitych.
+
+`score` w `APXREC` oznacza wewnętrzną ocenę rozkazu. `MaxScore` w tabelach
+`XCom_Challenge` oznacza początkową maksymalną pulę. Żadne z tych pól nie jest
+potwierdzeniem zdobytej punktacji. Przy braku oficjalnej liczby wpisuj
+**NIEZAREJESTROWANY**, bez wyliczania medalu z przybliżeń.
 
 ## Warunki awaryjne
 

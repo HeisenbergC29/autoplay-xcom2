@@ -20,7 +20,9 @@ szarże oddalające jednostkę od wsparcia i uwzględnia utratę legalnego ataku
 przez zużycie AP na ruch; próba v7 także zakończyła się porażką.
 Bieżące `mission-report-v8` dodaje priorytet dobicia źródła kontroli,
 alternatywne punkty granatu dla pary wrogów i rozpoznany zasięg zagrożenia
-wręcz. Wymaga nowej kompilacji; instrukcja próby to `docs/legacy-test.pl.md`,
+wręcz. Użytkownik potwierdził zwycięstwo v8 w pierwszej misji Legacy;
+kolejny etap testujemy na tej samej zainstalowanej wersji, bez przebudowy.
+Instrukcja próby to `docs/legacy-test.pl.md`,
 a opis zakresu zmian to `docs/tactics-v8.pl.md` w źródłach.
 
 ## Wymagania
@@ -154,7 +156,7 @@ ryzyka każdego widocznego wroga. Podglądy nie są gwarancją wyniku akcji.
 - Log gry: `<Dokumenty>\My Games\XCOM2 War of the Chosen\XComGame\Logs\Launch.log`. Do zgłoszenia dołącz typ misji, etap i listę pozostałych modów.
 - Wyłączenie moda: odznacz go w launcherze. Bieżące włączenie autoplaya nie jest zapisywane w kampanii.
 
-Wcześniejszą kompilację i zależności binarne sprawdzono, a użytkownik potwierdził
-wydawanie rozkazów po poprawce HUD-u. Nowe zmiany taktyki **wymagają kompilacji
-i prób w grze**. Nie potwierdzono pełnej obsługi każdej skryptowanej misji DLC
+Wcześniejszą kompilację i zależności binarne sprawdzono, a raport użytkownika
+potwierdza zwycięstwo v8 w pierwszej misji Legacy Operations. Nie potwierdzono
+pełnej obsługi każdej skryptowanej misji DLC
 ani konkretnego najnowszego numeru builda Steam. Stan weryfikacji opisuje README.

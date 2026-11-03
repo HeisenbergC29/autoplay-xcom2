@@ -12,6 +12,13 @@ automat i co rzeczywiście wydarzyło się po rozkazach.
 [Kolejna próba Legacy: wynik v6 i poprawki v7](report-2026-11-02-legacy-v6.pl.md).
 [Trzecia próba Legacy: wynik v7 i dalsze problemy](report-2026-11-02-legacy-v7.pl.md).
 [V8: źródła kontroli, punkty AoE i zasięg wręcz](tactics-v8.pl.md).
+[Pierwsze zwycięstwo v8 w Legacy i przejście do kolejnej misji](report-2026-11-03-legacy-v8-win.pl.md).
+
+W Legacy wynik misji i punkty zapisujemy oddzielnie. `score` w rekordach
+`candidate`/`chosen` jest oceną heurystyki, a startowe `MaxScore` z
+`XCom_Challenge` to pula maksymalna. Rejestrator v8 nie odczytuje oficjalnego
+`CumulativeScore`. Do raportu dopisz oficjalne punkty misji/skumulowane,
+ewentualny medal, restarty i ręczne działania, jeśli dane są dostępne.
 
 ## Co się zmieniło w taktyce
 
