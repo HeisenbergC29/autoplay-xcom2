@@ -4,8 +4,9 @@ Najnowszy materiał to [zwycięstwo pierwszej misji Legacy Operations na v8](rep
 `ChallengeAbductionGasStation`, Dowódca: **PASS**, 14 tur, dwóch poległych.
 Wynik punktowy i medal: **NIEZAREJESTROWANE**. Kolejna misja
 `ChallengeAbductionCemetery`: załadowana, próba autoplaya **NIEURUCHOMIONA**.
-Użyj tej samej v8 według [instrukcji Legacy](legacy-test.pl.md).
-Zaliczono także 218 testów źródeł i scenariuszy z SDK, bez pominięć.
+Następna próba wymaga nowej kompilacji v9 według [instrukcji Legacy](legacy-test.pl.md).
+Zwycięstwo v8 nie potwierdza jeszcze nowych mechanizmów ratunku, łupu i telemetrii
+punktów. [Zakres i reguły v9](tactics-v9.pl.md).
 
 Dotychczasowy wynik zgłoszony przez użytkownika: **PASS** — mod wydaje rozkazy;
 **PASS** — pierwsza misja Legacy na v8; **FAIL** — dotychczasowe próby
@@ -62,6 +63,15 @@ Wyniki zapisuj osobno: PASS / FAIL / NIEURUCHOMIONY. Kompilacja nie potwierdza d
 
 ## Reguły walki
 
+- V9 — wykrwawienie: ratownik z rzeczywistym ładunkiem i AP powinien podejść
+  bezpieczną znaną trasą, zachować koszt stabilizacji i użyć jej dopiero przy
+  legalnym celu. Sprawdź brak ładunku, ostatnią turę wykrwawiania, niedostępną
+  trasę, przeszkodę przy pacjencie i zagrożonego rannego ratownika. Żołnierz
+  ustabilizowany nie powinien pozostawać celem ponownej stabilizacji.
+- V9 — łup: sprawdź darmową natywną akcję i automatyczny pickup po ruchu,
+  upływ terminu łupu, brak LOS, wsparcie i zagrożenia na całej trasie. Widoczny
+  przeciwnik, pamiętany niedawny kontakt, wykrwawienie w oddziale, ewakuacja,
+  gotowy cel albo aktywny licznik misji powinny blokować wycieczkę po łup.
 - Ranger, Specialist, Grenadier, Sharpshooter, Psi Operative, Reaper, Skirmisher, Templar, SPARK; brak amunicji, leczenie, wykrwawienie, melee, darmowe akcje i Lost headshot.
 - Weryfikacja każdej domyślnej nazwy umiejętności, ograniczeń ładunków, cooldownów, trafień, pancerza i osłon. Brak strzałów do ukrytych wrogów i VIP-a do schwytania.
 - Podpalenie/kwas na początku trasy i dalej na trasie: można wyjść z zagrożonego pola, ale nie przechodzić przez kolejne.
@@ -94,7 +104,21 @@ i pozostałe kategorie nadal wymagają prób, szczególnie późniejsze etapy sk
 | Twierdza Wybranego | Portal, komora, sarkofag, boss i zakończenie |
 | Obrona Avengera / finał | Cele na obiektach, etapy skryptowane i faktyczny wynik |
 
-## Punktacja Legacy
+## Punktacja każdej symulacji
+
+Uruchom analizator v9 dla każdego raportu, także Gatecrashera i innych misji
+bez oficjalnych punktów. Sprawdź obecność `game_scoring.comparison` z profilem
+`wotc_legacy_observed_v1`, listą składowych i brakujących danych. Jest to wspólna
+miara porównawcza oparta na regułach gry; nie dodaje punktów do stanu misji.
+Wcześniej podane ręcznie wartości zostały zastąpione regułami odczytanymi z gry.
+
+Przypadki analizy: pierwsza rana kontra ponowne obrażenia i leczenie, śmierć
+kontra wykrwawienie, potwierdzone fabularne wyłączenie, przeciwnik przejęty
+kontrolą umysłu, przeciwnik przywołany i z posiłków, opcjonalny cel, ratunek
+cywila, późne włączenie F8 i urwany log. Brak danych nie może dawać pozornie
+pełnego wyniku ani zaliczać wszystkich celów na podstawie zwycięstwa.
+
+### Oficjalny wynik Legacy
 
 Przy każdej misji zapisuj osobno: wynik, numer etapu, tury, zgony, wyłączenia
 i rany, oficjalny wynik punktowy misji oraz skumulowany, ewentualne restarty
@@ -105,6 +129,12 @@ Punkty zależą m.in. od celów, przeciwników, tur, obrażeń i przeżycia oddz
 Leczenie nie odtwarza utraconej premii za brak obrażeń. Fabularna jednostka
 pozostająca żywa po wyłączeniu może ponieść karę punktową jak za utratę.
 Nie należy odtwarzać wyniku tylko z końcowego HP i liczby zabitych.
+
+V9 zapisuje odczyty `game_score.cumulative_score` tylko dla właściwego etapu.
+`recording_delta` obejmuje okres od pierwszego do ostatniego odczytu, nie
+gwarantuje punktów całej misji. Sprawdź przejście do kolejnego etapu: nie wolno
+przypisać jego wyniku poprzedniej misji. Końcowe premie po zamknięciu rejestracji
+mogą wymagać porównania z ekranem podsumowania.
 
 `score` w `APXREC` oznacza wewnętrzną ocenę rozkazu. `MaxScore` w tabelach
 `XCom_Challenge` oznacza początkową maksymalną pulę. Żadne z tych pól nie jest

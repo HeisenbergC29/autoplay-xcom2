@@ -185,3 +185,49 @@ W zwycięskim logu są startowe pule i reguły, ale brak oficjalnego zdobytego
 wyniku i medalu. Recorder v8 nie odczytuje tych wartości; nie rekonstruujemy
 ich z końcowego HP ani pól `score` decyzji. To doprecyzowanie dokumentacji
 nie zmienia kodu ani parametrów v8 i nie wymaga ponownej kompilacji.
+
+## Zmiany v9 — ratunek, łup i reguły punktacji
+
+Nowe źródła `mission-report-v9` wymagają kompilacji Windows i osobnej próby
+w grze. Testy źródeł, scenariuszy oraz kontraktów korzystają z tego samego
+prywatnego `Development/SrcOrig`; SDK nie jest dołączane do repozytorium.
+
+Sprawdzane kontrakty ratunku obejmują `MedikitStabilize`/`GremlinStabilize`,
+natywne warunki i koszt zdolności, `GetHitRange`, projekcję pozostałych AP
+oraz `GetBleedingOutTurnsRemaining`. Efekt wykrwawiania wygasa na początku
+tury jego właściciela, więc przy jednej pozostałej turze nie wystarcza
+częściowe podejście. Sam zasięg z proponowanego pola nie dowodzi dostępności
+celu; właściwa aktywacja nadal wymaga natywnego `AA_Success` po ruchu.
+
+`Loot` jest neutralną darmową zdolnością z `X2AbilityTarget_Single`
+i `X2AbilityMultiTarget_Loot`. Natywny builder pobiera przedmioty, a
+`UnitMoveFinished` może wyzwolić automatyczny pickup po odświeżeniu celów.
+Planer nie modyfikuje ekwipunku ani stanu pozycji podczas oceny. Zasięg łupu
+jest ścisły (`Distance < LootableRange`), a LOS i dostępność nadal weryfikuje gra.
+
+Punktacja korzysta z publicznego `XComGameState_LadderProgress.CumulativeScore`,
+rewizji `XComGameState_ChallengeScore`, zdarzeń jawnej listy celów i ratunku
+cywilów. SDK potwierdza utratę premii za brak ran tylko przy pierwszej ranie
+oraz osobną premię przeżycia. Parametry wspólnego profilu pochodzą z tabel
+`XCom_Challenge` w prawdziwym logu GasStation/Cemetery i jawnych wartości
+domyślnych struktur SDK dla pozostałych typów przeciwnika. Plik
+`tools/legacy-score-rules.json` zapisuje źródła i przyjęte konwencje.
+
+V9 odczytuje też faktyczne parametry Legacy przez natywne, odczytujące
+`XComChallengeModeManager.GetSoldierScoring`, `GetTimeScoring`, `GetEnemyScoring`
+i `GetObjectiveScoring`. Wywołania dotyczą bieżącej drabinki i etapu;
+reguły typów wrogów pochodzą tylko z widocznych podglądów, a cele z jawnych
+zaliczeń. Nie są wywoływane funkcje `Add*` przyznające punkty. Uruchomienie
+rejestracji F8 nie jest dowodem kompletności obserwacji misji.
+
+Funkcje przyznawania punktów za zabicia, cele i koniec misji są natywne;
+otrzymane `.uc` nie ujawniają ich pełnego algorytmu. Dlatego wynik porównawczy
+stosowany do wszystkich misji jest opisanym profilem, nie odtworzeniem
+oficjalnej punktacji co do punktu. Braki danych pozostają jawne.
+[Szczegóły v9](tactics-v9.pl.md).
+
+Kontrola końcowa v9: **280 testów Python zaliczonych bez pominięć** z ustawionym
+`APX_SDK_SOURCE_ROOT`, audyt 11 klas i 29 nazw zdolności oraz trzy zestawy testów
+PowerShell: budowania, zbierania źródeł SDK i raportów misji. Sprawdzono też
+odnośniki dokumentacji i `git diff --check`. To nie zastępuje kompilacji Windows
+ani próby v9 w grze.

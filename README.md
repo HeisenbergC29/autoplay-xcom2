@@ -54,7 +54,7 @@ utratę możliwości ataku po ruchu, np. strzału karabinem wymagającego dwóch
 [Próba v7](docs/report-2026-11-02-legacy-v7.pl.md) zakończyła się porażką
 w turze 3, potwierdzając działanie kontroli szarży i kosztu AP.
 
-Bieżące **`mission-report-v8`** dodaje wycenę znanych skutków zabicia źródła
+Wersja **`mission-report-v8`** dodała wycenę znanych skutków zabicia źródła
 kontroli umysłu lub psi zombie, alternatywne punkty granatu dla pary wrogów
 oraz bardziej zachowawczą ocenę odwrotu w zasięgu wręcz.
 [Opis zmian i ocena sugestii taktycznych](docs/tactics-v8.pl.md).
@@ -62,13 +62,18 @@ oraz bardziej zachowawczą ocenę odwrotu w zasięgu wręcz.
 zwycięstwo: `ChallengeAbductionGasStation`, pierwsza misja „Blast From the Past”,
 Dowódca, 14 tur i dwóch poległych. W logu widać załadowanie kolejnej misji
 `ChallengeAbductionCemetery`; jej próba autoplaya pozostaje do wykonania.
-Do tej próby zachowujemy tę samą v8, bez nowej kompilacji.
+Bieżące **`mission-report-v9`** dodaje podejście do wykrwawiającego się
+żołnierza przed stabilizacją, legalne zbieranie łupu i rejestrację punktacji.
+Wymaga nowej kompilacji przed próbą następnej misji.
+[Zakres zmian, reguły punktacji i ograniczenia v9](docs/tactics-v9.pl.md).
 
 **Stan: alpha; v8 wygrało pierwszą misję Legacy Operations na Dowódcy.**
 Pełna drabinka Legacy, wygrana Gatecrashera i wszystkie pozostałe rodzaje misji
-nadal wymagają osobnych prób. W Legacy zapisujemy oddzielnie zwycięstwo,
-straty i oficjalną punktację. Pole `score` w rejestrze decyzji jest oceną
-planera, nie wynikiem Legacy. [Instrukcja następnej próby](docs/legacy-test.pl.md).
+nadal wymagają osobnych prób. Każdy nowy raport otrzymuje porównawczą punktację
+według wspólnego profilu reguł odczytanych z gry, także poza Legacy. Oficjalny
+wynik Legacy pozostaje osobnym odczytem; niepełne dane dają częściową ocenę.
+Pole `score` w rejestrze decyzji nadal jest oceną planera.
+[Instrukcja następnej próby](docs/legacy-test.pl.md).
 
 Dotychczasowy plik `.u` i konfigurację zweryfikowano; importy binarne prowadzą tylko do standardowych pakietów `Core`, `Engine`, `XComGame`. Repozytorium nie zawiera SDK ani plików gry. Szczegóły: [wyniki kontroli SDK i kompilacji](docs/SDK-AUDIT.pl.md).
 
@@ -95,7 +100,8 @@ Przycisk używa oryginalnych elementów UI, bez zastępowania plików Flash. Po�
 | Walka wręcz | Wybrane ataki Rangera, Templariusza i Renegata, z trasą wyznaczaną przez silnik |
 | Niszczenie celów | Zwykłe strzały do widocznych obiektów oznaczonych przez grę jako wrogie cele misji, np. przekaźniki; bez atakowania neutralnej scenerii |
 | Granaty | Frag/Alien rzucane i wystrzeliwane, natywna trajektoria i promień wybuchu, ocena grup widocznych wrogów; kontrola sojuszników, cywilów, celów misji i niebezpiecznych obiektów na trasie i w wybuchu |
-| Wsparcie | Leczenie i stabilizacja, przeładowanie, overwatch, hunker down |
+| Wsparcie | Leczenie i stabilizacja; podejście ratownika do wykrwawiającego się sojusznika z zachowaniem AP na stabilizację; przeładowanie, overwatch, hunker down |
+| Łup | Natywne darmowe `Loot`; krótkie bezpieczne podejście do widocznego łupu po walce, gdy nie koliduje z ratunkiem, ewakuacją, celem ani aktywnym terminem |
 | Zasadzka | Przed atakiem z ukrycia: zachowanie strzelca otwierającego, krótkie ruchy pozostałych do linii ostrzału i legalny overwatch; ograniczony budżet przygotowań |
 | Ruch | Legalne niebieskie ruchy, trasowanie A*, ocena osłon względem widocznych wrogów, kontrola ognia/kwasu i innych zagrożeń na trasie |
 | Eksploracja | Gdy brak znanych celów i przydatnych akcji: ograniczone obliczeniowo próbkowanie niezbadanych pól mapy i podział celów między żołnierzy; bez odczytu pozycji ukrytych wrogów |
@@ -161,7 +167,8 @@ Dotyczy to wcześniejszej kompilacji. Przechowywany ZIP ma kompletną konfigurac
 tylko do `Core`, `Engine` i `XComGame`, a dziewięć klas moda jest obecnych.
 Najnowszy raport użytkownika potwierdza działanie v8 i zwycięstwo w pierwszej
 misji Legacy Operations. Nie dowodzi ukończenia pozostałych misji ani uzyskania
-konkretnego wyniku punktowego. Obecne
+konkretnego wyniku punktowego. Nowe zmiany v9 mają testy źródeł, scenariuszy
+i kontraktów SDK; ich kompilacja i działanie w grze wymagają osobnej próby. Obecne
 środowisko Linux pozwala uruchamiać testy Python i PowerShell, ale nie zawiera
 SDK Windows ani działającej gry.
 

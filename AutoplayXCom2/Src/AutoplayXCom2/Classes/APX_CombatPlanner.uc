@@ -527,15 +527,97 @@ static function float ScoreObjectiveAttack(XComGameState_Unit SourceUnit,
     return Result;
 }
 
+// Bleeding is a distinct rescue state. Unconscious/stabilized soldiers need
+// revival or evacuation instead; dead bodies must never become healing goals.
+// Do not require IsAbleToAct/!IsIncapacitated on the patient being rescued.
+static function bool IsRescuePatient(XComGameState_Unit SourceUnit,
+    XComGameState_Unit TargetUnit)
+{
+    return SourceUnit != none && TargetUnit != none
+        && SourceUnit.ObjectID != TargetUnit.ObjectID
+        && SourceUnit.GetAssociatedPlayerID() == TargetUnit.GetAssociatedPlayerID()
+        && SourceUnit.GetTeam() == eTeam_XCom && TargetUnit.GetTeam() == eTeam_XCom
+        && SourceUnit.IsFriendlyUnit(TargetUnit)
+        && !TargetUnit.bRemoved && !TargetUnit.bRemovedFromPlay
+        && TargetUnit.GetMyTemplate() != none && !TargetUnit.GetMyTemplate().bIsCosmetic
+        && TargetUnit.IsBleedingOut() && !TargetUnit.IsBeingCarried();
+}
+
+// CanActivateAbility checks the real shooter, cooldown, ammo/charges and AP,
+// independently of whether a target currently lies in the medikit's range.
+// This lets navigation propose a rescue without inventing an extra medikit.
+static function XComGameState_Ability GetReadyStabilizeAbility(
+    XComGameState_Unit SourceUnit, XComGameState_Unit TargetUnit)
+{
+    local StateObjectReference AbilityRef;
+    local XComGameState_Ability Ability;
+    local X2AbilityTemplate Template;
+
+    if (!IsRescuePatient(SourceUnit, TargetUnit) || !SourceUnit.IsAbleToAct())
+        return none;
+    foreach SourceUnit.Abilities(AbilityRef)
+    {
+        Ability = XComGameState_Ability(`XCOMHISTORY.GetGameStateForObjectID(AbilityRef.ObjectID));
+        if (Ability == none || Ability.OwnerStateObject.ObjectID != SourceUnit.ObjectID
+            || default.StabilizeAbilities.Find(Ability.GetMyTemplateName()) == INDEX_NONE
+            || !Ability.IsAbilityInputTriggered() || Ability.IsAbilityFreeAiming())
+            continue;
+        Template = Ability.GetMyTemplate();
+        // Only the configured single-target stabilization contract is known.
+        // Radius/revival abilities need an explicit planner of their own.
+        if (Template == none || Template.Hostility != eHostility_Defensive
+            || Template.AbilityTargetStyle == none
+            || Template.AbilityTargetStyle.Class != class'X2AbilityTarget_Single'
+            || Template.AbilityMultiTargetStyle != none)
+            continue;
+        if (Ability.CanActivateAbility(SourceUnit) == 'AA_Success'
+            && Template.CheckTargetConditions(Ability, SourceUnit, TargetUnit) == 'AA_Success')
+            return Ability;
+    }
+    return none;
+}
+
+// A position proposal, not an activation. The next decision still needs the
+// native available-target cache to authorize the actual stabilization order.
+static function bool CanStabilizeFromTile(XComGameState_Unit SourceUnit,
+    XComGameState_Unit TargetUnit, XComGameState_Ability Ability, TTile Tile)
+{
+    local X2AbilityTemplate Template;
+    local vector SourceLocation, TargetLocation;
+    local float HitRange;
+
+    if (!IsRescuePatient(SourceUnit, TargetUnit) || Ability == none
+        || Ability.OwnerStateObject.ObjectID != SourceUnit.ObjectID)
+        return false;
+    Template = Ability.GetMyTemplate();
+    if (Template == none || Template.AbilityTargetStyle == none
+        || Template.AbilityTargetStyle.Class != class'X2AbilityTarget_Single'
+        || Template.AbilityMultiTargetStyle != none
+        || default.StabilizeAbilities.Find(Ability.GetMyTemplateName()) == INDEX_NONE)
+        return false;
+    HitRange = Template.AbilityTargetStyle.GetHitRange(Ability);
+    if (HitRange < 0.0)
+        return true;
+    SourceLocation = `XWORLD.GetPositionFromTileCoordinates(Tile);
+    TargetLocation = `XWORLD.GetPositionFromTileCoordinates(TargetUnit.TileLocation);
+    return VSizeSq(SourceLocation - TargetLocation) <= Square(HitRange);
+}
+
 static function float ScoreMedical(XComGameState_Unit SourceUnit,
     XComGameState_Unit TargetUnit, bool bStabilize)
 {
     local float Health, MaxHealth, MissingHealth;
 
-    if (TargetUnit == none || !SourceUnit.IsFriendlyUnit(TargetUnit))
+    if (SourceUnit == none || TargetUnit == none)
+        return -10000.0;
+    if (TargetUnit.bRemoved || TargetUnit.bRemovedFromPlay || !SourceUnit.IsFriendlyUnit(TargetUnit))
         return -10000.0;
     if (bStabilize)
-        return TargetUnit.IsBleedingOut() ? 400.0 : -10000.0;
+    {
+        if (TargetUnit.IsBleedingOut())
+            return 400.0;
+        return -10000.0;
+    }
     if (!TargetUnit.IsAlive() || TargetUnit.IsBleedingOut())
         return -10000.0;
 

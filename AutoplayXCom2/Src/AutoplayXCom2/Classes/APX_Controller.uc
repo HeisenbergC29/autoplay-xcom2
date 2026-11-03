@@ -681,7 +681,7 @@ function MakeDecision(XComTacticalController PC)
     local array<TTile> CandidatePath, BestPath, AmbushPath;
     local array<vector> CandidateLocations, BestLocations;
     local vector CandidateAim, BestAim;
-    local int TargetIndex, BestTargetIndex, ChosenTargetID, AmbushTargetIndex;
+    local int TargetIndex, BestTargetIndex, ChosenTargetID, AmbushTargetIndex, RescuePatientID;
     local float Score, BestScore, AmbushScore;
     local bool bMove, bArea, bHavePlan, bSuccess, bCanExplore, bCombatThreats;
     local bool bVisibleThreats, bContactSearch, bCandidateMove, bGrenadeCandidate;
@@ -760,6 +760,19 @@ function MakeDecision(XComTacticalController PC)
             BestLocations.Length = 0;
             bHavePlan = true;
         }
+        if (class'APX_MissionPlanner'.static.ChooseLootInteraction(UnitState, Candidate, TargetIndex, Score)
+            && TraceCandidateAction(UnitState, "loot", Candidate, TargetIndex, Score)
+            && Score > BestScore && CanUseAction(UnitState, Candidate, TargetIndex))
+        {
+            BestAction = Candidate;
+            BestTargetIndex = TargetIndex;
+            BestScore = Score;
+            BestUnit = UnitState;
+            bMove = false;
+            bArea = false;
+            BestLocations.Length = 0;
+            bHavePlan = true;
+        }
         CandidateLocations.Length = 0;
         if (AutoPlaceEvac && class'APX_EvacPlanner'.static.ChoosePlacement(
             UnitState, Candidate, CandidateLocations, Score)
@@ -819,6 +832,38 @@ function MakeDecision(XComTacticalController PC)
             bArea = false;
             BestLocations.Length = 0;
             bHavePlan = true;
+        }
+        CandidatePath.Length = 0;
+        if (class'APX_MissionPlanner'.static.ChooseRescueMove(UnitState, CandidatePath, Score, RescuePatientID)
+            && TraceCandidateMove(UnitState, CandidatePath, Score)
+            && Score > BestScore && CanUseMove(UnitState, CandidatePath))
+        {
+            BestPath = CandidatePath;
+            BestScore = Score;
+            BestUnit = UnitState;
+            bMove = true;
+            bArea = false;
+            BestLocations.Length = 0;
+            bHavePlan = true;
+            if (MissionRecorder != none)
+                MissionRecorder.Marker("rescue_candidate", "unit=" $ UnitState.ObjectID
+                    @ "patient=" $ RescuePatientID @ "score=" $ Score);
+        }
+        CandidatePath.Length = 0;
+        if (!bCombatThreats
+            && class'APX_MissionPlanner'.static.ChooseLootMove(UnitState, CandidatePath, Score)
+            && TraceCandidateMove(UnitState, CandidatePath, Score)
+            && Score > BestScore && CanUseMove(UnitState, CandidatePath))
+        {
+            BestPath = CandidatePath;
+            BestScore = Score;
+            BestUnit = UnitState;
+            bMove = true;
+            bArea = false;
+            BestLocations.Length = 0;
+            bHavePlan = true;
+            if (MissionRecorder != none)
+                MissionRecorder.Marker("loot_candidate", "unit=" $ UnitState.ObjectID @ "score=" $ Score);
         }
     }
 

@@ -109,7 +109,11 @@ ani medalu. Nie wyliczamy ich zastępczo ze statystyk autoplaya. Kolejne próby
 powinny rozdzielać: zwycięstwo, straty, liczbę tur, wynik misji i wynik operacji,
 jeśli gra je pokazuje.
 
-## Następna misja na tej samej wersji
+## Następna misja — stan po próbie v8
+
+Poniższe zalecenie opisuje stan przy sporządzeniu raportu. Po dodaniu ratunku,
+łupu i rejestracji punktacji kolejną próbę wykonujemy na nowej v9 według
+[aktualnej instrukcji Legacy](legacy-test.pl.md).
 
 Po zwycięstwie gra ładuje `Plot_TWN_Abduction_Cemetery` (linia 8055),
 a inicjalizacja punktacji wskazuje `ChallengeAbductionCemetery`

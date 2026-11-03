@@ -18,12 +18,14 @@ ruchu i obronie oraz dodaje wkład ryzyka każdego widocznego przeciwnika.
 Próba v6 również zakończyła się porażką. `mission-report-v7` ogranicza
 szarże oddalające jednostkę od wsparcia i uwzględnia utratę legalnego ataku
 przez zużycie AP na ruch; próba v7 także zakończyła się porażką.
-Bieżące `mission-report-v8` dodaje priorytet dobicia źródła kontroli,
+Wersja `mission-report-v8` dodała priorytet dobicia źródła kontroli,
 alternatywne punkty granatu dla pary wrogów i rozpoznany zasięg zagrożenia
-wręcz. Użytkownik potwierdził zwycięstwo v8 w pierwszej misji Legacy;
-kolejny etap testujemy na tej samej zainstalowanej wersji, bez przebudowy.
+wręcz. Użytkownik potwierdził zwycięstwo v8 w pierwszej misji Legacy.
+Bieżące `mission-report-v9` dodaje podejście do wykrwawiającego się sojusznika,
+zbieranie łupu oraz telemetrię punktacji. Przed kolejnym etapem zbuduj
+i zainstaluj nową wersję; sama podmiana konfiguracji nie wystarczy.
 Instrukcja próby to `docs/legacy-test.pl.md`,
-a opis zakresu zmian to `docs/tactics-v8.pl.md` w źródłach.
+a opis zakresu zmian to `docs/tactics-v9.pl.md` w źródłach.
 
 ## Wymagania
 
@@ -142,12 +144,17 @@ Raport ZIP pojawi się w `<Dokumenty>\AutoplayXCom2-Reports`. Skrypt działa tak
 po usunięciu pobranego folderu źródeł. Załącz raport do zgłoszenia wraz z poziomem
 trudności, wynikiem misji i stratami. Szczegóły: `docs/mission-recording.pl.md`
 w repozytorium. To zapis diagnostyczny, nie film ani replay.
-W nowym raporcie wpis `revision=mission-report-v8` identyfikuje tę wersję.
+W nowym raporcie wpis `revision=mission-report-v9` identyfikuje tę wersję.
 Znaczniki `ambush_setup` pokazują przygotowania, a `grenade_scan` zawiera również
 liczby ocenionych okazji do granatu na pojedynczy cel i ostatni podgląd obrażeń.
 `area_target_preview` opisuje cele wybranego granatu; `move_threat_preview`
 pozwala sprawdzić osłony wybranych ruchów, odległość, klasyfikację wręcz i wkład
 ryzyka każdego widocznego wroga. Podglądy nie są gwarancją wyniku akcji.
+V9 zapisuje także `rescue_candidate`, `loot_candidate` i odczyty oficjalnego
+wyniku Legacy (`game_score`), gdy należą do bieżącego etapu. Analizator źródeł
+wylicza wspólną punktację porównawczą dla wszystkich misji; oznacza braki danych
+i nie zastępuje nią oficjalnego wyniku gry. Do raportu warto nadal dopisać wynik
+z ekranu podsumowania oraz wszelkie ręczne działania i restarty.
 
 - Stałe „PAUSED: SCREEN / MENU” na zwykłym HUD-zie w wersji `0.1.0-alpha`: pobierz aktualne źródła, ponownie zbuduj i zastąp cały folder moda; sama zmiana INI nie wystarczy. Po aktualizacji uruchom grę ponownie.
 - Jeśli aktualna kompilacja nadal czeka, prześlij `Launch.log` z `<Dokumenty>\My Games\XCOM2 War of the Chosen\XComGame\Logs`. Wpisy `AutoplayXCom2: Waiting:` oraz `UI stack:` wskazują rozpoznaną przyczynę; powtarzane są tylko po zmianie przyczyny.

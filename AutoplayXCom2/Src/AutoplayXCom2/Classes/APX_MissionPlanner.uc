@@ -108,6 +108,246 @@ static function bool IsObjectiveAbility(name AbilityName)
     return false;
 }
 
+// Loot never justifies postponing an owned soldier's bleeding-out emergency.
+static function bool HasBleedingSquadmate(XComGameState_Unit UnitState)
+{
+    local XComGameState_Unit Friendly;
+
+    foreach `XCOMHISTORY.IterateByClassType(class'XComGameState_Unit', Friendly)
+    {
+        if (Friendly.IsAlive() && !Friendly.bRemovedFromPlay
+            && Friendly.GetTeam() == eTeam_XCom && !Friendly.GetMyTemplate().bIsCosmetic
+            && Friendly.GetAssociatedPlayerID() == UnitState.GetAssociatedPlayerID()
+            && Friendly.IsBleedingOut())
+            return true;
+    }
+    return false;
+}
+
+// Read the installed native ability, including its actual configured range.
+// Unsupported/modded costs or targeting styles do not grant a free pickup.
+static function XComGameState_Ability GetReadyLootAbility(XComGameState_Unit UnitState,
+    out float LootRange)
+{
+    local StateObjectReference AbilityRef;
+    local XComGameState_Ability Ability;
+    local X2AbilityTemplate Template;
+    local X2Condition Condition;
+    local X2Condition_Lootable LootCondition;
+
+    LootRange = 0.0;
+    if (UnitState == none || !UnitState.IsAbleToAct() || UnitState.bRemovedFromPlay
+        || UnitState.GetTeam() != eTeam_XCom || UnitState.IsCivilian()
+        || UnitState.GetMyTemplate().bIsCosmetic)
+        return none;
+    AbilityRef = UnitState.FindAbility('Loot');
+    Ability = XComGameState_Ability(`XCOMHISTORY.GetGameStateForObjectID(AbilityRef.ObjectID));
+    if (Ability == none || Ability.OwnerStateObject.ObjectID != UnitState.ObjectID)
+        return none;
+    Template = Ability.GetMyTemplate();
+    if (Template == none || Template.Hostility != eHostility_Neutral
+        || Template.AbilityCosts.Length != 0 || !Ability.IsAbilityInputTriggered()
+        || Ability.IsAbilityFreeAiming() || Template.AbilityTargetStyle == none
+        || Template.AbilityTargetStyle.Class != class'X2AbilityTarget_Single'
+        || Template.AbilityMultiTargetStyle == none
+        || Template.AbilityMultiTargetStyle.Class != class'X2AbilityMultiTarget_Loot'
+        || Ability.CanActivateAbility(UnitState) != 'AA_Success')
+        return none;
+    foreach Template.AbilityTargetConditions(Condition)
+    {
+        LootCondition = X2Condition_Lootable(Condition);
+        if (LootCondition != none && LootCondition.bRestrictRange
+            && LootCondition.LootableRange > 0)
+        {
+            LootRange = LootCondition.LootableRange;
+            return Ability;
+        }
+    }
+    return none;
+}
+
+// The rules cache supplies the legal target; activating native Loot acquires
+// all eligible nearby items. There is no inventory mutation or pickup dialog.
+static function bool ChooseLootInteraction(XComGameState_Unit UnitState,
+    out AvailableAction Action, out int TargetIndex, out float Score)
+{
+    local XComGameState_Ability LootAbility;
+    local XComGameState_BaseObject TargetObject;
+    local Lootable LootObject;
+    local GameRulesCache_Unit UnitCache;
+    local AvailableAction Candidate;
+    local int ActionIndex, Index;
+    local float LootRange;
+
+    Score = 0.0;
+    TargetIndex = INDEX_NONE;
+    LootAbility = GetReadyLootAbility(UnitState, LootRange);
+    if (LootAbility == none || HasBleedingSquadmate(UnitState) || ShouldEvacuate(UnitState)
+        || !`TACTICALRULES.GetGameRulesCache_Unit(UnitState.GetReference(), UnitCache))
+        return false;
+    for (ActionIndex = 0; ActionIndex < UnitCache.AvailableActions.Length; ++ActionIndex)
+    {
+        Candidate = UnitCache.AvailableActions[ActionIndex];
+        if (Candidate.AbilityObjectRef.ObjectID != LootAbility.ObjectID
+            || Candidate.AvailableCode != 'AA_Success' || !Candidate.bInputTriggered
+            || Candidate.bFreeAim)
+            continue;
+        for (Index = 0; Index < Candidate.AvailableTargets.Length; ++Index)
+        {
+            TargetObject = `XCOMHISTORY.GetGameStateForObjectID(
+                Candidate.AvailableTargets[Index].PrimaryTarget.ObjectID);
+            LootObject = Lootable(TargetObject);
+            if (TargetObject == none || TargetObject.bRemoved || LootObject == none
+                || !LootObject.HasAvailableLoot()
+                || !LootObject.HasAvailableLootForLooter(UnitState.GetReference()))
+                continue;
+            Action = Candidate;
+            TargetIndex = Index;
+            Score = 245.0;
+            return true;
+        }
+    }
+    return false;
+}
+
+static function bool HasActiveMissionDeadline()
+{
+    local XComGameState_UITimer TimerState;
+
+    foreach `XCOMHISTORY.IterateByClassType(class'XComGameState_UITimer', TimerState)
+    {
+        // Do not infer timer semantics from its label or invent remaining turns.
+        if (!TimerState.bRemoved && TimerState.IsTimer && TimerState.ShouldShow
+            && !TimerState.IsSuspended())
+            return true;
+    }
+    return false;
+}
+
+static function bool IsLootRouteAllowed(bool bThreats, bool bBleeding,
+    bool bEvacuating, bool bReadyObjective, bool bMissionDeadline, int StandardAP)
+{
+    return !bThreats && !bBleeding && !bEvacuating && !bReadyObjective
+        && !bMissionDeadline && StandardAP >= 2;
+}
+
+static function bool LootRouteMakesProgress(bool bHasMissionGoal,
+    float CurrentGoalDistance, float DestinationGoalDistance)
+{
+    return !bHasMissionGoal || DestinationGoalDistance <= CurrentGoalDistance;
+}
+
+static function float ScoreLootMove(float PathCost, int ExpirationTurns,
+    bool bHasMissionGoal)
+{
+    local float Value;
+
+    Value = 24.0;
+    if (bHasMissionGoal)
+        Value = 36.0;
+    // Only the drop's real native expiry affects urgency; no synthetic timer.
+    return Value + float(Clamp(3 - ExpirationTurns, 0, 2))
+        - FMin(3.0, FMax(0.0, PathCost) * 0.1);
+}
+
+// Propose a short, known safe approach. EndOfMoveLoot and the refreshed rules
+// cache remain authoritative: a proposed tile is never a relocated live unit.
+static function bool ChooseLootMove(XComGameState_Unit UnitState,
+    out array<TTile> Path, out float Score)
+{
+    local XComGameState_LootDrop Drop;
+    local XComGameState_Ability LootAbility;
+    local XGUnit Visualizer;
+    local MissionGoal Goal;
+    local array<StateObjectReference> VisibleEnemies;
+    local array<TTile> Tiles, CandidatePath;
+    local AvailableAction Interaction;
+    local GameRulesCache_VisibilityInfo Visibility;
+    local TTile Tile, LootTile, ClosestTile;
+    local vector LootLocation, CandidateLocation;
+    local int TargetIndex, StandardAP, Sample, SampleCount, TileIndex, NeighborIndex, Drops;
+    local float LootRange, InteractionScore, StartGoalDistance, Cost, Value, StartSupport;
+    local bool bReadyObjective;
+
+    Path.Length = 0;
+    Score = 0.0;
+    LootAbility = GetReadyLootAbility(UnitState, LootRange);
+    if (LootAbility == none || !HasLegalMove(UnitState))
+        return false;
+    StandardAP = UnitState.NumActionPoints(class'X2CharacterTemplateManager'.default.StandardActionPoint);
+    bReadyObjective = ChooseInteraction(UnitState, Interaction, TargetIndex, InteractionScore);
+    GetVisibleThreats(UnitState, VisibleEnemies);
+    if (!IsLootRouteAllowed(VisibleEnemies.Length > 0, HasBleedingSquadmate(UnitState),
+        ShouldEvacuate(UnitState), bReadyObjective, HasActiveMissionDeadline(), StandardAP))
+        return false;
+    FindGoal(UnitState, Goal, VisibleEnemies);
+    if (Goal.bCombat)
+        return false;
+    StartGoalDistance = TileDistance(UnitState.TileLocation, Goal.Tile);
+    StartSupport = NearestSupportDistance(UnitState, UnitState.TileLocation);
+    Visualizer = XGUnit(UnitState.GetVisualizer());
+    if (Visualizer == none || Visualizer.m_kReachableTilesCache == none)
+        return false;
+    Visualizer.m_kReachableTilesCache.UpdateTileCacheIfNeeded();
+    Visualizer.m_kReachableTilesCache.GetAllPathableTiles(Tiles, Visualizer.GetMobility());
+    if (Tiles.Length == 0)
+        return false;
+    foreach `XCOMHISTORY.IterateByClassType(class'XComGameState_LootDrop', Drop)
+    {
+        LootTile = Drop.GetLootLocation();
+        if (Drop.bRemoved || Drop.LootExpirationTurnsRemaining <= 0
+            || !class'X2TacticalVisibilityHelpers'.static.CanSquadSeeLocation(
+                UnitState.ControllingPlayer.ObjectID, LootTile)
+            || !Drop.HasAvailableLoot() || !Drop.HasNonPsiLoot()
+            || !Drop.HasAvailableLootForLooter(UnitState.GetReference()))
+            continue;
+        if (++Drops > 32)
+            break;
+        LootLocation = `XWORLD.GetPositionFromTileCoordinates(LootTile);
+        ClosestTile = Visualizer.m_kReachableTilesCache.GetClosestReachableDestination(LootTile);
+        SampleCount = Min(Tiles.Length + 9, Clamp(default.MaxCandidateTiles, 1, 96));
+        for (Sample = 0; Sample < SampleCount; ++Sample)
+        {
+            if (Sample == 0)
+                Tile = ClosestTile;
+            else if (Sample < 9)
+            {
+                NeighborIndex = Sample - 1;
+                if (NeighborIndex >= 4)
+                    ++NeighborIndex;
+                Tile = LootTile;
+                Tile.X += NeighborIndex % 3 - 1;
+                Tile.Y += NeighborIndex / 3 - 1;
+            }
+            else
+            {
+                TileIndex = (Sample - 9) * Max(0, Tiles.Length - 1) / Max(1, SampleCount - 10);
+                Tile = Tiles[TileIndex];
+            }
+            Cost = Visualizer.m_kReachableTilesCache.GetPathCostToTile(Tile);
+            if (Tile == UnitState.TileLocation || Cost < 0.0 || Cost > Visualizer.GetMobility()
+                || !LootRouteMakesProgress(Goal.bFound, StartGoalDistance, TileDistance(Tile, Goal.Tile))
+                || !IsSupportedAdvanceDestination(StartSupport, NearestSupportDistance(UnitState, Tile)))
+                continue;
+            CandidateLocation = `XWORLD.GetPositionFromTileCoordinates(Tile);
+            // X2Condition_Lootable rejects Distance >= LootableRange.
+            if (VSizeSq(CandidateLocation - LootLocation) >= Square(LootRange)
+                || !`XWORLD.CanSeeTileToTile(Tile, LootTile, Visibility))
+                continue;
+            Value = ScoreLootMove(Cost, Drop.LootExpirationTurnsRemaining, Goal.bFound);
+            if (Value <= Score)
+                continue;
+            CandidatePath.Length = 0;
+            if (!Visualizer.m_kReachableTilesCache.BuildPathToTile(Tile, CandidatePath)
+                || !class'APX_SquadPlanner'.static.PreparationPathIsSafe(UnitState, CandidatePath))
+                continue;
+            Path = CandidatePath;
+            Score = Value;
+        }
+    }
+    return Path.Length > 1;
+}
+
 static function bool ChooseInteraction(XComGameState_Unit UnitState,
     out AvailableAction Action, out int TargetIndex, out float Score)
 {
@@ -932,6 +1172,131 @@ static function float MoveOpportunityPenalty(float BestNow, float BestAfterMove,
     if (HealthFraction < 0.5 && RiskReduction >= 8.0)
         return 0.0;
     return FMax(0.0, BestNow - BestAfterMove);
+}
+
+// Rescue is distinct from an ordinary firing-position move. The downed own
+// squadmate is the destination anchor; live-squad spacing must not exclude
+// every approach to a casualty who fell behind. Risk still reduces its value.
+static function float ScoreRescueApproach(bool bCanTreatNow, float Progress,
+    float CurrentRisk, float DestinationRisk, float HealthFraction, int BleedingTurns)
+{
+    local float Value, Increase;
+
+    if (!bCanTreatNow && (Progress < 2.0 || BleedingTurns <= 1))
+        return -10000.0;
+    Value = 180.0;
+    if (bCanTreatNow)
+        Value = 260.0;
+    Value += FMin(12.0, FMax(0.0, Progress) * 2.0);
+    Value += float(Clamp(3 - BleedingTurns, 0, 2)) * 8.0;
+    Increase = FMax(0.0, DestinationRisk - CurrentRisk);
+    Value -= DestinationRisk * 0.15 + Increase * (2.0 - FClamp(HealthFraction, 0.0, 1.0));
+    if (HealthFraction <= 0.45 && Increase > 0.0)
+        Value -= 60.0;
+    return Value;
+}
+
+static function bool ChooseRescueMove(XComGameState_Unit UnitState,
+    out array<TTile> Path, out float Score, out int PatientID)
+{
+    local XComGameState_Unit Patient;
+    local XComGameState_Ability Stabilize;
+    local XGUnit Visualizer;
+    local array<TTile> Tiles, CandidatePath;
+    local array<name> RemainingPoints;
+    local array<StateObjectReference> VisibleEnemies;
+    local array<float> MeleeThreatReaches;
+    local TTile Tile, ClosestTile;
+    local int Sample, SampleCount, TileIndex, NeighborIndex, PathIndex, Turns;
+    local float Cost, Distance, CandidateDistance, CurrentRisk, Risk, Value, HealthFraction;
+    local bool bCanTreatNow, bSafe;
+
+    Path.Length = 0;
+    Score = 0.0;
+    PatientID = 0;
+    if (UnitState == none || !UnitState.IsAbleToAct() || !HasLegalMove(UnitState)
+        || !ActionPointsAfterBlueMove(UnitState, RemainingPoints))
+        return false;
+    Visualizer = XGUnit(UnitState.GetVisualizer());
+    if (Visualizer == none || Visualizer.m_kReachableTilesCache == none)
+        return false;
+    Visualizer.m_kReachableTilesCache.UpdateTileCacheIfNeeded();
+    Visualizer.m_kReachableTilesCache.GetAllPathableTiles(Tiles, Visualizer.GetMobility());
+    if (Tiles.Length == 0)
+        return false;
+    GetVisibleThreats(UnitState, VisibleEnemies);
+    GetMeleeThreatReaches(UnitState, VisibleEnemies, MeleeThreatReaches);
+    CurrentRisk = ExposureRisk(UnitState, UnitState.TileLocation, VisibleEnemies, MeleeThreatReaches);
+    HealthFraction = UnitState.GetCurrentStat(eStat_HP) / FMax(1.0, UnitState.GetMaxStat(eStat_HP));
+    foreach `XCOMHISTORY.IterateByClassType(class'XComGameState_Unit', Patient)
+    {
+        Stabilize = class'APX_CombatPlanner'.static.GetReadyStabilizeAbility(UnitState, Patient);
+        if (Stabilize == none || !CanAttackWithActionPoints(Stabilize, UnitState, RemainingPoints))
+            continue;
+        Turns = Patient.GetBleedingOutTurnsRemaining();
+        Distance = TileDistance(UnitState.TileLocation, Patient.TileLocation);
+        ClosestTile = Visualizer.m_kReachableTilesCache.GetClosestReachableDestination(Patient.TileLocation);
+        SampleCount = Min(Tiles.Length + 9, Clamp(default.MaxCandidateTiles, 1, 96));
+        for (Sample = 0; Sample < SampleCount; ++Sample)
+        {
+            // Include native closest and adjacent treatment positions before
+            // sampling the larger tile set. Do not use an occupied body tile
+            // as though it were automatically a legal movement destination.
+            if (Sample == 0)
+                Tile = ClosestTile;
+            else if (Sample < 9)
+            {
+                NeighborIndex = Sample - 1;
+                if (NeighborIndex >= 4)
+                    ++NeighborIndex;
+                Tile = Patient.TileLocation;
+                Tile.X += NeighborIndex % 3 - 1;
+                Tile.Y += NeighborIndex / 3 - 1;
+            }
+            else
+            {
+                TileIndex = (Sample - 9) * Max(0, Tiles.Length - 1) / Max(1, SampleCount - 10);
+                Tile = Tiles[TileIndex];
+            }
+            Cost = Visualizer.m_kReachableTilesCache.GetPathCostToTile(Tile);
+            if (Tile == UnitState.TileLocation || Cost < 0.0 || Cost > Visualizer.GetMobility()
+                || !IsKnownCombatTile(Tile)
+                || !class'X2TacticalVisibilityHelpers'.static.CanSquadSeeLocation(
+                    UnitState.ControllingPlayer.ObjectID, Tile))
+                continue;
+            bCanTreatNow = class'APX_CombatPlanner'.static.CanStabilizeFromTile(
+                UnitState, Patient, Stabilize, Tile);
+            CandidateDistance = TileDistance(Tile, Patient.TileLocation);
+            Risk = ExposureRisk(UnitState, Tile, VisibleEnemies, MeleeThreatReaches);
+            Value = ScoreRescueApproach(bCanTreatNow, Distance - CandidateDistance,
+                CurrentRisk, Risk, HealthFraction, Turns) - Cost * 0.25;
+            if (Value <= Score)
+                continue;
+            CandidatePath.Length = 0;
+            if (!Visualizer.m_kReachableTilesCache.BuildPathToTile(Tile, CandidatePath)
+                || CandidatePath.Length < 2)
+                continue;
+            bSafe = true;
+            for (PathIndex = 1; PathIndex < CandidatePath.Length; ++PathIndex)
+            {
+                if (class'XComPath'.static.TileContainsHazard(UnitState, CandidatePath[PathIndex])
+                    || !IsKnownCombatTile(CandidatePath[PathIndex])
+                    || !class'X2TacticalVisibilityHelpers'.static.CanSquadSeeLocation(
+                        UnitState.ControllingPlayer.ObjectID, CandidatePath[PathIndex]))
+                {
+                    bSafe = false;
+                    break;
+                }
+            }
+            if (bSafe)
+            {
+                Path = CandidatePath;
+                Score = Value;
+                PatientID = Patient.ObjectID;
+            }
+        }
+    }
+    return Path.Length > 1;
 }
 
 static function bool HasLegalMove(XComGameState_Unit UnitState)

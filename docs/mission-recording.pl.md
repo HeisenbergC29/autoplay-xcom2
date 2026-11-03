@@ -13,11 +13,14 @@ automat i co rzeczywiście wydarzyło się po rozkazach.
 [Trzecia próba Legacy: wynik v7 i dalsze problemy](report-2026-11-02-legacy-v7.pl.md).
 [V8: źródła kontroli, punkty AoE i zasięg wręcz](tactics-v8.pl.md).
 [Pierwsze zwycięstwo v8 w Legacy i przejście do kolejnej misji](report-2026-11-03-legacy-v8-win.pl.md).
+[V9: ratunek, łup i punktacja każdej symulacji](tactics-v9.pl.md).
 
-W Legacy wynik misji i punkty zapisujemy oddzielnie. `score` w rekordach
-`candidate`/`chosen` jest oceną heurystyki, a startowe `MaxScore` z
-`XCom_Challenge` to pula maksymalna. Rejestrator v8 nie odczytuje oficjalnego
-`CumulativeScore`. Do raportu dopisz oficjalne punkty misji/skumulowane,
+Wynik misji, punktację porównawczą i oficjalne punkty gry zapisujemy oddzielnie.
+`score` w rekordach `candidate`/`chosen` jest oceną heurystyki, a startowe
+`MaxScore` z `XCom_Challenge` to pula maksymalna. Rejestrator v9 odczytuje
+oficjalne `CumulativeScore` dla bieżącego etapu Legacy. Analizator stosuje
+także wspólny profil oparty na regułach gry do wszystkich misji, również tych
+bez oficjalnej punktacji. Do raportu dopisz oficjalny wynik z ekranu podsumowania,
 ewentualny medal, restarty i ręczne działania, jeśli dane są dostępne.
 
 ## Co się zmieniło w taktyce
@@ -54,14 +57,14 @@ przerywa sam Gatecrashera tylko dlatego, że walka idzie źle.
 
 Nie każda zdolność gracza ma automatyczny planer. Obsługiwane są skonfigurowane
 ataki, leczenie, stabilizacja, przeładowanie, overwatch, hunker, Aid Protocol,
-zwykłe granaty Frag/Alien oraz rozpoznane akcje celu i ewakuacji. Pozostałych
+zwykłe granaty Frag/Alien, natywne `Loot` oraz rozpoznane akcje celu i ewakuacji. Pozostałych
 zdolności automat nie uruchamia bez rozpoznania sposobu celowania i skutków.
 Rejestr pokazuje także dostępne polecenia bez planera, żeby kolejne zmiany
 wynikały z konkretnej misji.
 
 ## Zbudowanie i pierwsza próba
 
-1. Pobierz aktualny `main`, rozpakuj źródła i zbuduj jak poprzednio na zachowanym
+1. Pobierz aktualne źródła v9, rozpakuj je i zbuduj jak poprzednio na zachowanym
    SDK WOTC. Bez `-BuildBase`, jeśli pakiety bazowe są już przygotowane.
 2. Zainstaluj nowy `dist\AutoplayXCom2.zip` i uruchom grę ponownie. Stara paczka
    z `release` nie zawiera rejestratora.
@@ -179,6 +182,52 @@ obiektu od braku interfejsu/pustej geometrii oraz różne rodzaje propagacji
 zniszczeń. Dane szczegółowe dotyczą ostatniej blokady bezpieczeństwa w skanie,
 a niekoniecznie wybranego punktu. Tożsamość i właściwości niewidocznych obiektów
 pozostają zredagowane. [Interpretacja i granice v8](tactics-v8.pl.md).
+
+Od `mission-report-v9` wpisy `rescue_candidate` i `loot_candidate` wskazują,
+że propozycja ruchu ratunkowego lub po łup została w danej chwili najlepszym
+planem. Nie są jeszcze potwierdzeniem wykonania: ostateczny wybór opisuje
+`chosen`, a wynik zwykłe rekordy historii. `ability.handler=loot` rozpoznaje
+obsługiwane natywne zbieranie przedmiotów.
+
+Własne jednostki mają dodatkowo `bleeding_turns_remaining`, `score_eligible`,
+`highest_hp`, `lowest_hp`, `unconscious` i `ladder_killed_scored`. Te pola
+pozwalają odróżnić pierwszą ranę od kolejnych trafień i wyłączenie od śmierci.
+`result` oraz `result_target` zapisują turę właściwej klatki historii oraz stan
+celu po zdarzeniu, w tym `target_alive_after`, `target_incapacitated_after`
+i `target_bleeding_out_after`. Samo HP równe zero nie dowodzi zabicia przeciwnika.
+
+Zdarzenia punktacji v9:
+
+- `game_score` — oficjalny odczyt `cumulative_score` z `legacy_runtime`,
+  identyfikator drabinki i etapu, klatka historii oraz faza `start`, `observe`
+  lub `finish`. Odczyt powstaje tylko wtedy, gdy stan drabinki nadal odpowiada
+  rejestrowanej misji.
+- `score_delta` — zaobserwowana rewizja natywnego `XComGameState_ChallengeScore`.
+  `added_points`, `ladder_bonus` i `scoring_type` zachowują informację gry;
+  analizator nie sumuje ich jako zamiennika oficjalnego wyniku.
+- `score_rule` — parametry odczytane przez natywne gettery punktacji w Legacy:
+  `kind=enemy`, `objective`, `soldier` lub `time`. Reguła przeciwnika pochodzi
+  z widocznego podglądu, a reguła celu z jawnego zaliczenia. Powtarzające się
+  identyczne reguły nie są ponownie emitowane. Analizator zachowuje je wraz
+  ze startowymi tabelami gry w `native_rules_observed`.
+- `scoring_coverage` — zakres obserwacji; obecnie `complete=false`, ponieważ
+  uruchomienie F8 nie dowodzi rejestracji od początku misji.
+- `objective_completed` — jawne zdarzenie zaliczenia pozycji listy celów,
+  stabilny identyfikator i tura. Zwycięstwo nie zastępuje zdarzeń celów pobocznych.
+- `civilian_rescued` — jawne zdarzenie ratunku przez własnego żołnierza.
+  Tożsamość niewidocznego cywila pozostaje zredagowana.
+
+Analiza dodaje `game_scoring` do każdej sesji. `official` zawiera rzeczywisty
+odczyt gry, gdy był dostępny; `recording_delta` to różnica z okresu rejestracji
+od F8, a nie dowód punktów za całą misję. `comparison` stosuje stały profil
+`wotc_legacy_observed_v1`, opisany wraz z pochodzeniem parametrów w
+`tools/legacy-score-rules.json`. Przy brakach zwraca `status=partial`,
+`observed_subtotal` i listę `missing_components`; `total` pozostaje nieznany.
+Składniki natywne pozostawione poza zakresem wspólnego profilu opisuje osobna
+lista `excluded_native_components`. Nie uzupełniamy brakujących celów,
+pochodzenia wrogów lub końcowych premii domysłami. Starsze raporty v8 także
+otrzymują analizę, lecz nie zyskują przez to danych, których nie rejestrowały.
+[Reguły i ograniczenia punktacji](tactics-v9.pl.md).
 
 Podgląd nie przewiduje ukrytego losowania. Zniknięcie przeciwnika z pola widzenia
 nie jest uznawane za zabicie. Brak końcowego wpisu albo osiągnięcie limitu
