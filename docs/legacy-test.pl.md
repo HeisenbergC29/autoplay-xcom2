@@ -1,14 +1,15 @@
-# Kolejna misja „Blast From the Past” — v9
+# Próba Legacy i licznika punktów — v10
 
-Pierwsza misja `ChallengeAbductionGasStation` została ukończona zwycięstwem
-na v8: Dowódca, 14 tur, dwóch poległych. Potwierdzają to użytkownik i końcowy
-rekord `outcome=win`. [Raport zwycięskiej próby](report-2026-11-03-legacy-v8-win.pl.md).
-Log pokazuje też wczytanie drugiego etapu `ChallengeAbductionCemetery`.
+Pierwsza misja `ChallengeAbductionGasStation` została wcześniej ukończona
+zwycięstwem na v8: Dowódca, 14 tur, dwóch poległych.
+[Raport zwycięstwa](report-2026-11-03-legacy-v8-win.pl.md).
+Najnowszy raport obejmuje ponowną próbę GasStation na v9: porażkę w turze 7,
+ratunek snajpera oraz natywny wynik −10000 przy maksymalnej puli 46000.
+[Raport v9](report-2026-11-03-legacy-v9.pl.md).
 
-Do następnej próby **zbuduj i zainstaluj v9**. Dodaje podejście ratownika do
-wykrwawiającego się żołnierza, zbieranie łupu oraz dane punktacji.
-Poprzednie zwycięstwo pozostaje wynikiem v8, commitu `3859882`.
-[Opis nowych zasad i granic](tactics-v9.pl.md).
+Do kolejnej próby **zbuduj i zainstaluj v10**. Dodaje nad przyciskiem licznik
+punktów bieżącej misji i jej maksymalnej puli.
+[Zasady działania i granice licznika](score-display-v10.pl.md).
 Pełne źródła SDK z przesłanego `Development.rar` pozostają dostępne do kontroli zgodności.
 Do kontroli źródeł i kontraktów SDK nie potrzeba kolejnych plików.
 
@@ -30,14 +31,18 @@ uruchom grę ponownie. Źródła możesz później usunąć; SDK zachowaj.
 
 ## Przebieg porównawczy
 
-1. Uruchom następny etap Legacy Operations „Blast From the Past” na nowej
-   v9. Oczekiwany typ to `ChallengeAbductionCemetery`, etap 2; zachowaj
-   ustawienia trudności i ciągłość punktacji z poprzedniej misji.
-2. Po uzyskaniu sterowania włącz autoplay klawiszem F8. Automat startuje
-   wyłączony po zmianie misji. W `Launch.log` sprawdź
-   `revision=mission-report-v9`; inna rewizja oznacza uruchomienie starszego kodu.
-3. Pozwól misji dojść do wyniku; zapisz ewentualne ręczne działania,
-   ich moment i powód.
+1. Uruchom wybrany zapis Legacy Operations „Blast From the Past” na nowej
+   v10. Dla kontynuacji wcześniejszego zwycięstwa oczekiwany jest
+   `ChallengeAbductionCemetery`, etap 2; ponowienie najnowszej przegranej
+   dotyczy `ChallengeAbductionGasStation`, etap 1. Zapisz etap i trudność.
+2. Po uzyskaniu sterowania, przed F8, sprawdź licznik nad przyciskiem.
+   Powinien działać przy wyłączonym autoplay, używać tej samej wielkości
+   czcionki i przepuszczać kliknięcia mapy. Maksimum nie powinno maleć po
+   zabiciach; w drugim etapie licznik nie może doliczać punktów poprzedniej misji.
+3. Włącz autoplay klawiszem F8. Automat startuje wyłączony po zmianie misji.
+   W `Launch.log` sprawdź `revision=mission-report-v10`; inna rewizja oznacza
+   uruchomienie starszego kodu. Pozwól misji dojść do wyniku; zapisz ewentualne
+   ręczne działania, ich moment i powód.
 4. Po misji, przed ponownym uruchomieniem gry, otwórz PowerShell w folderze
    `XComGame\Mods\AutoplayXCom2\Diagnostics` i zbierz raport:
 
@@ -97,4 +102,4 @@ Zbieranie raportu działa po usunięciu pobranych źródeł moda.
 
 Nowy zasięg wręcz jest geometrycznym przybliżeniem możliwego ataku, bez
 planowania rzeczywistej przyszłej trasy. Nieznane style zachowują poprzednią
-heurystykę. V9 nie gwarantuje zwycięstwa ani bezpiecznej reakcji łańcuchowej.
+heurystykę. V10 nie gwarantuje zwycięstwa ani bezpiecznej reakcji łańcuchowej.

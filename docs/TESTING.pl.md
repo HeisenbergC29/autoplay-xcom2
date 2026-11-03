@@ -1,12 +1,13 @@
 # Testy odbiorcze
 
-Najnowszy materiał to [zwycięstwo pierwszej misji Legacy Operations na v8](report-2026-11-03-legacy-v8-win.pl.md).
-`ChallengeAbductionGasStation`, Dowódca: **PASS**, 14 tur, dwóch poległych.
-Wynik punktowy i medal: **NIEZAREJESTROWANE**. Kolejna misja
-`ChallengeAbductionCemetery`: załadowana, próba autoplaya **NIEURUCHOMIONA**.
-Następna próba wymaga nowej kompilacji v9 według [instrukcji Legacy](legacy-test.pl.md).
-Zwycięstwo v8 nie potwierdza jeszcze nowych mechanizmów ratunku, łupu i telemetrii
-punktów. [Zakres i reguły v9](tactics-v9.pl.md).
+Najnowszy materiał to [ponowna próba GasStation na v9](report-2026-11-03-legacy-v9.pl.md):
+Dowódca, **FAIL** w turze 7, wynik gry **−10000** przy maksymalnej puli 46000.
+Podejście i stabilizacja snajpera: **PASS**. Legalny pickup łupu: **NIEZAREJESTROWANY**.
+Ten sam raport zawiera zwycięstwo v8 w `SabotageCC` na trudności 3.
+Wcześniejsze zwycięstwo v8 w pierwszej misji Legacy pozostaje osobną próbą;
+Cemetery nadal nie ma udokumentowanej próby autoplaya.
+Nowy licznik v10: kompilacja Windows i próba w grze **NIEURUCHOMIONE**.
+[Instrukcja Legacy](legacy-test.pl.md) · [Licznik v10](score-display-v10.pl.md).
 
 Dotychczasowy wynik zgłoszony przez użytkownika: **PASS** — mod wydaje rozkazy;
 **PASS** — pierwsza misja Legacy na v8; **FAIL** — dotychczasowe próby
@@ -53,6 +54,11 @@ Wyniki zapisuj osobno: PASS / FAIL / NIEURUCHOMIONY. Kompilacja nie potwierdza d
 
 ## UI
 
+- V10: nad przyciskiem widoczne `punkty/maksimum`, z wielkością czcionki
+  przycisku. Sprawdź odświeżanie przy OFF, po zwinięciu przycisku i po wczytaniu
+  zapisu ze środka misji. W kolejnym etapie Legacy wynik nie obejmuje wcześniejszych
+  misji, a maksimum nie maleje po zabiciach i stratach. Ujemny wynik ma zachować
+  minus. Zwykła misja bez punktacji pokazuje „—”. Pole przepuszcza kliknięcia mapy.
 - W zwykłej turze XCOM z dostępnymi akcjami włącz autoplay. Nakładka tury i licznik celu misji (`UITurnOverlay`, `UISpecialMissionHUD`) nie mogą powodować stałej pauzy; automat powinien wydać legalny rozkaz.
 - Sprawdź rzeczywiste menu, dialog, sekwencję blokującą sterowanie i ręczne celowanie. Nowe rozkazy mają czekać; po zamknięciu menu lub anulowaniu celowania automat może wznowić pracę. Ekrany znajdujące się pod HUD-em nie powinny samodzielnie powodować pauzy.
 - Przy utrzymującej się blokadzie sprawdź status i wpisy `AutoplayXCom2` w `Launch.log`. Log powinien podawać przyczynę zmiany stanu i dane ekranu, bez powtarzania identycznego wpisu w każdej klatce.

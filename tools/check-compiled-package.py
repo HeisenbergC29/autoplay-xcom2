@@ -33,7 +33,8 @@ EXPECTED_CLASSES = {
     "APX_UITacticalControl": "UIPanel",
     "X2DownloadableContentInfo_AutoplayXCom2": "X2DownloadableContentInfo",
 }
-OPTIONAL_CLASSES = {"APX_MissionRecorder": "Object", "APX_SquadPlanner": "Object"}
+OPTIONAL_CLASSES = {"APX_MissionRecorder": "Object", "APX_SquadPlanner": "Object",
+                    "APX_MissionScore": "Object"}
 REQUIRED_FILES = {
     f"{ROOT}/AutoplayXCom2.XComMod",
     f"{ROOT}/INSTALL.pl.md",

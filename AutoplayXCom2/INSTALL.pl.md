@@ -21,11 +21,16 @@ przez zużycie AP na ruch; próba v7 także zakończyła się porażką.
 Wersja `mission-report-v8` dodała priorytet dobicia źródła kontroli,
 alternatywne punkty granatu dla pary wrogów i rozpoznany zasięg zagrożenia
 wręcz. Użytkownik potwierdził zwycięstwo v8 w pierwszej misji Legacy.
-Bieżące `mission-report-v9` dodaje podejście do wykrwawiającego się sojusznika,
-zbieranie łupu oraz telemetrię punktacji. Przed kolejnym etapem zbuduj
-i zainstaluj nową wersję; sama podmiana konfiguracji nie wystarczy.
+Wersja `mission-report-v9` dodała podejście do wykrwawiającego się sojusznika,
+zbieranie łupu oraz telemetrię punktacji. Raport potwierdza podejście i stabilizację,
+lecz najnowsza próba GasStation zakończyła się porażką.
+Bieżące `mission-report-v10` dodaje nad przyciskiem punkty bieżącej misji / jej
+maksymalną pulę. Czcionka ma wielkość tekstu przycisku; licznik pozostaje
+widoczny po jego schowaniu i przy wyłączonym autoplay. Gdy gra nie prowadzi
+punktacji, wyświetla „—”.
+Zbuduj i zainstaluj nową wersję; sama podmiana konfiguracji nie wystarczy.
 Instrukcja próby to `docs/legacy-test.pl.md`,
-a opis zakresu zmian to `docs/tactics-v9.pl.md` w źródłach.
+a opis licznika to `docs/score-display-v10.pl.md` w źródłach.
 
 ## Wymagania
 
@@ -144,7 +149,7 @@ Raport ZIP pojawi się w `<Dokumenty>\AutoplayXCom2-Reports`. Skrypt działa tak
 po usunięciu pobranego folderu źródeł. Załącz raport do zgłoszenia wraz z poziomem
 trudności, wynikiem misji i stratami. Szczegóły: `docs/mission-recording.pl.md`
 w repozytorium. To zapis diagnostyczny, nie film ani replay.
-W nowym raporcie wpis `revision=mission-report-v9` identyfikuje tę wersję.
+W nowym raporcie wpis `revision=mission-report-v10` identyfikuje tę wersję.
 Znaczniki `ambush_setup` pokazują przygotowania, a `grenade_scan` zawiera również
 liczby ocenionych okazji do granatu na pojedynczy cel i ostatni podgląd obrażeń.
 `area_target_preview` opisuje cele wybranego granatu; `move_threat_preview`
@@ -163,7 +168,8 @@ z ekranu podsumowania oraz wszelkie ręczne działania i restarty.
 - Log gry: `<Dokumenty>\My Games\XCOM2 War of the Chosen\XComGame\Logs\Launch.log`. Do zgłoszenia dołącz typ misji, etap i listę pozostałych modów.
 - Wyłączenie moda: odznacz go w launcherze. Bieżące włączenie autoplaya nie jest zapisywane w kampanii.
 
-Wcześniejszą kompilację i zależności binarne sprawdzono, a raport użytkownika
-potwierdza zwycięstwo v8 w pierwszej misji Legacy Operations. Nie potwierdzono
+Wcześniejszą kompilację i zależności binarne sprawdzono. Raporty potwierdzają
+zwycięstwa v8 i działanie ratunku v9; najnowsza próba v9 zakończyła się porażką.
+Kompilacja i licznik v10 wymagają osobnej próby. Nie potwierdzono
 pełnej obsługi każdej skryptowanej misji DLC
 ani konkretnego najnowszego numeru builda Steam. Stan weryfikacji opisuje README.

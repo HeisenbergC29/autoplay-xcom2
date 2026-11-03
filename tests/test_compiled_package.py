@@ -113,6 +113,12 @@ class CompiledTableTests(unittest.TestCase):
         self.assertIn("APX_SquadPlanner", report["own_classes"])
         self.assertEqual(set(report["import_roots"]), {'Core', 'Engine', 'XComGame'})
 
+    def test_accepts_native_score_display_helper(self):
+        data, _ = table_fixture(extra_classes={"APX_MissionScore": "Object"})
+        report = CHECKS.parse_ue3_package(data)
+        self.assertIn("APX_MissionScore", report["own_classes"])
+        self.assertEqual(set(report["import_roots"]), {'Core', 'Engine', 'XComGame'})
+
     def test_rejects_unknown_additional_class(self):
         data, _ = table_fixture(extra_classes={"UnrelatedClass": "Object"})
         with self.assertRaisesRegex(CHECKS.InvalidPackage, "unexpected mod classes"):

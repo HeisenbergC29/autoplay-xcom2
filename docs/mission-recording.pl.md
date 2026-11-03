@@ -14,14 +14,22 @@ automat i co rzeczywiście wydarzyło się po rozkazach.
 [V8: źródła kontroli, punkty AoE i zasięg wręcz](tactics-v8.pl.md).
 [Pierwsze zwycięstwo v8 w Legacy i przejście do kolejnej misji](report-2026-11-03-legacy-v8-win.pl.md).
 [V9: ratunek, łup i punktacja każdej symulacji](tactics-v9.pl.md).
+[Próba v9: stabilizacja potwierdzona, GasStation przegrane](report-2026-11-03-legacy-v9.pl.md).
+[V10: licznik punktów bieżącej misji nad przyciskiem](score-display-v10.pl.md).
 
 Wynik misji, punktację porównawczą i oficjalne punkty gry zapisujemy oddzielnie.
 `score` w rekordach `candidate`/`chosen` jest oceną heurystyki, a startowe
-`MaxScore` z `XCom_Challenge` to pula maksymalna. Rejestrator v9 odczytuje
+`MaxScore` z `XCom_Challenge` to pula maksymalna. Rejestrator od v9 odczytuje
 oficjalne `CumulativeScore` dla bieżącego etapu Legacy. Analizator stosuje
 także wspólny profil oparty na regułach gry do wszystkich misji, również tych
 bez oficjalnej punktacji. Do raportu dopisz oficjalny wynik z ekranu podsumowania,
 ewentualny medal, restarty i ręczne działania, jeśli dane są dostępne.
+
+Licznik HUD v10 pokazuje wyłącznie natywny wynik **bieżącej misji** i jej
+maksymalną pulę. W Legacy odejmuje wynik przeniesiony na start etapu; zapis
+`game_score.cumulative_score` pozostaje surowym wynikiem drabinki. To różne
+wartości w kolejnych etapach. W misjach bez punktacji licznik pokazuje „—”,
+a analiza raportu nadal może zawierać osobną ocenę porównawczą.
 
 ## Co się zmieniło w taktyce
 
@@ -64,7 +72,7 @@ wynikały z konkretnej misji.
 
 ## Zbudowanie i pierwsza próba
 
-1. Pobierz aktualne źródła v9, rozpakuj je i zbuduj jak poprzednio na zachowanym
+1. Pobierz aktualne źródła v10, rozpakuj je i zbuduj jak poprzednio na zachowanym
    SDK WOTC. Bez `-BuildBase`, jeśli pakiety bazowe są już przygotowane.
 2. Zainstaluj nowy `dist\AutoplayXCom2.zip` i uruchom grę ponownie. Stara paczka
    z `release` nie zawiera rejestratora.

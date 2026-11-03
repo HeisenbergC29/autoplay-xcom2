@@ -3,6 +3,9 @@ EnableLabel="WŁĄCZ AUTOPLAY"
 DisableLabel="ZATRZYMAJ AUTOPLAY"
 IndicatorTooltip="Najedź, aby pokazać przycisk. F8 przełącza; Escape zatrzymuje."
 
+[APX_MissionScore]
+UnavailableLabel="—"
+
 [APX_Controller]
 StatusOff="WYŁĄCZONY"
 StatusActive="AUTOPLAY"

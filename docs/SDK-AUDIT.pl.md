@@ -231,3 +231,31 @@ Kontrola końcowa v9: **280 testów Python zaliczonych bez pominięć** z ustawi
 PowerShell: budowania, zbierania źródeł SDK i raportów misji. Sprawdzono też
 odnośniki dokumentacji i `git diff --check`. To nie zastępuje kompilacji Windows
 ani próby v9 w grze.
+
+
+## V10 — natywny licznik wyniku misji
+
+`APX_MissionScore` jest obiektem odczytującym dane dla HUD-u. W Legacy bierze
+różnicę `CumulativeScore` względem tego samego obiektu Ladder w taktycznym
+start state (`FindStartStateIndex` i `GetGameStateForObjectID`). Sprawdza
+zgodność misji, drabinki i etapu. Baseline nie pochodzi z chwili włączenia
+F8 ani utworzenia HUD-u, więc może zachować punkty po wczytaniu zapisu.
+
+Maksimum Legacy pochodzi z `GetChallengeMaxPossibleScoreTable`, tego samego
+odczytu, którego używa `UILadderModeScoringDialog`. Jest buforowane dla misji.
+W natywnym Challenge Mode wymagany jest `XComGameState_ChallengeData`; licznik
+używa pary `GetTotalScore` / `GetMaxChallengeScore`, tak jak podsumowanie gry.
+Bez natywnej punktacji lub dostępnego odczytu wyświetla „—”.
+Nie przyznaje punktów, nie zmienia stanów gry i nie przekazuje danych do planera.
+
+UI odczytuje publiczne `UIButton.FontSize` i odświeża się co 0,25 s także przy
+wyłączonym autoplay. Nowe pole ma wyłączone przechwytywanie myszy i nawigację.
+Rozszerzenie wymaga nowej kompilacji Windows oraz próby HUD-u w grze.
+Raport v9 potwierdził natywny ujemny wynik i stabilizację, nie działanie
+nowego licznika. [Zakres i próba v10](score-display-v10.pl.md).
+
+Kontrola końcowa v10: **299 testów Python zaliczonych bez pominięć** z SDK,
+audyt 12 klas i 29 nazw zdolności oraz trzy zestawy testów PowerShell
+(budowanie, zbieranie źródeł SDK i raportów misji). Odnośniki dokumentacji
+i `git diff --check` są poprawne. Nie przeprowadzono kompilacji Windows
+ani testu nowego licznika w grze.

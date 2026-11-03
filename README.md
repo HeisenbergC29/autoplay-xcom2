@@ -62,10 +62,20 @@ oraz bardziej zachowawczą ocenę odwrotu w zasięgu wręcz.
 zwycięstwo: `ChallengeAbductionGasStation`, pierwsza misja „Blast From the Past”,
 Dowódca, 14 tur i dwóch poległych. W logu widać załadowanie kolejnej misji
 `ChallengeAbductionCemetery`; jej próba autoplaya pozostaje do wykonania.
-Bieżące **`mission-report-v9`** dodaje podejście do wykrwawiającego się
+Wersja **`mission-report-v9`** dodała podejście do wykrwawiającego się
 żołnierza przed stabilizacją, legalne zbieranie łupu i rejestrację punktacji.
-Wymaga nowej kompilacji przed próbą następnej misji.
+[Najnowszy raport v9](docs/report-2026-11-03-legacy-v9.pl.md) potwierdza
+podejście i stabilizację snajpera, ale ponowna próba GasStation skończyła się
+porażką w turze 7, z wynikiem gry −10000. Ten sam raport zawiera też wygraną
+v8 w `SabotageCC` na trudności 3.
 [Zakres zmian, reguły punktacji i ograniczenia v9](docs/tactics-v9.pl.md).
+
+Bieżące **`mission-report-v10`** dodaje nad przyciskiem licznik punktów
+bieżącej misji i jej maksymalnej puli, z taką samą wielkością czcionki.
+Działa także przy wyłączonym autoplay. W misjach bez natywnej punktacji
+pokazuje „—”; nie zastępuje jej oceną porównawczą.
+[Zasady licznika i próba v10](docs/score-display-v10.pl.md).
+Nowe źródła wymagają kompilacji Windows i sprawdzenia w grze.
 
 **Stan: alpha; v8 wygrało pierwszą misję Legacy Operations na Dowódcy.**
 Pełna drabinka Legacy, wygrana Gatecrashera i wszystkie pozostałe rodzaje misji
@@ -165,10 +175,10 @@ potwierdziła **0 błędów i 8 ostrzeżeń SDK**, zarówno dla bazy, jak i moda
 Dotyczy to wcześniejszej kompilacji. Przechowywany ZIP ma kompletną konfigurację,
 27 nazw zdolności, obie lokalizacje i prawidłowy `.u`; jego 464 importy prowadzą
 tylko do `Core`, `Engine` i `XComGame`, a dziewięć klas moda jest obecnych.
-Najnowszy raport użytkownika potwierdza działanie v8 i zwycięstwo w pierwszej
-misji Legacy Operations. Nie dowodzi ukończenia pozostałych misji ani uzyskania
-konkretnego wyniku punktowego. Nowe zmiany v9 mają testy źródeł, scenariuszy
-i kontraktów SDK; ich kompilacja i działanie w grze wymagają osobnej próby. Obecne
+Najnowszy raport użytkownika potwierdza ratunek na v9 i natywny wynik −10000,
+ale ta próba pierwszej misji Legacy zakończyła się porażką. Wcześniejsze
+zwycięstwa v8 w GasStation i `SabotageCC` pozostają osobnymi próbami.
+Nowy licznik v10 wymaga własnej kompilacji i sprawdzenia w grze. Obecne
 środowisko Linux pozwala uruchamiać testy Python i PowerShell, ale nie zawiera
 SDK Windows ani działającej gry.
 
