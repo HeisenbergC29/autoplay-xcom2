@@ -64,17 +64,25 @@ Dowódca, 14 tur i dwóch poległych. W logu widać załadowanie kolejnej misji
 `ChallengeAbductionCemetery`; jej próba autoplaya pozostaje do wykonania.
 Wersja **`mission-report-v9`** dodała podejście do wykrwawiającego się
 żołnierza przed stabilizacją, legalne zbieranie łupu i rejestrację punktacji.
-[Najnowszy raport v9](docs/report-2026-11-03-legacy-v9.pl.md) potwierdza
+[Raport v9](docs/report-2026-11-03-legacy-v9.pl.md) potwierdza
 podejście i stabilizację snajpera, ale ponowna próba GasStation skończyła się
 porażką w turze 7, z wynikiem gry −10000. Ten sam raport zawiera też wygraną
 v8 w `SabotageCC` na trudności 3.
 [Zakres zmian, reguły punktacji i ograniczenia v9](docs/tactics-v9.pl.md).
 
-Bieżące **`mission-report-v10`** dodaje nad przyciskiem licznik punktów
-bieżącej misji i jej maksymalnej puli, z taką samą wielkością czcionki.
-Działa także przy wyłączonym autoplay. W misjach bez natywnej punktacji
-pokazuje „—”; nie zastępuje jej oceną porównawczą.
-[Zasady licznika i próba v10](docs/score-display-v10.pl.md).
+Bieżące **`mission-report-v11`** pokazuje nad przyciskiem punkty bieżącej misji
+i maksymalną pulę, z taką samą wielkością czcionki. Działa także przy wyłączonym
+autoplay. Znany natywny wynik pozostaje widoczny bez maksimum, np. `1200/—`.
+W misjach bez punktacji gry wyświetla częściową ocenę porównawczą ze wspólnego
+profilu, np. `~5200/—`. Tylda odróżnia ją od oficjalnych punktów, a maksimum
+pozostaje nieznane. Profil przyznaje na początku premie za obserwowanych
+żołnierzy: czterech kwalifikowanych żołnierzy daje `~24000/—` przed stratami.
+To premie porównawcze, które mogą zostać utracone, a nie zdobyte punkty gry.
+[Najnowszy raport v10](docs/report-2026-11-03-v10-sabotage.pl.md) dotyczy
+niepunktowanego `SabotageCC`: porażka w turze 12, trzy zgony i jeden żołnierz
+wykrwawiający się na końcu. Kierunek osłony jest oceniany osobno względem
+każdego widocznego przeciwnika.
+[Zasady licznika i próba v11](docs/score-display-v10.pl.md).
 Nowe źródła wymagają kompilacji Windows i sprawdzenia w grze.
 
 **Stan: alpha; v8 wygrało pierwszą misję Legacy Operations na Dowódcy.**
@@ -175,10 +183,11 @@ potwierdziła **0 błędów i 8 ostrzeżeń SDK**, zarówno dla bazy, jak i moda
 Dotyczy to wcześniejszej kompilacji. Przechowywany ZIP ma kompletną konfigurację,
 27 nazw zdolności, obie lokalizacje i prawidłowy `.u`; jego 464 importy prowadzą
 tylko do `Core`, `Engine` i `XComGame`, a dziewięć klas moda jest obecnych.
-Najnowszy raport użytkownika potwierdza ratunek na v9 i natywny wynik −10000,
-ale ta próba pierwszej misji Legacy zakończyła się porażką. Wcześniejsze
-zwycięstwa v8 w GasStation i `SabotageCC` pozostają osobnymi próbami.
-Nowy licznik v10 wymaga własnej kompilacji i sprawdzenia w grze. Obecne
+Najnowszy raport użytkownika potwierdza uruchomienie v10 w zwykłym
+`SabotageCC`: porażka, licznik bez natywnych punktów. Ratunek i wynik −10000
+z v9 oraz wcześniejsze zwycięstwa v8 pozostają osobnymi próbami.
+Licznik porównawczy i rozdzielenie odczytów w v11 wymagają nowej kompilacji
+i sprawdzenia w grze. Obecne
 środowisko Linux pozwala uruchamiać testy Python i PowerShell, ale nie zawiera
 SDK Windows ani działającej gry.
 

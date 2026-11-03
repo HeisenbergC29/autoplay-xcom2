@@ -1,5 +1,5 @@
-// Read-only native mission score for the HUD. Never supplies tactical targets
-// or awards points; ordinary unscored missions have no native value to show.
+// Read-only mission score for the HUD. Native points take precedence; ordinary
+// unscored missions use the separately marked, partial comparison profile.
 class APX_MissionScore extends Object
     dependson(XComGameState, X2ChallengeModeDataStructures);
 
@@ -18,6 +18,7 @@ var private int CachedBaseline;
 var private int LastHistoryIndex;
 var private bool bHasMaximum;
 var private bool bHasBaseline;
+var private APX_ComparisonScore ComparisonCounter;
 
 function string UnavailableText()
 {
@@ -37,8 +38,18 @@ static function string FormatPoints(int CurrentPoints, int MaximumPoints)
     return string(CurrentPoints) $ "/" $ string(MaximumPoints);
 }
 
+function Cleanup()
+{
+    if (ComparisonCounter != none)
+    {
+        ComparisonCounter.Cleanup();
+        ComparisonCounter = none;
+    }
+}
+
 function ResetCache()
 {
+    Cleanup();
     CachedHistory = none;
     CachedStartIndex = -1;
     CachedBattleID = 0;
@@ -70,7 +81,7 @@ function bool CacheMatches(XComGameStateHistory History, int StartIndex,
             && CachedLadderRung == Ladder.LadderRung;
     if (ChallengeData != none)
         return CachedLadderID == 0 && CachedChallengeID == ChallengeData.ObjectID;
-    return false;
+    return CachedLadderID == 0 && CachedChallengeID == 0;
 }
 
 function RememberMission(XComGameStateHistory History, int StartIndex,
@@ -127,7 +138,7 @@ function string GetText()
     local XComGameState_ChallengeData ChallengeData;
     local XComChallengeModeManager Manager;
     local array<ScoreTableEntry> ScoreTable;
-    local int HistoryIndex, StartIndex, CurrentPoints, MaximumPoints;
+    local int HistoryIndex, StartIndex, CurrentPoints, MaximumPoints, ComparisonPoints;
 
     History = `XCOMHISTORY;
     if (History == none)
@@ -148,14 +159,20 @@ function string GetText()
         class'XComGameState_LadderProgress', true));
     ChallengeData = XComGameState_ChallengeData(History.GetSingleGameStateObjectForClass(
         class'XComGameState_ChallengeData', true));
-    if (Ladder == none && ChallengeData == none)
-    {
-        ResetCache();
-        return UnavailableText();
-    }
     if (!CacheMatches(History, StartIndex, BattleData, Ladder, ChallengeData, HistoryIndex))
         RememberMission(History, StartIndex, BattleData, Ladder, ChallengeData);
     LastHistoryIndex = HistoryIndex;
+    if (Ladder == none && ChallengeData == none)
+    {
+        if (ComparisonCounter == none)
+            ComparisonCounter = new(self) class'APX_ComparisonScore';
+        ComparisonPoints = ComparisonCounter.GetObservedScore();
+        if (!ComparisonCounter.IsReady())
+            return UnavailableText();
+        // Tilde distinguishes the partial comparison from native game points.
+        // Never invent a maximum from unseen enemies or optional objectives.
+        return "~" $ string(ComparisonPoints) $ "/" $ UnavailableText();
+    }
     Manager = `CHALLENGEMODE_MGR;
     if (Manager == none)
         return UnavailableText();
@@ -183,7 +200,9 @@ function string GetText()
     if (!bHasMaximum)
     {
         if (MaximumPoints <= 0)
-            return UnavailableText();
+            // A valid current score does not depend on knowing its ceiling.
+            // Leave the maximum uncached so a later native read can fill it.
+            return string(CurrentPoints) $ "/" $ UnavailableText();
         CachedMaximum = MaximumPoints;
         bHasMaximum = true;
     }

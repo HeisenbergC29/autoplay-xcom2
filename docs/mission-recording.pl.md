@@ -25,11 +25,15 @@ także wspólny profil oparty na regułach gry do wszystkich misji, również ty
 bez oficjalnej punktacji. Do raportu dopisz oficjalny wynik z ekranu podsumowania,
 ewentualny medal, restarty i ręczne działania, jeśli dane są dostępne.
 
-Licznik HUD v10 pokazuje wyłącznie natywny wynik **bieżącej misji** i jej
-maksymalną pulę. W Legacy odejmuje wynik przeniesiony na start etapu; zapis
+Licznik HUD pokazuje natywny wynik **bieżącej misji**, gdy gra go prowadzi.
+W Legacy odejmuje wynik przeniesiony na start etapu; zapis
 `game_score.cumulative_score` pozostaje surowym wynikiem drabinki. To różne
-wartości w kolejnych etapach. W misjach bez punktacji licznik pokazuje „—”,
-a analiza raportu nadal może zawierać osobną ocenę porównawczą.
+wartości w kolejnych etapach. V10 pokazywało „—” w zwykłych misjach.
+V11 pokazuje tam częściową ocenę porównawczą `~wartość/—`, według tego samego
+profilu co analizator. Początkowe premie wynoszą 6000 na kwalifikowanego
+obserwowanego żołnierza, więc czterech daje `~24000/—` przed stratami.
+Tylda oznacza ocenę porównawczą, nie wynik gry. Zakres obserwacji HUD-u
+i logu może się różnić, szczególnie po wczytaniu zapisu.
 
 ## Co się zmieniło w taktyce
 
@@ -72,7 +76,7 @@ wynikały z konkretnej misji.
 
 ## Zbudowanie i pierwsza próba
 
-1. Pobierz aktualne źródła v10, rozpakuj je i zbuduj jak poprzednio na zachowanym
+1. Pobierz aktualne źródła v11, rozpakuj je i zbuduj jak poprzednio na zachowanym
    SDK WOTC. Bez `-BuildBase`, jeśli pakiety bazowe są już przygotowane.
 2. Zainstaluj nowy `dist\AutoplayXCom2.zip` i uruchom grę ponownie. Stara paczka
    z `release` nie zawiera rejestratora.
@@ -204,8 +208,12 @@ pozwalają odróżnić pierwszą ranę od kolejnych trafień i wyłączenie od �
 celu po zdarzeniu, w tym `target_alive_after`, `target_incapacitated_after`
 i `target_bleeding_out_after`. Samo HP równe zero nie dowodzi zabicia przeciwnika.
 
-Zdarzenia punktacji v9:
+Zdarzenia punktacji:
 
+- `hud_score` (od v11) — dokładny tekst wyświetlony nad przyciskiem, np.
+  `~5200/—` albo `1200/—`. Zapis powstaje przy zmianie wartości, tylko podczas
+  istniejącej rejestracji. Nie jest zdarzeniem przyznania punktów; tylda
+  nadal oznacza częściową ocenę porównawczą.
 - `game_score` — oficjalny odczyt `cumulative_score` z `legacy_runtime`,
   identyfikator drabinki i etapu, klatka historii oraz faza `start`, `observe`
   lub `finish`. Odczyt powstaje tylko wtedy, gdy stan drabinki nadal odpowiada
@@ -271,3 +279,9 @@ MaxHistoryFramesPerObserve=128
 Zmiany wprowadzaj przy zamkniętej grze. Raport pozwala analizować decyzje,
 ale nie potwierdza, że nowa wersja wygrywa misję. Kompilacja Windows i rzeczywisty
 Gatecrasher nadal wymagają sprawdzenia w grze.
+
+Od `mission-report-v11` znany natywny wynik i nieznane maksimum dają
+`aktualne/—`. W misji bez natywnej punktacji licznik porównawczy daje
+`~wartość/—`. Pojedyncze „—” oznacza brak dostępnego odczytu w trybie gry
+prowadzącej punktację, np. bez pewnego stanu początkowego Legacy.
+[Wyjaśnienie na raporcie SabotageCC](report-2026-11-03-v10-sabotage.pl.md).

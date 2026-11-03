@@ -293,6 +293,14 @@ function string GetStatusText()
     return Status @ "[" $ string(ToggleKey) $ "]";
 }
 
+// The passive HUD may run while autoplay is off. Forward only to an already
+// started recorder; observing text must never start recording or issue orders.
+function RecordDisplayedScore(string DisplayText)
+{
+    if (MissionRecorder != none)
+        MissionRecorder.RecordHUDScore(DisplayText);
+}
+
 function StopAutoplay(string Reason, optional bool bPreservePendingHack = false)
 {
     bEnabled = false;

@@ -9,7 +9,7 @@ import re
 from types import SimpleNamespace
 import unittest
 
-from test_ui_gating import CHECKS, function_body
+from test_ui_gating import CHECKS, braced_body, function_body
 from uc_math import load_uc_function
 
 
@@ -59,6 +59,46 @@ class MissionScoreTests(unittest.TestCase):
                                             (65000, 64000, '65000/64000')):
             self.assertEqual(eval(expression, {'str': str, 'CurrentPoints': current,
                                                'MaximumPoints': maximum}), expected)
+
+    def test_unknown_maximum_preserves_the_known_current_score(self):
+        text = CHECKS.without_comments(function_body(self.source, 'GetText'))
+        expression = re.search(r'if\s*\(MaximumPoints <= 0\)\s*return\s+([^;]+);', text)[1]
+        expression = expression.replace('$', '+').replace('string(', 'str(')
+        for current, unavailable, expected in ((1200, '—', '1200/—'),
+                                               (0, '—', '0/—'),
+                                               (-1000, '—', '-1000/—'),
+                                               (1200, '--', '1200/--')):
+            with self.subTest(current=current, unavailable=unavailable):
+                self.assertEqual(eval(expression, {'str': str, 'CurrentPoints': current,
+                                                  'UnavailableText': lambda: unavailable}), expected)
+        # A missing maximum must be retried, rather than cached as zero.
+        self.assertLess(text.index('return string(CurrentPoints) $ "/" $ UnavailableText()'),
+                        text.index('CachedMaximum = MaximumPoints'))
+
+    def test_unscored_mission_has_marked_comparison_without_native_getters(self):
+        text = function_body(self.source, 'GetText')
+        mode_guard = text.index('if (Ladder == none && ChallengeData == none)')
+        unscored = braced_body(text, text.index('{', mode_guard))
+        self.assertIn("ComparisonCounter = new(self) class'APX_ComparisonScore'", unscored)
+        self.assertIn('ComparisonCounter.GetObservedScore()', unscored)
+        self.assertIn('if (!ComparisonCounter.IsReady())', unscored)
+        self.assertIn('return UnavailableText()', unscored)
+        self.assertIn('return "~" $ string(ComparisonPoints) $ "/" $ UnavailableText()', unscored)
+        self.assertNotIn('Manager.', unscored)
+        self.assertNotIn('ResetCache()', unscored)
+        self.assertLess(mode_guard, text.index('Manager = `CHALLENGEMODE_MGR'))
+        self.assertRegex(text, r'if \(!bHasBaseline && !ReadLadderBaseline\(History, BattleData, Ladder\)\)\s*return UnavailableText\(\);')
+
+    def test_comparison_lifetime_ends_on_mission_reset_and_hud_removal(self):
+        cleanup = function_body(self.source, 'Cleanup')
+        self.assertIn('ComparisonCounter.Cleanup()', cleanup)
+        self.assertIn('ComparisonCounter = none', cleanup)
+        self.assertIn('Cleanup()', function_body(self.source, 'ResetCache'))
+        hud = (SOURCE.parent / 'APX_UITacticalControl.uc').read_text()
+        self.assertIn('ScoreCounter.Cleanup()', function_body(hud, 'Removed'))
+        self.matches.__globals__.update(CachedLadderID=0, CachedChallengeID=0)
+        self.assertTrue(self.matches(self.history, 50, battle(), None, None, 100))
+        self.assertFalse(self.matches(self.history, 50, battle(), ladder(), None, 100))
 
     def test_unchanged_mission_retains_cached_maximum_across_actions(self):
         self.assertTrue(self.matches(self.history, 50, battle(), ladder(), None, 100))

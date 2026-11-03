@@ -1,14 +1,17 @@
-# Próba Legacy i licznika punktów — v10
+# Próba Legacy i licznika punktów — v11
 
 Pierwsza misja `ChallengeAbductionGasStation` została wcześniej ukończona
 zwycięstwem na v8: Dowódca, 14 tur, dwóch poległych.
 [Raport zwycięstwa](report-2026-11-03-legacy-v8-win.pl.md).
-Najnowszy raport obejmuje ponowną próbę GasStation na v9: porażkę w turze 7,
+Raport v9 obejmuje ponowną próbę GasStation: porażkę w turze 7,
 ratunek snajpera oraz natywny wynik −10000 przy maksymalnej puli 46000.
 [Raport v9](report-2026-11-03-legacy-v9.pl.md).
+Najnowszy [raport v10](report-2026-11-03-v10-sabotage.pl.md) dotyczy zwykłego
+`SabotageCC`, bez punktacji gry; misja została przegrana.
 
-Do kolejnej próby **zbuduj i zainstaluj v10**. Dodaje nad przyciskiem licznik
-punktów bieżącej misji i jej maksymalnej puli.
+Do kolejnej próby **zbuduj i zainstaluj v11**. Zachowuje dostępny natywny
+wynik bez maksimum, np. `1200/—`. W niepunktowanych misjach udostępnia
+częściową ocenę porównawczą, np. `~5200/—`, według wspólnego profilu raportów.
 [Zasady działania i granice licznika](score-display-v10.pl.md).
 Pełne źródła SDK z przesłanego `Development.rar` pozostają dostępne do kontroli zgodności.
 Do kontroli źródeł i kontraktów SDK nie potrzeba kolejnych plików.
@@ -32,7 +35,7 @@ uruchom grę ponownie. Źródła możesz później usunąć; SDK zachowaj.
 ## Przebieg porównawczy
 
 1. Uruchom wybrany zapis Legacy Operations „Blast From the Past” na nowej
-   v10. Dla kontynuacji wcześniejszego zwycięstwa oczekiwany jest
+   v11. Dla kontynuacji wcześniejszego zwycięstwa oczekiwany jest
    `ChallengeAbductionCemetery`, etap 2; ponowienie najnowszej przegranej
    dotyczy `ChallengeAbductionGasStation`, etap 1. Zapisz etap i trudność.
 2. Po uzyskaniu sterowania, przed F8, sprawdź licznik nad przyciskiem.
@@ -40,7 +43,7 @@ uruchom grę ponownie. Źródła możesz później usunąć; SDK zachowaj.
    czcionki i przepuszczać kliknięcia mapy. Maksimum nie powinno maleć po
    zabiciach; w drugim etapie licznik nie może doliczać punktów poprzedniej misji.
 3. Włącz autoplay klawiszem F8. Automat startuje wyłączony po zmianie misji.
-   W `Launch.log` sprawdź `revision=mission-report-v10`; inna rewizja oznacza
+   W `Launch.log` sprawdź `revision=mission-report-v11`; inna rewizja oznacza
    uruchomienie starszego kodu. Pozwól misji dojść do wyniku; zapisz ewentualne
    ręczne działania, ich moment i powód.
 4. Po misji, przed ponownym uruchomieniem gry, otwórz PowerShell w folderze
@@ -60,6 +63,11 @@ oficjalnego wpisujemy „niezarejestrowana”, bez utożsamiania z `MaxScore`.
 Analizator stosuje ponadto stały profil porównawczy `wotc_legacy_observed_v1`
 do każdej misji, także niepunktowanej w grze. Niepełne obserwacje pozostają
 oznaczone jako częściowe; wartości podane wcześniej ręcznie nie są regułami.
+W misji niepunktowanej HUD v11 pokazuje tę skalę jako `~wartość/—`.
+Początkowe premie 6000 za każdego kwalifikowanego obserwowanego żołnierza
+nie są zdobytymi punktami gry; czterech żołnierzy daje `~24000/—` przed stratami.
+Ocena może rosnąć i maleć. Do raportu dopisz widoczny licznik, zwłaszcza po
+wczytaniu zapisu: zakres obserwacji może różnić się od analizatora.
 Zbieranie raportu działa po usunięciu pobranych źródeł moda.
 
 ## Co obserwować w następnym etapie

@@ -1,13 +1,25 @@
 # Testy odbiorcze
 
-Najnowszy materiał to [ponowna próba GasStation na v9](report-2026-11-03-legacy-v9.pl.md):
+Najnowszy [raport v10 — SabotageCC](report-2026-11-03-v10-sabotage.pl.md):
+trudność 3, **FAIL** w turze 12. Licznik „—” odpowiada brakowi natywnej
+punktacji; 55 rozkazów przyjętych, zero odrzuceń, jeden granat.
+W v11 sprawdź niezależną dostępność liczb: znany wynik gry bez maksimum
+ma pozostać widoczny jako `1200/—`, także `0/—` i wartości ujemne.
+Zwykłe misje otrzymują teraz ocenę porównawczą `~wartość/—`; jej wygląd
+i naliczanie w grze pozostają **NIEURUCHOMIONE**. Sprawdź początkowe premie
+6000 za żołnierza, pierwszą ranę, potwierdzoną śmierć, zabicie i jawny cel.
+F8 nie powinno zerować licznika. Wczytanie zapisu może wymagać kilku odświeżeń
+na przejrzenie historii; brakujące zdarzenia nie mogą tworzyć fikcyjnych punktów.
+
+Wcześniejszy materiał to [ponowna próba GasStation na v9](report-2026-11-03-legacy-v9.pl.md):
 Dowódca, **FAIL** w turze 7, wynik gry **−10000** przy maksymalnej puli 46000.
 Podejście i stabilizacja snajpera: **PASS**. Legalny pickup łupu: **NIEZAREJESTROWANY**.
 Ten sam raport zawiera zwycięstwo v8 w `SabotageCC` na trudności 3.
 Wcześniejsze zwycięstwo v8 w pierwszej misji Legacy pozostaje osobną próbą;
 Cemetery nadal nie ma udokumentowanej próby autoplaya.
-Nowy licznik v10: kompilacja Windows i próba w grze **NIEURUCHOMIONE**.
-[Instrukcja Legacy](legacy-test.pl.md) · [Licznik v10](score-display-v10.pl.md).
+V10 działało w zwykłej niepunktowanej misji. Wyświetlanie liczb Legacy
+i nowa poprawka v11 nadal wymagają kompilacji Windows i próby w grze.
+[Instrukcja Legacy](legacy-test.pl.md) · [Licznik v10/v11](score-display-v10.pl.md).
 
 Dotychczasowy wynik zgłoszony przez użytkownika: **PASS** — mod wydaje rozkazy;
 **PASS** — pierwsza misja Legacy na v8; **FAIL** — dotychczasowe próby
@@ -54,11 +66,12 @@ Wyniki zapisuj osobno: PASS / FAIL / NIEURUCHOMIONY. Kompilacja nie potwierdza d
 
 ## UI
 
-- V10: nad przyciskiem widoczne `punkty/maksimum`, z wielkością czcionki
+- V10/v11: nad przyciskiem widoczne `punkty/maksimum`, z wielkością czcionki
   przycisku. Sprawdź odświeżanie przy OFF, po zwinięciu przycisku i po wczytaniu
   zapisu ze środka misji. W kolejnym etapie Legacy wynik nie obejmuje wcześniejszych
   misji, a maksimum nie maleje po zabiciach i stratach. Ujemny wynik ma zachować
-  minus. Zwykła misja bez punktacji pokazuje „—”. Pole przepuszcza kliknięcia mapy.
+  minus. W v11 zwykła misja bez punktacji pokazuje `~wartość/—`; natywny
+  wynik bez maksimum daje `wartość/—`. Pole przepuszcza kliknięcia mapy.
 - W zwykłej turze XCOM z dostępnymi akcjami włącz autoplay. Nakładka tury i licznik celu misji (`UITurnOverlay`, `UISpecialMissionHUD`) nie mogą powodować stałej pauzy; automat powinien wydać legalny rozkaz.
 - Sprawdź rzeczywiste menu, dialog, sekwencję blokującą sterowanie i ręczne celowanie. Nowe rozkazy mają czekać; po zamknięciu menu lub anulowaniu celowania automat może wznowić pracę. Ekrany znajdujące się pod HUD-em nie powinny samodzielnie powodować pauzy.
 - Przy utrzymującej się blokadzie sprawdź status i wpisy `AutoplayXCom2` w `Launch.log`. Log powinien podawać przyczynę zmiany stanu i dane ekranu, bez powtarzania identycznego wpisu w każdej klatce.

@@ -142,11 +142,18 @@ simulated function Collapse()
 
 simulated function UpdateStatus()
 {
+    local string ScoreText;
+
     // UIText caches its HTML, so unchanged score/font values do not issue
     // another Flash update. Keep this independent of autoplay's run state.
     if (ScoreCounter != none && ScoreLabel != none && ToggleButton != none)
+    {
+        ScoreText = ScoreCounter.GetText();
         ScoreLabel.SetCenteredText(class'UIUtilities_Text'.static.GetColoredText(
-            ScoreCounter.GetText(), eUIState_Normal, ToggleButton.FontSize));
+            ScoreText, eUIState_Normal, ToggleButton.FontSize));
+        if (Controller != none)
+            Controller.RecordDisplayedScore(ScoreText);
+    }
 
     if (Controller == none)
         return;
@@ -197,6 +204,8 @@ simulated event Removed()
         Controller.Destroy();
         Controller = none;
     }
+    if (ScoreCounter != none)
+        ScoreCounter.Cleanup();
     ScoreCounter = none;
     super.Removed();
 }

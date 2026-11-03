@@ -31,6 +31,7 @@ var private bool bEndPending;
 var private int LastEndHistory;
 var private string RecordedMissionType;
 var private string LastGameScore;
+var private string LastHUDScore;
 var private int RecordedLadderIndex;
 var private int RecordedLadderRung;
 var private bool bHasLadderScore;
@@ -89,7 +90,7 @@ function Start(int PlayerID)
     bStarted = true;
     Emit("start", "|player=" $ PlayerID $ "|mission=" $ Safe(Mission)
         $ "|difficulty=" $ `TacticalDifficultySetting $ "|history=" $ HistoryCursor
-        $ "|revision=mission-report-v10");
+        $ "|revision=mission-report-v11");
     // F8 starts observation, not the mission. Even turn one may already have
     // processed damage, objectives or native starting allowances.
     Emit("scoring_coverage", "|complete=false|reason=recording_begins_at_f8"
@@ -353,6 +354,16 @@ function RecordScoreDeltas(XComGameState HistoryState)
             $ "|history=" $ HistoryState.HistoryIndex
             $ "|turn=" $ TurnAtHistory(HistoryState.HistoryIndex));
     }
+}
+
+// Preserve the exact displayed value, including the comparison marker and
+// missing-value glyph. A fresh recorder observes its first value after F8.
+function RecordHUDScore(string DisplayText)
+{
+    if (!bStarted || bFinished || DisplayText == LastHUDScore)
+        return;
+    LastHUDScore = DisplayText;
+    Emit("hud_score", "|display=" $ Safe(DisplayText));
 }
 
 function Marker(string Kind, string Details)

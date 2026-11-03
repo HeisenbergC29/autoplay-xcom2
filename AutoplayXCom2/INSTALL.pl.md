@@ -24,13 +24,18 @@ wręcz. Użytkownik potwierdził zwycięstwo v8 w pierwszej misji Legacy.
 Wersja `mission-report-v9` dodała podejście do wykrwawiającego się sojusznika,
 zbieranie łupu oraz telemetrię punktacji. Raport potwierdza podejście i stabilizację,
 lecz najnowsza próba GasStation zakończyła się porażką.
-Bieżące `mission-report-v10` dodaje nad przyciskiem punkty bieżącej misji / jej
+Bieżące `mission-report-v11` dodaje nad przyciskiem punkty bieżącej misji / jej
 maksymalną pulę. Czcionka ma wielkość tekstu przycisku; licznik pozostaje
 widoczny po jego schowaniu i przy wyłączonym autoplay. Gdy gra nie prowadzi
-punktacji, wyświetla „—”.
+punktacji, wyświetla częściową ocenę porównawczą, np. `~5200/—`. Tylda oznacza
+ocenę moda, a nie oficjalny wynik; maksimum pozostaje nieznane.
 Zbuduj i zainstaluj nową wersję; sama podmiana konfiguracji nie wystarczy.
 Instrukcja próby to `docs/legacy-test.pl.md`,
 a opis licznika to `docs/score-display-v10.pl.md` w źródłach.
+V11 pokazuje znany wynik gry także bez maksimum, np. `1200/—`. Ocena
+porównawcza korzysta ze wspólnego profilu raportów: zaczyna od premii 6000
+za każdego obserwowanego kwalifikowanego żołnierza i może maleć po ranach
+lub śmierciach. Czterech takich żołnierzy daje na początku `~24000/—`.
 
 ## Wymagania
 
@@ -149,7 +154,7 @@ Raport ZIP pojawi się w `<Dokumenty>\AutoplayXCom2-Reports`. Skrypt działa tak
 po usunięciu pobranego folderu źródeł. Załącz raport do zgłoszenia wraz z poziomem
 trudności, wynikiem misji i stratami. Szczegóły: `docs/mission-recording.pl.md`
 w repozytorium. To zapis diagnostyczny, nie film ani replay.
-W nowym raporcie wpis `revision=mission-report-v10` identyfikuje tę wersję.
+W nowym raporcie wpis `revision=mission-report-v11` identyfikuje tę wersję.
 Znaczniki `ambush_setup` pokazują przygotowania, a `grenade_scan` zawiera również
 liczby ocenionych okazji do granatu na pojedynczy cel i ostatni podgląd obrażeń.
 `area_target_preview` opisuje cele wybranego granatu; `move_threat_preview`
@@ -158,7 +163,10 @@ ryzyka każdego widocznego wroga. Podglądy nie są gwarancją wyniku akcji.
 V9 zapisuje także `rescue_candidate`, `loot_candidate` i odczyty oficjalnego
 wyniku Legacy (`game_score`), gdy należą do bieżącego etapu. Analizator źródeł
 wylicza wspólną punktację porównawczą dla wszystkich misji; oznacza braki danych
-i nie zastępuje nią oficjalnego wyniku gry. Do raportu warto nadal dopisać wynik
+i nie zastępuje nią oficjalnego wyniku gry. V11 udostępnia tę samą skalę
+porównawczą także na HUD-zie misji niepunktowanych, zawsze z tyldą i bez
+znanego maksimum. Zakres obserwacji HUD-u i raportu może się różnić.
+Do raportu warto nadal dopisać wynik
 z ekranu podsumowania oraz wszelkie ręczne działania i restarty.
 
 - Stałe „PAUSED: SCREEN / MENU” na zwykłym HUD-zie w wersji `0.1.0-alpha`: pobierz aktualne źródła, ponownie zbuduj i zastąp cały folder moda; sama zmiana INI nie wystarczy. Po aktualizacji uruchom grę ponownie.
@@ -169,7 +177,8 @@ z ekranu podsumowania oraz wszelkie ręczne działania i restarty.
 - Wyłączenie moda: odznacz go w launcherze. Bieżące włączenie autoplaya nie jest zapisywane w kampanii.
 
 Wcześniejszą kompilację i zależności binarne sprawdzono. Raporty potwierdzają
-zwycięstwa v8 i działanie ratunku v9; najnowsza próba v9 zakończyła się porażką.
-Kompilacja i licznik v10 wymagają osobnej próby. Nie potwierdzono
+zwycięstwa v8 i działanie ratunku v9; najnowszy raport v10 z `SabotageCC`
+kończy się porażką. Licznik porównawczy v11 wymaga nowej kompilacji i próby.
+Nie potwierdzono
 pełnej obsługi każdej skryptowanej misji DLC
 ani konkretnego najnowszego numeru builda Steam. Stan weryfikacji opisuje README.

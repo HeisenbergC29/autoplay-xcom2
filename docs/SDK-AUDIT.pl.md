@@ -259,3 +259,38 @@ audyt 12 klas i 29 nazw zdolności oraz trzy zestawy testów PowerShell
 (budowanie, zbieranie źródeł SDK i raportów misji). Odnośniki dokumentacji
 i `git diff --check` są poprawne. Nie przeprowadzono kompilacji Windows
 ani testu nowego licznika w grze.
+
+## V11 — wynik natywny i porównawczy na HUD-zie
+
+Znany natywny wynik przy niedostępnym maksimum daje `aktualne/—`; nieznane
+maksimum jest nadal odczytywane ponownie. Brak pewnego bieżącego odczytu
+Legacy lub Challenge Mode nie jest zastępowany fikcyjnym zerem.
+
+Po nowym wyborze użytkownika w niepunktowanych misjach HUD v11 pokazuje
+`~wartość/—`, według tego samego profilu `wotc_legacy_observed_v1` co analizator.
+Początkowe premie wynoszą 6000 za każdego obserwowanego kwalifikowanego
+żołnierza. To częściowa ocena porównawcza, nie natywne zdobyte punkty;
+czterech żołnierzy daje `~24000/—` przed ranami i stratami.
+
+Obserwator odczytuje własne jednostki oraz historycznie widoczne fakty o wrogach.
+Zabicie wymaga potwierdzenia; zniknięcie z widoku i samo HP równe zero nie
+wystarczają. Nasłuchuje jawnych zaliczeń celów i ratunku cywilów. Zdarzenia
+sprzed utworzenia HUD-u lub wczytania zapisu mogą być nieobserwowane, dlatego
+ocena zawsze ma tyldę i nie obiecuje pełnego wyniku. Historia jest przeglądana
+porcjami; nasłuchy są usuwane przy usunięciu HUD-u lub zmianie trybu.
+Działanie nie zależy od F8. Nie ma wywołań przyznających punkty ani zmian gry.
+
+Audyt kierunku osłony potwierdził `GetCoverTypeForTarget` od pozycji każdego
+widocznego przeciwnika do rozważanego pola. Eksploracja bez widocznych wrogów
+ocenia osłonę względem celu marszu; nie przewiduje ukrytych pozycji. V11 nie
+zmienia tej taktycznej oceny.
+
+Kompilacja Windows oraz próba nowego licznika w grze pozostają do wykonania.
+[Zasady i scenariusze v11](score-display-v10.pl.md).
+
+Kontrola końcowa v11: **315 testów Python zaliczonych bez pominięć** z SDK,
+audyt 13 klas i 29 nazw zdolności oraz testy PowerShell budowania. Sprawdzono
+zgodność wag licznika z profilem raportów, odnośniki dokumentacji i
+`git diff --check`. Zapis `hud_score` zachowuje dokładny tekst licznika,
+bez uruchamiania rejestratora ani wydawania rozkazów. Kompilacja Windows
+i próba nowego licznika w grze pozostają do wykonania.

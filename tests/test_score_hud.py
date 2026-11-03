@@ -44,7 +44,8 @@ class ScoreHUDContracts(unittest.TestCase):
 
     def test_score_refresh_uses_the_actual_button_font_even_with_autoplay_off(self):
         update = function_body(self.source, 'UpdateStatus')
-        self.assertIn('ScoreCounter.GetText(), eUIState_Normal, ToggleButton.FontSize', update)
+        self.assertIn('ScoreText = ScoreCounter.GetText()', update)
+        self.assertIn('ScoreText, eUIState_Normal, ToggleButton.FontSize', update)
         self.assertLess(update.index('ScoreCounter.GetText()'), update.index('if (Controller == none)'))
         tick = function_body(self.source, 'Tick')
         self.assertIn('RefreshRemaining = 0.25', tick)
@@ -54,6 +55,28 @@ class ScoreHUDContracts(unittest.TestCase):
         init = function_body(self.source, 'InitAutoplayControl')
         self.assertIn("ScoreCounter = new(self) class'APX_MissionScore'", init)
         self.assertIn('ScoreCounter = none', function_body(self.source, 'Removed'))
+
+
+    def test_telemetry_records_the_same_displayed_text_without_starting_autoplay(self):
+        update = function_body(self.source, 'UpdateStatus')
+        self.assertIn('Controller.RecordDisplayedScore(ScoreText)', update)
+        self.assertLess(update.index('ScoreText = ScoreCounter.GetText()'),
+                        update.index('Controller.RecordDisplayedScore(ScoreText)'))
+        classes = HUD.parent
+        forward = function_body((classes / 'APX_Controller.uc').read_text(), 'RecordDisplayedScore')
+        self.assertIn('if (MissionRecorder != none)', forward)
+        self.assertIn('MissionRecorder.RecordHUDScore(DisplayText)', forward)
+        self.assertNotIn('new(', forward)
+        for forbidden in ('Start(', 'Toggle(', 'ActivateAbility', 'SubmitGameState', 'bEnabled ='):
+            self.assertNotIn(forbidden, forward)
+        record = function_body((classes / 'APX_MissionRecorder.uc').read_text(), 'RecordHUDScore')
+        self.assertIn('if (!bStarted || bFinished || DisplayText == LastHUDScore)', record)
+        self.assertIn('LastHUDScore = DisplayText', record)
+        self.assertIn('Emit("hud_score", "|display=" $ Safe(DisplayText))', record)
+        self.assertLess(record.index('DisplayText == LastHUDScore'), record.index('Emit('))
+        self.assertNotIn('CumulativeScore', record)
+        self.assertNotIn('AddedPoints', record)
+        self.assertNotIn('ModifyStateObject', record)
 
 
 @unittest.skipUnless(os.environ.get('APX_SDK_SOURCE_ROOT'), 'Score HUD contracts need SDK sources')
