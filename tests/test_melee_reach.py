@@ -104,8 +104,8 @@ class MeleeReachTests(unittest.TestCase):
         self.assertIn('MeleeThreatReaches.Length == VisibleEnemies.Length', exposure)
         self.assertIn('KnownMeleeReach = -2.0;', exposure)
         self.assertIn('KnownMeleeReach = MeleeThreatReaches[Index];', exposure)
-        self.assertIn('ThreatRiskAtTile(UnitState, Enemy, Tile, KnownMeleeReach)', exposure)
-        self.assertIn('ExposureRisk(UnitState, Tile, VisibleEnemies, MeleeThreatReaches)', position)
+        self.assertIn('ThreatRiskAtTile(UnitState, Enemy, Tile, KnownMeleeReach, KnownWeight)', exposure)
+        self.assertIn('ExposureRisk(UnitState, Tile, VisibleEnemies, MeleeThreatReaches, ThreatWeights)', position)
         self.assertIn('if (MeleeReach == -2.0)', threat)
         self.assertEqual(threat.count('GetMeleeThreatReach(Enemy)'), 1)
         for body in (move, cache, exposure, position, threat):

@@ -258,11 +258,20 @@ static function bool HasFiringLane(XComGameState_Unit Soldier, TTile Tile,
     return false;
 }
 
+// Preparing a shot while concealed must still leave a reasonable position
+// after the opener reveals the squad. This is a bounded planner allowance,
+// not a claim about native hit probability or unseen enemy intentions.
+static function bool PreparationRiskAllowed(float CurrentRisk, float CandidateRisk)
+{
+    return CandidateRisk <= FMax(0.0, CurrentRisk) + FMax(6.0, CurrentRisk * 0.25);
+}
+
 static function bool ChoosePreparationMove(XComGameState_Unit Soldier, XComGameState_Unit Opener,
     const out array<StateObjectReference> VisibleEnemies, out array<TTile> Path)
 {
     local XGUnit Visualizer;
     local array<TTile> Tiles, CandidatePath, RoutePath;
+    local array<float> MeleeThreatReaches, ThreatWeights;
     local TTile Tile, OpenerTile;
     local int Index, Sample, SampleCount;
     local float Cost, Value, BestValue, CurrentSupport;
@@ -287,7 +296,10 @@ static function bool ChoosePreparationMove(XComGameState_Unit Soldier, XComGameS
     BestValue = -100000.0;
     CurrentSupport = class'APX_MissionPlanner'.static.NearestSupportDistance(Soldier, Soldier.TileLocation);
     CurrentDistance = class'APX_MissionPlanner'.static.TileDistance(Soldier.TileLocation, OpenerTile);
-    CurrentRisk = class'APX_MissionPlanner'.static.ExposureRisk(Soldier, Soldier.TileLocation, VisibleEnemies);
+    class'APX_MissionPlanner'.static.GetMeleeThreatReaches(Soldier, VisibleEnemies, MeleeThreatReaches);
+    class'APX_MissionPlanner'.static.GetThreatWeights(Soldier, VisibleEnemies, ThreatWeights);
+    CurrentRisk = class'APX_MissionPlanner'.static.ExposureRisk(
+        Soldier, Soldier.TileLocation, VisibleEnemies, MeleeThreatReaches, ThreatWeights);
     for (Sample = 0; Sample < SampleCount; ++Sample)
     {
         Index = Sample * Max(0, Tiles.Length - 1) / Max(1, SampleCount - 1);
@@ -298,6 +310,10 @@ static function bool ChoosePreparationMove(XComGameState_Unit Soldier, XComGameS
             || !class'APX_MissionPlanner'.static.IsSupportedAdvanceDestination(CurrentSupport,
                 class'APX_MissionPlanner'.static.NearestSupportDistance(Soldier, Tile)))
             continue;
+        CandidateRisk = class'APX_MissionPlanner'.static.ExposureRisk(
+            Soldier, Tile, VisibleEnemies, MeleeThreatReaches, ThreatWeights);
+        if (!PreparationRiskAllowed(CurrentRisk, CandidateRisk))
+            continue;
         bFiringLane = HasFiringLane(Soldier, Tile, VisibleEnemies);
         if (!bFiringLane && bBestFiringLane)
             continue;
@@ -305,13 +321,12 @@ static function bool ChoosePreparationMove(XComGameState_Unit Soldier, XComGameS
         if (!bFiringLane)
         {
             CandidateDistance = class'APX_MissionPlanner'.static.TileDistance(Tile, OpenerTile);
-            CandidateRisk = class'APX_MissionPlanner'.static.ExposureRisk(Soldier, Tile, VisibleEnemies);
             CatchupValue = CatchupProgress(CurrentDistance, CandidateDistance, CurrentRisk,
                 CandidateRisk, class'APX_MissionPlanner'.default.SquadSupportDistance);
             if (CatchupValue < 0.0)
                 continue;
         }
-        Value = class'APX_MissionPlanner'.static.PositionScore(Soldier, Tile, Tile, true, VisibleEnemies) - Cost * 0.25;
+        Value = class'APX_MissionPlanner'.static.PositionScore(Soldier, Tile, Tile, true, VisibleEnemies, MeleeThreatReaches, ThreatWeights) - Cost * 0.25;
         Value += CatchupValue;
         // Prefer an established line whenever both kinds of safe move exist.
         if (bFiringLane == bBestFiringLane && Value <= BestValue)

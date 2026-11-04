@@ -326,3 +326,41 @@ i `git diff --check`. Na nowym raporcie odtworzono v1 subtotal 1400 oraz
 v2 subtotal −22600; natywny odczyt Legacy pozostał bez zmian. Wersja profilu
 jest teraz zapisywana przy porównawczych odczytach `hud_score`.
 Kompilacja Windows i próba v12 w grze pozostają do wykonania.
+
+## V13 — źródła jednostek i ocena zagrożenia
+
+`APX_EnemyKnowledge` korzysta z załadowanego szablonu podstawowej broni
+widocznego wroga. Średnia uwzględnia `BaseDamage.Damage` oraz `PlusOne/100`;
+`PlusOne` jest szansą procentową na dodatkowy punkt, a nie płaskim dodatkiem.
+Ograniczona waga broni i celności jest wspólna dla ekspozycji i priorytetu
+zabicia. Efekty kontroli, obszarowe style celu i wsparcie wpływają na priorytet
+celu. Nie ustalają faktycznej gotowości zdolności.
+
+SDK potwierdza kontratak przeciw `StandardAim.bMeleeAttack`, również przy
+inaczej gwarantowanym trafieniu. Planer rozpoznaje zainstalowaną zdolność
+kontry i jawne `IsImpaired`, bez odczytu ukrytego limitu użycia. Zwykłe
+`StandardMelee` ma styl `X2AbilityTarget_Single` z ograniczeniem do broni;
+`GetHitRange` zwraca jednostki świata. Nie zakłada się `iRange=0`: broń zombie
+ma w źródłach `iRange=2`. Dwa standardowe AP pozwalają na ruch i potem cios.
+
+Katalog `data/unit-catalog.json` zawiera metadane źródeł bazowych, WOTC
+i oficjalnych dodatków oraz odwołania do definicji. Obejmuje też żołnierzy,
+cywilów, jednostki MP i mówców; liczba rejestracji nie jest liczbą wrogów.
+Narzędzie nie wykonuje natywnych modyfikacji ani losowania wariantów.
+Plików INI z pełnymi statystykami i ekwipunkiem nie było w przekazanym SDK;
+wartości nierozwiązane pozostają jawne. W grze używane są załadowane parametry
+broni zaobserwowanego kontaktu. Pełne SDK i logi pozostają poza repozytorium.
+
+Przygotowanie zasadzki otrzymało ograniczenie wzrostu ryzyka po ujawnieniu.
+Budżet 6 jednostek heurystyki lub 25% bieżącego ryzyka jest wyborem planera,
+nie parametrem gry. Wagi kontaktów są obliczane raz na wyszukiwanie pól.
+Kompilacja Windows oraz skuteczność nowych decyzji wymagają próby w grze.
+[Mechaniki, katalog i scenariusze v13](enemy-knowledge-v13.pl.md).
+
+Kontrola końcowa v13: **353 testy Python zaliczone bez pominięć** z SDK,
+audyt 14 klas i 29 nazw zdolności oraz testy PowerShell budowania i zbierania
+raportu. Katalog 253 rejestracji, 171 fabryk i 208 definicji broni jest
+odtwarzalny z tych samych 196 plików źródeł. Rozpoznano wszystkie 253 nazwy
+oraz dziesięć szablonów obserwowanych dotąd w raportach. Sprawdzono
+odnośniki dokumentacji i `git diff --check`. Nie przeprowadzono kompilacji
+Windows ani próby v13 w grze.

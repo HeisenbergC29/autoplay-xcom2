@@ -1,4 +1,4 @@
-# Próba Legacy i licznika punktów — v12
+# Próba Legacy i oceny przeciwników — v13
 
 Pierwsza misja `ChallengeAbductionGasStation` została wcześniej ukończona
 zwycięstwem na v8: Dowódca, 14 tur, dwóch poległych.
@@ -6,17 +6,17 @@ zwycięstwem na v8: Dowódca, 14 tur, dwóch poległych.
 Raport v9 obejmuje ponowną próbę GasStation: porażkę w turze 7,
 ratunek snajpera oraz natywny wynik −10000 przy maksymalnej puli 46000.
 [Raport v9](report-2026-11-03-legacy-v9.pl.md).
-Najnowszy [raport v11](report-2026-11-03-v11-score.pl.md) dotyczy zwykłego
-`SabotageCC`: porażka w turze 6 i potwierdzona błędna baza `~24000` starego
-licznika porównawczego. W archiwum jest także natywny start Legacy od 0.
+Najnowszy [raport v12](report-2026-11-04-v12-enemies.pl.md) dotyczy zwykłego
+`SabotageCC`: porażka w turze 8 przy trudności 3. Start oceny porównawczej
+od zera został potwierdzony. Raport ujawnił także luki zasięgu zwykłego melee
+i przygotowania zasadzki, które poprawia v13.
 
-Do kolejnej próby **zbuduj i zainstaluj v12**. Zachowuje dostępny natywny
-wynik bez maksimum, np. `1200/—`. W niepunktowanych misjach udostępnia
-częściową ocenę porównawczą zaczynającą od `~0/—`, według profilu v2.
-Usuwa początkowe 6000 na żołnierza, które nie było potwierdzoną premią Legacy.
-[Zasady działania i granice licznika](score-display-v10.pl.md).
-Pełne źródła SDK z przesłanego `Development.rar` pozostają dostępne do kontroli zgodności.
-Do kontroli źródeł i kontraktów SDK nie potrzeba kolejnych plików.
+Do kolejnej próby **zbuduj i zainstaluj v13**.
+[Ocena przeciwników i katalog źródeł](enemy-knowledge-v13.pl.md) ·
+[Zasady licznika](score-display-v10.pl.md).
+Źródła SDK z `Development.rar` pozostają podstawą kontroli kontraktów.
+Nie zawierają kompletu plików INI z liczbowymi statystykami, wyposażeniem
+i drzewami AI; brakujące wartości katalog oznacza jako nierozwiązane.
 
 ## Zbudowanie na zachowanym SDK
 
@@ -37,7 +37,7 @@ uruchom grę ponownie. Źródła możesz później usunąć; SDK zachowaj.
 ## Przebieg porównawczy
 
 1. Uruchom wybrany zapis Legacy Operations „Blast From the Past” na nowej
-   v12. Dla kontynuacji wcześniejszego zwycięstwa oczekiwany jest
+   v13. Dla kontynuacji wcześniejszego zwycięstwa oczekiwany jest
    `ChallengeAbductionCemetery`, etap 2; próba GasStation dotyczy
    `ChallengeAbductionGasStation`, etap 1. Zapisz etap i trudność.
 2. Po uzyskaniu sterowania, przed F8, sprawdź licznik nad przyciskiem.
@@ -45,7 +45,7 @@ uruchom grę ponownie. Źródła możesz później usunąć; SDK zachowaj.
    czcionki i przepuszczać kliknięcia mapy. Maksimum nie powinno maleć po
    zabiciach; w drugim etapie licznik nie może doliczać punktów poprzedniej misji.
 3. Włącz autoplay klawiszem F8. Automat startuje wyłączony po zmianie misji.
-   W `Launch.log` sprawdź `revision=mission-report-v12`; inna rewizja oznacza
+   W `Launch.log` sprawdź `revision=mission-report-v13`; inna rewizja oznacza
    uruchomienie starszego kodu. Pozwól misji dojść do wyniku; zapisz ewentualne
    ręczne działania, ich moment i powód.
 4. Po misji, przed ponownym uruchomieniem gry, otwórz PowerShell w folderze
@@ -65,7 +65,7 @@ oficjalnego wpisujemy „niezarejestrowana”, bez utożsamiania z `MaxScore`.
 Analizator stosuje ponadto stały profil porównawczy `wotc_legacy_observed_v2`
 do każdej misji, także niepunktowanej w grze. Niepełne obserwacje pozostają
 oznaczone jako częściowe; wartości podane wcześniej ręcznie nie są regułami.
-W misji niepunktowanej HUD v12 pokazuje tę skalę jako `~wartość/—`, od zera.
+W misji niepunktowanej HUD pokazuje tę skalę jako `~wartość/—`, od zera.
 Nie przyznaje premii początkowej ani nie zakłada nieobserwowanych premii na
 koniec. Profil v1 pozostaje archiwalny; nie porównuj jego sum wprost z v2.
 Ocena może rosnąć i maleć. Do raportu dopisz widoczny licznik, zwłaszcza po
@@ -74,6 +74,13 @@ Zbieranie raportu działa po usunięciu pobranych źródeł moda.
 
 ## Co obserwować w następnym etapie
 
+- Wiedza o przeciwnikach: porównaj słabszą i silniejszą broń przy podobnej
+  osłonie i szansie zabicia. Sprawdź wpływ rozpoznanych zdolności kontroli,
+  AoE i wsparcia na priorytet celu oraz nowe wpisy `enemy_knowledge`.
+- Melee i zasadzka: zwykły atak zombie powinien mieć rozpoznany zasięg ruchu
+  i ciosu. Sprawdź melee przeciw zdolności kontrataku, także przy podglądzie
+  100%, oraz wyjątek dla jawnie obezwładnionego celu. Przygotowanie zasadzki
+  nie powinno wybierać pola z nadmiernie większym ryzykiem po ujawnieniu.
 - Ratunek: przy wykrwawieniu sprawdź podejście żołnierza z gotową stabilizacją
   i zachowanie AP, a następnie natywną legalną stabilizację. Ostatnia tura
   wykrwawiania wymaga osiągnięcia zasięgu od razu. Przeszkody i brak ładunku

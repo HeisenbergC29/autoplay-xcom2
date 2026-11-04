@@ -1,16 +1,19 @@
 # Testy odbiorcze
 
-Najnowszy [raport v11](report-2026-11-03-v11-score.pl.md): `SabotageCC`,
-trudność 3, **FAIL** w turze 6. Licznik porównawczy zaczynał od `~24000`.
-To błędna konwencja v1, a nie przyznane punkty Legacy. W v12 HUD i analizator
-używają profilu v2 bez premii początkowych. Kompilacja i próba korekty w grze
-pozostają **NIEURUCHOMIONE**.
+Najnowszy [raport v12](report-2026-11-04-v12-enemies.pl.md): `SabotageCC`,
+trudność 3, **FAIL** w turze 8, 40 przyjętych rozkazów i zero odrzuceń.
+Start oceny porównawczej od zera: **PASS**. Nowa ocena zagrożeń v13:
+kompilacja Windows i próba w grze **NIEURUCHOMIONE**.
+[Mechaniki i scenariusze v13](enemy-knowledge-v13.pl.md).
 
-Sprawdź początek zwykłej misji `~0/—`, pierwszą ranę −1000, ponowne obrażenia
-bez kolejnej tej samej kary, potwierdzoną stratę −5000, zabicie i jawny cel.
-Wykrwawienie nie może udawać śmierci. F8 nie powinno zerować licznika.
-Wczytanie zapisu może wymagać kilku odświeżeń na przejrzenie historii;
-brakujące zdarzenia nie mogą tworzyć fikcyjnych punktów.
+Sprawdź różne obrażenia broni przy porównywalnej geometrii, rozpoznane
+zdolności kontroli/AoE/wsparcia, zwykłe melee zombie, możliwą kontrę Mutona
+oraz nadmierny wzrost ekspozycji podczas przygotowania zasadzki. Nieznane
+dane powinny zachować neutralną wagę, a nie usuwać zagrożenie.
+
+Profil punktacji v2 pozostaje bez zmian: `~0/—` na początku zwykłej misji,
+pierwsza rana −1000, potwierdzona strata −5000. Wykrwawienie nie udaje śmierci,
+leczenie nie zwraca kary, a F8 nie zeruje oceny.
 
 Wcześniejszy materiał to [ponowna próba GasStation na v9](report-2026-11-03-legacy-v9.pl.md):
 Dowódca, **FAIL** w turze 7, wynik gry **−10000** przy maksymalnej puli 46000.
@@ -19,7 +22,7 @@ Ten sam raport zawiera zwycięstwo v8 w `SabotageCC` na trudności 3.
 Wcześniejsze zwycięstwo v8 w pierwszej misji Legacy pozostaje osobną próbą;
 Cemetery nadal nie ma udokumentowanej próby autoplaya.
 V10 działało w zwykłej niepunktowanej misji. Wyświetlanie liczb Legacy
-i nowa poprawka v12 nadal wymagają kompilacji Windows i próby w grze.
+oraz nowe mechaniki v13 nadal wymagają kompilacji Windows i próby w grze.
 [Instrukcja Legacy](legacy-test.pl.md) · [Licznik v12](score-display-v10.pl.md).
 
 Dotychczasowy wynik zgłoszony przez użytkownika: **PASS** — mod wydaje rozkazy;
@@ -126,7 +129,7 @@ i pozostałe kategorie nadal wymagają prób, szczególnie późniejsze etapy sk
 
 ## Punktacja każdej symulacji
 
-Uruchom analizator v12 dla każdego raportu, także Gatecrashera i innych misji
+Uruchom aktualny analizator dla każdego raportu, także Gatecrashera i innych misji
 bez oficjalnych punktów. Sprawdź obecność `game_scoring.comparison` z profilem
 `wotc_legacy_observed_v2`, listą składowych i brakujących danych. Jest to wspólna
 miara porównawcza oparta na regułach gry; nie dodaje punktów do stanu misji.

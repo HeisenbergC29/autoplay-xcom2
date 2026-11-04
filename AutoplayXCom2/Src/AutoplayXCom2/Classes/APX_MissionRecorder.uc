@@ -13,6 +13,7 @@ struct RecordedUnit
     var int UnitID;
     var string Snapshot;
     var string Abilities;
+    var string Knowledge;
 };
 
 var private array<RecordedUnit> Units;
@@ -90,7 +91,7 @@ function Start(int PlayerID)
     bStarted = true;
     Emit("start", "|player=" $ PlayerID $ "|mission=" $ Safe(Mission)
         $ "|difficulty=" $ `TacticalDifficultySetting $ "|history=" $ HistoryCursor
-        $ "|revision=mission-report-v12");
+        $ "|revision=mission-report-v13");
     // F8 starts observation, not the mission. Even turn one may already have
     // processed damage, objectives or native starting allowances.
     Emit("scoring_coverage", "|complete=false|reason=recording_begins_at_f8"
@@ -453,6 +454,69 @@ function RecordUnit(XComGameState_Unit UnitState, bool bFriendly, bool bForce)
         RecordAvailability(UnitState, Index);
 }
 
+// Called only from the current native visible-enemy list. These are installed
+// template parameters and public unit stats, not AP, cooldown or AI readiness.
+function RecordEnemyKnowledge(XComGameState_Unit Enemy)
+{
+    local XComGameState_Item Weapon;
+    local X2CharacterTemplate Character;
+    local string Fields, WeaponName, Immunities;
+    local name ImmuneType;
+    local int Index, Flags;
+    local float Weight, TargetWeight;
+
+    if (Enemy == none || Enemy.GetMyTemplate() == none)
+        return;
+    Character = Enemy.GetMyTemplate();
+    Weapon = Enemy.GetPrimaryWeapon();
+    WeaponName = "unknown";
+    if (Weapon != none)
+        WeaponName = string(Weapon.GetMyTemplateName());
+    foreach Character.ImmuneTypes(ImmuneType)
+    {
+        if (Immunities != "")
+            Immunities $= ",";
+        Immunities $= string(ImmuneType);
+    }
+    Weight = class'APX_EnemyKnowledge'.static.ThreatWeight(Enemy);
+    Flags = class'APX_EnemyKnowledge'.static.CapabilityFlags(Enemy);
+    TargetWeight = class'APX_EnemyKnowledge'.static.TargetThreatValue(Weight,
+        (Flags & class'APX_EnemyKnowledge'.const.Capability_Control) != 0,
+        (Flags & class'APX_EnemyKnowledge'.const.Capability_Area) != 0,
+        (Flags & class'APX_EnemyKnowledge'.const.Capability_Support) != 0,
+        Enemy.GetTeam() == eTeam_TheLost);
+    Fields = "|source=visible_template|enemy=" $ Enemy.ObjectID
+        $ "|template=" $ Enemy.GetMyTemplateName() $ "|primary_weapon=" $ Safe(WeaponName)
+        $ "|weapon_mean_damage=" $ class'APX_EnemyKnowledge'.static.PrimaryWeaponMeanDamage(Enemy)
+        $ "|aim=" $ Enemy.GetCurrentStat(eStat_Offense)
+        $ "|mobility=" $ Enemy.GetCurrentStat(eStat_Mobility)
+        $ "|armor=" $ Enemy.GetArmorMitigationForUnitFlag()
+        $ "|base_hp=" $ Character.GetCharacterBaseStat(eStat_HP)
+        $ "|base_aim=" $ Character.GetCharacterBaseStat(eStat_Offense)
+        $ "|base_defense=" $ Character.GetCharacterBaseStat(eStat_Defense)
+        $ "|base_mobility=" $ Character.GetCharacterBaseStat(eStat_Mobility)
+        $ "|base_will=" $ Character.GetCharacterBaseStat(eStat_Will)
+        $ "|base_dodge=" $ Character.GetCharacterBaseStat(eStat_Dodge)
+        $ "|base_armor=" $ Character.GetCharacterBaseStat(eStat_ArmorMitigation)
+        $ "|base_psi=" $ Character.GetCharacterBaseStat(eStat_PsiOffense)
+        $ "|base_hack_defense=" $ Character.GetCharacterBaseStat(eStat_HackDefense)
+        $ "|base_detection=" $ Character.GetCharacterBaseStat(eStat_DetectionRadius)
+        $ "|base_crit=" $ Character.GetCharacterBaseStat(eStat_CritChance)
+        $ "|can_take_cover=" $ Character.bCanTakeCover
+        $ "|robotic=" $ Character.bIsRobotic
+        $ "|tech_vulnerable=" $ Character.bWeakAgainstTechLikeRobot
+        $ "|immune_types=" $ Safe(Immunities)
+        $ "|threat_weight=" $ Weight $ "|target_threat=" $ TargetWeight
+        $ "|capabilities=" $ Flags
+        $ "|melee_counter_possible=" $ class'APX_EnemyKnowledge'.static.HasMeleeCounter(Enemy);
+    Index = UnitIndex(Enemy.ObjectID);
+    if (Units[Index].Knowledge != Fields)
+    {
+        Emit("enemy_knowledge", Fields);
+        Units[Index].Knowledge = Fields;
+    }
+}
+
 function RecordAvailability(XComGameState_Unit UnitState, int Index)
 {
     local GameRulesCache_Unit Cache;
@@ -552,6 +616,7 @@ function Observe(string Phase)
         VisibleIDs.AddItem(UnitState.ObjectID);
         RecordUnit(UnitState, false, PreviousVisibleIDs.Find(UnitState.ObjectID) == INDEX_NONE);
         RecordVisibleEnemyScoreRule(UnitState);
+        RecordEnemyKnowledge(UnitState);
     }
     for (Index = 0; Index < PreviousVisibleIDs.Length; ++Index)
     {
@@ -913,7 +978,7 @@ function RecordMoveThreatPreviews(XComGameState_Unit UnitState, const out array<
     local TTile CurrentTile, DestinationTile, EnemyTile;
     local vector CurrentLocation, DestinationLocation, EnemyLocation;
     local GameRulesCache_VisibilityInfo CurrentVisibility, DestinationVisibility;
-    local float Angle, MeleeReach;
+    local float Angle, MeleeReach, Weight;
     local string CurrentCover, DestinationCover;
     local bool bCurrentLOS, bDestinationLOS, bCurrentDefaultView, bDestinationDefaultView;
     local int Count;
@@ -943,13 +1008,14 @@ function RecordMoveThreatPreviews(XComGameState_Unit UnitState, const out array<
         bCurrentDefaultView = bCurrentLOS && CurrentVisibility.bVisibleFromDefault;
         bDestinationDefaultView = bDestinationLOS && DestinationVisibility.bVisibleFromDefault;
         MeleeReach = class'APX_MissionPlanner'.static.GetMeleeThreatReach(Enemy);
+        Weight = class'APX_EnemyKnowledge'.static.ThreatWeight(Enemy);
         Emit("move_threat_preview", "|source=" $ UnitState.ObjectID $ "|enemy=" $ Enemy.ObjectID
             $ "|enemy_template=" $ Enemy.GetMyTemplateName() $ "|melee_only=" $ Enemy.IsMeleeOnly()
-            $ "|melee_threat_reach=" $ MeleeReach
+            $ "|melee_threat_reach=" $ MeleeReach $ "|threat_weight=" $ Weight
             $ "|current_distance=" $ class'APX_MissionPlanner'.static.TileDistance(CurrentTile, EnemyTile)
             $ "|destination_distance=" $ class'APX_MissionPlanner'.static.TileDistance(DestinationTile, EnemyTile)
-            $ "|current_threat_risk=" $ class'APX_MissionPlanner'.static.ThreatRiskAtTile(UnitState, Enemy, CurrentTile)
-            $ "|destination_threat_risk=" $ class'APX_MissionPlanner'.static.ThreatRiskAtTile(UnitState, Enemy, DestinationTile)
+            $ "|current_threat_risk=" $ class'APX_MissionPlanner'.static.ThreatRiskAtTile(UnitState, Enemy, CurrentTile, MeleeReach, Weight)
+            $ "|destination_threat_risk=" $ class'APX_MissionPlanner'.static.ThreatRiskAtTile(UnitState, Enemy, DestinationTile, MeleeReach, Weight)
             $ "|current_cover=" $ CurrentCover $ "|destination_cover=" $ DestinationCover
             $ "|current_los=" $ bCurrentLOS $ "|destination_los=" $ bDestinationLOS
             $ "|current_default_view=" $ bCurrentDefaultView

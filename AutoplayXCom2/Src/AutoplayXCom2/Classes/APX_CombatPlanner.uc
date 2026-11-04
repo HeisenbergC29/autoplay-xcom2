@@ -152,11 +152,19 @@ static function bool HasRequiredMeleePath(XComGameState_Unit SourceUnit,
 {
     local array<TTile> Destinations, Path;
     local XGUnit UnitVisualizer;
+    local X2AbilityToHitCalc_StandardAim MeleeCalc;
     local int Index;
     local float StartSupport;
     local bool bRequireSupport;
 
     RiskPenalty = 0.0;
+    // The native counterattack conversion can also defeat a guaranteed melee
+    // preview. Check the visible capability before stationary/path shortcuts;
+    // never inspect the enemy's private once-per-turn counter value.
+    MeleeCalc = X2AbilityToHitCalc_StandardAim(AbilityTemplate.AbilityToHitCalc);
+    if (MeleeCalc != none && MeleeCalc.bMeleeAttack
+        && class'APX_EnemyKnowledge'.static.HasMeleeCounter(TargetUnit))
+        return false;
     if (AbilityTemplate.TargetingMethod == none || !AbilityTemplate.TargetingMethod.default.ProvidesPath)
         return true;
     if (AbilityTemplate.AbilityTargetStyle == none
@@ -448,9 +456,7 @@ static function float ScoreAttack(XComGameState_Ability Ability,
     // Remove dangerous weapons first when kill probabilities are comparable.
     // Do not reserve a target optimistically: the controller recomputes after
     // every actual result, so a missed kill naturally leaves a follow-up shot.
-    Threat = FClamp(TargetUnit.GetCurrentStat(eStat_Offense) / 65.0, 0.75, 1.35);
-    if (TargetUnit.GetTeam() == eTeam_TheLost)
-        Threat = 0.6;
+    Threat = class'APX_EnemyKnowledge'.static.TargetThreat(TargetUnit);
     Result = ScoreDamage(MinHPDamage, MaxHPDamage, Health, HitChance, Threat,
         1.0 - TargetUnit.GetCurrentStat(eStat_HP) / FMax(1.0, TargetUnit.GetMaxStat(eStat_HP)));
     KillChance = EstimatedKillChance(MinHPDamage, MaxHPDamage, Health, HitChance);

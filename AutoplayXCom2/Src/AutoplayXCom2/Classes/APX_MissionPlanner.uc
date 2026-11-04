@@ -606,6 +606,7 @@ static function float GetMeleeThreatReach(XComGameState_Unit Enemy)
     local X2AbilityCost Cost;
     local X2AbilityCost_ActionPoints APCost;
     local X2AbilityTarget_MovingMelee MovingTarget;
+    local X2AbilityTarget_Single SingleTarget;
     local X2AbilityMultiTarget_Cone Cone;
     local XComGameState_Item SourceWeapon;
     local int StandardActions, AttackCost, MoveActions;
@@ -664,6 +665,21 @@ static function float GetMeleeThreatReach(XComGameState_Unit Enemy)
                 * class'XComWorldData'.const.WORLD_METERS_TO_UNITS_MULTIPLIER
                 / class'XComWorldData'.const.WORLD_StepSize;
         }
+        else if (Template.AbilityTargetStyle != none
+            && Template.AbilityTargetStyle.Class == class'X2AbilityTarget_Single'
+            && Template.AbilityMultiTargetStyle == none)
+        {
+            SingleTarget = X2AbilityTarget_Single(Template.AbilityTargetStyle);
+            if (!SingleTarget.OnlyIncludeTargetsInsideWeaponRange)
+                return -1.0;
+            // Stock StandardMelee (including psi zombies) uses this stationary
+            // style. The native getter resolves weapon range into world units;
+            // iRange is not necessarily zero and must not be guessed in tiles.
+            AttackRangeTiles = SingleTarget.GetHitRange(Ability) / class'XComWorldData'.const.WORLD_StepSize;
+            if (AttackRangeTiles <= 0.0)
+                return -1.0;
+            MoveActions = MeleeMovementActions(StandardActions, AttackCost, 0, false);
+        }
         else if (X2AbilityTarget_Cursor(Template.AbilityTargetStyle) != none && Cone != none)
         {
             // Cone.GetHitRange explicitly returns world units, including its
@@ -715,13 +731,33 @@ static function float MeleeReachRisk(float Distance, float Reach)
     return LegacyRisk;
 }
 
+// Caller-owned weights share the same visible-contact order as reach values.
+// Snapshot once per search so weapon metadata is not re-read for every tile.
+static function GetThreatWeights(XComGameState_Unit UnitState,
+    const out array<StateObjectReference> VisibleEnemies, out array<float> Weights)
+{
+    local XComGameState_Unit Enemy;
+    local int Index;
+
+    Weights.Length = VisibleEnemies.Length;
+    for (Index = 0; Index < VisibleEnemies.Length; ++Index)
+    {
+        Weights[Index] = 1.0;
+        Enemy = XComGameState_Unit(`XCOMHISTORY.GetGameStateForObjectID(VisibleEnemies[Index].ObjectID));
+        if (Enemy != none && Enemy.IsAlive() && !Enemy.bRemovedFromPlay
+            && UnitState != none && UnitState.IsEnemyUnit(Enemy))
+            Weights[Index] = class'APX_EnemyKnowledge'.static.ThreatWeight(Enemy);
+    }
+}
+
 // Shared per-contact estimate for movement, defensive actions and diagnostics.
 // Callers must first restrict Enemy to their player-visible hostile contacts.
 static function float ThreatRiskAtTile(XComGameState_Unit UnitState,
-    XComGameState_Unit Enemy, TTile Tile, optional float KnownMeleeReach=-2.0)
+    XComGameState_Unit Enemy, TTile Tile, optional float KnownMeleeReach=-2.0,
+    optional float KnownThreatWeight=-1.0)
 {
     local vector TargetLocation, EnemyLocation;
-    local float Angle, Risk, MeleeReach;
+    local float Angle, Risk, MeleeReach, Weight;
     local ECoverType Cover;
     local int CoverLevel;
     local GameRulesCache_VisibilityInfo Visibility;
@@ -731,6 +767,9 @@ static function float ThreatRiskAtTile(XComGameState_Unit UnitState,
     if (UnitState == none || Enemy == none || !Enemy.IsAlive()
         || Enemy.IsIncapacitated() || Enemy.bRemovedFromPlay || !UnitState.IsEnemyUnit(Enemy))
         return 0.0;
+    Weight = KnownThreatWeight;
+    if (Weight < 0.0)
+        Weight = class'APX_EnemyKnowledge'.static.ThreatWeight(Enemy);
     if (Enemy.IsMeleeOnly())
     {
         MeleeReach = KnownMeleeReach;
@@ -738,7 +777,7 @@ static function float ThreatRiskAtTile(XComGameState_Unit UnitState,
             MeleeReach = GetMeleeThreatReach(Enemy);
         // Legacy melee also ignores cover and LOS. A recognized -1 fallback
         // need not repeat the template scan or those unrelated native queries.
-        return MeleeReachRisk(TileDistance(Tile, Enemy.TileLocation), MeleeReach);
+        return MeleeReachRisk(TileDistance(Tile, Enemy.TileLocation), MeleeReach) * Weight;
     }
     TargetLocation = `XWORLD.GetPositionFromTileCoordinates(Tile);
     EnemyLocation = `XWORLD.GetPositionFromTileCoordinates(Enemy.TileLocation);
@@ -752,15 +791,16 @@ static function float ThreatRiskAtTile(XComGameState_Unit UnitState,
         UnitState.GetMyTemplate().bCanTakeCover, Enemy.IsMeleeOnly());
     EnemyTile = Enemy.TileLocation;
     bClearLOS = `XWORLD.CanSeeTileToTile(EnemyTile, Tile, Visibility);
-    return KnownThreatRisk(Risk, bClearLOS, Enemy.IsMeleeOnly());
+    return KnownThreatRisk(Risk, bClearLOS, Enemy.IsMeleeOnly()) * Weight;
 }
 
 static function float ExposureRisk(XComGameState_Unit UnitState, TTile Tile,
     array<StateObjectReference> VisibleEnemies,
-    optional const out array<float> MeleeThreatReaches)
+    optional const out array<float> MeleeThreatReaches,
+    optional const out array<float> ThreatWeights)
 {
     local XComGameState_Unit Enemy;
-    local float Risk, SumRisk, WorstRisk, KnownMeleeReach;
+    local float Risk, SumRisk, WorstRisk, KnownMeleeReach, KnownWeight;
     local int Index;
 
     for (Index = 0; Index < VisibleEnemies.Length; ++Index)
@@ -769,7 +809,10 @@ static function float ExposureRisk(XComGameState_Unit UnitState, TTile Tile,
         KnownMeleeReach = -2.0;
         if (MeleeThreatReaches.Length == VisibleEnemies.Length)
             KnownMeleeReach = MeleeThreatReaches[Index];
-        Risk = ThreatRiskAtTile(UnitState, Enemy, Tile, KnownMeleeReach);
+        KnownWeight = -1.0;
+        if (ThreatWeights.Length == VisibleEnemies.Length)
+            KnownWeight = ThreatWeights[Index];
+        Risk = ThreatRiskAtTile(UnitState, Enemy, Tile, KnownMeleeReach, KnownWeight);
         SumRisk += Risk;
         WorstRisk = FMax(WorstRisk, Risk);
     }
@@ -980,14 +1023,15 @@ static function float OffensivePositionScore(XComGameState_Unit UnitState, TTile
 
 static function float PositionScore(XComGameState_Unit UnitState, TTile Tile,
     TTile GoalTile, bool bCombatGoal, array<StateObjectReference> VisibleEnemies,
-    optional const out array<float> MeleeThreatReaches)
+    optional const out array<float> MeleeThreatReaches,
+    optional const out array<float> ThreatWeights)
 {
     local float Result;
     if (bCombatGoal)
         Result = OffensivePositionScore(UnitState, Tile, VisibleEnemies);
     else
         Result = -TileDistance(Tile, GoalTile) * 3.0;
-    return Result - ExposureRisk(UnitState, Tile, VisibleEnemies, MeleeThreatReaches)
+    return Result - ExposureRisk(UnitState, Tile, VisibleEnemies, MeleeThreatReaches, ThreatWeights)
         + SquadPositionScore(UnitState, Tile);
 }
 
@@ -1206,6 +1250,7 @@ static function bool ChooseRescueMove(XComGameState_Unit UnitState,
     local array<name> RemainingPoints;
     local array<StateObjectReference> VisibleEnemies;
     local array<float> MeleeThreatReaches;
+    local array<float> ThreatWeights;
     local TTile Tile, ClosestTile;
     local int Sample, SampleCount, TileIndex, NeighborIndex, PathIndex, Turns;
     local float Cost, Distance, CandidateDistance, CurrentRisk, Risk, Value, HealthFraction;
@@ -1226,7 +1271,8 @@ static function bool ChooseRescueMove(XComGameState_Unit UnitState,
         return false;
     GetVisibleThreats(UnitState, VisibleEnemies);
     GetMeleeThreatReaches(UnitState, VisibleEnemies, MeleeThreatReaches);
-    CurrentRisk = ExposureRisk(UnitState, UnitState.TileLocation, VisibleEnemies, MeleeThreatReaches);
+    GetThreatWeights(UnitState, VisibleEnemies, ThreatWeights);
+    CurrentRisk = ExposureRisk(UnitState, UnitState.TileLocation, VisibleEnemies, MeleeThreatReaches, ThreatWeights);
     HealthFraction = UnitState.GetCurrentStat(eStat_HP) / FMax(1.0, UnitState.GetMaxStat(eStat_HP));
     foreach `XCOMHISTORY.IterateByClassType(class'XComGameState_Unit', Patient)
     {
@@ -1267,7 +1313,7 @@ static function bool ChooseRescueMove(XComGameState_Unit UnitState,
             bCanTreatNow = class'APX_CombatPlanner'.static.CanStabilizeFromTile(
                 UnitState, Patient, Stabilize, Tile);
             CandidateDistance = TileDistance(Tile, Patient.TileLocation);
-            Risk = ExposureRisk(UnitState, Tile, VisibleEnemies, MeleeThreatReaches);
+            Risk = ExposureRisk(UnitState, Tile, VisibleEnemies, MeleeThreatReaches, ThreatWeights);
             Value = ScoreRescueApproach(bCanTreatNow, Distance - CandidateDistance,
                 CurrentRisk, Risk, HealthFraction, Turns) - Cost * 0.25;
             if (Value <= Score)
@@ -1384,6 +1430,7 @@ static function bool ChooseMove(XComGameState_Unit UnitState,
     local array<TTile> Tiles, CandidatePath;
     local array<StateObjectReference> VisibleEnemies;
     local array<float> MeleeThreatReaches;
+    local array<float> ThreatWeights;
     local TTile GoalTile, Tile, ClosestTile;
     local MissionGoal Goal;
     local bool bCombatGoal, bSafe, bRequireSupport;
@@ -1427,10 +1474,11 @@ static function bool ChooseMove(XComGameState_Unit UnitState,
     Tiles.InsertItem(0, ClosestTile);
     SampleCount = Min(Tiles.Length, Clamp(default.MaxCandidateTiles, 1, 512));
     GetMeleeThreatReaches(UnitState, VisibleEnemies, MeleeThreatReaches);
+    GetThreatWeights(UnitState, VisibleEnemies, ThreatWeights);
     CurrentScore = PositionScore(UnitState, UnitState.TileLocation, GoalTile,
-        bCombatGoal, VisibleEnemies, MeleeThreatReaches);
+        bCombatGoal, VisibleEnemies, MeleeThreatReaches, ThreatWeights);
     BestScore = CurrentScore + FMax(1.0, default.MinimumPositionGain);
-    CurrentRisk = ExposureRisk(UnitState, UnitState.TileLocation, VisibleEnemies, MeleeThreatReaches);
+    CurrentRisk = ExposureRisk(UnitState, UnitState.TileLocation, VisibleEnemies, MeleeThreatReaches, ThreatWeights);
     BestRisk = CurrentRisk;
 
     // Include the closest goal tile and distribute the remaining samples over
@@ -1450,9 +1498,9 @@ static function bool ChooseMove(XComGameState_Unit UnitState,
             || (bRequireSupport && !IsSupportedAdvanceDestination(StartSupport,
                 NearestSupportDistance(UnitState, Tile))))
             continue;
-        CandidateRisk = ExposureRisk(UnitState, Tile, VisibleEnemies, MeleeThreatReaches);
+        CandidateRisk = ExposureRisk(UnitState, Tile, VisibleEnemies, MeleeThreatReaches, ThreatWeights);
         CandidateScore = PositionScore(UnitState, Tile, GoalTile, bCombatGoal,
-            VisibleEnemies, MeleeThreatReaches);
+            VisibleEnemies, MeleeThreatReaches, ThreatWeights);
         // Small travel cost breaks equivalent-position ties and reduces churn.
         CandidateScore -= PathCost * 0.25;
         if (bCombatGoal && !IsUsefulReposition(CandidateScore - CurrentScore,

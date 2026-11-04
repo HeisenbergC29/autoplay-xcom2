@@ -24,7 +24,7 @@ wręcz. Użytkownik potwierdził zwycięstwo v8 w pierwszej misji Legacy.
 Wersja `mission-report-v9` dodała podejście do wykrwawiającego się sojusznika,
 zbieranie łupu oraz telemetrię punktacji. Raport potwierdza podejście i stabilizację,
 lecz najnowsza próba GasStation zakończyła się porażką.
-Bieżące `mission-report-v12` pokazuje nad przyciskiem punkty bieżącej misji
+Pole nad przyciskiem pokazuje punkty bieżącej misji
 oraz maksimum. Czcionka ma wielkość tekstu przycisku; licznik pozostaje widoczny
 przy wyłączonym autoplay. Natywne punkty są odczytywane z gry. Znany wynik bez
 maksimum pozostaje widoczny, np. `1200/—`.
@@ -34,6 +34,13 @@ bazę 6000 punktów na żołnierza z v11. Pierwsza rana odejmuje 1000, potwierdz
 strata 5000; każda kara jest naliczana najwyżej raz na jednostkę. Zabicia,
 jawne cele i ratunek cywilów zachowują reguły wspólnego profilu v2. Tylda
 oznacza ocenę częściową, a maksimum pozostaje nieznane.
+
+Bieżące `mission-report-v13` rozróżnia zagrożenie broni widocznych wrogów,
+uwzględnia rozpoznane zdolności w priorytecie celu i unika melee przeciw
+możliwej kontrze. Poprawia zasięg zwykłego melee zombie oraz ogranicza
+nadmierny wzrost ryzyka podczas przygotowania zasadzki. Katalog źródeł
+opisuje również jednostki, których jeszcze nie spotkano w testach;
+niepełne dane konfiguracyjne pozostają oznaczone.
 
 Zbuduj i zainstaluj nową wersję; sama podmiana konfiguracji nie wystarczy.
 Instrukcja próby to `docs/legacy-test.pl.md`, a opis licznika to
@@ -156,7 +163,7 @@ Raport ZIP pojawi się w `<Dokumenty>\AutoplayXCom2-Reports`. Skrypt działa tak
 po usunięciu pobranego folderu źródeł. Załącz raport do zgłoszenia wraz z poziomem
 trudności, wynikiem misji i stratami. Szczegóły: `docs/mission-recording.pl.md`
 w repozytorium. To zapis diagnostyczny, nie film ani replay.
-W nowym raporcie wpis `revision=mission-report-v12` identyfikuje tę wersję.
+W nowym raporcie wpis `revision=mission-report-v13` identyfikuje tę wersję.
 Znaczniki `ambush_setup` pokazują przygotowania, a `grenade_scan` zawiera również
 liczby ocenionych okazji do granatu na pojedynczy cel i ostatni podgląd obrażeń.
 `area_target_preview` opisuje cele wybranego granatu; `move_threat_preview`
@@ -179,8 +186,9 @@ z ekranu podsumowania oraz wszelkie ręczne działania i restarty.
 - Wyłączenie moda: odznacz go w launcherze. Bieżące włączenie autoplaya nie jest zapisywane w kampanii.
 
 Wcześniejszą kompilację i zależności binarne sprawdzono. Raporty potwierdzają
-zwycięstwa v8 i działanie ratunku v9; najnowszy raport v11 z `SabotageCC`
-kończy się porażką. Korekta punktacji v12 wymaga nowej kompilacji i próby.
+zwycięstwa v8 i działanie ratunku v9; najnowszy raport v12 z `SabotageCC`
+kończy się porażką. Potwierdza start punktacji porównawczej od zera.
+Zmiany oceny zagrożeń v13 wymagają nowej kompilacji i próby.
 Nie potwierdzono
 pełnej obsługi każdej skryptowanej misji DLC
 ani konkretnego najnowszego numeru builda Steam. Stan weryfikacji opisuje README.

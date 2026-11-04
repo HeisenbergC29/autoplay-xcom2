@@ -70,17 +70,18 @@ porażką w turze 7, z wynikiem gry −10000. Ten sam raport zawiera też wygran
 v8 w `SabotageCC` na trudności 3.
 [Zakres zmian, reguły punktacji i ograniczenia v9](docs/tactics-v9.pl.md).
 
-Bieżące **`mission-report-v12`** usuwa błędne premie początkowe z oceny
-porównawczej. Licznik w misjach bez punktacji gry zaczyna od `~0/—`, a punkty
-zmieniają się za zaobserwowane zabicia, cele, ratunek cywilów, rany i straty.
-Wartości 1000 i 5000 są używane jako kary, bez przyznawania z góry 6000
-na żołnierza. Natywna punktacja Legacy i Challenge Mode pozostaje odczytem gry.
-[Raport v11](docs/report-2026-11-03-v11-score.pl.md) potwierdził wyświetlenie
-starej bazy `~24000` w `SabotageCC`; nie była to premia startowa Legacy.
-Nowy profil `wotc_legacy_observed_v2` jest używany przez HUD i analizator;
-archiwalny v1 zachowujemy osobno. Wyników różnych profili nie porównujemy
-bez przeliczenia. [Zasady licznika i próba v12](docs/score-display-v10.pl.md).
-Nowe źródła wymagają kompilacji Windows i sprawdzenia w grze.
+Bieżące **`mission-report-v13`** wykorzystuje dane broni i zdolności widocznych
+przeciwników we wspólnej ocenie zagrożenia. Dodaje ochronę przed znanym
+kontratakiem melee, rozpoznaje zasięg zwykłego ataku zombie i ogranicza
+pogorszenie osłony podczas przygotowania zasadzki.
+[Katalog jednostek i mechaniki v13](docs/enemy-knowledge-v13.pl.md).
+[Najnowszy raport v12](docs/report-2026-11-04-v12-enemies.pl.md) potwierdza
+start licznika od zera, lecz `SabotageCC` na trudności 3 zakończyło się
+porażką w turze 8. Nowe zmiany wymagają kompilacji Windows i osobnej próby.
+
+Ocena porównawcza nadal używa profilu `wotc_legacy_observed_v2` od `~0/—`;
+reguły punktacji nie zostały zmienione przez v13.
+[Zasady licznika](docs/score-display-v10.pl.md).
 
 **Stan: alpha; v8 wygrało pierwszą misję Legacy Operations na Dowódcy.**
 Pełna drabinka Legacy, wygrana Gatecrashera i wszystkie pozostałe rodzaje misji
@@ -180,10 +181,9 @@ potwierdziła **0 błędów i 8 ostrzeżeń SDK**, zarówno dla bazy, jak i moda
 Dotyczy to wcześniejszej kompilacji. Przechowywany ZIP ma kompletną konfigurację,
 27 nazw zdolności, obie lokalizacje i prawidłowy `.u`; jego 464 importy prowadzą
 tylko do `Core`, `Engine` i `XComGame`, a dziewięć klas moda jest obecnych.
-Najnowszy raport potwierdza uruchomienie v11 w zwykłym `SabotageCC`,
-porażkę w turze 6 i działanie starej oceny porównawczej. Jej początkowe
-6000 na żołnierza było błędnym założeniem usuniętym w v12. Nowa wersja wymaga
-kompilacji i sprawdzenia w grze. Obecne
+Najnowszy raport potwierdza uruchomienie v12 w zwykłym `SabotageCC`,
+start oceny porównawczej od zera oraz porażkę w turze 8. Katalog źródeł i nowe
+reguły zagrożenia v13 wymagają kompilacji i sprawdzenia w grze. Obecne
 środowisko Linux pozwala uruchamiać testy Python i PowerShell, ale nie zawiera
 SDK Windows ani działającej gry.
 

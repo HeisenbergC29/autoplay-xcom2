@@ -163,8 +163,8 @@ class MissionRecorderContracts(unittest.TestCase):
         self.assertIn('bDestinationLOS && DestinationVisibility.bVisibleFromDefault', preview)
         # Per-contact values must come from the planner, so a future report
         # can distinguish ranged cover changes from melee distance changes.
-        self.assertIn('ThreatRiskAtTile(UnitState, Enemy, CurrentTile)', preview)
-        self.assertIn('ThreatRiskAtTile(UnitState, Enemy, DestinationTile)', preview)
+        self.assertIn('ThreatRiskAtTile(UnitState, Enemy, CurrentTile, MeleeReach, Weight)', preview)
+        self.assertIn('ThreatRiskAtTile(UnitState, Enemy, DestinationTile, MeleeReach, Weight)', preview)
         for field in ('enemy_template', 'melee_only', 'current_distance',
                       'destination_distance', 'current_threat_risk', 'destination_threat_risk'):
             self.assertIn('|' + field + '=', preview)

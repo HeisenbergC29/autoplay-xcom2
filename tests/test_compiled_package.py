@@ -120,6 +120,12 @@ class CompiledTableTests(unittest.TestCase):
         self.assertIn("APX_ComparisonScore", report["own_classes"])
         self.assertEqual(set(report["import_roots"]), {'Core', 'Engine', 'XComGame'})
 
+    def test_accepts_enemy_knowledge_helper_without_external_packages(self):
+        data, _ = table_fixture(extra_classes={"APX_EnemyKnowledge": "Object"})
+        report = CHECKS.parse_ue3_package(data)
+        self.assertIn("APX_EnemyKnowledge", report["own_classes"])
+        self.assertEqual(set(report["import_roots"]), {'Core', 'Engine', 'XComGame'})
+
     def test_rejects_unknown_additional_class(self):
         data, _ = table_fixture(extra_classes={"UnrelatedClass": "Object"})
         with self.assertRaisesRegex(CHECKS.InvalidPackage, "unexpected mod classes"):

@@ -16,6 +16,8 @@ automat i co rzeczywiście wydarzyło się po rozkazach.
 [V9: ratunek, łup i punktacja każdej symulacji](tactics-v9.pl.md).
 [Próba v9: stabilizacja potwierdzona, GasStation przegrane](report-2026-11-03-legacy-v9.pl.md).
 [V10: licznik punktów bieżącej misji nad przyciskiem](score-display-v10.pl.md).
+[V13: wiedza o przeciwnikach, broń i kontrataki](enemy-knowledge-v13.pl.md).
+[Raport v12 i napotkane zdolności](report-2026-11-04-v12-enemies.pl.md).
 
 Wynik misji, punktację porównawczą i oficjalne punkty gry zapisujemy oddzielnie.
 `score` w rekordach `candidate`/`chosen` jest oceną heurystyki, a startowe
@@ -76,7 +78,7 @@ wynikały z konkretnej misji.
 
 ## Zbudowanie i pierwsza próba
 
-1. Pobierz aktualne źródła v12, rozpakuj je i zbuduj jak poprzednio na zachowanym
+1. Pobierz aktualne źródła v13, rozpakuj je i zbuduj jak poprzednio na zachowanym
    SDK WOTC. Bez `-BuildBase`, jeśli pakiety bazowe są już przygotowane.
 2. Zainstaluj nowy `dist\AutoplayXCom2.zip` i uruchom grę ponownie. Stara paczka
    z `release` nie zawiera rejestratora.
@@ -297,3 +299,19 @@ Od v12 wpis `hud_score` z oceną porównawczą zawiera też
 `comparison_profile=wotc_legacy_observed_v2`. Historyczne odczyty v11
 pochodzą z profilu v1; nie należy porównywać ich liczbowo z v2 bez
 ponownego przeliczenia tych samych zdarzeń.
+
+Od `mission-report-v13` wpis `enemy_knowledge` opisuje rozpoznane dane
+widocznego kontaktu użyte przez nowy model. `move_threat_preview` pozwala
+zestawić zastosowaną wagę z osłoną, LOS i rozpoznanym zasięgiem melee.
+Dane opisują potencjał broni i zdolności, nie gotowość ataku ani decyzję AI.
+Wagi są heurystyką planera; nie są trafieniem, obrażeniami z losowania ani
+punktacją misji. [Zakres i ograniczenia](enemy-knowledge-v13.pl.md).
+
+Od `mission-report-v13` `enemy_knowledge` zapisuje wyłącznie aktualnie
+widocznych przeciwników: `primary_weapon`, `weapon_mean_damage`, bieżące
+`aim`, `mobility`, `armor`, bazowe pola `base_*` załadowanego szablonu,
+`robotic`, `tech_vulnerable`, `immune_types`, `threat_weight`, `target_threat`,
+`capabilities` i `melee_counter_possible`. Maska zdolności: kontrola 1,
+obszar 2, wsparcie 4. Są to parametry i potencjalne zdolności, bez odczytu
+bieżących AP, amunicji, cooldownu i zamiaru AI. `move_threat_preview` zapisuje
+wagę używaną dla obu ocenianych pozycji. [Interpretacja v13](enemy-knowledge-v13.pl.md).
