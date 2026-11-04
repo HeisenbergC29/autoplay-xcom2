@@ -1,8 +1,9 @@
 """Resolve bounded, source-linked facts from supplied WOTC Default INIs.
 
 This is a configuration snapshot audit, not Unreal's native configuration
-loader. It deliberately does not overlay SDK-generated XCom*.ini caches, load
-mods/DLC, execute hooks, or invent values for missing sections.
+loader. It composes explicitly supplied game DLC snapshots, but does not overlay
+SDK-generated caches, discover a native load order, execute hooks, or invent
+values for missing sections.
 """
 from __future__ import annotations
 
@@ -10,6 +11,7 @@ from copy import deepcopy
 import hashlib
 from pathlib import Path
 import re
+from types import MappingProxyType
 
 
 FAMILIES = (
@@ -106,6 +108,8 @@ class IniDocument:
         self.filename = filename
         self.dataset = dataset
         self.sections = {}
+        self._entry_cache = None
+        self._section_names = None
         section, pending, first_line = None, '', 0
         logical = []
         for line_number, physical in enumerate(text.splitlines(), 1):
@@ -151,9 +155,21 @@ class IniDocument:
         return cls(text, path.name, dataset)
 
     def section_name(self, requested: str):
+        if self._section_names is not None:
+            return self._section_names.get(requested.casefold())
         return next((name for name in self.sections if name.casefold() == requested.casefold()), None)
 
+    def freeze(self):
+        """Freeze section topology and cache reads after composition is complete."""
+        self._section_names = {name.casefold(): name for name in self.sections}
+        self.sections = MappingProxyType({name: tuple(entries) for name, entries in self.sections.items()})
+        self._entry_cache = {}
+        return self
+
     def entries(self, section: str, key: str | None = None) -> list[dict]:
+        cache_key = (section.casefold(), key.casefold() if key is not None else None)
+        if self._entry_cache is not None and cache_key in self._entry_cache:
+            return list(self._entry_cache[cache_key])
         actual = self.section_name(section)
         result = []
         for entry in self.sections.get(actual, []):
@@ -168,9 +184,13 @@ class IniDocument:
                 result = [item for item in result if not same_value(item)]
             elif operation != '+' or not any(same_value(item) for item in result):
                 result.append(entry)
+        if self._entry_cache is not None:
+            self._entry_cache[cache_key] = tuple(result)
         return result
 
     def source(self, section: str, entry: dict) -> dict:
+        if '_source' in entry:
+            return deepcopy(entry['_source'])
         return {'dataset': self.dataset, 'file': self.filename,
                 'section': self.section_name(section) or section,
                 'key': entry['key'], 'line': entry['line']}
@@ -193,43 +213,132 @@ def _documents(directory: Path) -> dict[str, IniDocument]:
             for family in FAMILIES if (directory / f'Default{family}.ini').is_file()}
 
 
+def _dlc_documents(directory: Path, label: str) -> dict[str, IniDocument]:
+    """Read only the explicitly identified game DLC's seven supported families."""
+    documents = {}
+    for family in FAMILIES:
+        paths = [directory / f'{prefix}{family}.ini' for prefix in ('XCom', 'Default')]
+        present = [path for path in paths if path.is_file()]
+        if len(present) > 1:
+            raise ValueError(f'Ambiguous DLC configuration family: {label}/{family}')
+        if present:
+            document = IniDocument.read(present[0], f'game_dlc:{label}')
+            document.filename = f'{label}/Config/{present[0].name}'
+            documents[family] = document
+    return documents
+
+
+def _compose_documents(base: dict[str, IniDocument],
+                       layers: list[dict[str, IniDocument]]) -> dict[str, IniDocument]:
+    """Replay raw entries in caller-declared order, retaining every origin.
+
+    Operations must be applied after composing: pre-filtering each document
+    would lose DLC removals and clears aimed at an earlier document.
+    """
+    result = {}
+    for family in FAMILIES:
+        components = [layer[family] for layer in [base, *layers] if family in layer]
+        if not components:
+            continue
+        composite = IniDocument('', f'composed:{family}')
+        for document in components:
+            for section, entries in document.sections.items():
+                actual = composite.section_name(section) or section
+                target = composite.sections.setdefault(actual, [])
+                for entry in entries:
+                    copied = deepcopy(entry)
+                    copied['_source'] = document.source(section, entry)
+                    target.append(copied)
+        result[family] = composite.freeze()
+    return result
+
+
+def _scalar_conflicts(document: IniDocument, section: str, entries: list[dict]) -> list[dict]:
+    """Do not choose between conflicting scalar values from separate DLCs."""
+    last_by_layer = {}
+    for entry in entries:
+        source = document.source(section, entry)
+        if source['dataset'].startswith('game_dlc:'):
+            last_by_layer[source['dataset']] = entry
+    selected = list(last_by_layer.values())
+    if len(selected) > 1 and any(entry['value'] != selected[0]['value'] for entry in selected[1:]):
+        return [document.fact(section, entry) for entry in selected]
+    return []
+
+
+def _character_section(document: IniDocument, name: str) -> tuple[str | None, list[str]]:
+    candidates = [section for section in document.sections
+                  if len(section.split()) == 2
+                  and section.split()[0].casefold() == name.casefold()
+                  and 'charactertemplate' in section.split()[1].casefold()]
+    return (candidates[0], []) if len(candidates) == 1 else (None, candidates)
+
+
 def _stats(unit: dict, document: IniDocument | None) -> dict:
     name = unit.get('template_name')
     if not name:
         return {'status': 'not_declared', 'base': {}, 'difficulty': {},
                 'randomized_base_stats': [], 'effective_values_complete': False}
-    section = f'{name} X2CharacterTemplate'
     if document is None:
         return {'status': 'not_present', 'base': {}, 'difficulty': {},
                 'randomized_base_stats': [], 'effective_values_complete': False}
 
     def values(section_name):
-        result = {}
+        result, conflicts = {}, {}
+        if section_name is None:
+            return result, conflicts
+        entries_by_stat = {}
         for entry in document.entries(section_name):
             match = re.fullmatch(r'CharacterBaseStats\[(\w+)\]', entry['key'], re.I)
             if match:
-                result[match[1]] = document.fact(section_name, entry)
-        return result
+                entries_by_stat.setdefault(match[1], []).append(entry)
+        for stat, entries in entries_by_stat.items():
+            conflict = _scalar_conflicts(document, section_name, entries)
+            if conflict:
+                conflicts[stat] = conflict
+            else:
+                result[stat] = document.fact(section_name, entries[-1])
+        return result, conflicts
 
-    base = values(section)
-    difficulties = {}
+    section, ambiguous = _character_section(document, name)
+    base, base_conflicts = values(section)
+    difficulties, variant_conflicts, ambiguous_variants = {}, {}, {}
     any_difficulty = False
     for difficulty in range(4):
-        variant = f'{name}_Diff_{difficulty} X2CharacterTemplate'
-        present = document.section_name(variant) is not None
+        variant, variant_ambiguous = _character_section(document, f'{name}_Diff_{difficulty}')
+        present = variant is not None
         any_difficulty |= present
-        overrides = values(variant)
+        overrides, conflicts = values(variant)
         merged = {key: fact['value'] for key, fact in base.items()}
         merged.update({key: fact['value'] for key, fact in overrides.items()})
+        # A conflicting override cannot safely fall back to the base value.
+        for key in conflicts:
+            merged.pop(key, None)
+        # An ambiguous subclass variant may override known base fields too.
+        # Keep inherited fields only when none of its candidates mentions them.
+        for candidate in variant_ambiguous:
+            candidate_values, candidate_conflicts = values(candidate)
+            for key in candidate_values.keys() | candidate_conflicts.keys():
+                merged.pop(key, None)
         difficulties[str(difficulty)] = {
             'section_present': present, 'overrides': overrides, 'values': merged,
         }
-    randomized = [document.fact(section, entry)
-                  for entry in document.entries(section, 'RandomizedBaseStats')]
-    status = ('present' if document.section_name(section) else
+        if conflicts:
+            variant_conflicts[str(difficulty)] = conflicts
+        if variant_ambiguous:
+            ambiguous_variants[str(difficulty)] = variant_ambiguous
+    randomized = ([document.fact(section, entry)
+                   for entry in document.entries(section, 'RandomizedBaseStats')]
+                  if section is not None else [])
+    status = ('ambiguous' if ambiguous else 'present' if section is not None else
               'partial' if any_difficulty else 'not_present')
-    return {'status': status, 'base': base, 'difficulty': difficulties,
-            'randomized_base_stats': randomized, 'effective_values_complete': False}
+    result = {'status': status, 'base': base, 'difficulty': difficulties,
+              'randomized_base_stats': randomized, 'effective_values_complete': False}
+    if base_conflicts or variant_conflicts:
+        result['conflicting_fields'] = {'base': base_conflicts, 'difficulty': variant_conflicts}
+    if ambiguous or ambiguous_variants:
+        result['ambiguous_sections'] = {'base': ambiguous, 'difficulty': ambiguous_variants}
+    return result
 
 
 def _loadout(unit: dict, document: IniDocument | None) -> dict:
@@ -291,7 +400,7 @@ def _ai(unit: dict, document: IniDocument | None) -> dict:
 
 def _weapon(weapon: dict, documents: dict[str, IniDocument]) -> dict:
     document = documents.get(weapon.get('config'))
-    resolved, unresolved = {}, {}
+    resolved, unresolved, conflicts = {}, {}, {}
     for field, declaration in weapon.get('properties', {}).items():
         reference = declaration.get('reference')
         if not reference:
@@ -301,35 +410,52 @@ def _weapon(weapon: dict, documents: dict[str, IniDocument]) -> dict:
             unresolved[field] = reference
             continue
         owner = match['class'] or Path(declaration.get('source', weapon['source'])['file']).stem
-        # An explicitly qualified reference can name an ability class configured
-        # in SoldierSkills rather than the weapon's own config family. Search
-        # only the selected Default snapshots, and never guess among duplicates.
         candidates = [(candidate, section)
                       for candidate in (documents.values() if match['class'] else
                                         [document] if document is not None else [])
                       for section in candidate.sections
                       if section.rsplit('.', 1)[-1].casefold() == owner.casefold()]
-        if len(candidates) != 1:
-            unresolved[field] = reference
-            continue
-        target_document, section = candidates[0]
-        entries = target_document.entries(section, match['symbol'])
-        if entries:
-            resolved[field] = target_document.fact(section, entries[-1])
-        else:
-            indexed = []
-            for entry in target_document.entries(section):
-                index = re.fullmatch(re.escape(match['symbol']) + r'\[(\d+)\]', entry['key'], re.I)
-                if index:
-                    indexed.append({'index': int(index[1]), **target_document.fact(section, entry)})
-            if indexed:
-                # Explicit indexes only: absent indexes are unknown, not zero.
-                by_index = {entry['index']: entry for entry in indexed}
-                resolved[field] = {'indexed_values': [by_index[index] for index in sorted(by_index)]}
+        if len(candidates) == 1:
+            target_document, section = candidates[0]
+            entries = target_document.entries(section, match['symbol'])
+            conflict = _scalar_conflicts(target_document, section, entries)
+            if conflict:
+                conflicts[field] = conflict
+            elif entries:
+                resolved[field] = target_document.fact(section, entries[-1])
             else:
-                unresolved[field] = reference
-    return {'resolved_properties': resolved, 'unresolved_references': unresolved,
-            'effective_values_complete': False}
+                indexed = {}
+                for entry in target_document.entries(section):
+                    index = re.fullmatch(re.escape(match['symbol']) + r'\[(\d+)\]', entry['key'], re.I)
+                    if index:
+                        indexed.setdefault(int(index[1]), []).append(entry)
+                bad_indexes = {index: _scalar_conflicts(target_document, section, rows)
+                               for index, rows in indexed.items()}
+                bad_indexes = {str(index): rows for index, rows in bad_indexes.items() if rows}
+                if bad_indexes:
+                    conflicts[field] = {'indexed_values': bad_indexes}
+                elif indexed:
+                    # Explicit indexes only: absent indexes are unknown, not zero.
+                    resolved[field] = {'indexed_values': [
+                        {'index': index, **target_document.fact(section, indexed[index][-1])}
+                        for index in sorted(indexed)]}
+        if field in resolved:
+            continue
+        # The source index supplies only direct literal non-config defaults;
+        # these are separate from INI facts and never resolve an INI conflict.
+        source_default = weapon.get('source_defaults', {}).get(match['symbol'])
+        if (field not in conflicts and len(candidates) <= 1 and source_default is not None
+                and source_default.get('source', {}).get('class', '').casefold() == owner.casefold()):
+            fact = deepcopy(source_default)
+            fact['source']['dataset'] = 'sdk_source_defaults'
+            resolved[field] = fact
+        else:
+            unresolved[field] = reference
+    result = {'resolved_properties': resolved, 'unresolved_references': unresolved,
+              'effective_values_complete': False}
+    if conflicts:
+        result['conflicting_properties'] = conflicts
+    return result
 
 
 def _file_record(path: Path) -> dict:
@@ -339,11 +465,29 @@ def _file_record(path: Path) -> dict:
     return {'present': True, 'bytes': len(data), 'sha256': hashlib.sha256(data).hexdigest()}
 
 
-def enrich_catalog(catalog: dict, game_config: Path, sdk_config: Path | None = None) -> dict:
-    """Return a deep copy enriched with the supplied game Defaults snapshot."""
+def enrich_catalog(catalog: dict, game_config: Path, sdk_config: Path | None = None,
+                   game_dlc: dict[str, Path] | None = None) -> dict:
+    """Enrich a copy using game Defaults and caller-ordered game DLC snapshots."""
     game_dir = _config_dir(game_config)
     sdk_dir = _config_dir(sdk_config) if sdk_config is not None else None
     documents = _documents(game_dir)
+    dlc_records, dlc_layers = [], []
+    for label, supplied_path in (game_dlc or {}).items():
+        if not re.fullmatch(r'[A-Za-z0-9_][A-Za-z0-9_.-]*', label):
+            raise ValueError('DLC labels must be simple names, not paths.')
+        directory = _config_dir(supplied_path)
+        layer = _dlc_documents(directory, label)
+        dlc_layers.append(layer)
+        used_names = {document.filename.rsplit('/', 1)[-1] for document in layer.values()}
+        files = [{'file': f'{label}/Config/{path.name}',
+                  'used_by_catalog': path.name in used_names, **_file_record(path)}
+                 for path in sorted(directory.iterdir(), key=lambda path: path.name.casefold())
+                 if path.is_file() and path.suffix.casefold() == '.ini']
+        dlc_records.append({'name': label, 'dataset': f'game_dlc:{label}',
+                            'files': files, 'ini_file_count': len(files),
+                            'used_ini_file_count': sum(file['used_by_catalog'] for file in files)})
+    if dlc_layers:
+        documents = _compose_documents(documents, dlc_layers)
     result = deepcopy(catalog)
     file_records = []
     for family in FAMILIES:
@@ -375,7 +519,7 @@ def enrich_catalog(catalog: dict, game_config: Path, sdk_config: Path | None = N
                                                         (game_dir / name).read_bytes()
                                                         for name in common)})
     result['configuration_audit'] = {
-        'format_version': 1, 'primary_dataset': 'game_defaults',
+        'format_version': 2 if dlc_records else 1, 'primary_dataset': 'game_defaults',
         'default_files': file_records, 'generated_configuration': generated,
         'coverage': {
             'units_with_base_stats_section': sum(unit['config_values']['stats']['status'] == 'present'
@@ -402,4 +546,25 @@ def enrich_catalog(catalog: dict, game_config: Path, sdk_config: Path | None = N
             'AI root children are an index, not an execution trace or prediction of private enemy intent.',
         ],
     }
+    if dlc_records:
+        audit = result['configuration_audit']
+        audit['dlc_configuration'] = {
+            'source': 'game_installation', 'input_order': list(game_dlc),
+            'native_load_order_verified': False, 'datasets': dlc_records,
+            'array_operations': 'replayed_across_documents_before_selection',
+            'scalar_conflict_policy': 'different_values_from_multiple_dlc_layers_remain_unresolved',
+        }
+        audit['limitations'][0] = ('Values compose supplied game Defaults and explicitly identified game DLC INIs; '
+                                   'they are not certified effective native/runtime values.')
+        audit['limitations'].extend([
+            'DLC documents use caller-declared input order; actual native DLC enumeration and hooks are not executed.',
+            'Conflicting scalar values from separate DLC layers remain unresolved instead of guessing a winning layer.',
+        ])
+        audit['coverage']['weapon_properties_from_source_defaults'] = sum(
+            fact.get('source', {}).get('dataset') == 'sdk_source_defaults'
+            for weapon in result.get('weapon_definitions', [])
+            for fact in weapon['config_values']['resolved_properties'].values())
+        audit['coverage']['weapon_properties_from_configuration'] = (
+            audit['coverage']['weapon_properties_resolved']
+            - audit['coverage']['weapon_properties_from_source_defaults'])
     return result

@@ -71,7 +71,7 @@ v8 w `SabotageCC` na trudności 3.
 [Zakres zmian, reguły punktacji i ograniczenia v9](docs/tactics-v9.pl.md).
 
 Bieżące **`mission-report-v14`** uzupełnia katalog o przekazane konfiguracje
-gry i SDK: statystyki bazowe i warianty trudności, wyposażenie, parametry broni
+gry, porównane z SDK: statystyki bazowe i warianty trudności, wyposażenie, parametry broni
 oraz odwołania do AI. Zachowuje pochodzenie i jawne braki danych.
 We wspólnej ocenie ryzyka uwzględnia też aktywne oznaczenie własnego żołnierza
 przez kapitana. W dostarczonej konfiguracji Marked daje przeciwnikom +10 do
@@ -80,9 +80,18 @@ celności przeciw temu żołnierzowi; planer stosuje ograniczoną wagę ryzyka.
 [Mechaniki broni, melee i zasadzki z v13](docs/enemy-knowledge-v13.pl.md)
 pozostają w użyciu. Dane załadowane przez grę mają pierwszeństwo przed
 statycznym katalogiem; katalog nie zastępuje natywnego podglądu ataku.
+
+[Uzupełnienie katalogu o konfiguracje DLC](docs/dlc-config-knowledge.pl.md)
+korzysta z pięciu nowych archiwów pochodzących wyłącznie z gry: `DLC_1`,
+`DLC_2`, `DLC_3`, `TLE` i `XCom_DLC_Day0`. Nie wymaga folderu DLC w SDK.
+Dodaje między innymi parametry władców obcych, SPARK-a i jednostek Legacy.
+Ta aktualizacja dotyczy narzędzi analizy i katalogu; kod działający w grze
+oraz rewizja `mission-report-v14` pozostają takie same. Samo uzupełnienie
+katalogu nie wymaga ponownej kompilacji zainstalowanego v14.
+
 [Najnowszy raport v12](docs/report-2026-11-04-v12-enemies.pl.md) potwierdza
 start licznika od zera, lecz `SabotageCC` na trudności 3 zakończyło się
-porażką w turze 8. Nowe zmiany wymagają kompilacji Windows i osobnej próby.
+porażką w turze 8. Zmiany taktyczne v14 wymagają kompilacji Windows i osobnej próby.
 
 Ocena porównawcza nadal używa profilu `wotc_legacy_observed_v2` od `~0/—`;
 reguły punktacji nie zostały zmienione przez v14.

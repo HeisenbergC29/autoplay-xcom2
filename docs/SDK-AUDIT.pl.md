@@ -396,3 +396,39 @@ Przeszły testy skryptu budowania, kolektora raportów, 79 lokalnych odnośnikó
 w zmienionych dokumentach oraz `git diff --check`.
 Testy źródeł i konfiguracji nie zastępują kompilacji Windows ani próby w grze;
 wynik działania v14 pozostaje do potwierdzenia.
+
+## Uzupełnienie konfiguracji DLC z gry
+
+Otrzymano pięć archiwów z konfiguracjami gry: `DLC_1`, `DLC_2`, `DLC_3`,
+`TLE` i `XCom_DLC_Day0`, łącznie 79 INI i 796252 bajty. W przekazanej
+instalacji SDK nie ma katalogu konfiguracji DLC; nie jest potrzebny do tego
+uzupełnienia. Pliki `XCom*.ini` z dodatków gry są odrębnym wejściem od
+wygenerowanych ustawień SDK.
+
+Rozszerzenie zachowuje pochodzenie wpisów i operatory tablic między warstwami
+oraz rozpoznaje sekcje pochodnych klas szablonów, w tym SPARK-a.
+Kolejność składania dostarczonych plików jest zapisana jawnie; pełna natywna
+kolejność ładowania pozostaje niepotwierdzona. Usunięcia i dodatki AI z
+`DLC_3` wymagają wcześniejszych wpisów `DLC_2`.
+
+Nowe dane rozwiązują 55 wcześniejszych pól broni DLC. Dwa odwołania kategorii
+apteczek mają wartość w już posiadanych źródłowych `defaultproperties`.
+Pozostałe dwa odwołania obrażeń Feral MEC M2/M3 są opisane osobno,
+bez przypisywania im wartości M1 i bez żądania kolejnych archiwów.
+
+To aktualizacja narzędzi i katalogu. Kod UnrealScript, reguły punktacji
+i rewizja `mission-report-v14` pozostają takie same; zainstalowany v14
+nie wymaga nowej kompilacji tylko z powodu tego uzupełnienia.
+[Wejścia, przykłady i odtwarzanie katalogu DLC](dlc-config-knowledge.pl.md).
+
+Wynik katalogu po uzupełnieniu: 196 sekcji bazowych statystyk, 177 zestawów
+wyposażenia i 684 rozwiązane odwołania parametrów broni (682 z konfiguracji,
+2 ze źródłowych wartości domyślnych); 2 odwołania pozostają nierozwiązane.
+Indeks AI obejmuje 28 jawnych korzeni i 166 dopasowań według grupy postaci.
+
+Kontrola końcowa uzupełnienia: **412 testów Python zaliczonych bez pominięć**
+z SDK, konfiguracją bazową i pięcioma katalogami DLC gry. Odtworzono cały
+katalog i potwierdzono 13 zastąpionych węzłów AI bez pozostawienia starych
+duplikatów, w tym cztery poprawki DLC_3 do DLC_2 z właściwym pochodzeniem.
+Przeszły 53 lokalne odnośniki, walidacja argumentów CLI i `git diff --check`.
+Ta aktualizacja nie zmienia UnrealScript ani wyniku prób w grze.

@@ -215,6 +215,114 @@ def calls_in(body: str):
         yield match.start(), match['class'], match['name'], split_args(clean[match.end():close])
 
 
+def source_scalar_defaults(sources: dict[str, str]) -> dict:
+    """Index literal, explicitly non-config defaults without executing SDK code.
+
+    Inherited fields, array/struct defaults, nested objects and expressions stay
+    unresolved. These are source declarations, not effective runtime values.
+    """
+    result, ambiguous = {}, set()
+    scalar = re.compile(r"\b(bool|name|string|int|float)\s+(.+)$", re.I | re.S)
+    literal_scalar = re.compile(
+        r"'(?:[^'\\]|\\.)*'|\"(?:[^\"\\]|\\.)*\"|true|false|"
+        r"[+-]?\d+|[+-]?(?:\d+\.\d*|\.\d+|\d+)(?:[eE][+-]?\d+)?[fF]?", re.I)
+    for filename, text in sorted(sources.items()):
+        clean, mask = strip_comments(text), syntax_mask(text)
+        header = re.search(r'\bclass\s+(\w+)\s+extends\s+(\w+)', mask, re.I)
+        if not header:
+            continue
+        owner, identity = header[1], header[1].casefold()
+        if identity in result:
+            ambiguous.add(identity)
+            continue
+        result[identity] = {}
+        if 'defaultproperties' not in text.casefold():
+            continue
+        declared = set()
+        for declaration in re.finditer(r'\bvar(?:\([^)]*\))?\s+([^;]+);', mask, re.I):
+            before = mask[:declaration.start()]
+            if before.count('{') != before.count('}'):
+                continue
+            body = declaration[1]
+            if re.search(r'\b(?:config|globalconfig)\b', body, re.I):
+                continue
+            typed = scalar.search(body)
+            if not typed:
+                continue
+            for name in typed[2].split(','):
+                if re.fullmatch(r'\s*\w+\s*', name):
+                    declared.add(name.strip().casefold())
+        defaults = {}
+        for block in re.finditer(r'\bdefaultproperties\s*\{', mask, re.I):
+            before = mask[:block.start()]
+            if before.count('{') != before.count('}'):
+                continue
+            opening = block.end() - 1
+            closing = matching(mask, opening, '{', '}')
+            block_mask = mask[opening + 1:closing]
+            # defaultproperties has no executable control flow. Reject an
+            # unsupported pseudo-block rather than guessing about its effects.
+            if re.search(r'\b(?:if|else|for|foreach|while|switch)\b', block_mask, re.I):
+                continue
+            nesting, offset = 0, opening + 1
+            for line in clean[opening + 1:closing].splitlines(keepends=True):
+                masked_line = mask[offset:offset + len(line)]
+                if re.match(r'\s*begin\s+object\b', masked_line, re.I):
+                    nesting += 1
+                elif re.match(r'\s*end\s+object\b', masked_line, re.I):
+                    nesting = max(0, nesting - 1)
+                elif not nesting:
+                    assignment = re.fullmatch(r'\s*(\w+)\s*=\s*(.*?)\s*;?\s*', line, re.S)
+                    prefix = mask[opening + 1:offset]
+                    top_level = all(prefix.count(a) == prefix.count(b)
+                                    for a, b in (('(', ')'), ('[', ']'), ('{', '}')))
+                    if assignment and top_level and assignment[1].casefold() in declared:
+                        expression = assignment[2].rstrip(';').strip()
+                        if literal_scalar.fullmatch(expression):
+                            if expression.lower() in ('true', 'false'):
+                                value = expression.lower() == 'true'
+                            elif expression[0] in "\"'":
+                                quote = expression[0]
+                                value = expression[1:-1].replace('\\' + quote, quote)
+                            elif re.fullmatch(r'[+-]?\d+', expression):
+                                value = int(expression)
+                            else:
+                                value = float(expression.rstrip('fF'))
+                            defaults[assignment[1].casefold()] = {
+                                'value': value,
+                                'source': {'file': filename, 'line': clean[:offset].count('\n') + 1,
+                                           'class': owner, 'block': 'defaultproperties'},
+                            }
+                offset += len(line)
+        result[identity] = defaults
+    return {owner: defaults for owner, defaults in result.items() if owner not in ambiguous}
+
+
+def attach_source_defaults(weapons: list[dict], sources: dict[str, str]) -> None:
+    """Link only explicit references to a unique source-class scalar default."""
+    index = source_scalar_defaults(sources)
+    reference = re.compile(r"(?:(?:class\s*'(?P<class>\w+)'\s*\.)?)default\.(?P<symbol>\w+)", re.I)
+    for weapon in weapons:
+        resolved, ambiguous = {}, set()
+        for declaration in weapon['properties'].values():
+            match = reference.fullmatch(declaration.get('reference', ''))
+            if not match:
+                continue
+            source = declaration.get('source', weapon['source'])
+            owner = match['class'] or Path(source['file']).stem
+            fact = index.get(owner.casefold(), {}).get(match['symbol'].casefold())
+            if fact is None:
+                continue
+            symbol = match['symbol']
+            if symbol in resolved and resolved[symbol] != fact:
+                ambiguous.add(symbol)
+            else:
+                resolved[symbol] = fact
+        defaults = {symbol: fact for symbol, fact in resolved.items() if symbol not in ambiguous}
+        if defaults:
+            weapon['source_defaults'] = deepcopy(defaults)
+
+
 def definition_indexes(functions: list[dict]) -> tuple[dict, list]:
     abilities, weapons = {}, []
     for function in functions:
@@ -274,6 +382,7 @@ def audit_sources(sources: dict[str, str]) -> dict:
     factories = {(function['class'].casefold(), function['name'].casefold()): function
                  for function in functions if function['class'] in providers}
     ability_definitions, weapon_definitions = definition_indexes(functions)
+    attach_source_defaults(weapon_definitions, sources)
 
     def resolve(function: dict, arguments: list[str], inherited_environment: dict,
                 result: dict, stack: tuple, inherited_conditional=False):
@@ -442,17 +551,29 @@ def main() -> int:
     parser.add_argument('--json', required=True, type=Path, help='New output file; existing files are preserved.')
     parser.add_argument('--game-config', type=Path, help='Optional game Config folder; enriches source facts with the supplied defaults.')
     parser.add_argument('--sdk-config', type=Path, help='Optional SDK Config folder for corroboration; never applied over the game.')
+    parser.add_argument('--game-dlc', action='append', default=[], metavar='NAME=PATH',
+                        help='Game DLC Config folder; repeat in the explicit audit composition order. Requires --game-config.')
     args = parser.parse_args()
     if args.json.exists():
         parser.error('Output already exists; choose a new path to preserve the previous audit.')
     if args.sdk_config and not args.game_config:
         parser.error('--sdk-config requires --game-config; SDK settings are not a game override.')
+    if args.game_dlc and not args.game_config:
+        parser.error('--game-dlc requires --game-config; DLC configuration patches the supplied game defaults.')
+    game_dlc = {}
+    for declaration in args.game_dlc:
+        name, separator, directory = declaration.partition('=')
+        if not separator or not directory or not re.fullmatch(r'[A-Za-z][A-Za-z0-9_.-]*', name):
+            parser.error('--game-dlc expects NAME=PATH, with a simple unique name such as DLC_2.')
+        if name.casefold() in {existing.casefold() for existing in game_dlc}:
+            parser.error('Each --game-dlc name must be unique.')
+        game_dlc[name] = Path(directory)
     result = build_catalog(args.sdk)
     if args.game_config:
         spec = importlib.util.spec_from_file_location('apx_unit_config', Path(__file__).with_name('unit_config.py'))
         configuration = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(configuration)
-        result = configuration.enrich_catalog(result, args.game_config, args.sdk_config)
+        result = configuration.enrich_catalog(result, args.game_config, args.sdk_config, game_dlc=game_dlc or None)
     args.json.parent.mkdir(parents=True, exist_ok=True)
     args.json.write_text(json.dumps(result, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
     coverage = result['coverage']
@@ -460,7 +581,7 @@ def main() -> int:
           f"{coverage['resolved_registration_count']} resolved names, {coverage['unique_template_count']} unique names.")
     if args.game_config:
         configured = result['configuration_audit']['coverage']
-        print(f"Game Defaults: {configured['units_with_base_stats_section']} unit stat sections, "
+        print(f"Configuration and linked source defaults: {configured['units_with_base_stats_section']} unit stat sections, "
               f"{configured['units_with_resolved_loadout']} loadouts, "
               f"{configured['weapon_properties_resolved']} weapon properties resolved.")
         print('Missing configuration and native/runtime overrides remain explicitly unresolved; no SDK source is bundled.')

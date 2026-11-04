@@ -66,6 +66,17 @@ class IniParsingTests(unittest.TestCase):
             doc = CONFIG.IniDocument.read(path)
         self.assertEqual(doc.entries('S', 'Value')[0]['value'], 'żółw')
 
+    def test_frozen_document_reuses_selection_without_exposing_cached_list(self):
+        doc = self.document('[S]\n+V=old\n-V=old\n+V=new\n').freeze()
+        first = doc.entries('S', 'V')
+        expected = [dict(entry) for entry in first]
+        first.clear()
+        self.assertEqual(doc.entries('s', 'v'), expected)
+        self.assertEqual(len(doc._entry_cache), 1)
+        self.assertIsInstance(doc._entry_cache[('s', 'v')], tuple)
+        with self.assertRaises(TypeError):
+            doc.sections['S'] = []
+
 
 class ConfigurationEnrichmentTests(unittest.TestCase):
     def setUp(self):
@@ -96,8 +107,14 @@ class ConfigurationEnrichmentTests(unittest.TestCase):
         prefix = 'XCom' if generated else 'Default'
         (directory or self.game).joinpath(f'{prefix}{family}.ini').write_text(text, encoding='utf-8')
 
-    def enrich(self, sdk=False):
-        return CONFIG.enrich_catalog(self.catalog, self.game, self.sdk if sdk else None)
+    def enrich(self, sdk=False, dlc=None):
+        return CONFIG.enrich_catalog(self.catalog, self.game, self.sdk if sdk else None, dlc)
+
+    def write_dlc(self, label, family, text):
+        directory = self.directory / 'dlc' / label / 'Config'
+        directory.mkdir(parents=True, exist_ok=True)
+        self.write(family, text, directory, generated=True)
+        return directory
 
     def test_partial_difficulty_inherits_base_and_keeps_zero_distinct_from_missing(self):
         self.write('GameData_CharacterStats', '[Enemy X2CharacterTemplate]\n'
@@ -221,6 +238,156 @@ class ConfigurationEnrichmentTests(unittest.TestCase):
         serialized = json.dumps(result)
         self.assertNotIn(str(self.directory), serialized)
         self.assertNotIn('raw_text', serialized)
+
+    def test_game_dlc_xcom_files_have_distinct_provenance_and_sdk_caches_stay_ignored(self):
+        dlc = self.write_dlc('DLC_2', 'GameData_CharacterStats',
+                             '[Enemy X2CharacterTemplate]\nCharacterBaseStats[eStat_HP]=40\n')
+        self.write('GameData_CharacterStats',
+                   '[Enemy X2CharacterTemplate]\nCharacterBaseStats[eStat_HP]=999\n', self.sdk, True)
+        self.write('Content', '[Fixture]\nName=unused\n', dlc, True)
+        result = self.enrich(sdk=True, dlc={'DLC_2': dlc})
+        fact = result['units'][0]['config_values']['stats']['base']['eStat_HP']
+        self.assertEqual(fact['value'], 40)
+        self.assertEqual(fact['source']['dataset'], 'game_dlc:DLC_2')
+        self.assertEqual(fact['source']['file'], 'DLC_2/Config/XComGameData_CharacterStats.ini')
+        metadata = result['configuration_audit']['dlc_configuration']
+        self.assertFalse(metadata['native_load_order_verified'])
+        dataset = metadata['datasets'][0]
+        self.assertEqual((dataset['ini_file_count'], dataset['used_ini_file_count']), (2, 1))
+        self.assertTrue(all(len(file['sha256']) == 64 for file in dataset['files']))
+        self.assertNotIn(str(self.directory), json.dumps(result))
+
+    def test_dlc_removes_base_loadout_before_first_remaining_match_is_selected(self):
+        self.write('GameData', '[XComGame.X2ItemTemplateManager]\n'
+                   'Loadouts=(LoadoutName=Enemy_Loadout,Items[0]=(Item=old))\n')
+        dlc = self.write_dlc('DLC_2', 'GameData', '[XComGame.X2ItemTemplateManager]\n'
+                             '-Loadouts=(LoadoutName=Enemy_Loadout,Items[0]=(Item=old))\n'
+                             '+Loadouts=(LoadoutName=Enemy_Loadout,Items[0]=(Item=new))\n')
+        loadout = self.enrich(dlc={'DLC_2': dlc})['units'][0]['config_values']['loadout']
+        self.assertEqual([item['item'] for item in loadout['items']], ['new'])
+        self.assertEqual(loadout['matching_definitions'], 1)
+        self.assertEqual(loadout['source']['dataset'], 'game_dlc:DLC_2')
+
+    def test_ai_array_patches_replay_across_dlc_layers(self):
+        self.write('AI', '[XComGame.X2AIBTBehaviorTree]\n'
+                   'Behaviors=(BehaviorName="EnemyGroup::CharacterRoot",NodeType=Selector,Child[0]=Base)\n')
+        first = self.write_dlc('DLC_2', 'AI', '[XComGame.X2AIBTBehaviorTree]\n'
+                               '-Behaviors=(BehaviorName="EnemyGroup::CharacterRoot",NodeType=Selector,Child[0]=Base)\n'
+                               '+Behaviors=(BehaviorName="EnemyGroup::CharacterRoot",NodeType=Selector,Child[0]=First)\n')
+        second = self.write_dlc('DLC_3', 'AI', '[XComGame.X2AIBTBehaviorTree]\n'
+                                '-Behaviors=(BehaviorName="EnemyGroup::CharacterRoot",NodeType=Selector,Child[0]=First)\n'
+                                '+Behaviors=(BehaviorName="EnemyGroup::CharacterRoot",NodeType=Selector,Child[0]=Second)\n')
+        ai = self.enrich(dlc={'DLC_2': first, 'DLC_3': second})['units'][0]['config_values']['ai_root']
+        self.assertEqual(ai['children'], {'Child[0]': 'Second'})
+        self.assertEqual(ai['matching_definitions'], 1)
+        self.assertEqual(ai['source']['dataset'], 'game_dlc:DLC_3')
+
+    def test_dlc_array_clear_and_append_operate_on_earlier_layers(self):
+        self.write('GameData', '[XComGame.X2ItemTemplateManager]\n'
+                   'Loadouts=(LoadoutName=Enemy_Loadout,Items[0]=(Item=old))\n')
+        dlc = self.write_dlc('DLC_2', 'GameData', '[XComGame.X2ItemTemplateManager]\n'
+                             '!Loadouts=ClearArray\n'
+                             '.Loadouts=(LoadoutName=Enemy_Loadout,Items[0]=(Item=new))\n'
+                             '.Loadouts=(LoadoutName=Enemy_Loadout,Items[0]=(Item=new))\n')
+        loadout = self.enrich(dlc={'DLC_2': dlc})['units'][0]['config_values']['loadout']
+        self.assertEqual(loadout['matching_definitions'], 2)
+        self.assertEqual([item['item'] for item in loadout['items']], ['new'])
+
+    def test_conflicting_scalar_stats_between_dlc_layers_are_not_guessed(self):
+        first = self.write_dlc('DLC_2', 'GameData_CharacterStats',
+                               '[Enemy X2CharacterTemplate]\nCharacterBaseStats[eStat_HP]=40\n'
+                               'CharacterBaseStats[eStat_Defense]=0\n')
+        second = self.write_dlc('DLC_3', 'GameData_CharacterStats',
+                                '[Enemy X2CharacterTemplate]\nCharacterBaseStats[eStat_HP]=50\n')
+        stats = self.enrich(dlc={'DLC_2': first, 'DLC_3': second})['units'][0]['config_values']['stats']
+        self.assertNotIn('eStat_HP', stats['base'])
+        self.assertNotIn('eStat_HP', stats['difficulty']['3']['values'])
+        self.assertEqual(stats['base']['eStat_Defense']['value'], 0)
+        self.assertEqual([fact['value'] for fact in stats['conflicting_fields']['base']['eStat_HP']], [40, 50])
+
+    def test_conflicting_difficulty_override_does_not_revert_to_base_value(self):
+        self.write('GameData_CharacterStats', '[Enemy X2CharacterTemplate]\nCharacterBaseStats[eStat_HP]=4\n')
+        first = self.write_dlc('DLC_2', 'GameData_CharacterStats',
+                               '[Enemy_Diff_3 X2CharacterTemplate]\nCharacterBaseStats[eStat_HP]=40\n')
+        second = self.write_dlc('DLC_3', 'GameData_CharacterStats',
+                                '[Enemy_Diff_3 X2CharacterTemplate]\nCharacterBaseStats[eStat_HP]=50\n')
+        stats = self.enrich(dlc={'DLC_2': first, 'DLC_3': second})['units'][0]['config_values']['stats']
+        self.assertEqual(stats['difficulty']['0']['values']['eStat_HP'], 4)
+        self.assertNotIn('eStat_HP', stats['difficulty']['3']['values'])
+        self.assertIn('eStat_HP', stats['conflicting_fields']['difficulty']['3'])
+
+    def test_conflicting_weapon_scalars_do_not_use_source_default_fallback(self):
+        self.catalog['weapon_definitions'][0]['source_defaults'] = {
+            'DAMAGE': {'value': 1, 'source': {'class': 'X2Item_Fixture', 'file': 'Fixture.uc', 'line': 9}}}
+        first = self.write_dlc('DLC_2', 'GameData_WeaponData', '[XComGame.X2Item_Fixture]\nDAMAGE=4\n')
+        second = self.write_dlc('DLC_3', 'GameData_WeaponData', '[XComGame.X2Item_Fixture]\nDAMAGE=7\n')
+        weapon = self.enrich(dlc={'DLC_2': first, 'DLC_3': second})['weapon_definitions'][0]['config_values']
+        self.assertNotIn('BaseDamage', weapon['resolved_properties'])
+        self.assertEqual(weapon['unresolved_references']['BaseDamage'], 'default.DAMAGE')
+        self.assertEqual([fact['value'] for fact in weapon['conflicting_properties']['BaseDamage']], [4, 7])
+
+    def test_declared_dlc_order_is_preserved_without_claiming_native_load_order(self):
+        first = self.write_dlc('Z_First', 'GameData', '[XComGame.X2ItemTemplateManager]\n'
+                               'Loadouts=(LoadoutName=Enemy_Loadout,Items[0]=(Item=first))\n')
+        second = self.write_dlc('A_Second', 'GameData', '[XComGame.X2ItemTemplateManager]\n'
+                                'Loadouts=(LoadoutName=Enemy_Loadout,Items[0]=(Item=second))\n')
+        result = self.enrich(dlc={'Z_First': first, 'A_Second': second})
+        self.assertEqual(result['configuration_audit']['dlc_configuration']['input_order'], ['Z_First', 'A_Second'])
+        self.assertFalse(result['configuration_audit']['dlc_configuration']['native_load_order_verified'])
+        self.assertEqual(result['units'][0]['config_values']['loadout']['items'][0]['item'], 'first')
+
+    def test_unique_spark_character_subclass_sections_merge_difficulty(self):
+        dlc = self.write_dlc('DLC_3', 'GameData_CharacterStats',
+                             '[Enemy X2SparkCharacterTemplate_DLC_3]\nCharacterBaseStats[eStat_HP]=10\n'
+                             'CharacterBaseStats[eStat_ArmorMitigation]=1\n'
+                             '[Enemy_Diff_3 X2SparkCharacterTemplate_DLC_3]\nCharacterBaseStats[eStat_HP]=12\n')
+        stats = self.enrich(dlc={'DLC_3': dlc})['units'][0]['config_values']['stats']
+        self.assertEqual(stats['difficulty']['3']['values'], {'eStat_HP': 12, 'eStat_ArmorMitigation': 1})
+        self.assertEqual(stats['base']['eStat_HP']['source']['section'], 'Enemy X2SparkCharacterTemplate_DLC_3')
+
+    def test_ambiguous_character_subclasses_remain_unresolved(self):
+        dlc = self.write_dlc('DLC_3', 'GameData_CharacterStats',
+                             '[Enemy X2CharacterTemplate]\nCharacterBaseStats[eStat_HP]=10\n'
+                             '[Enemy X2SparkCharacterTemplate_DLC_3]\nCharacterBaseStats[eStat_HP]=12\n')
+        stats = self.enrich(dlc={'DLC_3': dlc})['units'][0]['config_values']['stats']
+        self.assertEqual(stats['status'], 'ambiguous')
+        self.assertNotIn('eStat_HP', stats['base'])
+        self.assertEqual(len(stats['ambiguous_sections']['base']), 2)
+
+    def test_ambiguous_difficulty_subclass_does_not_claim_affected_base_value(self):
+        self.write('GameData_CharacterStats', '[Enemy X2CharacterTemplate]\n'
+                   'CharacterBaseStats[eStat_HP]=4\nCharacterBaseStats[eStat_Defense]=0\n')
+        dlc = self.write_dlc('DLC_3', 'GameData_CharacterStats',
+                             '[Enemy_Diff_3 X2CharacterTemplate]\nCharacterBaseStats[eStat_HP]=10\n'
+                             '[Enemy_Diff_3 X2SparkCharacterTemplate_DLC_3]\nCharacterBaseStats[eStat_HP]=12\n')
+        stats = self.enrich(dlc={'DLC_3': dlc})['units'][0]['config_values']['stats']
+        self.assertEqual(stats['difficulty']['3']['values'], {'eStat_Defense': 0})
+        self.assertEqual(stats['difficulty']['0']['values']['eStat_HP'], 4)
+        self.assertEqual(len(stats['ambiguous_sections']['difficulty']['3']), 2)
+
+    def test_source_literal_default_resolves_only_matching_owner_and_yields_to_ini(self):
+        weapon = self.catalog['weapon_definitions'][0]
+        weapon['source_defaults'] = {
+            'DAMAGE': {'value': 4, 'source': {'class': 'X2Item_Fixture', 'file': 'Fixture.uc', 'line': 9}},
+            'RANGE': {'value': 8, 'source': {'class': 'SomeOtherClass', 'file': 'Other.uc', 'line': 2}}}
+        resolved = self.enrich()['weapon_definitions'][0]['config_values']
+        self.assertEqual(resolved['resolved_properties']['BaseDamage']['value'], 4)
+        self.assertEqual(resolved['resolved_properties']['BaseDamage']['source']['dataset'], 'sdk_source_defaults')
+        self.assertIn('RangeAccuracy', resolved['unresolved_references'])
+        self.write('GameData_WeaponData', '[XComGame.X2Item_Fixture]\nDAMAGE=5\n')
+        fact = self.enrich()['weapon_definitions'][0]['config_values']['resolved_properties']['BaseDamage']
+        self.assertEqual(fact['value'], 5)
+        self.assertEqual(fact['source']['dataset'], 'game_defaults')
+
+    def test_dlc_labels_cannot_leak_absolute_paths_into_metadata(self):
+        with self.assertRaises(ValueError):
+            self.enrich(dlc={'/private/path': self.game})
+
+    def test_two_dlc_family_filenames_require_explicit_disambiguation(self):
+        dlc = self.write_dlc('DLC_3', 'GameData', '[S]\nName=one\n')
+        self.write('GameData', '[S]\nName=two\n', dlc)
+        with self.assertRaisesRegex(ValueError, 'Ambiguous DLC configuration family'):
+            self.enrich(dlc={'DLC_3': dlc})
 
 
 if __name__ == '__main__':

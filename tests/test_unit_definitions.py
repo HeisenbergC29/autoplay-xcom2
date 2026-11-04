@@ -201,6 +201,97 @@ static function X2AbilityTemplate BuildControl()
         self.assertEqual(result, AUDIT.audit_sources(dict(reversed(list(sources.items())))))
         self.assertNotIn('/workspace/', json.dumps(result))
 
+    def test_source_defaults_preserve_literal_values_and_physical_provenance(self):
+        source = '''class WeaponFixture extends X2Item config(GameCore);
+var name Category;
+var bool Enabled;
+var int Count;
+var float Rate;
+var string Label;
+var config int Configured;
+defaultproperties
+{
+    // The braces and comment marker are literal string content.
+    Category="img:///Category.}"
+    Enabled=true
+    Count=-2
+    Rate=1.25f
+    Label="quoted \\\"label\\\"";
+    Configured=99
+}
+'''
+        defaults = AUDIT.source_scalar_defaults({'Fixture/Classes/WeaponFixture.uc': source})['weaponfixture']
+        self.assertEqual({key: fact['value'] for key, fact in defaults.items()},
+                         {'category': 'img:///Category.}', 'enabled': True, 'count': -2,
+                          'rate': 1.25, 'label': 'quoted "label"'})
+        self.assertEqual(defaults['category']['source'],
+                         {'file': 'Fixture/Classes/WeaponFixture.uc', 'line': 11,
+                          'class': 'WeaponFixture', 'block': 'defaultproperties'})
+
+    def test_source_defaults_skip_expressions_structs_arrays_and_nested_objects(self):
+        source = '''class WeaponFixture extends X2Item;
+var name Category;
+var int Count;
+var int Items[2];
+defaultproperties
+{
+    Category="outer"
+    Count=1+2
+    Items[0]=4
+    Details=(
+        Category="struct"
+    )
+    Begin Object Class=Fixture Name=Nested
+        Category="nested"
+    End Object
+}
+'''
+        defaults = AUDIT.source_scalar_defaults({'Fixture/Classes/WeaponFixture.uc': source})['weaponfixture']
+        self.assertEqual({key: fact['value'] for key, fact in defaults.items()}, {'category': 'outer'})
+
+    def test_weapon_source_default_links_explicit_class_without_guessing_inheritance(self):
+        sources = {
+            'Fixture/Classes/BaseFixture.uc': '''class BaseFixture extends X2Item;
+var name Category;
+defaultproperties
+{
+    Category="base"
+}
+''',
+            'Fixture/Classes/ChildFixture.uc': '''class ChildFixture extends BaseFixture;
+static function X2WeaponTemplate Build()
+{
+    local X2WeaponTemplate Template;
+    `CREATE_X2TEMPLATE(class'X2WeaponTemplate', Template, 'ChildWeapon');
+    Template.WeaponCat = default.Category;
+    Template.WeaponTech = class'BaseFixture'.default.Category;
+    return Template;
+}
+''',
+        }
+        result = AUDIT.audit_sources(sources)
+        weapon = result['weapon_definitions'][0]
+        self.assertTrue(weapon['properties']['WeaponCat']['unresolved'])
+        self.assertEqual(weapon['source_defaults']['Category']['value'], 'base')
+        self.assertEqual(weapon['source_defaults']['Category']['source']['class'], 'BaseFixture')
+        only_inherited = sources['Fixture/Classes/ChildFixture.uc'].replace(
+            "    Template.WeaponTech = class'BaseFixture'.default.Category;\n", '')
+        sources['Fixture/Classes/ChildFixture.uc'] = only_inherited
+        self.assertNotIn('source_defaults', AUDIT.audit_sources(sources)['weapon_definitions'][0])
+
+    def test_duplicate_source_class_names_do_not_choose_a_default(self):
+        sources = {
+            'A/Classes/Fixture.uc': '''class Fixture extends X2Item;
+var name Category;
+defaultproperties
+{
+    Category="first"
+}
+''',
+            'B/Classes/Fixture.uc': 'class Fixture extends X2Item;',
+        }
+        self.assertNotIn('fixture', AUDIT.source_scalar_defaults(sources))
+
 
 @unittest.skipUnless(os.environ.get('APX_SDK_SOURCE_ROOT'), 'Unit definition audit contracts need SDK sources')
 class UnitDefinitionSDKContracts(unittest.TestCase):
@@ -227,6 +318,16 @@ class UnitDefinitionSDKContracts(unittest.TestCase):
         spectre = self.units['SpectreM1']
         self.assertIs(spectre['properties']['bIsRobotic']['value'], False)
         self.assertIs(spectre['properties']['bWeakAgainstTechLikeRobot']['value'], True)
+
+    def test_medikit_category_is_already_declared_in_sdk_source_defaults(self):
+        weapons = {weapon['name']: weapon for weapon in self.catalog['weapon_definitions']}
+        for name in ('Medikit', 'NanoMedikit'):
+            with self.subTest(item=name):
+                fact = weapons[name]['source_defaults']['MedikitCat']
+                self.assertEqual(fact['value'], 'medikit')
+                self.assertEqual(fact['source']['file'], 'XComGame/Classes/X2Item_DefaultUtilityItems.uc')
+                self.assertEqual(fact['source']['class'], 'X2Item_DefaultUtilityItems')
+                self.assertEqual(fact['source']['block'], 'defaultproperties')
 
     def test_checked_in_metadata_is_reproducible_from_the_same_sdk(self):
         checked_in = json.loads((ROOT / 'data/unit-catalog.json').read_text())

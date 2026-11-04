@@ -6,6 +6,10 @@ Pierwszą zmianą decyzji wynikającą z tej kontroli jest uwzględnienie aktywn
 Marked na własnym żołnierzu przy ocenie zagrożenia. Kompilacja Windows
 i skuteczność tych decyzji w grze pozostają do sprawdzenia.
 
+Późniejsze [uzupełnienie konfiguracji DLC](dlc-config-knowledge.pl.md)
+korzysta z pięciu dodatkowych archiwów pochodzących z gry. Rozszerza katalog
+i narzędzia analizy bez zmiany kodu działającego w grze ani rewizji v14.
+
 ## Zakres i pochodzenie danych
 
 Archiwum gry zawiera 49 plików INI, a archiwum SDK 114: 98 w głównym
@@ -34,11 +38,13 @@ Pola `config_values` dodają dane konfiguracji obok dotychczasowych faktów
 ze źródeł, a `configuration_audit` zachowuje metadane porównania.
 Nie publikujemy pełnych źródeł SDK ani surowych plików INI z archiwów.
 
-Konfiguracja uzupełnia 178 sekcji bazowych statystyk, 165 zestawów
+Pierwotny katalog v14, bez konfiguracji DLC, uzupełnił 178 sekcji bazowych statystyk, 165 zestawów
 wyposażenia i 627 odwołań do parametrów broni. Dalszych 59 odwołań broni
-pozostaje nierozwiązanych. Indeks AI obejmuje 23 jawnie zadeklarowane
+pozostawało nierozwiązanych. Ówczesny indeks AI obejmował 23 jawnie zadeklarowane
 korzenie oraz 165 dopasowań według grupy postaci; te ostatnie są oznaczone
 `indexed_by_convention` i nie dowodzą, że gra wykonała dane drzewo.
+Aktualne uzupełnienie i pozostałe konkretne luki opisuje
+[analiza konfiguracji DLC](dlc-config-knowledge.pl.md).
 
 ## Co wynika z konfiguracji
 
@@ -104,13 +110,17 @@ ocenę porównawczą od zera.
 
 Brak sekcji lub pola pozostaje brakiem danych, a nie wartością zero.
 Pancerz może być statystyką jednostki bez osobnego przedmiotu zbroi.
-W przekazanych głównych plikach brakuje między innymi sekcji statystyk
-`ViperKing`, `BerserkerQueen`, `ArchonKing` i `SparkSoldier`; obecność ich
-definicji źródłowych nie uzupełnia automatycznie konfiguracji DLC.
-Nie blokuje to używania załadowanych parametrów kontaktu w grze.
+W samych głównych plikach nie ma między innymi sekcji statystyk
+`ViperKing`, `BerserkerQueen`, `ArchonKing` i `SparkSoldier`.
+Te dane zostały później otrzymane w konfiguracjach dodatków z gry
+i są uwzględniane przez [rozszerzenie audytu DLC](dlc-config-knowledge.pl.md).
+Brak własnej sekcji INI nie oznacza również, że cały szablon nie ma znanych
+statystyk: katalog zachowuje osobno jawne przypisania ze źródeł.
 
-Katalog z konfiguracją można odtworzyć z Pythonem 3, wskazując nowy plik
-wynikowy i lokalne katalogi zawierające pliki `Default*.ini`:
+Poniższe polecenie odtwarza zakres głównych konfiguracji z Pythonem 3,
+wskazując nowy plik wynikowy i katalogi zawierające pliki `Default*.ini`.
+Pełny aktualny katalog wymaga również opcji `--game-dlc` z
+[instrukcji uzupełnienia DLC](dlc-config-knowledge.pl.md).
 
 ```powershell
 python .\tools\audit-unit-definitions.py `

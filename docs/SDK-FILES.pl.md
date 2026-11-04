@@ -2,10 +2,12 @@
 
 Nie wysyłaj całej gry, zapisów Steam, tokenów ani danych konta. Gra i SDK nie są instalowane w linuksowym środowisku projektu.
 
-**Źródła SDK oraz konfiguracje gry i SDK zostały już otrzymane i sprawdzone.**
+**Źródła SDK oraz konfiguracje gry, SDK i pięciu dodatków z gry zostały już otrzymane.**
 Nie trzeba ponownie wysyłać `SrcOrig.rar`, `Development.rar`, `Config.rar`
-ani `Config sdk.rar`. Wynik opisują [audyt SDK](SDK-AUDIT.pl.md) oraz
-[konfiguracje v14](config-knowledge-v14.pl.md). Następny potrzebny wynik to
+ani `Config sdk.rar`, ani archiwów `game dlc_1`, `game dlc_2`, `game dlc_3`,
+`game tle` i `game XCom_DLC_Day0`. Wynik opisują [audyt SDK](SDK-AUDIT.pl.md),
+[konfiguracje v14](config-knowledge-v14.pl.md) oraz
+[uzupełnienie DLC](dlc-config-knowledge.pl.md). Następny potrzebny wynik to
 rzeczywista kompilacja bieżących źródeł na Windows i raport z gry:
 przy sukcesie `dist\AutoplayXCom2.zip`, przy błędzie logi z `.build`.
 RAR jest poprawnym formatem załącznika.
@@ -16,13 +18,19 @@ RAR jest poprawnym formatem załącznika.
 Siedem istotnych plików `Default` jest identycznych; wygenerowane ustawienia
 `XCom*.ini` z SDK nie są nakładane na konfigurację gry. Otrzymane pliki
 wystarczają do obecnego audytu bazowych statystyk, loadoutów, broni i AI.
-Brakujące sekcje części DLC pozostają oznaczone w katalogu.
 
-Gdy będzie potrzebne uzupełnienie konkretnego DLC, odpowiadające mu pliki
-`Config\Default*.ini` można znaleźć w katalogach tego dodatku pod
-`<gra>\XComGame\DLC\` albo `<SDK>\XComGame\DLC\`. Lokalizacja zależy
-od instalacji. Nie należy wnioskować o braku statystyki lub przedmiotu
-wyłącznie z braku sekcji w głównym katalogu `Config`.
+Otrzymane później archiwa `DLC_1`, `DLC_2`, `DLC_3`, `TLE`
+i `XCom_DLC_Day0` zawierają łącznie 79 plików INI z gry. W tej instalacji
+SDK nie ma katalogu konfiguracji DLC; nie jest on potrzebny do tego audytu.
+Pliki `XCom*.ini` w katalogach dodatków gry są wejściem audytu DLC.
+Nie należy utożsamiać ich z wygenerowanymi ustawieniami SDK tylko ze względu
+na nazwę pliku.
+
+Brak osobnej sekcji INI nie dowodzi braku statystyki lub przedmiotu.
+Wartość może pochodzić z kodu lub dziedziczenia; część postaci nie potrzebuje
+zestawu wyposażenia. Dwa nierozwiązane odwołania obrażeń proxy Feral MEC
+pozostają opisane w [zakresie danych DLC](dlc-config-knowledge.pl.md).
+Nie ma podstaw do proszenia o kolejne archiwa wyłącznie z ich powodu.
 
 ## Lokalizacja źródeł SDK
 
