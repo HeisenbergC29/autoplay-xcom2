@@ -17,6 +17,7 @@ automat i co rzeczywiście wydarzyło się po rozkazach.
 [Próba v9: stabilizacja potwierdzona, GasStation przegrane](report-2026-11-03-legacy-v9.pl.md).
 [V10: licznik punktów bieżącej misji nad przyciskiem](score-display-v10.pl.md).
 [V13: wiedza o przeciwnikach, broń i kontrataki](enemy-knowledge-v13.pl.md).
+[V14: konfiguracje jednostek i ryzyko oznaczonego żołnierza](config-knowledge-v14.pl.md).
 [Raport v12 i napotkane zdolności](report-2026-11-04-v12-enemies.pl.md).
 
 Wynik misji, punktację porównawczą i oficjalne punkty gry zapisujemy oddzielnie.
@@ -78,7 +79,7 @@ wynikały z konkretnej misji.
 
 ## Zbudowanie i pierwsza próba
 
-1. Pobierz aktualne źródła v13, rozpakuj je i zbuduj jak poprzednio na zachowanym
+1. Pobierz aktualne źródła v14, rozpakuj je i zbuduj jak poprzednio na zachowanym
    SDK WOTC. Bez `-BuildBase`, jeśli pakiety bazowe są już przygotowane.
 2. Zainstaluj nowy `dist\AutoplayXCom2.zip` i uruchom grę ponownie. Stara paczka
    z `release` nie zawiera rejestratora.
@@ -315,3 +316,13 @@ widocznych przeciwników: `primary_weapon`, `weapon_mean_damage`, bieżące
 obszar 2, wsparcie 4. Są to parametry i potencjalne zdolności, bez odczytu
 bieżących AP, amunicji, cooldownu i zamiaru AI. `move_threat_preview` zapisuje
 wagę używaną dla obu ocenianych pozycji. [Interpretacja v13](enemy-knowledge-v13.pl.md).
+
+Od `mission-report-v14` `move_threat_preview` dodaje `marked_aim_bonus`
+i `target_status_weight`. Opisują aktywny, jawny efekt Marked na własnym
+żołnierzu oraz jego ograniczoną wagę w ocenie otrzymywanego zagrożenia.
+Przy przekazanej konfiguracji wartości wynoszą 10 i 1,1; bez oznaczenia 0 i 1.
+Ta sama waga dotyczy pozycji bieżącej i docelowej oraz ocen obrony korzystających
+ze wspólnego ryzyka. Nie jest natywną szansą trafienia ani dodatkową karą punktową.
+Katalog poza grą zawiera osobne `config_values` i `configuration_audit`;
+nie rozszerza to logu o niewidocznych przeciwników.
+[Źródła, zakres i ograniczenia v14](config-knowledge-v14.pl.md).

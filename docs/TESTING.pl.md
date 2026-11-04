@@ -2,14 +2,23 @@
 
 Najnowszy [raport v12](report-2026-11-04-v12-enemies.pl.md): `SabotageCC`,
 trudność 3, **FAIL** w turze 8, 40 przyjętych rozkazów i zero odrzuceń.
-Start oceny porównawczej od zera: **PASS**. Nowa ocena zagrożeń v13:
+Start oceny porównawczej od zera: **PASS**. Nowa ocena zagrożeń v14:
 kompilacja Windows i próba w grze **NIEURUCHOMIONE**.
-[Mechaniki i scenariusze v13](enemy-knowledge-v13.pl.md).
+[Konfiguracje i scenariusze v14](config-knowledge-v14.pl.md) ·
+[Mechaniki v13](enemy-knowledge-v13.pl.md).
 
 Sprawdź różne obrażenia broni przy porównywalnej geometrii, rozpoznane
 zdolności kontroli/AoE/wsparcia, zwykłe melee zombie, możliwą kontrę Mutona
 oraz nadmierny wzrost ekspozycji podczas przygotowania zasadzki. Nieznane
 dane powinny zachować neutralną wagę, a nie usuwać zagrożenie.
+
+V14: sprawdź ryzyko oznaczonego własnego żołnierza, z kapitanem oraz innymi
+widocznymi strzelcami. `move_threat_preview` powinno podawać
+`marked_aim_bonus=10` i `target_status_weight=1.1` dla dostarczonej
+konfiguracji, następnie 0 i 1 po wygaśnięciu efektu. Waga powinna być wspólna
+dla ruchu i obrony. Natomiast natywna szansa trafienia pozostaje odczytem gry.
+Katalog powinien rozróżniać bazę i `_Diff_3`, np. trooper 3/4 HP oraz
+sektoid 7/10 HP; nie wolno nadpisywać nimi bieżących statystyk kontaktu.
 
 Profil punktacji v2 pozostaje bez zmian: `~0/—` na początku zwykłej misji,
 pierwsza rana −1000, potwierdzona strata −5000. Wykrwawienie nie udaje śmierci,
@@ -22,7 +31,7 @@ Ten sam raport zawiera zwycięstwo v8 w `SabotageCC` na trudności 3.
 Wcześniejsze zwycięstwo v8 w pierwszej misji Legacy pozostaje osobną próbą;
 Cemetery nadal nie ma udokumentowanej próby autoplaya.
 V10 działało w zwykłej niepunktowanej misji. Wyświetlanie liczb Legacy
-oraz nowe mechaniki v13 nadal wymagają kompilacji Windows i próby w grze.
+oraz nowe mechaniki v14 nadal wymagają kompilacji Windows i próby w grze.
 [Instrukcja Legacy](legacy-test.pl.md) · [Licznik v12](score-display-v10.pl.md).
 
 Dotychczasowy wynik zgłoszony przez użytkownika: **PASS** — mod wydaje rozkazy;

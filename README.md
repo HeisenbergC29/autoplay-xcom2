@@ -70,17 +70,22 @@ porażką w turze 7, z wynikiem gry −10000. Ten sam raport zawiera też wygran
 v8 w `SabotageCC` na trudności 3.
 [Zakres zmian, reguły punktacji i ograniczenia v9](docs/tactics-v9.pl.md).
 
-Bieżące **`mission-report-v13`** wykorzystuje dane broni i zdolności widocznych
-przeciwników we wspólnej ocenie zagrożenia. Dodaje ochronę przed znanym
-kontratakiem melee, rozpoznaje zasięg zwykłego ataku zombie i ogranicza
-pogorszenie osłony podczas przygotowania zasadzki.
-[Katalog jednostek i mechaniki v13](docs/enemy-knowledge-v13.pl.md).
+Bieżące **`mission-report-v14`** uzupełnia katalog o przekazane konfiguracje
+gry i SDK: statystyki bazowe i warianty trudności, wyposażenie, parametry broni
+oraz odwołania do AI. Zachowuje pochodzenie i jawne braki danych.
+We wspólnej ocenie ryzyka uwzględnia też aktywne oznaczenie własnego żołnierza
+przez kapitana. W dostarczonej konfiguracji Marked daje przeciwnikom +10 do
+celności przeciw temu żołnierzowi; planer stosuje ograniczoną wagę ryzyka.
+[Konfiguracje, ustalenia i scenariusze v14](docs/config-knowledge-v14.pl.md).
+[Mechaniki broni, melee i zasadzki z v13](docs/enemy-knowledge-v13.pl.md)
+pozostają w użyciu. Dane załadowane przez grę mają pierwszeństwo przed
+statycznym katalogiem; katalog nie zastępuje natywnego podglądu ataku.
 [Najnowszy raport v12](docs/report-2026-11-04-v12-enemies.pl.md) potwierdza
 start licznika od zera, lecz `SabotageCC` na trudności 3 zakończyło się
 porażką w turze 8. Nowe zmiany wymagają kompilacji Windows i osobnej próby.
 
 Ocena porównawcza nadal używa profilu `wotc_legacy_observed_v2` od `~0/—`;
-reguły punktacji nie zostały zmienione przez v13.
+reguły punktacji nie zostały zmienione przez v14.
 [Zasady licznika](docs/score-display-v10.pl.md).
 
 **Stan: alpha; v8 wygrało pierwszą misję Legacy Operations na Dowódcy.**
@@ -182,8 +187,8 @@ Dotyczy to wcześniejszej kompilacji. Przechowywany ZIP ma kompletną konfigurac
 27 nazw zdolności, obie lokalizacje i prawidłowy `.u`; jego 464 importy prowadzą
 tylko do `Core`, `Engine` i `XComGame`, a dziewięć klas moda jest obecnych.
 Najnowszy raport potwierdza uruchomienie v12 w zwykłym `SabotageCC`,
-start oceny porównawczej od zera oraz porażkę w turze 8. Katalog źródeł i nowe
-reguły zagrożenia v13 wymagają kompilacji i sprawdzenia w grze. Obecne
+start oceny porównawczej od zera oraz porażkę w turze 8. Katalog konfiguracji
+i nowe reguły zagrożenia v14 wymagają kompilacji i sprawdzenia w grze. Obecne
 środowisko Linux pozwala uruchamiać testy Python i PowerShell, ale nie zawiera
 SDK Windows ani działającej gry.
 

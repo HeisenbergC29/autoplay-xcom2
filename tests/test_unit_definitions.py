@@ -230,6 +230,12 @@ class UnitDefinitionSDKContracts(unittest.TestCase):
 
     def test_checked_in_metadata_is_reproducible_from_the_same_sdk(self):
         checked_in = json.loads((ROOT / 'data/unit-catalog.json').read_text())
+        # Configuration snapshots enrich, rather than overwrite, source facts.
+        checked_in.pop('configuration_audit', None)
+        for unit in checked_in['units']:
+            unit.pop('config_values', None)
+        for weapon in checked_in['weapon_definitions']:
+            weapon.pop('config_values', None)
         self.assertEqual(checked_in, self.catalog)
 
 

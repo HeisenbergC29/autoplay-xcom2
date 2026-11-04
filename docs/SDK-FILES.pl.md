@@ -2,9 +2,29 @@
 
 Nie wysyłaj całej gry, zapisów Steam, tokenów ani danych konta. Gra i SDK nie są instalowane w linuksowym środowisku projektu.
 
-**Źródła zostały już otrzymane jako `SrcOrig.rar` i sprawdzone.** Nie trzeba wysyłać ich ponownie. Wynik opisuje `SDK-AUDIT.pl.md`. Bieżący brakujący element to wynik rzeczywistej kompilacji na Windows: przy sukcesie `dist\AutoplayXCom2.zip`, przy błędzie logi z `.build`. RAR jest poprawnym formatem załącznika.
+**Źródła SDK oraz konfiguracje gry i SDK zostały już otrzymane i sprawdzone.**
+Nie trzeba ponownie wysyłać `SrcOrig.rar`, `Development.rar`, `Config.rar`
+ani `Config sdk.rar`. Wynik opisują [audyt SDK](SDK-AUDIT.pl.md) oraz
+[konfiguracje v14](config-knowledge-v14.pl.md). Następny potrzebny wynik to
+rzeczywista kompilacja bieżących źródeł na Windows i raport z gry:
+przy sukcesie `dist\AutoplayXCom2.zip`, przy błędzie logi z `.build`.
+RAR jest poprawnym formatem załącznika.
 
-## Najpierw źródła SDK
+## Otrzymane konfiguracje
+
+`Config.rar` zawiera domyślne pliki gry, a `Config sdk.rar` pliki SDK.
+Siedem istotnych plików `Default` jest identycznych; wygenerowane ustawienia
+`XCom*.ini` z SDK nie są nakładane na konfigurację gry. Otrzymane pliki
+wystarczają do obecnego audytu bazowych statystyk, loadoutów, broni i AI.
+Brakujące sekcje części DLC pozostają oznaczone w katalogu.
+
+Gdy będzie potrzebne uzupełnienie konkretnego DLC, odpowiadające mu pliki
+`Config\Default*.ini` można znaleźć w katalogach tego dodatku pod
+`<gra>\XComGame\DLC\` albo `<SDK>\XComGame\DLC\`. Lokalizacja zależy
+od instalacji. Nie należy wnioskować o braku statystyki lub przedmiotu
+wyłącznie z braku sekcji w głównym katalogu `Config`.
+
+## Lokalizacja źródeł SDK
 
 Zainstaluj **XCOM 2 War of the Chosen Development Tools** ze Steam. Typowa lokalizacja:
 

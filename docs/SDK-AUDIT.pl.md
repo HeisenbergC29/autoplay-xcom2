@@ -364,3 +364,35 @@ odtwarzalny z tych samych 196 plików źródeł. Rozpoznano wszystkie 253 nazwy
 oraz dziesięć szablonów obserwowanych dotąd w raportach. Sprawdzono
 odnośniki dokumentacji i `git diff --check`. Nie przeprowadzono kompilacji
 Windows ani próby v13 w grze.
+
+## V14 — otrzymane konfiguracje gry i SDK
+
+Archiwa `Config.rar` i `Config sdk.rar` rozpakowano poza repozytorium,
+po kontroli ścieżek i typów wpisów. Pierwsze zawiera 49 plików INI;
+drugie 114, w tym 98 bezpośrednio w katalogu głównym i 16 w podkatalogach.
+Siedem plików `Default` dotyczących statystyk, broni, zdolności, loadoutów,
+efektów i AI jest bajtowo identycznych. Katalog korzysta z domyślnych
+plików gry, z porównaniem do SDK. Wygenerowane pliki `XCom*.ini` SDK
+nie nadpisują tego zestawu.
+
+Źródłowe fakty katalogu zachowano i uzupełniono o oddzielne `config_values`
+oraz `configuration_audit`. Warianty `_Diff_0`–`_Diff_3` dziedziczą bazowe
+statystyki i zmieniają tylko zadeklarowane pola. Brak sekcji nie daje
+fikcyjnego zera ani dowodu braku wyposażenia. Surowe INI i pełne SDK
+pozostają prywatnymi danymi wejściowymi, poza repozytorium i paczką moda.
+
+Kontrola `X2Effect_Marked` potwierdza +10 do celności oraz zerowe premie
+krytyczne w przekazanych plikach. Planer sprawdza aktywny jawny efekt
+na własnym żołnierzu i odczytuje faktyczną wartość klasy, stosując ograniczoną
+wagę ryzyka. Nie odczytuje gotowości ani zamiaru przeciwnika. Telemetria
+`move_threat_preview` dodaje `marked_aim_bonus` i `target_status_weight`.
+Reguły punktacji v2 pozostają bez zmian.
+
+[Zakres danych, ustalenia i odtwarzanie katalogu v14](config-knowledge-v14.pl.md).
+Kontrola końcowa v14: **388 testów Python zaliczonych bez pominięć**
+z SDK i oboma zestawami konfiguracji, w tym odtworzenie całego katalogu.
+Audyt potwierdził 14 klas moda i 29 skonfigurowanych nazw zdolności.
+Przeszły testy skryptu budowania, kolektora raportów, 79 lokalnych odnośników
+w zmienionych dokumentach oraz `git diff --check`.
+Testy źródeł i konfiguracji nie zastępują kompilacji Windows ani próby w grze;
+wynik działania v14 pozostaje do potwierdzenia.

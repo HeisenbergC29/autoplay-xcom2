@@ -35,12 +35,16 @@ strata 5000; każda kara jest naliczana najwyżej raz na jednostkę. Zabicia,
 jawne cele i ratunek cywilów zachowują reguły wspólnego profilu v2. Tylda
 oznacza ocenę częściową, a maksimum pozostaje nieznane.
 
-Bieżące `mission-report-v13` rozróżnia zagrożenie broni widocznych wrogów,
-uwzględnia rozpoznane zdolności w priorytecie celu i unika melee przeciw
-możliwej kontrze. Poprawia zasięg zwykłego melee zombie oraz ogranicza
-nadmierny wzrost ryzyka podczas przygotowania zasadzki. Katalog źródeł
-opisuje również jednostki, których jeszcze nie spotkano w testach;
-niepełne dane konfiguracyjne pozostają oznaczone.
+Bieżące `mission-report-v14` dodaje do katalogu dane z konfiguracji gry i SDK:
+statystyki według trudności, wyposażenie, parametry broni i odwołania do AI.
+Wspólna ocena ryzyka uwzględnia aktywne oznaczenie własnego żołnierza
+przez kapitana. W przekazanej konfiguracji Marked daje +10 celności przeciw
+oznaczonemu celowi, bez dodatkowej premii do krytyka. Jest to podstawa
+ograniczonej wagi planera; trafienia nadal oblicza gra.
+Pozostają mechaniki v13: rozróżnianie broni, priorytet znanych zdolności,
+ochrona przed kontrą melee, zasięg zombie i limit ekspozycji przy zasadzce.
+Brakujące sekcje konfiguracji pozostają jawne; katalog nie zastępuje danych
+załadowanych w bieżącej grze. Opis: `docs/config-knowledge-v14.pl.md`.
 
 Zbuduj i zainstaluj nową wersję; sama podmiana konfiguracji nie wystarczy.
 Instrukcja próby to `docs/legacy-test.pl.md`, a opis licznika to
@@ -163,7 +167,7 @@ Raport ZIP pojawi się w `<Dokumenty>\AutoplayXCom2-Reports`. Skrypt działa tak
 po usunięciu pobranego folderu źródeł. Załącz raport do zgłoszenia wraz z poziomem
 trudności, wynikiem misji i stratami. Szczegóły: `docs/mission-recording.pl.md`
 w repozytorium. To zapis diagnostyczny, nie film ani replay.
-W nowym raporcie wpis `revision=mission-report-v13` identyfikuje tę wersję.
+W nowym raporcie wpis `revision=mission-report-v14` identyfikuje tę wersję.
 Znaczniki `ambush_setup` pokazują przygotowania, a `grenade_scan` zawiera również
 liczby ocenionych okazji do granatu na pojedynczy cel i ostatni podgląd obrażeń.
 `area_target_preview` opisuje cele wybranego granatu; `move_threat_preview`
@@ -188,7 +192,7 @@ z ekranu podsumowania oraz wszelkie ręczne działania i restarty.
 Wcześniejszą kompilację i zależności binarne sprawdzono. Raporty potwierdzają
 zwycięstwa v8 i działanie ratunku v9; najnowszy raport v12 z `SabotageCC`
 kończy się porażką. Potwierdza start punktacji porównawczej od zera.
-Zmiany oceny zagrożeń v13 wymagają nowej kompilacji i próby.
+Zmiany oceny zagrożeń v14 wymagają nowej kompilacji i próby.
 Nie potwierdzono
 pełnej obsługi każdej skryptowanej misji DLC
 ani konkretnego najnowszego numeru builda Steam. Stan weryfikacji opisuje README.

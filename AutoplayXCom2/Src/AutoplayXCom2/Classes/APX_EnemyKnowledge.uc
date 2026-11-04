@@ -1,4 +1,4 @@
-// Source-backed capability estimates for an already player-visible hostile.
+// Source-backed estimates for player-visible hostiles and own public statuses.
 // These weights are planner heuristics, not native hit probabilities. Never
 // inspect an enemy's current AP, ammo, cooldowns, charges or private AI intent.
 class APX_EnemyKnowledge extends Object
@@ -29,6 +29,28 @@ static function float WeaponThreatWeight(float MeanDamage, float Offense)
     if (Offense > 0.0)
         AimWeight = FClamp(Offense / 65.0, 0.85, 1.15);
     return FClamp(DamageWeight * AimWeight, 0.75, 1.6);
+}
+
+// Marked is a displayed penalty on our own unit. Read its installed GameCore
+// bonus rather than guessing from the enemy's intent or remaining abilities.
+static function int KnownMarkedAimBonus(XComGameState_Unit UnitState)
+{
+    if (UnitState == none
+        || !UnitState.IsUnitAffectedByEffectName(class'X2StatusEffects'.default.MarkedName))
+        return 0;
+    return class'X2Effect_Marked'.default.ACCURACY_CHANCE_BONUS;
+}
+
+static function float MarkedRiskScale(float Bonus)
+{
+    // A bounded planning weight, not native hit chance or expected damage.
+    // Negative or missing bonuses must preserve the unmarked estimate.
+    return 1.0 + FClamp(Bonus, 0.0, 50.0) / 100.0;
+}
+
+static function float TargetStatusWeight(XComGameState_Unit UnitState)
+{
+    return MarkedRiskScale(float(KnownMarkedAimBonus(UnitState)));
 }
 
 static function float TargetThreatValue(float WeaponWeight, bool bControl,

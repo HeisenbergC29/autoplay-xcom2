@@ -1,4 +1,4 @@
-# Próba Legacy i oceny przeciwników — v13
+# Próba Legacy i oceny przeciwników — v14
 
 Pierwsza misja `ChallengeAbductionGasStation` została wcześniej ukończona
 zwycięstwem na v8: Dowódca, 14 tur, dwóch poległych.
@@ -11,12 +11,15 @@ Najnowszy [raport v12](report-2026-11-04-v12-enemies.pl.md) dotyczy zwykłego
 od zera został potwierdzony. Raport ujawnił także luki zasięgu zwykłego melee
 i przygotowania zasadzki, które poprawia v13.
 
-Do kolejnej próby **zbuduj i zainstaluj v13**.
-[Ocena przeciwników i katalog źródeł](enemy-knowledge-v13.pl.md) ·
+Do kolejnej próby **zbuduj i zainstaluj v14**.
+[Konfiguracje i scenariusze v14](config-knowledge-v14.pl.md) ·
+[Ocena przeciwników z v13](enemy-knowledge-v13.pl.md) ·
 [Zasady licznika](score-display-v10.pl.md).
-Źródła SDK z `Development.rar` pozostają podstawą kontroli kontraktów.
-Nie zawierają kompletu plików INI z liczbowymi statystykami, wyposażeniem
-i drzewami AI; brakujące wartości katalog oznacza jako nierozwiązane.
+Źródła SDK z `Development.rar` oraz nowe `Config.rar` i `Config sdk.rar`
+pozwalają sprawdzić statystyki, wyposażenie, parametry broni i reguły AI.
+Konfiguracja gry ma pierwszeństwo w katalogu, zgodne domyślne pliki SDK ją
+potwierdzają. Dane załadowane w grze pozostają rozstrzygające, a brakujące
+sekcje, m.in. części DLC, nadal są oznaczone.
 
 ## Zbudowanie na zachowanym SDK
 
@@ -37,7 +40,7 @@ uruchom grę ponownie. Źródła możesz później usunąć; SDK zachowaj.
 ## Przebieg porównawczy
 
 1. Uruchom wybrany zapis Legacy Operations „Blast From the Past” na nowej
-   v13. Dla kontynuacji wcześniejszego zwycięstwa oczekiwany jest
+   v14. Dla kontynuacji wcześniejszego zwycięstwa oczekiwany jest
    `ChallengeAbductionCemetery`, etap 2; próba GasStation dotyczy
    `ChallengeAbductionGasStation`, etap 1. Zapisz etap i trudność.
 2. Po uzyskaniu sterowania, przed F8, sprawdź licznik nad przyciskiem.
@@ -45,7 +48,7 @@ uruchom grę ponownie. Źródła możesz później usunąć; SDK zachowaj.
    czcionki i przepuszczać kliknięcia mapy. Maksimum nie powinno maleć po
    zabiciach; w drugim etapie licznik nie może doliczać punktów poprzedniej misji.
 3. Włącz autoplay klawiszem F8. Automat startuje wyłączony po zmianie misji.
-   W `Launch.log` sprawdź `revision=mission-report-v13`; inna rewizja oznacza
+   W `Launch.log` sprawdź `revision=mission-report-v14`; inna rewizja oznacza
    uruchomienie starszego kodu. Pozwól misji dojść do wyniku; zapisz ewentualne
    ręczne działania, ich moment i powód.
 4. Po misji, przed ponownym uruchomieniem gry, otwórz PowerShell w folderze
@@ -74,6 +77,11 @@ Zbieranie raportu działa po usunięciu pobranych źródeł moda.
 
 ## Co obserwować w następnym etapie
 
+- Oznaczenie kapitana: po Mark na własnym żołnierzu sprawdź
+  `marked_aim_bonus` i `target_status_weight` w `move_threat_preview`.
+  Dla przekazanych ustawień oczekiwane są 10 i 1,1. Po wygaśnięciu oznaczenia
+  powinny wrócić do 0 i 1. Waga dotyczy ryzyka od wszystkich widocznych
+  przeciwników, także troopera strzelającego do oznaczonego celu.
 - Wiedza o przeciwnikach: porównaj słabszą i silniejszą broń przy podobnej
   osłonie i szansie zabicia. Sprawdź wpływ rozpoznanych zdolności kontroli,
   AoE i wsparcia na priorytet celu oraz nowe wpisy `enemy_knowledge`.
@@ -119,4 +127,4 @@ Zbieranie raportu działa po usunięciu pobranych źródeł moda.
 
 Nowy zasięg wręcz jest geometrycznym przybliżeniem możliwego ataku, bez
 planowania rzeczywistej przyszłej trasy. Nieznane style zachowują poprzednią
-heurystykę. V12 nie gwarantuje zwycięstwa ani bezpiecznej reakcji łańcuchowej.
+heurystykę. V14 nie gwarantuje zwycięstwa ani bezpiecznej reakcji łańcuchowej.

@@ -9,6 +9,7 @@ Only derived identifiers, values and source locations are written to JSON.
 from __future__ import annotations
 
 import argparse
+import importlib.util
 from copy import deepcopy
 import hashlib
 import json
@@ -439,16 +440,32 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--sdk', required=True, type=Path)
     parser.add_argument('--json', required=True, type=Path, help='New output file; existing files are preserved.')
+    parser.add_argument('--game-config', type=Path, help='Optional game Config folder; enriches source facts with the supplied defaults.')
+    parser.add_argument('--sdk-config', type=Path, help='Optional SDK Config folder for corroboration; never applied over the game.')
     args = parser.parse_args()
     if args.json.exists():
         parser.error('Output already exists; choose a new path to preserve the previous audit.')
+    if args.sdk_config and not args.game_config:
+        parser.error('--sdk-config requires --game-config; SDK settings are not a game override.')
     result = build_catalog(args.sdk)
+    if args.game_config:
+        spec = importlib.util.spec_from_file_location('apx_unit_config', Path(__file__).with_name('unit_config.py'))
+        configuration = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(configuration)
+        result = configuration.enrich_catalog(result, args.game_config, args.sdk_config)
     args.json.parent.mkdir(parents=True, exist_ok=True)
     args.json.write_text(json.dumps(result, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
     coverage = result['coverage']
     print(f"Audited {coverage['registration_count']} registrations in {coverage['provider_count']} providers; "
           f"{coverage['resolved_registration_count']} resolved names, {coverage['unique_template_count']} unique names.")
-    print('Configuration and native/runtime overrides remain explicitly unresolved; no SDK source is bundled.')
+    if args.game_config:
+        configured = result['configuration_audit']['coverage']
+        print(f"Game Defaults: {configured['units_with_base_stats_section']} unit stat sections, "
+              f"{configured['units_with_resolved_loadout']} loadouts, "
+              f"{configured['weapon_properties_resolved']} weapon properties resolved.")
+        print('Missing configuration and native/runtime overrides remain explicitly unresolved; no SDK source is bundled.')
+    else:
+        print('Configuration and native/runtime overrides remain explicitly unresolved; no SDK source is bundled.')
     return 0
 
 

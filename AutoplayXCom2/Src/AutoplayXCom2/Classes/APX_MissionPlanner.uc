@@ -757,7 +757,7 @@ static function float ThreatRiskAtTile(XComGameState_Unit UnitState,
     optional float KnownThreatWeight=-1.0)
 {
     local vector TargetLocation, EnemyLocation;
-    local float Angle, Risk, MeleeReach, Weight;
+    local float Angle, Risk, MeleeReach, Weight, TargetWeight;
     local ECoverType Cover;
     local int CoverLevel;
     local GameRulesCache_VisibilityInfo Visibility;
@@ -767,6 +767,7 @@ static function float ThreatRiskAtTile(XComGameState_Unit UnitState,
     if (UnitState == none || Enemy == none || !Enemy.IsAlive()
         || Enemy.IsIncapacitated() || Enemy.bRemovedFromPlay || !UnitState.IsEnemyUnit(Enemy))
         return 0.0;
+    TargetWeight = class'APX_EnemyKnowledge'.static.TargetStatusWeight(UnitState);
     Weight = KnownThreatWeight;
     if (Weight < 0.0)
         Weight = class'APX_EnemyKnowledge'.static.ThreatWeight(Enemy);
@@ -777,7 +778,7 @@ static function float ThreatRiskAtTile(XComGameState_Unit UnitState,
             MeleeReach = GetMeleeThreatReach(Enemy);
         // Legacy melee also ignores cover and LOS. A recognized -1 fallback
         // need not repeat the template scan or those unrelated native queries.
-        return MeleeReachRisk(TileDistance(Tile, Enemy.TileLocation), MeleeReach) * Weight;
+        return MeleeReachRisk(TileDistance(Tile, Enemy.TileLocation), MeleeReach) * Weight * TargetWeight;
     }
     TargetLocation = `XWORLD.GetPositionFromTileCoordinates(Tile);
     EnemyLocation = `XWORLD.GetPositionFromTileCoordinates(Enemy.TileLocation);
@@ -791,7 +792,7 @@ static function float ThreatRiskAtTile(XComGameState_Unit UnitState,
         UnitState.GetMyTemplate().bCanTakeCover, Enemy.IsMeleeOnly());
     EnemyTile = Enemy.TileLocation;
     bClearLOS = `XWORLD.CanSeeTileToTile(EnemyTile, Tile, Visibility);
-    return KnownThreatRisk(Risk, bClearLOS, Enemy.IsMeleeOnly()) * Weight;
+    return KnownThreatRisk(Risk, bClearLOS, Enemy.IsMeleeOnly()) * Weight * TargetWeight;
 }
 
 static function float ExposureRisk(XComGameState_Unit UnitState, TTile Tile,

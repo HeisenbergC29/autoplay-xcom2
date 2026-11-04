@@ -91,7 +91,7 @@ function Start(int PlayerID)
     bStarted = true;
     Emit("start", "|player=" $ PlayerID $ "|mission=" $ Safe(Mission)
         $ "|difficulty=" $ `TacticalDifficultySetting $ "|history=" $ HistoryCursor
-        $ "|revision=mission-report-v13");
+        $ "|revision=mission-report-v14");
     // F8 starts observation, not the mission. Even turn one may already have
     // processed damage, objectives or native starting allowances.
     Emit("scoring_coverage", "|complete=false|reason=recording_begins_at_f8"
@@ -978,13 +978,15 @@ function RecordMoveThreatPreviews(XComGameState_Unit UnitState, const out array<
     local TTile CurrentTile, DestinationTile, EnemyTile;
     local vector CurrentLocation, DestinationLocation, EnemyLocation;
     local GameRulesCache_VisibilityInfo CurrentVisibility, DestinationVisibility;
-    local float Angle, MeleeReach, Weight;
+    local float Angle, MeleeReach, Weight, TargetWeight;
     local string CurrentCover, DestinationCover;
     local bool bCurrentLOS, bDestinationLOS, bCurrentDefaultView, bDestinationDefaultView;
-    local int Count;
+    local int Count, MarkedAimBonus;
 
     if (UnitState == none || UnitState.GetAssociatedPlayerID() != OwnerPlayerID || Path.Length < 2)
         return;
+    MarkedAimBonus = class'APX_EnemyKnowledge'.static.KnownMarkedAimBonus(UnitState);
+    TargetWeight = class'APX_EnemyKnowledge'.static.TargetStatusWeight(UnitState);
     CurrentTile = UnitState.TileLocation;
     DestinationTile = Path[Path.Length - 1];
     CurrentLocation = `XWORLD.GetPositionFromTileCoordinates(CurrentTile);
@@ -1012,6 +1014,7 @@ function RecordMoveThreatPreviews(XComGameState_Unit UnitState, const out array<
         Emit("move_threat_preview", "|source=" $ UnitState.ObjectID $ "|enemy=" $ Enemy.ObjectID
             $ "|enemy_template=" $ Enemy.GetMyTemplateName() $ "|melee_only=" $ Enemy.IsMeleeOnly()
             $ "|melee_threat_reach=" $ MeleeReach $ "|threat_weight=" $ Weight
+            $ "|marked_aim_bonus=" $ MarkedAimBonus $ "|target_status_weight=" $ TargetWeight
             $ "|current_distance=" $ class'APX_MissionPlanner'.static.TileDistance(CurrentTile, EnemyTile)
             $ "|destination_distance=" $ class'APX_MissionPlanner'.static.TileDistance(DestinationTile, EnemyTile)
             $ "|current_threat_risk=" $ class'APX_MissionPlanner'.static.ThreatRiskAtTile(UnitState, Enemy, CurrentTile, MeleeReach, Weight)
