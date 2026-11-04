@@ -25,7 +25,8 @@ static function bool ChooseAction(XComGameState_Unit UnitState,
     local array<StateObjectReference> VisibleEnemies;
     local name AbilityName;
     local int Index, SelfIndex;
-    local float CandidateScore, MeleePenalty;
+    local float CandidateScore, MeleePenalty, RetainedAttackValue;
+    local int FollowUpAbilityID, FollowUpTargetID;
     local bool bFound;
 
     Action = EmptyAction;
@@ -103,6 +104,9 @@ static function bool ChooseAction(XComGameState_Unit UnitState,
                     Candidate.AvailableTargets[Index].PrimaryTarget.ObjectID));
                 CandidateScore = ScoreMedical(UnitState, TargetUnit,
                     default.StabilizeAbilities.Find(AbilityName) != INDEX_NONE);
+                CandidateScore = class'APX_ActionEconomy'.static.ScoreWithRetainedAttack(
+                    UnitState, Ability, CandidateScore, VisibleEnemies,
+                    FollowUpAbilityID, FollowUpTargetID, RetainedAttackValue);
                 if (CandidateScore > Score)
                 {
                     Action = Candidate;
@@ -119,6 +123,9 @@ static function bool ChooseAction(XComGameState_Unit UnitState,
                 TargetUnit = XComGameState_Unit(History.GetGameStateForObjectID(
                     Candidate.AvailableTargets[Index].PrimaryTarget.ObjectID));
                 CandidateScore = ScoreSupport(UnitState, TargetUnit, AbilityName, VisibleEnemies);
+                CandidateScore = class'APX_ActionEconomy'.static.ScoreWithRetainedAttack(
+                    UnitState, Ability, CandidateScore, VisibleEnemies,
+                    FollowUpAbilityID, FollowUpTargetID, RetainedAttackValue);
                 if (CandidateScore > Score)
                 {
                     Action = Candidate;
@@ -199,7 +206,7 @@ static function bool HasRequiredMeleePath(XComGameState_Unit SourceUnit,
         return false;
     for (Index = 1; Index < Path.Length; ++Index)
     {
-        if (class'XComPath'.static.TileContainsHazard(SourceUnit, Path[Index])
+        if (class'APX_HazardKnowledge'.static.HasBlockingHazard(SourceUnit, Path[Index])
             || !class'APX_MissionPlanner'.static.IsKnownCombatTile(Path[Index])
             || !class'X2TacticalVisibilityHelpers'.static.CanSquadSeeLocation(
                 SourceUnit.ControllingPlayer.ObjectID, Path[Index])

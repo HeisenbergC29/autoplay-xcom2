@@ -1,24 +1,34 @@
 # Testy odbiorcze
 
-Najnowszy [raport v12](report-2026-11-04-v12-enemies.pl.md): `SabotageCC`,
-trudność 3, **FAIL** w turze 8, 40 przyjętych rozkazów i zero odrzuceń.
-Start oceny porównawczej od zera: **PASS**. Nowa ocena zagrożeń v14:
-kompilacja Windows i próba w grze **NIEURUCHOMIONE**.
-[Konfiguracje i scenariusze v14](config-knowledge-v14.pl.md) ·
-[Mechaniki v13](enemy-knowledge-v13.pl.md).
+Najnowszy [raport v14](report-2026-11-04-v14-poison.pl.md) zawiera trzy
+próby zakończone porażką. Ostatnie GasStation: trudność 2, **FAIL** w turze 9,
+31 przyjętych rozkazów, zero odrzuceń i natywny odczyt −15100. Stabilizacja:
+**PASS**. Aktywna waga Marked: **NIEPOTWIERDZONA**, bo wszystkie podglądy
+mają bonus 0. Kompilacja Windows i próba zmian v15: **NIEURUCHOMIONE**.
+[Zakres i scenariusze v15](tactics-v15.pl.md).
 
-Sprawdź różne obrażenia broni przy porównywalnej geometrii, rozpoznane
-zdolności kontroli/AoE/wsparcia, zwykłe melee zombie, możliwą kontrę Mutona
-oraz nadmierny wzrost ekspozycji podczas przygotowania zasadzki. Nieznane
-dane powinny zachować neutralną wagę, a nie usuwać zagrożenie.
+Od bieżącej serii **PASS wymaga zwycięstwa oraz wyniku misji > 0**.
+Zwycięstwo przy zerze lub wyniku ujemnym daje FAIL próby; oficjalne zwycięstwo
+gry pozostaje zapisane. Brak pewnego końcowego wyniku daje **NIEPOTWIERDZONY**,
+bez zaliczenia na podstawie częściowego `~wynik/—`. Dawne opisy zwycięstw
+v8 zachowują znaczenie historycznego wyniku gry.
 
-V14: sprawdź ryzyko oznaczonego własnego żołnierza, z kapitanem oraz innymi
-widocznymi strzelcami. `move_threat_preview` powinno podawać
-`marked_aim_bonus=10` i `target_status_weight=1.1` dla dostarczonej
-konfiguracji, następnie 0 i 1 po wygaśnięciu efektu. Waga powinna być wspólna
-dla ruchu i obrony. Natomiast natywna szansa trafienia pozostaje odczytem gry.
-Katalog powinien rozróżniać bazę i `_Diff_3`, np. trooper 3/4 HP oraz
-sektoid 7/10 HP; nie wolno nadpisywać nimi bieżących statystyk kontaktu.
+V15: porównaj słaby podstawowy strzał przy dwóch AP z bezpiecznym ruchem
+poprawiającym celowanie, a dobry strzał z małą możliwą poprawą. Sprawdź
+niewystarczające AP po ruchu, dwupunktowy strzał snajpera, różne typy AP,
+wsparcie lub leczenie przed końcem tury i każdorazowe ponowne sprawdzenie
+legalności akcji. Prognoza z docelowego pola jest heurystyką; rzeczywistą
+szansę po ruchu odczytuje gra.
+
+Sprawdź wyjście z wielopolowej chmury trucizny na czyste widoczne pole,
+pozostający status po wyjściu, odporność, ogień i kwas na początku lub dalej
+na trasie, brak bezpiecznego wyjścia oraz zakaz ponownego wejścia po czystym
+polu. Nie wolno utożsamiać `Poisoned` z odpornością ani samym brakiem chmury.
+
+Zachowaj scenariusze v13/v14: broń i zdolności widocznego kontaktu, zombie,
+kontra Mutona, ekspozycja przy zasadzce i aktywne Marked. Dla konfiguracji
+Marked oczekiwane są `marked_aim_bonus=10` i `target_status_weight=1.1`,
+a po wygaśnięciu 0 i 1. Raport v14 nie sprawdził tego przypadku.
 
 Profil punktacji v2 pozostaje bez zmian: `~0/—` na początku zwykłej misji,
 pierwsza rana −1000, potwierdzona strata −5000. Wykrwawienie nie udaje śmierci,
@@ -31,7 +41,7 @@ Ten sam raport zawiera zwycięstwo v8 w `SabotageCC` na trudności 3.
 Wcześniejsze zwycięstwo v8 w pierwszej misji Legacy pozostaje osobną próbą;
 Cemetery nadal nie ma udokumentowanej próby autoplaya.
 V10 działało w zwykłej niepunktowanej misji. Wyświetlanie liczb Legacy
-oraz nowe mechaniki v14 nadal wymagają kompilacji Windows i próby w grze.
+oraz nowe mechaniki v15 nadal wymagają kompilacji Windows i próby w grze.
 [Instrukcja Legacy](legacy-test.pl.md) · [Licznik v12](score-display-v10.pl.md).
 
 Dotychczasowy wynik zgłoszony przez użytkownika: **PASS** — mod wydaje rozkazy;
@@ -138,6 +148,12 @@ i pozostałe kategorie nadal wymagają prób, szczególnie późniejsze etapy sk
 
 ## Punktacja każdej symulacji
 
+Sprawdź `attempt_verdict` niezależnie od `outcome`: zwycięstwo i pewny
+wynik > 0 dają `pass`, zwycięstwo z wynikiem <= 0 lub porażka gry dają
+`fail`, a niepełne dane uniemożliwiają zaliczenie i dają `unknown`.
+Przypadki obejmują dodatni, zerowy i ujemny wynik, brak końca, niepełną
+historię, konflikt powtórzonych rekordów i przeniesione punkty Legacy.
+
 Uruchom aktualny analizator dla każdego raportu, także Gatecrashera i innych misji
 bez oficjalnych punktów. Sprawdź obecność `game_scoring.comparison` z profilem
 `wotc_legacy_observed_v2`, listą składowych i brakujących danych. Jest to wspólna
@@ -164,6 +180,11 @@ Punkty zależą m.in. od celów, przeciwników, tur, obrażeń i przeżycia oddz
 Leczenie nie odtwarza utraconej premii za brak obrażeń. Fabularna jednostka
 pozostająca żywa po wyłączeniu może ponieść karę punktową jak za utratę.
 Nie należy odtwarzać wyniku tylko z końcowego HP i liczby zabitych.
+
+V15 dodaje `mission_points`, `mission_points_known` i `mission_final`.
+Do oceny próby potrzebny jest znany końcowy wkład bieżącej misji, po
+zatwierdzonym zakończeniu i nadrobieniu historii. Odczyt nie obiecuje nagród,
+które gra może zapisać później; porównaj go z ekranem podsumowania.
 
 V9 zapisuje odczyty `game_score.cumulative_score` tylko dla właściwego etapu.
 `recording_delta` obejmuje okres od pierwszego do ostatniego odczytu, nie

@@ -432,3 +432,43 @@ katalog i potwierdzono 13 zastąpionych węzłów AI bez pozostawienia starych
 duplikatów, w tym cztery poprawki DLC_3 do DLC_2 z właściwym pochodzeniem.
 Przeszły 53 lokalne odnośniki, walidacja argumentów CLI i `git diff --check`.
 Ta aktualizacja nie zmienia UnrealScript ani wyniku prób w grze.
+
+## V15 — AP, pozycja do ataku i chmury trucizny
+
+[Raport v14](report-2026-11-04-v14-poison.pl.md) zawiera trzy przegrane próby.
+Ostatnie GasStation kończy się w turze 9 z natywnym odczytem −15100.
+Historia pokazuje odroczone spadki HP po `PoisonSpit`, lecz brak geometrii
+chmur i flagi zatrucia w v14 uniemożliwia odtworzenie konkretnych wejść.
+Wszystkie 48 podglądów ruchu v14 miało nieaktywne Marked; aktywna waga
+tego efektu nadal wymaga osobnej próby.
+
+V15 rozdziela publiczny `TileContainsPoison` od `Poisoned`, sprawdza aktualną
+odporność oraz robotyczność i zachowuje natywną kontrolę pozostałych zagrożeń.
+Wyjątek trasy wyjścia dotyczy ciągłego początku własnej chmury, wymaga czystego
+widocznego końca i nie dopuszcza ognia, kwasu ani ponownego wejścia po wyjściu.
+Nie usuwa istniejącego statusu trucizny.
+
+Podgląd podstawowego strzału po ruchu wykorzystuje natywną zdalną widoczność
+i warunki pojedynczego celu. Pełna kalkulacja szansy trafienia nie przyjmuje
+hipotetycznej pozycji strzelca. Dlatego prognoza zmiany zasięgu i osłony jest
+ograniczoną heurystyką, bez modyfikacji historii lub `TileLocation` jednostki.
+AP są projektowane na lokalnej kopii z zachowaniem typów i kosztów.
+Po każdej akcji kontroler odczytuje stan i legalne polecenia ponownie.
+
+Nowy `attempt_verdict` wymaga zwycięstwa i pewnych dodatnich punktów bieżącej
+misji. Natywne `outcome` pozostaje osobno; zero lub ujemny wynik nie zalicza
+próby. `mission_points_known`, `mission_points` i `mission_final` nie
+utożsamiają sumy drabinki, delty od F8 ani starego HUD-u z końcowym wkładem
+misji. Częściowa ocena porównawcza nie potwierdza sukcesu.
+
+Reguły porównawcze v2 i katalog DLC pozostają bez zmian. Kompilacja Windows
+oraz skuteczność v15 w grze pozostają do sprawdzenia.
+[Zakres, ograniczenia i scenariusze v15](tactics-v15.pl.md).
+
+Kontrola końcowa v15: **480 testów Python zaliczonych bez pominięć**
+z SDK oraz bazową i DLC konfiguracją gry. Audyt referencji potwierdził
+17 klas moda i 29 skonfigurowanych nazw zdolności. Przeszły testy skryptu
+budowania, kolektora raportów, 88 lokalnych odnośników w zmienionych
+dokumentach i `git diff --check`. Testy obejmują typy AP i koszty darmowych
+akcji, prognozę podstawowego strzału, wyjście z chmury i warunek dodatniego
+wyniku. Nie przeprowadzono kompilacji Windows ani próby v15 w grze.

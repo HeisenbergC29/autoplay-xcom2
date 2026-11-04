@@ -79,7 +79,7 @@ class LootActionTests(unittest.TestCase):
             self.assertIn(contract, move)
         path = function_body((CLASSES / 'APX_SquadPlanner.uc').read_text(), 'PreparationPathIsSafe')
         for contract in ('IsKnownCombatTile(Tile)', 'CanSquadSeeLocation(',
-                         'TileContainsHazard(Soldier, Tile)',
+                         'HasBlockingHazard(Soldier, Tile)',
                          'IsSupportedAdvanceStep(', 'IsDestructiveTraversal('):
             self.assertIn(contract, path)
 

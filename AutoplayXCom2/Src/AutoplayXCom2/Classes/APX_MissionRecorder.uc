@@ -40,6 +40,7 @@ var private array<string> RecordedScoreKeys;
 var private array<string> RecordedScoreRules;
 var private array<string> CompletedObjectiveIDs;
 var private array<int> RescuedCivilianIDs;
+var private APX_MissionScore NativeScoreProbe;
 
 function string Safe(string Value)
 {
@@ -91,7 +92,7 @@ function Start(int PlayerID)
     bStarted = true;
     Emit("start", "|player=" $ PlayerID $ "|mission=" $ Safe(Mission)
         $ "|difficulty=" $ `TacticalDifficultySetting $ "|history=" $ HistoryCursor
-        $ "|revision=mission-report-v14");
+        $ "|revision=mission-report-v15");
     // F8 starts observation, not the mission. Even turn one may already have
     // processed damage, objectives or native starting allowances.
     Emit("scoring_coverage", "|complete=false|reason=recording_begins_at_f8"
@@ -122,6 +123,11 @@ function UnregisterScoreObservers()
     local X2EventManager EventManager;
     local Object Listener;
 
+    if (NativeScoreProbe != none)
+    {
+        NativeScoreProbe.Cleanup();
+        NativeScoreProbe = none;
+    }
     EventManager = `XEVENTMGR;
     if (EventManager == none)
         return;
@@ -225,8 +231,13 @@ function EventListenerReturn OnCivilianRescued(Object EventData, Object EventSou
 function RecordGameScore(string Phase)
 {
     local XComGameState_LadderProgress Ladder;
+    local XComGameState_BattleData BattleData;
     local string Fields, ScorePhase;
+    local int MissionPoints;
+    local bool bPointsKnown, bMissionFinal;
 
+    if (`XCOMHISTORY == none || !IsRecordingMission())
+        return;
     Ladder = XComGameState_LadderProgress(`XCOMHISTORY.GetSingleGameStateObjectForClass(
         class'XComGameState_LadderProgress', true));
     if (Ladder == none)
@@ -240,6 +251,19 @@ function RecordGameScore(string Phase)
     RecordBaseScoreRules();
     Fields = "|source=legacy_runtime|ladder_index=" $ Ladder.LadderIndex
         $ "|ladder_rung=" $ Ladder.LadderRung $ "|cumulative_score=" $ Ladder.CumulativeScore;
+    if (NativeScoreProbe == none)
+        NativeScoreProbe = new(self) class'APX_MissionScore';
+    bPointsKnown = NativeScoreProbe.ReadNativeMissionPoints(MissionPoints);
+    BattleData = XComGameState_BattleData(`XCOMHISTORY.GetSingleGameStateObjectForClass(
+        class'XComGameState_BattleData', true));
+    // An observed terminal snapshot, after our history cursor has caught up.
+    // This never promises awards that have not yet been committed by the game.
+    bMissionFinal = Phase == "finish" && BattleData != none
+        && BattleData.VictoriousPlayer.ObjectID != 0 && !bLimitReported
+        && HistoryCursor == `XCOMHISTORY.GetCurrentHistoryIndex();
+    Fields $= "|mission_points_known=" $ bPointsKnown $ "|mission_final=" $ bMissionFinal;
+    if (bPointsKnown)
+        Fields $= "|mission_points=" $ MissionPoints;
     if (Fields == LastGameScore && Phase != "start" && Phase != "finish")
         return;
     ScorePhase = "observe";
@@ -441,6 +465,10 @@ function RecordUnit(XComGameState_Unit UnitState, bool bFriendly, bool bForce)
             $ "|panicked=" $ UnitState.IsPanicked()
             $ "|mind_controlled=" $ UnitState.IsMindControlled()
             $ "|unconscious=" $ UnitState.IsUnconscious()
+            $ "|poisoned=" $ UnitState.IsPoisoned()
+            $ "|poison_cloud=" $ class'APX_HazardKnowledge'.static.IsKnownPoisonCloudAtTile(
+                UnitState, UnitState.TileLocation)
+            $ "|poison_cloud_harmful=" $ class'APX_HazardKnowledge'.static.NeedsPoisonEscape(UnitState)
             $ "|score_eligible=" $ bScoreEligible $ "|highest_hp=" $ UnitState.HighestHP
             $ "|lowest_hp=" $ UnitState.LowestHP $ "|ladder_killed_scored=" $ bLadderKilled;
     }
@@ -755,6 +783,10 @@ function string ActionFields(XComGameState_Unit UnitState, string Kind,
     local ShotBreakdown Breakdown;
     local WeaponDamageValue MinDamage, MaxDamage;
     local int TargetID, Chance, AllowsShield, ReleasedAllies, LinkedEnemies;
+    local int ComboAbilityID, ComboTargetID;
+    local float RetainedAttackValue;
+    local bool bHasAPCombo;
+    local array<StateObjectReference> VisibleEnemies;
     local string AbilityName, Reason;
 
     Ability = XComGameState_Ability(`XCOMHISTORY.GetGameStateForObjectID(
@@ -768,6 +800,12 @@ function string ActionFields(XComGameState_Unit UnitState, string Kind,
         Reason = class'APX_CombatPlanner'.static.GetActionReason(UnitState, Ability.GetMyTemplateName());
         if (Ability.GetMyTemplateName() == 'ThrowGrenade' || Ability.GetMyTemplateName() == 'LaunchGrenade')
             Reason = "explosive_area_attack";
+        if (class'APX_ActionEconomy'.static.IsSupportedPreparation(Ability.GetMyTemplateName()))
+        {
+            class'APX_MissionPlanner'.static.GetVisibleThreats(UnitState, VisibleEnemies);
+            bHasAPCombo = class'APX_ActionEconomy'.static.GetRetainedAttack(UnitState, Ability,
+                VisibleEnemies, ComboAbilityID, ComboTargetID, RetainedAttackValue);
+        }
     }
     if (TargetIndex >= 0 && TargetIndex < Action.AvailableTargets.Length)
     {
@@ -787,6 +825,10 @@ function string ActionFields(XComGameState_Unit UnitState, string Kind,
         $ "|ability=" $ Safe(AbilityName) $ "|reason=" $ Safe(Reason) $ "|target=" $ TargetID
         $ "|target_index=" $ TargetIndex $ "|score=" $ Score $ "|chance=" $ Chance
         $ "|raw_min_damage=" $ MinDamage.Damage $ "|raw_max_damage=" $ MaxDamage.Damage
+        $ "|ap_combo_available=" $ bHasAPCombo
+        $ "|ap_combo_followup_ability_id=" $ ComboAbilityID $ "|ap_combo_followup_target=" $ ComboTargetID
+        $ "|ap_combo_retained_attack_value=" $ RetainedAttackValue
+        $ "|ap_combo_model=current_legal_attack_after_stationary_preparation"
         $ "|known_released_allies=" $ ReleasedAllies $ "|known_linked_enemies=" $ LinkedEnemies;
 }
 
@@ -801,6 +843,9 @@ function string MoveFields(XComGameState_Unit UnitState, const out array<TTile> 
     local array<StateObjectReference> VisibleEnemies;
     local TTile Destination;
     local float CurrentRisk, CandidateRisk, SupportScore, BestAttackNow, BestAttackAfterMove;
+    local float NativeAttackValue, ProjectedAttackValue;
+    local int ForecastTarget, NativeChance, ProjectedChance;
+    local bool bHasForecast;
 
     if (Path.Length == 0)
         return "|kind=move|unit=" $ UnitState.ObjectID $ "|score=" $ Score $ "|path_tiles=0";
@@ -811,12 +856,23 @@ function string MoveFields(XComGameState_Unit UnitState, const out array<TTile> 
     SupportScore = class'APX_MissionPlanner'.static.SquadPositionScore(UnitState, Destination);
     class'APX_MissionPlanner'.static.GetMoveAttackOptions(UnitState, VisibleEnemies,
         BestAttackNow, BestAttackAfterMove);
+    bHasForecast = class'APX_RepositionPlanner'.static.EvaluateDestination(UnitState, Destination,
+        ForecastTarget, NativeChance, ProjectedChance, NativeAttackValue, ProjectedAttackValue);
     return "|kind=move|unit=" $ UnitState.ObjectID $ "|score=" $ Score
         $ "|path_tiles=" $ Path.Length $ "|x=" $ Path[Path.Length - 1].X
         $ "|y=" $ Path[Path.Length - 1].Y $ "|z=" $ Path[Path.Length - 1].Z
         $ "|ap_before=" $ UnitState.NumActionPoints() $ "|visible_threats=" $ VisibleEnemies.Length
         $ "|current_risk=" $ CurrentRisk $ "|candidate_risk=" $ CandidateRisk
         $ "|support_score=" $ SupportScore
+        $ "|current_poison_cloud=" $ class'APX_HazardKnowledge'.static.IsKnownPoisonCloudAtTile(
+            UnitState, UnitState.TileLocation)
+        $ "|destination_poison_cloud=" $ class'APX_HazardKnowledge'.static.IsKnownPoisonCloudAtTile(
+            UnitState, Destination)
+        $ "|needs_poison_escape=" $ class'APX_HazardKnowledge'.static.NeedsPoisonEscape(UnitState)
+        $ "|offensive_forecast=" $ bHasForecast $ "|forecast_target=" $ ForecastTarget
+        $ "|native_chance_now=" $ NativeChance $ "|projected_chance=" $ ProjectedChance
+        $ "|projected_attack_value=" $ ProjectedAttackValue
+        $ "|forecast_model=bounded_geometry"
         $ "|best_attack_now=" $ BestAttackNow $ "|best_attack_after_move_ap=" $ BestAttackAfterMove
         $ "|potential_attack_loss=" $ FMax(0.0, BestAttackNow - BestAttackAfterMove);
 }
@@ -1079,6 +1135,7 @@ function Finish(string Reason)
     Observe("finish");
     if (`XCOMHISTORY != none)
         PendingHistory = Max(0, `XCOMHISTORY.GetCurrentHistoryIndex() - HistoryCursor);
+    RecordGameScore("finish");
     Outcome = "unknown";
     if (BattleData != none && BattleData.VictoriousPlayer.ObjectID != 0)
         Outcome = BattleData.bLocalPlayerWon ? "win" : "loss";

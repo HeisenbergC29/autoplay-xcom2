@@ -7,7 +7,10 @@ obejmujący walkę, cele, interakcje, kolejne etapy i ewakuację, prowadzący do
 legalnego zwycięstwa. Próby Gatecrashera i Legacy rozwijają wspólny mod.
 Wyjątek dla scenariusza obiektywnie niemożliwego wymaga uzasadnienia stanem
 misji; sama porażka aktualnego planera tego nie dowodzi. Postęp mierzymy
-pełnymi misjami ukończonymi w grze. Obecna alpha nie realizuje jeszcze całości.
+pełnymi misjami ukończonymi w grze. Od obecnej serii prób sukces wymaga
+zwycięstwa i wyniku misji większego od zera; zero lub wynik ujemny nie zalicza
+próby. Niepełna punktacja pozostawia ocenę niepotwierdzoną. Obecna alpha
+nie realizuje jeszcze całości.
 
 **Nowa wersja do prób Gatecrashera:** poprawiona ocena overwatch i przyczajenia,
 Aid Protocol, ostrożniejsze flankowanie oraz rejestr decyzji i wyników misji.
@@ -70,7 +73,7 @@ porażką w turze 7, z wynikiem gry −10000. Ten sam raport zawiera też wygran
 v8 w `SabotageCC` na trudności 3.
 [Zakres zmian, reguły punktacji i ograniczenia v9](docs/tactics-v9.pl.md).
 
-Bieżące **`mission-report-v14`** uzupełnia katalog o przekazane konfiguracje
+Wersja **`mission-report-v14`** uzupełnia katalog o przekazane konfiguracje
 gry, porównane z SDK: statystyki bazowe i warianty trudności, wyposażenie, parametry broni
 oraz odwołania do AI. Zachowuje pochodzenie i jawne braki danych.
 We wspólnej ocenie ryzyka uwzględnia też aktywne oznaczenie własnego żołnierza
@@ -85,19 +88,31 @@ statycznym katalogiem; katalog nie zastępuje natywnego podglądu ataku.
 korzysta z pięciu nowych archiwów pochodzących wyłącznie z gry: `DLC_1`,
 `DLC_2`, `DLC_3`, `TLE` i `XCom_DLC_Day0`. Nie wymaga folderu DLC w SDK.
 Dodaje między innymi parametry władców obcych, SPARK-a i jednostek Legacy.
-Ta aktualizacja dotyczy narzędzi analizy i katalogu; kod działający w grze
-oraz rewizja `mission-report-v14` pozostają takie same. Samo uzupełnienie
-katalogu nie wymaga ponownej kompilacji zainstalowanego v14.
+Tamta aktualizacja dotyczyła narzędzi analizy i katalogu; nie zmieniała kodu
+działającego w grze ani rewizji `mission-report-v14`.
 
-[Najnowszy raport v12](docs/report-2026-11-04-v12-enemies.pl.md) potwierdza
-start licznika od zera, lecz `SabotageCC` na trudności 3 zakończyło się
-porażką w turze 8. Zmiany taktyczne v14 wymagają kompilacji Windows i osobnej próby.
+[Najnowszy raport v14](docs/report-2026-11-04-v14-poison.pl.md) zawiera trzy
+próby zakończone porażką. Ostatnie GasStation kończy się w turze 9 z natywnym
+odczytem −15100; stabilizacja jest potwierdzona. Raport wskazuje na potrzebę
+rozróżnienia chmur trucizny od trwającego zatrucia i oceny ruchu przed słabym
+strzałem przy zachowaniu AP.
+
+Bieżące **`mission-report-v15`** dodaje jawną kontrolę chmur i bezpieczne
+wyjście z nich oraz ograniczoną ocenę niebieskiego ruchu z zachowaniem
+podstawowego strzału. Ocenia też wsparcie lub leczenie z zachowaniem
+aktualnie legalnego ataku, respektując rzeczywiste typy i koszty AP.
+Projekcja poprawy trafienia jest heurystyką; po ruchu
+atak ponownie sprawdza gra. Analizator osobno ocenia zwycięstwo z dodatnim
+wynikiem misji. [Zakres v15 i kolejna próba](docs/tactics-v15.pl.md).
+Nowy kod wymaga kompilacji na Windows i sprawdzenia w grze.
 
 Ocena porównawcza nadal używa profilu `wotc_legacy_observed_v2` od `~0/—`;
-reguły punktacji nie zostały zmienione przez v14.
+reguły punktacji nie zostały zmienione przez v15. Zmieniło się kryterium
+zaliczenia próby, nie sposób naliczania punktów.
 [Zasady licznika](docs/score-display-v10.pl.md).
 
-**Stan: alpha; v8 wygrało pierwszą misję Legacy Operations na Dowódcy.**
+**Stan: alpha; historyczne v8 wygrało pierwszą misję Legacy na Dowódcy.**
+To oficjalne zwycięstwo nie potwierdza jeszcze nowego wymogu dodatniego wyniku.
 Pełna drabinka Legacy, wygrana Gatecrashera i wszystkie pozostałe rodzaje misji
 nadal wymagają osobnych prób. Każdy nowy raport otrzymuje porównawczą punktację
 według wspólnego profilu reguł odczytanych z gry, także poza Legacy. Oficjalny
@@ -133,7 +148,7 @@ Przycisk używa oryginalnych elementów UI, bez zastępowania plików Flash. Po�
 | Wsparcie | Leczenie i stabilizacja; podejście ratownika do wykrwawiającego się sojusznika z zachowaniem AP na stabilizację; przeładowanie, overwatch, hunker down |
 | Łup | Natywne darmowe `Loot`; krótkie bezpieczne podejście do widocznego łupu po walce, gdy nie koliduje z ratunkiem, ewakuacją, celem ani aktywnym terminem |
 | Zasadzka | Przed atakiem z ukrycia: zachowanie strzelca otwierającego, krótkie ruchy pozostałych do linii ostrzału i legalny overwatch; ograniczony budżet przygotowań |
-| Ruch | Legalne niebieskie ruchy, trasowanie A*, ocena osłon względem widocznych wrogów, kontrola ognia/kwasu i innych zagrożeń na trasie |
+| Ruch | Legalne niebieskie ruchy, trasowanie A*, kierunkowe osłony i wsparcie; ograniczony wariant ruchu przed podstawowym strzałem; kontrola zagrożeń i wyjście z jawnej chmury trucizny |
 | Eksploracja | Gdy brak znanych celów i przydatnych akcji: ograniczone obliczeniowo próbkowanie niezbadanych pól mapy i podział celów między żołnierzy; bez odczytu pozycji ukrytych wrogów |
 | Cele | Rozpoznawane interakcje: ładunki, skrzynie, dowody, obiekty misji, oznaczanie zasobów, wybrane obiekty fabularne, przenoszenie VIP-a i podejście do cywilów |
 | Hakowanie | Wyłącznie ekran wywołany własnym rozkazem; wybór dostępnej nagrody z najwyższą pokazywaną szansą, zwykły rzut gry, zamknięcie po zakończeniu animacji |
@@ -195,9 +210,9 @@ potwierdziła **0 błędów i 8 ostrzeżeń SDK**, zarówno dla bazy, jak i moda
 Dotyczy to wcześniejszej kompilacji. Przechowywany ZIP ma kompletną konfigurację,
 27 nazw zdolności, obie lokalizacje i prawidłowy `.u`; jego 464 importy prowadzą
 tylko do `Core`, `Engine` i `XComGame`, a dziewięć klas moda jest obecnych.
-Najnowszy raport potwierdza uruchomienie v12 w zwykłym `SabotageCC`,
-start oceny porównawczej od zera oraz porażkę w turze 8. Katalog konfiguracji
-i nowe reguły zagrożenia v14 wymagają kompilacji i sprawdzenia w grze. Obecne
+Najnowszy raport potwierdza uruchomienie v14 oraz trzy porażki, w tym
+GasStation w turze 9 z natywnym odczytem −15100. Zmiany taktyczne v15
+wymagają nowej kompilacji i sprawdzenia w grze. Obecne
 środowisko Linux pozwala uruchamiać testy Python i PowerShell, ale nie zawiera
 SDK Windows ani działającej gry.
 

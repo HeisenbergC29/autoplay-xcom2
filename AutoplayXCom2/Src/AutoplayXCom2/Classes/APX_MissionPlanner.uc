@@ -1326,7 +1326,7 @@ static function bool ChooseRescueMove(XComGameState_Unit UnitState,
             bSafe = true;
             for (PathIndex = 1; PathIndex < CandidatePath.Length; ++PathIndex)
             {
-                if (class'XComPath'.static.TileContainsHazard(UnitState, CandidatePath[PathIndex])
+                if (class'APX_HazardKnowledge'.static.HasBlockingHazard(UnitState, CandidatePath[PathIndex])
                     || !IsKnownCombatTile(CandidatePath[PathIndex])
                     || !class'X2TacticalVisibilityHelpers'.static.CanSquadSeeLocation(
                         UnitState.ControllingPlayer.ObjectID, CandidatePath[PathIndex]))
@@ -1401,7 +1401,7 @@ static function bool ChooseRoutePrefix(XComGameState_Unit UnitState,
         bSafe = true;
         for (PathIndex = 1; PathIndex < CandidatePath.Length; ++PathIndex)
         {
-            if (class'XComPath'.static.TileContainsHazard(UnitState, CandidatePath[PathIndex])
+            if (class'APX_HazardKnowledge'.static.HasBlockingHazard(UnitState, CandidatePath[PathIndex])
                 || (bRequireSupport && !IsSupportedAdvanceStep(StartSupport,
                     NearestSupportDistance(UnitState, CandidatePath[PathIndex]))))
             {
@@ -1419,6 +1419,100 @@ static function bool ChooseRoutePrefix(XComGameState_Unit UnitState,
                 BestValue = CandidateValue;
                 Path = CandidatePath;
             }
+        }
+    }
+    return Path.Length > 1;
+}
+
+static function float ScorePoisonEscape(float CurrentRisk, float CandidateRisk,
+    float HealthFraction, float LostAttackValue, float PathCost)
+{
+    if (CandidateRisk > CurrentRisk + 3.0)
+        return -10000.0;
+    // Leaving prevents continued cloud contact; it does not cure Poisoned.
+    // Keep a sure valuable attack and urgent objective/rescue in competition.
+    return 78.0 + (1.0 - FClamp(HealthFraction, 0.0, 1.0)) * 16.0
+        + FMin(20.0, FMax(0.0, CurrentRisk - CandidateRisk) * 0.5)
+        - FMax(0.0, LostAttackValue) * 0.5 - FMax(0.0, PathCost) * 0.5;
+}
+
+static function bool ChoosePoisonEscape(XComGameState_Unit UnitState,
+    out array<TTile> Path, out float Score)
+{
+    local XGUnit Visualizer;
+    local array<TTile> Tiles, CandidatePath;
+    local array<StateObjectReference> Enemies;
+    local array<float> Reaches, Weights;
+    local TTile Tile;
+    local int Sample, Index, Count, Step;
+    local float CurrentRisk, Risk, Cost, Value, Support, Health, BestNow, BestAfter;
+    local bool bSafe, bReachedCleanTile, bRequireSupport;
+
+    Path.Length = 0;
+    Score = -10000.0;
+    if (UnitState == none || !UnitState.IsAbleToAct() || !HasLegalMove(UnitState)
+        || !class'APX_HazardKnowledge'.static.NeedsPoisonEscape(UnitState))
+        return false;
+    Visualizer = XGUnit(UnitState.GetVisualizer());
+    if (Visualizer == none || Visualizer.m_kReachableTilesCache == none)
+        return false;
+    Visualizer.m_kReachableTilesCache.UpdateTileCacheIfNeeded();
+    Visualizer.m_kReachableTilesCache.GetAllPathableTiles(Tiles, Visualizer.GetMobility());
+    Count = Min(Tiles.Length, Clamp(default.MaxCandidateTiles, 1, 256));
+    GetVisibleThreats(UnitState, Enemies);
+    GetMeleeThreatReaches(UnitState, Enemies, Reaches);
+    GetThreatWeights(UnitState, Enemies, Weights);
+    CurrentRisk = ExposureRisk(UnitState, UnitState.TileLocation, Enemies, Reaches, Weights);
+    Support = NearestSupportDistance(UnitState, UnitState.TileLocation);
+    bRequireSupport = !ShouldEvacuate(UnitState);
+    Health = UnitState.GetCurrentStat(eStat_HP) / FMax(1.0, UnitState.GetMaxStat(eStat_HP));
+    GetMoveAttackOptions(UnitState, Enemies, BestNow, BestAfter);
+    for (Sample = 0; Sample < Count; ++Sample)
+    {
+        Index = (Sample * Max(0, Tiles.Length - 1)) / Max(1, Count - 1);
+        Tile = Tiles[Index];
+        Cost = Visualizer.m_kReachableTilesCache.GetPathCostToTile(Tile);
+        if (Tile == UnitState.TileLocation || Cost < 0.0 || Cost > Visualizer.GetMobility()
+            || !IsKnownCombatTile(Tile) || !IsSupportedCombatDestination(UnitState, Tile)
+            || class'APX_HazardKnowledge'.static.HasBlockingHazard(UnitState, Tile)
+            || (bRequireSupport && !IsSupportedAdvanceDestination(Support,
+                NearestSupportDistance(UnitState, Tile))))
+            continue;
+        Risk = ExposureRisk(UnitState, Tile, Enemies, Reaches, Weights);
+        Value = ScorePoisonEscape(CurrentRisk, Risk, Health, FMax(0.0, BestNow - BestAfter), Cost);
+        if (Value <= Score)
+            continue;
+        CandidatePath.Length = 0;
+        if (!Visualizer.m_kReachableTilesCache.BuildPathToTile(Tile, CandidatePath)
+            || CandidatePath.Length < 2)
+            continue;
+        bSafe = true;
+        bReachedCleanTile = false;
+        for (Step = 1; Step < CandidatePath.Length; ++Step)
+        {
+            if (!IsKnownCombatTile(CandidatePath[Step])
+                || !class'X2TacticalVisibilityHelpers'.static.CanSquadSeeLocation(
+                    UnitState.GetAssociatedPlayerID(), CandidatePath[Step])
+                || (bRequireSupport && !IsSupportedAdvanceStep(Support,
+                    NearestSupportDistance(UnitState, CandidatePath[Step]))))
+            {
+                bSafe = false;
+                break;
+            }
+            if (class'APX_HazardKnowledge'.static.CanCrossStartingPoisonTile(
+                UnitState, CandidatePath[Step], bReachedCleanTile))
+                continue;
+            if (class'APX_HazardKnowledge'.static.HasBlockingHazard(UnitState, CandidatePath[Step]))
+            {
+                bSafe = false;
+                break;
+            }
+            bReachedCleanTile = true;
+        }
+        if (bSafe && bReachedCleanTile)
+        {
+            Path = CandidatePath;
+            Score = Value;
         }
     }
     return Path.Length > 1;
@@ -1492,7 +1586,7 @@ static function bool ChooseMove(XComGameState_Unit UnitState,
         Tile = Tiles[Index];
         PathCost = UnitVisualizer.m_kReachableTilesCache.GetPathCostToTile(Tile);
         if (TileDistance(Tile, UnitState.TileLocation) < 1
-            || class'XComPath'.static.TileContainsHazard(UnitState, Tile)
+            || class'APX_HazardKnowledge'.static.HasBlockingHazard(UnitState, Tile)
             || (bCombatGoal && !IsKnownCombatTile(Tile))
             || (bCombatGoal && !IsSupportedCombatDestination(UnitState, Tile))
             || PathCost < 0.0 || PathCost > UnitVisualizer.GetMobility()
@@ -1518,7 +1612,7 @@ static function bool ChooseMove(XComGameState_Unit UnitState,
         // Check the entire route, not just its endpoint; allow leaving a burning start tile.
         for (PathIndex = 1; PathIndex < CandidatePath.Length; ++PathIndex)
         {
-            if (class'XComPath'.static.TileContainsHazard(UnitState, CandidatePath[PathIndex])
+            if (class'APX_HazardKnowledge'.static.HasBlockingHazard(UnitState, CandidatePath[PathIndex])
                 || (bCombatGoal && !IsKnownCombatTile(CandidatePath[PathIndex]))
                 || (bCombatGoal && !class'X2TacticalVisibilityHelpers'.static.CanSquadSeeLocation(
                     UnitState.ControllingPlayer.ObjectID, CandidatePath[PathIndex]))

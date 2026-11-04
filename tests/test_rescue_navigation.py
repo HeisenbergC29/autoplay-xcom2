@@ -41,7 +41,7 @@ class RescueNavigationTests(unittest.TestCase):
                          'CanAttackWithActionPoints(Stabilize, UnitState, RemainingPoints)',
                          'GetBleedingOutTurnsRemaining()', 'CanStabilizeFromTile(',
                          'GetAllPathableTiles(', 'BuildPathToTile(',
-                         'TileContainsHazard(', 'IsKnownCombatTile(', 'CanSquadSeeLocation('):
+                         'HasBlockingHazard(', 'IsKnownCombatTile(', 'CanSquadSeeLocation('):
             self.assertIn(contract, rescue)
         self.assertIn('Clamp(default.MaxCandidateTiles, 1, 96)', rescue)
         for forbidden in ('ModifyStateObject(', 'ApplyCost(', 'SetCurrentStat(', 'ActivateAbility_'):

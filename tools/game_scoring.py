@@ -402,3 +402,94 @@ def score_session(records: list[dict], native_rules: dict | None = None,
             'comparison': comparison_score(records, profile or load_profile()),
             'native_rules_observed': native_rules,
             'note': 'Planner candidate/chosen score and engine initialization MaxScore are not earned game points.'}
+
+
+ATTEMPT_CRITERION = 'victory_and_positive_mission_score_v1'
+
+
+def assess_attempt(records: list[dict], outcome: str, scoring: dict,
+                   conflicting_records: bool = False) -> dict:
+    """Keep the native winner separate from the project's acceptance criterion.
+
+    Ladder cumulative points and recorder-start deltas are not mission totals.
+    A partial benchmark or an old HUD reading can describe an observation, but
+    cannot establish that the final mission score was positive.
+    """
+    ends = [record for record in records if record['event'] == 'end']
+    end = ends[-1] if ends else {}
+    official = scoring['official']
+    native_records = [record for record in records
+                      if record['event'] == 'game_score'
+                      and record.get('source') in {'legacy_runtime', 'challenge_runtime'}]
+    if official['status'] == 'observed_native':
+        stage = (official.get('ladder_index'), official.get('ladder_rung'))
+        native_records = [record for record in native_records
+                          if record.get('source') != 'legacy_runtime'
+                          or (record.get('ladder_index'), record.get('ladder_rung')) == stage]
+    native_hud = []
+    for record in records:
+        if record['event'] != 'hud_score' or record.get('comparison_profile'):
+            continue
+        match = re.fullmatch(r'(-?\d+)/(?:-?\d+|[^\d/]+)', str(record.get('display', '')))
+        if match:
+            native_hud.append((record, int(match[1])))
+
+    score, observed_score, source, score_status, profile = None, None, None, 'not_recorded', None
+    complete = False
+    if native_records or native_hud or official['status'] == 'observed_native':
+        source = 'native_mission_points'
+        if native_records:
+            last = native_records[-1]
+            if last.get('mission_points_known') is True and type(last.get('mission_points')) is int:
+                observed_score = last['mission_points']
+                # An explicit final marker comes from a source-backed terminal
+                # read, never from the sign or stability of a cumulative score.
+                complete = (last.get('mission_final') is True
+                            and last.get('phase') in {'finish', 'end'}
+                            and bool(end) and last.get('seq', 0) <= end.get('seq', -1)
+                            and type(last.get('history')) is int and last['history'] >= 0
+                            and type(end.get('history')) is int
+                            and last['history'] == end['history']
+                            and type(end.get('history_pending')) is int
+                            and end['history_pending'] == 0)
+                score_status = 'final_native_observation' if complete else 'partial_native_observation'
+        if observed_score is None and native_hud and not official.get('other_stage_snapshots_ignored'):
+            observed_score = native_hud[-1][1]
+            source, score_status = 'native_hud_observation', 'partial_native_observation'
+        if complete:
+            score = observed_score
+    else:
+        comparison = scoring['comparison']
+        source, profile = 'comparison', comparison['profile_id']
+        observed_score = comparison['observed_subtotal']
+        complete = (profile == 'wotc_legacy_observed_v2'
+                    and comparison['status'] == 'complete_for_comparison_convention'
+                    and type(comparison['total']) is int)
+        score_status = 'complete_comparison' if complete else 'partial_comparison'
+        if complete:
+            score = comparison['total']
+
+    result = {'criterion': ATTEMPT_CRITERION, 'status': 'unknown',
+              'mission_outcome': outcome, 'score': score, 'observed_score': observed_score,
+              'score_source': source, 'score_status': score_status,
+              'score_complete': complete, 'score_profile': profile}
+    normalized = str(outcome).casefold()
+    if conflicting_records:
+        result.update(score=None, score_complete=False, reason='conflicting_records',
+                      explanation='Conflicting recording observations prevent a reliable acceptance verdict.')
+    elif normalized == 'loss':
+        result.update(status='fail', reason='mission_lost',
+                      explanation='The game recorded a defeat; positive points alone cannot pass the attempt.')
+    elif normalized != 'win':
+        result.update(reason='mission_outcome_unknown',
+                      explanation='A confirmed mission victory has not been recorded.')
+    elif not complete:
+        result.update(reason='mission_score_incomplete',
+                      explanation='The game recorded a victory, but the final mission score is unavailable or incomplete.')
+    elif score <= 0:
+        result.update(status='fail', reason='mission_score_not_positive',
+                      explanation='The game recorded a victory, but the mission score is not greater than zero.')
+    else:
+        result.update(status='pass', reason='victory_with_positive_mission_score',
+                      explanation='The game recorded a victory and a mission score greater than zero.')
+    return result

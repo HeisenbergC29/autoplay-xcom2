@@ -825,6 +825,32 @@ function MakeDecision(XComTacticalController PC)
             bHavePlan = true;
         }
         CandidatePath.Length = 0;
+        if (class'APX_MissionPlanner'.static.ChoosePoisonEscape(UnitState, CandidatePath, Score)
+            && TraceCandidateMove(UnitState, CandidatePath, Score)
+            && Score > BestScore && CanUseMove(UnitState, CandidatePath))
+        {
+            BestPath = CandidatePath;
+            BestScore = Score;
+            BestUnit = UnitState;
+            bMove = true;
+            bArea = false;
+            BestLocations.Length = 0;
+            bHavePlan = true;
+        }
+        CandidatePath.Length = 0;
+        if (class'APX_RepositionPlanner'.static.ChooseMove(UnitState, CandidatePath, Score)
+            && TraceCandidateMove(UnitState, CandidatePath, Score)
+            && Score > BestScore && CanUseMove(UnitState, CandidatePath))
+        {
+            BestPath = CandidatePath;
+            BestScore = Score;
+            BestUnit = UnitState;
+            bMove = true;
+            bArea = false;
+            BestLocations.Length = 0;
+            bHavePlan = true;
+        }
+        CandidatePath.Length = 0;
         if (bContactSearch && !class'APX_MissionPlanner'.static.ShouldEvacuate(UnitState))
             bCandidateMove = ChooseContactSearchMove(UnitState, CandidatePath, Score);
         else

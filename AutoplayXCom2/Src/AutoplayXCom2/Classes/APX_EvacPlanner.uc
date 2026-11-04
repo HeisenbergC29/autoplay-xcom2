@@ -73,7 +73,7 @@ static function bool AreaIsSafe(XComGameState_Unit UnitState, TTile Center)
     {
         for (Tile.Y = Minimum.Y; Tile.Y <= Maximum.Y; ++Tile.Y)
         {
-            if (class'XComPath'.static.TileContainsHazard(UnitState, Tile))
+            if (class'APX_HazardKnowledge'.static.HasBlockingHazard(UnitState, Tile))
                 return false;
         }
     }
@@ -94,7 +94,7 @@ static function bool HasSafeBlueRoute(XComGameState_Unit UnitState,
         return false;
     for (Index = 1; Index < Path.Length; ++Index)
     {
-        if (class'XComPath'.static.TileContainsHazard(UnitState, Path[Index]))
+        if (class'APX_HazardKnowledge'.static.HasBlockingHazard(UnitState, Path[Index]))
             return false;
     }
     return true;

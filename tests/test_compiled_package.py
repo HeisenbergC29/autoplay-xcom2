@@ -131,6 +131,14 @@ class CompiledTableTests(unittest.TestCase):
         with self.assertRaisesRegex(CHECKS.InvalidPackage, "unexpected mod classes"):
             CHECKS.parse_ue3_package(data)
 
+    def test_accepts_v15_planning_helpers_without_external_packages(self):
+        helpers = {name: 'Object' for name in
+                   ('APX_HazardKnowledge', 'APX_RepositionPlanner', 'APX_ActionEconomy')}
+        data, _ = table_fixture(extra_classes=helpers)
+        report = CHECKS.parse_ue3_package(data)
+        self.assertTrue(set(helpers) <= set(report['own_classes']))
+        self.assertEqual(set(report['import_roots']), {'Core', 'Engine', 'XComGame'})
+
     def test_parses_handcrafted_stock_roots_and_nine_classes(self):
         data, _ = table_fixture()
         report = CHECKS.parse_ue3_package(data)

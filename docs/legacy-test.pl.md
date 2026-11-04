@@ -1,4 +1,4 @@
-# Próba Legacy i oceny przeciwników — v14
+# Próba Legacy, AP i trucizna — v15
 
 Pierwsza misja `ChallengeAbductionGasStation` została wcześniej ukończona
 zwycięstwem na v8: Dowódca, 14 tur, dwóch poległych.
@@ -6,20 +6,24 @@ zwycięstwem na v8: Dowódca, 14 tur, dwóch poległych.
 Raport v9 obejmuje ponowną próbę GasStation: porażkę w turze 7,
 ratunek snajpera oraz natywny wynik −10000 przy maksymalnej puli 46000.
 [Raport v9](report-2026-11-03-legacy-v9.pl.md).
-Najnowszy [raport v12](report-2026-11-04-v12-enemies.pl.md) dotyczy zwykłego
-`SabotageCC`: porażka w turze 8 przy trudności 3. Start oceny porównawczej
-od zera został potwierdzony. Raport ujawnił także luki zasięgu zwykłego melee
-i przygotowania zasadzki, które poprawia v13.
+Najnowszy [raport v14](report-2026-11-04-v14-poison.pl.md) obejmuje trzy
+przegrane próby. Ostatnie GasStation kończy się w turze 9 z natywnym
+odczytem −15100. Potwierdzono stabilizację, lecz raport nie zapisuje
+geometrii chmur trucizny ani nie dowodzi istnienia lepszej trasy do strzału.
 
-Do kolejnej próby **zbuduj i zainstaluj v14**.
-[Konfiguracje i scenariusze v14](config-knowledge-v14.pl.md) ·
-[Ocena przeciwników z v13](enemy-knowledge-v13.pl.md) ·
+Do kolejnej próby **zbuduj i zainstaluj v15**.
+[AP, ruch, trucizna i kryterium sukcesu](tactics-v15.pl.md) ·
+[Konfiguracje i ustalenia v14](config-knowledge-v14.pl.md) ·
 [Zasady licznika](score-display-v10.pl.md).
-Źródła SDK z `Development.rar` oraz nowe `Config.rar` i `Config sdk.rar`
-pozwalają sprawdzić statystyki, wyposażenie, parametry broni i reguły AI.
-Konfiguracja gry ma pierwszeństwo w katalogu, zgodne domyślne pliki SDK ją
-potwierdzają. Dane załadowane w grze pozostają rozstrzygające, a brakujące
-sekcje, m.in. części DLC, nadal są oznaczone.
+Dostarczone konfiguracje gry i DLC uzupełniają katalog; folder DLC w SDK
+nie jest potrzebny. Katalog obejmuje 196 sekcji statystyk, 177 zestawów
+wyposażenia i 684 odczytane parametry broni. Załadowane dane gry pozostają
+rozstrzygające. [Zakres katalogu DLC](dlc-config-knowledge.pl.md).
+
+**Próba jest zaliczona dopiero przy zwycięstwie i wyniku misji większym
+od zera.** Zero i wynik ujemny przy zwycięstwie oznaczają niezaliczenie.
+Brak pewnej końcowej punktacji daje ocenę niepotwierdzoną. Historyczne
+zwycięstwo v8 zachowuje oficjalny wynik, ale nie potwierdza tego nowego wymogu.
 
 ## Zbudowanie na zachowanym SDK
 
@@ -40,7 +44,7 @@ uruchom grę ponownie. Źródła możesz później usunąć; SDK zachowaj.
 ## Przebieg porównawczy
 
 1. Uruchom wybrany zapis Legacy Operations „Blast From the Past” na nowej
-   v14. Dla kontynuacji wcześniejszego zwycięstwa oczekiwany jest
+   v15. Dla kontynuacji wcześniejszego zwycięstwa oczekiwany jest
    `ChallengeAbductionCemetery`, etap 2; próba GasStation dotyczy
    `ChallengeAbductionGasStation`, etap 1. Zapisz etap i trudność.
 2. Po uzyskaniu sterowania, przed F8, sprawdź licznik nad przyciskiem.
@@ -48,7 +52,7 @@ uruchom grę ponownie. Źródła możesz później usunąć; SDK zachowaj.
    czcionki i przepuszczać kliknięcia mapy. Maksimum nie powinno maleć po
    zabiciach; w drugim etapie licznik nie może doliczać punktów poprzedniej misji.
 3. Włącz autoplay klawiszem F8. Automat startuje wyłączony po zmianie misji.
-   W `Launch.log` sprawdź `revision=mission-report-v14`; inna rewizja oznacza
+   W `Launch.log` sprawdź `revision=mission-report-v15`; inna rewizja oznacza
    uruchomienie starszego kodu. Pozwól misji dojść do wyniku; zapisz ewentualne
    ręczne działania, ich moment i powód.
 4. Po misji, przed ponownym uruchomieniem gry, otwórz PowerShell w folderze
@@ -77,6 +81,21 @@ Zbieranie raportu działa po usunięciu pobranych źródeł moda.
 
 ## Co obserwować w następnym etapie
 
+- Ruch przed atakiem: słaby podstawowy strzał przy 2 AP kontra bezpieczna
+  poprawa pozycji. Porównaj prognozę z rzeczywistym natywnym odczytem po ruchu.
+  Dobry strzał z małą poprawą, utrata wymaganych AP snajpera, wzrost ekspozycji
+  albo niebezpieczna trasa powinny zachować dotychczasowe ograniczenia.
+- Inne kombinacje AP: sprawdź wsparcie lub leczenie przed akcją kończącą turę,
+  darmowe zdolności wymagające posiadania AP oraz różne typy punktów.
+  Sama liczba punktów nie dowodzi możliwości dwóch dowolnych czynności;
+  każda następna akcja musi przejść świeżą kontrolę gry.
+- Chmury trucizny: własne pole w chmurze, droga przez kilka początkowych pól
+  chmury i czysty widoczny koniec. Wyjątek wyjścia nie może dopuścić ognia,
+  kwasu ani powrotu do chmury po czystym polu. Zatrucie może nadal zadawać
+  obrażenia po wyjściu; nie traktuj tego jako dowodu ponownego wejścia.
+- Ocena próby: zestaw oficjalny wynik gry z `attempt_verdict` analizatora.
+  Do zaliczenia wymagane są dodatnie punkty tej misji, bez przeniesionej
+  sumy drabinki. Niepełny odczyt i częściowe porównanie nie dają PASS.
 - Oznaczenie kapitana: po Mark na własnym żołnierzu sprawdź
   `marked_aim_bonus` i `target_status_weight` w `move_threat_preview`.
   Dla przekazanych ustawień oczekiwane są 10 i 1,1. Po wygaśnięciu oznaczenia
@@ -120,7 +139,8 @@ Zbieranie raportu działa po usunięciu pobranych źródeł moda.
   pozostają aktywne. `pair_offset_centers` pokazuje nowe propozycje dla pary,
   a `blast_blocker_*` oraz `blast_safe_radius_units` wyjaśniają ostatnią
   blokadę. Zero granatów samo nie wskazuje błędu punktacji.
-- Jakość wyniku: zwycięstwo, liczba tur, rany, zgony/wyłączenia, oficjalne
+- Jakość wyniku: zwycięstwo z dodatnim wynikiem misji, liczba tur, rany,
+  zgony/wyłączenia, oficjalne
   punkty, wynik skumulowany i zakres braków punktacji porównawczej.
   Zwycięstwo pierwszej misji potwierdza postęp,
   a dwóch poległych pozostaje kosztem do uwzględnienia w ocenie jakości.

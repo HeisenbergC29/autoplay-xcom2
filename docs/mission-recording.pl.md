@@ -19,6 +19,8 @@ automat i co rzeczywiście wydarzyło się po rozkazach.
 [V13: wiedza o przeciwnikach, broń i kontrataki](enemy-knowledge-v13.pl.md).
 [V14: konfiguracje jednostek i ryzyko oznaczonego żołnierza](config-knowledge-v14.pl.md).
 [Raport v12 i napotkane zdolności](report-2026-11-04-v12-enemies.pl.md).
+[Raport v14: ruch, trucizna i trzy porażki](report-2026-11-04-v14-poison.pl.md).
+[V15: AP, chmury i dodatni wynik misji](tactics-v15.pl.md).
 
 Wynik misji, punktację porównawczą i oficjalne punkty gry zapisujemy oddzielnie.
 `score` w rekordach `candidate`/`chosen` jest oceną heurystyki, a startowe
@@ -40,6 +42,14 @@ szczególnie po wczytaniu zapisu.
 
 ## Co się zmieniło w taktyce
 
+- V15 dodaje ograniczoną ocenę ruchu z zachowaniem podstawowego strzału.
+  Natywna widoczność z rozważanego pola nie oznacza pełnego podglądu przyszłego
+  trafienia; ograniczona projekcja jest jawnie heurystyczna. Po ruchu akcja
+  i szansa są sprawdzane ponownie.
+- Chmura trucizny jest sprawdzana osobno od statusu `Poisoned`. Bezpieczne
+  wyjście może przejść przez początkowe pola własnej chmury, lecz musi skończyć
+  na czystym widocznym polu, bez ognia/kwasu i ponownego wejścia po wyjściu.
+  Wyjście nie usuwa już nałożonej trucizny.
 - Overwatch konkuruje ze słabymi strzałami, zamiast zawsze otrzymywać minimalną
   ocenę. Obsługiwany jest też wariant `LongWatch` snajpera.
 - Hunker Down jest oceniany według ran i zagrożenia ostrzałem. Może być
@@ -77,9 +87,15 @@ zdolności automat nie uruchamia bez rozpoznania sposobu celowania i skutków.
 Rejestr pokazuje także dostępne polecenia bez planera, żeby kolejne zmiany
 wynikały z konkretnej misji.
 
+Od v15 analizator oddzielnie zapisuje `attempt_verdict`. Do zaliczenia próby
+potrzebne są zwycięstwo oraz pewny wynik bieżącej misji większy od zera.
+Wynik zero lub ujemny przy zwycięstwie oznacza nieudaną próbę; brak pewnego
+końcowego wyniku nie daje potwierdzenia. Oficjalne `outcome` gry pozostaje
+osobnym faktem. [Reguła i przykłady](tactics-v15.pl.md).
+
 ## Zbudowanie i pierwsza próba
 
-1. Pobierz aktualne źródła v14, rozpakuj je i zbuduj jak poprzednio na zachowanym
+1. Pobierz aktualne źródła v15, rozpakuj je i zbuduj jak poprzednio na zachowanym
    SDK WOTC. Bez `-BuildBase`, jeśli pakiety bazowe są już przygotowane.
 2. Zainstaluj nowy `dist\AutoplayXCom2.zip` i uruchom grę ponownie. Stara paczka
    z `release` nie zawiera rejestratora.
@@ -326,3 +342,37 @@ ze wspólnego ryzyka. Nie jest natywną szansą trafienia ani dodatkową karą p
 Katalog poza grą zawiera osobne `config_values` i `configuration_audit`;
 nie rozszerza to logu o niewidocznych przeciwników.
 [Źródła, zakres i ograniczenia v14](config-knowledge-v14.pl.md).
+
+
+Od `mission-report-v15` wpisy własnych jednostek dodają `poisoned`,
+`poison_cloud` i `poison_cloud_harmful`. Rozdzielają status żołnierza od
+publicznej chmury na jego polu; istniejący status nie jest odpornością.
+Podgląd ruchu dodaje `current_poison_cloud`, `destination_poison_cloud`
+i `needs_poison_escape`.
+
+Ruch z prognozą podstawowego strzału zapisuje `offensive_forecast`,
+`forecast_target`, `native_chance_now`, `projected_chance`,
+`projected_attack_value` i `forecast_model=bounded_geometry`.
+`native_chance_now` jest bieżącym odczytem gry, a `projected_chance`
+ograniczoną prognozą geometryczną. Dotychczasowe `best_attack_after_move_ap`
+nadal oznacza wyłącznie filtr kosztu AP, bez przewidywania nowej szansy.
+
+V15 `game_score` dodaje `mission_points_known`, `mission_points` oraz
+`mission_final`. Końcowy znacznik wymaga zatwierdzonego wyniku i nadrobionej
+historii. Wynik Legacy odejmuje bazę rzeczywistego startu etapu, zamiast
+utożsamiać całą sumę drabinki lub deltę od F8 z punktami jednej misji.
+Znacznik nie obiecuje przyszłych nagród po ekranie końca. Starszy lub
+niepełny odczyt HUD-u pozostaje informacją wstępną.
+
+`attempt_verdict` analizatora opisuje ocenę próby według
+`victory_and_positive_mission_score_v1`. Brak pewnego końcowego wyniku,
+niepełna ocena porównawcza albo konflikt danych nie potwierdzają zaliczenia.
+Wszystkie te dane są obserwacjami; nie zmieniają punktów ani zwycięzcy gry.
+
+Podglądy czynności przygotowawczych dodają `ap_combo_available`,
+`ap_combo_followup_ability_id`, `ap_combo_followup_target` oraz
+`ap_combo_retained_attack_value`. Model
+`ap_combo_model=current_legal_attack_after_stationary_preparation` opisuje
+atak obecnie legalny i mieszczący się w projektowanych pozostałych AP
+po Aid Protocol lub czynności medycznej. Nie kolejkuje tego ataku;
+po rzeczywistej akcji kontroler ponownie ocenia cały oddział.

@@ -36,7 +36,7 @@ class MeleePositionSafetyTests(unittest.TestCase):
         move = function_body(MOVEMENT.read_text(encoding='utf-8-sig'), 'ChooseMove')
         for guard in ('IsKnownCombatTile(', 'IsSupportedCombatDestination(',
                       'IsSupportedAdvanceDestination(', 'IsSupportedAdvanceStep(',
-                      'CanSquadSeeLocation(', 'TileContainsHazard('):
+                      'CanSquadSeeLocation(', 'HasBlockingHazard('):
             with self.subTest(guard=guard):
                 self.assertIn(guard, melee)
                 self.assertIn(guard, move)
@@ -48,7 +48,7 @@ class MeleePositionSafetyTests(unittest.TestCase):
         self.assertIn('IsKnownCombatTile(Path[Index])', melee)
         self.assertIn('SourceUnit.ControllingPlayer.ObjectID, Path[Index])', melee)
         self.assertIn('NearestSupportDistance(SourceUnit, Path[Index])', melee)
-        self.assertLess(melee.index('for (Index = 1;'), melee.index('TileContainsHazard('))
+        self.assertLess(melee.index('for (Index = 1;'), melee.index('HasBlockingHazard('))
         self.assertLess(melee.index('IsSupportedCombatDestination('), melee.index('BuildPathToTile('))
 
     def test_stationary_melee_and_existing_evacuation_support_exception_remain(self):

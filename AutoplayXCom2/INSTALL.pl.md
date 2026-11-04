@@ -35,7 +35,7 @@ strata 5000; każda kara jest naliczana najwyżej raz na jednostkę. Zabicia,
 jawne cele i ratunek cywilów zachowują reguły wspólnego profilu v2. Tylda
 oznacza ocenę częściową, a maksimum pozostaje nieznane.
 
-Bieżące `mission-report-v14` dodaje do katalogu dane z konfiguracji gry i SDK:
+Wersja `mission-report-v14` dodaje do katalogu dane z konfiguracji gry i SDK:
 statystyki według trudności, wyposażenie, parametry broni i odwołania do AI.
 Wspólna ocena ryzyka uwzględnia aktywne oznaczenie własnego żołnierza
 przez kapitana. W przekazanej konfiguracji Marked daje +10 celności przeciw
@@ -45,6 +45,19 @@ Pozostają mechaniki v13: rozróżnianie broni, priorytet znanych zdolności,
 ochrona przed kontrą melee, zasięg zombie i limit ekspozycji przy zasadzce.
 Brakujące sekcje konfiguracji pozostają jawne; katalog nie zastępuje danych
 załadowanych w bieżącej grze. Opis: `docs/config-knowledge-v14.pl.md`.
+
+Bieżące `mission-report-v15` dodaje kontrolę jawnych chmur trucizny,
+bezpieczne wyjście na czyste pole oraz ograniczony wariant ruchu przed
+podstawowym strzałem z zachowaniem AP. Ocenia też Aid Protocol lub leczenie
+przed zachowanym legalnym atakiem, według rzeczywistych typów i kosztów AP.
+Wyjście z chmury nie leczy już
+nałożonego zatrucia. Przyszłe trafienie jest szacowane ostrożnie; po ruchu
+legalność i rzeczywistą szansę ponownie sprawdza gra.
+
+Od tej serii prób sukces wymaga zwycięstwa oraz wyniku misji większego od
+zera. Zwycięstwo z wynikiem zero lub ujemnym nie zalicza próby, a niepełna
+punktacja nie potwierdza sukcesu. Oficjalny rezultat gry pozostaje osobno.
+Opis: `docs/tactics-v15.pl.md` i `docs/report-2026-11-04-v14-poison.pl.md`.
 
 Zbuduj i zainstaluj nową wersję; sama podmiana konfiguracji nie wystarczy.
 Instrukcja próby to `docs/legacy-test.pl.md`, a opis licznika to
@@ -167,7 +180,7 @@ Raport ZIP pojawi się w `<Dokumenty>\AutoplayXCom2-Reports`. Skrypt działa tak
 po usunięciu pobranego folderu źródeł. Załącz raport do zgłoszenia wraz z poziomem
 trudności, wynikiem misji i stratami. Szczegóły: `docs/mission-recording.pl.md`
 w repozytorium. To zapis diagnostyczny, nie film ani replay.
-W nowym raporcie wpis `revision=mission-report-v14` identyfikuje tę wersję.
+W nowym raporcie wpis `revision=mission-report-v15` identyfikuje tę wersję.
 Znaczniki `ambush_setup` pokazują przygotowania, a `grenade_scan` zawiera również
 liczby ocenionych okazji do granatu na pojedynczy cel i ostatni podgląd obrażeń.
 `area_target_preview` opisuje cele wybranego granatu; `move_threat_preview`
@@ -190,9 +203,10 @@ z ekranu podsumowania oraz wszelkie ręczne działania i restarty.
 - Wyłączenie moda: odznacz go w launcherze. Bieżące włączenie autoplaya nie jest zapisywane w kampanii.
 
 Wcześniejszą kompilację i zależności binarne sprawdzono. Raporty potwierdzają
-zwycięstwa v8 i działanie ratunku v9; najnowszy raport v12 z `SabotageCC`
+zwycięstwa v8 i działanie ratunku v9; wcześniejszy raport v12 z `SabotageCC`
 kończy się porażką. Potwierdza start punktacji porównawczej od zera.
-Zmiany oceny zagrożeń v14 wymagają nowej kompilacji i próby.
+Najnowszy raport v14 zawiera trzy porażki, w tym GasStation z natywnym
+odczytem −15100 w turze 9. Zmiany v15 wymagają nowej kompilacji i próby.
 Nie potwierdzono
 pełnej obsługi każdej skryptowanej misji DLC
 ani konkretnego najnowszego numeru builda Steam. Stan weryfikacji opisuje README.

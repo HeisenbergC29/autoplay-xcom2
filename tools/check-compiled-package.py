@@ -34,7 +34,8 @@ EXPECTED_CLASSES = {
     "X2DownloadableContentInfo_AutoplayXCom2": "X2DownloadableContentInfo",
 }
 OPTIONAL_CLASSES = {"APX_MissionRecorder": "Object", "APX_SquadPlanner": "Object",
-                    "APX_MissionScore": "Object", "APX_ComparisonScore": "Object", "APX_EnemyKnowledge": "Object"}
+                    "APX_MissionScore": "Object", "APX_ComparisonScore": "Object", "APX_EnemyKnowledge": "Object",
+                    "APX_HazardKnowledge": "Object", "APX_RepositionPlanner": "Object", "APX_ActionEconomy": "Object"}
 REQUIRED_FILES = {
     f"{ROOT}/AutoplayXCom2.XComMod",
     f"{ROOT}/INSTALL.pl.md",

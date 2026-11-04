@@ -396,7 +396,7 @@ function bool BuildSafeBluePrefix(XComGameState_Unit UnitState,
         // Leaving a hazardous starting tile is allowed; entering hazards is not.
         for (PathIndex = 1; PathIndex < CandidatePath.Length; ++PathIndex)
         {
-            if (class'XComPath'.static.TileContainsHazard(UnitState, CandidatePath[PathIndex])
+            if (class'APX_HazardKnowledge'.static.HasBlockingHazard(UnitState, CandidatePath[PathIndex])
                 || !class'APX_MissionPlanner'.static.IsSupportedAdvanceStep(StartSupport,
                     class'APX_MissionPlanner'.static.NearestSupportDistance(UnitState, CandidatePath[PathIndex])))
             {

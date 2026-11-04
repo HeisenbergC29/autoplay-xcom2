@@ -19,6 +19,15 @@ var private int LastHistoryIndex;
 var private bool bHasMaximum;
 var private bool bHasBaseline;
 var private APX_ComparisonScore ComparisonCounter;
+var private int LastNativePoints;
+var private bool bHasNativePoints;
+
+function bool ReadNativeMissionPoints(out int Points)
+{
+    GetText();
+    Points = LastNativePoints;
+    return bHasNativePoints;
+}
 
 function string UnavailableText()
 {
@@ -63,6 +72,8 @@ function ResetCache()
     LastHistoryIndex = -1;
     bHasMaximum = false;
     bHasBaseline = false;
+    bHasNativePoints = false;
+    LastNativePoints = 0;
 }
 
 function bool CacheMatches(XComGameStateHistory History, int StartIndex,
@@ -140,6 +151,8 @@ function string GetText()
     local array<ScoreTableEntry> ScoreTable;
     local int HistoryIndex, StartIndex, CurrentPoints, MaximumPoints, ComparisonPoints;
 
+    bHasNativePoints = false;
+    LastNativePoints = 0;
     History = `XCOMHISTORY;
     if (History == none)
     {
@@ -197,6 +210,8 @@ function string GetText()
         if (!bHasMaximum)
             MaximumPoints = Manager.GetMaxChallengeScore();
     }
+    LastNativePoints = CurrentPoints;
+    bHasNativePoints = true;
     if (!bHasMaximum)
     {
         if (MaximumPoints <= 0)

@@ -266,6 +266,7 @@ def analyze_logs(logs: list[tuple[str, str]]) -> dict:
     sessions = {}
     malformed = []
     seen = {}
+    conflicting_sessions = set()
     duplicate_count = 0
     record_count = 0
     for filename, content in logs:
@@ -284,6 +285,7 @@ def analyze_logs(logs: list[tuple[str, str]]) -> dict:
             if key in seen:
                 duplicate_count += 1
                 if seen[key] != record:
+                    conflicting_sessions.add(record['session'])
                     malformed.append({'file': filename, 'line': number,
                                       'reason': 'conflicting record with same session and sequence'})
                 continue
@@ -298,6 +300,8 @@ def analyze_logs(logs: list[tuple[str, str]]) -> dict:
         summary = summarize_session(name, records)
         summary['game_scoring'] = SCORING.score_session(
             records, SCORING.native_rules_for_session(records, native_profiles), comparison_profile)
+        summary['attempt_verdict'] = SCORING.assess_attempt(
+            records, summary['outcome'], summary['game_scoring'], name in conflicting_sessions)
         summaries.append(summary)
     return {
         'format_version': 1,
@@ -307,6 +311,7 @@ def analyze_logs(logs: list[tuple[str, str]]) -> dict:
         'malformed_records': malformed,
         'sessions': summaries,
         'native_scoring_profiles': native_profiles,
+        'attempt_criterion': SCORING.ATTEMPT_CRITERION,
         'limitations': [
             'Observed HP losses are changes between snapshots, not a complete damage ledger.',
             'Enemy snapshots contain only player-visible contacts; disappearance is not a confirmed kill.',
@@ -316,6 +321,7 @@ def analyze_logs(logs: list[tuple[str, str]]) -> dict:
             'Result hit enums include non-attack abilities; they are not a weapon accuracy percentage.',
             'Comparison points use one game-derived profile with explicit conventions; missing components prevent a final total.',
             'Native score snapshots are authoritative observations; initialization MaxScore is not earned score.',
+            'Attempt acceptance uses the recorded terminal mission contribution; later debrief awards are not reconstructed.',
         ],
     }
 
@@ -355,6 +361,12 @@ def human_summary(report: dict) -> str:
                          'no award components could be reconstructed, total unavailable.')
         if comparison['missing_components']:
             lines.append('  Comparison incomplete: ' + ', '.join(comparison['missing_components']))
+        verdict = session['attempt_verdict']
+        lines.append(f"  Attempt assessment (victory and mission score > 0): {verdict['status'].upper()}; "
+                     f"score={verdict['score']}, source={verdict['score_source']}, "
+                     f"score status={verdict['score_status']}. {verdict['explanation']}")
+        if verdict['score'] is None and verdict['observed_score'] is not None:
+            lines.append(f"  Provisional observed mission points={verdict['observed_score']}; not a final acceptance score.")
         for warning in session['warnings']:
             lines.append('  Warning: ' + warning)
     if report['malformed_records']:
