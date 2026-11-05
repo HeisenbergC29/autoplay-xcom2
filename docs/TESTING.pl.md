@@ -1,9 +1,63 @@
 # Testy odbiorcze
 
-Najnowszy wynik zgłoszony przez użytkownika: **PASS** — mod wydaje rozkazy;
-**FAIL** — przegrywa Gatecrasher na Legendzie i Dowódcy. Dawna paczka 0.1.0 alpha
-miała blokadę HUD-u. Bieżące zmiany taktyczne mają testy numerycznych heurystyk,
-ale ich kompilacja i próby w grze pozostają **NIEURUCHOMIONE**.
+Najnowszy [raport v15](report-2026-11-04-v15-stops.pl.md): `SabotageCC`,
+trudność 3, **FAIL** w turze 18, 80 przyjętych rozkazów i zero odrzuceń
+przez silnik. Częściowy wynik porównawczy −17500. Jedno przestawienie
+przed strzałem 47→68%: **POTWIERDZONE**; próby chmury trucizny i kombinacji
+AP: **NIEURUCHOMIONE**. Trzy zatrzymania przed rzutem granatu są osobnym
+błędem od odrzuconego rozkazu. Kompilacja Windows i próba poprawek v16:
+**NIEURUCHOMIONE**. [Zakres i scenariusze v16](tactics-v16.pl.md).
+
+Od bieżącej serii **PASS wymaga zwycięstwa oraz wyniku misji > 0**.
+Zwycięstwo przy zerze lub wyniku ujemnym daje FAIL próby; oficjalne zwycięstwo
+gry pozostaje zapisane. Brak pewnego końcowego wyniku daje **NIEPOTWIERDZONY**,
+bez zaliczenia na podstawie częściowego `~wynik/—`. Dawne opisy zwycięstw
+v8 zachowują znaczenie historycznego wyniku gry.
+
+V16: sprawdź odrzucenie nieaktualnego granatu bez wyłączenia autoplaya,
+wybór innej legalnej akcji, blokadę powtórzenia przy tej samej historii,
+ponowienie po zmianie stanu i limit trzech niepowodzeń danej zdolności
+w turze. Kontrola wybuchu, celów i sojuszników nadal musi działać.
+Przy kończeniu tury sprawdź żądanie zwracające `false`, ale zatwierdzające
+`SkipTurn`, opóźnione zatwierdzenie, zmianę gracza/tury, pauzę i rzeczywisty
+brak potwierdzenia. Żaden z tych przypadków nie może wielokrotnie wysłać
+tego samego końca tury.
+
+Zachowaj scenariusze V15: porównaj słaby podstawowy strzał przy dwóch AP z bezpiecznym ruchem
+poprawiającym celowanie, a dobry strzał z małą możliwą poprawą. Sprawdź
+niewystarczające AP po ruchu, dwupunktowy strzał snajpera, różne typy AP,
+wsparcie lub leczenie przed końcem tury i każdorazowe ponowne sprawdzenie
+legalności akcji. Prognoza z docelowego pola jest heurystyką; rzeczywistą
+szansę po ruchu odczytuje gra.
+
+Sprawdź wyjście z wielopolowej chmury trucizny na czyste widoczne pole,
+pozostający status po wyjściu, odporność, ogień i kwas na początku lub dalej
+na trasie, brak bezpiecznego wyjścia oraz zakaz ponownego wejścia po czystym
+polu. Nie wolno utożsamiać `Poisoned` z odpornością ani samym brakiem chmury.
+
+Zachowaj scenariusze v13/v14: broń i zdolności widocznego kontaktu, zombie,
+kontra Mutona, ekspozycja przy zasadzce i aktywne Marked. Dla konfiguracji
+Marked oczekiwane są `marked_aim_bonus=10` i `target_status_weight=1.1`,
+a po wygaśnięciu 0 i 1. Raport v14 nie sprawdził tego przypadku.
+
+Profil punktacji v2 pozostaje bez zmian: `~0/—` na początku zwykłej misji,
+pierwsza rana −1000, potwierdzona strata −5000. Wykrwawienie nie udaje śmierci,
+leczenie nie zwraca kary, a F8 nie zeruje oceny.
+
+Wcześniejszy materiał to [ponowna próba GasStation na v9](report-2026-11-03-legacy-v9.pl.md):
+Dowódca, **FAIL** w turze 7, wynik gry **−10000** przy maksymalnej puli 46000.
+Podejście i stabilizacja snajpera: **PASS**. Legalny pickup łupu: **NIEZAREJESTROWANY**.
+Ten sam raport zawiera zwycięstwo v8 w `SabotageCC` na trudności 3.
+Wcześniejsze zwycięstwo v8 w pierwszej misji Legacy pozostaje osobną próbą;
+Cemetery nadal nie ma udokumentowanej próby autoplaya.
+V10 działało w zwykłej niepunktowanej misji. Wyświetlanie liczb Legacy
+oraz poprawki ciągłości działania v16 nadal wymagają kompilacji Windows i próby w grze.
+[Instrukcja Legacy](legacy-test.pl.md) · [Licznik v12](score-display-v10.pl.md).
+
+Dotychczasowy wynik zgłoszony przez użytkownika: **PASS** — mod wydaje rozkazy;
+**PASS** — pierwsza misja Legacy na v8; **FAIL** — dotychczasowe próby
+Gatecrashera. Dawna paczka 0.1.0 alpha miała blokadę HUD-u. Wynik jednej misji
+nie potwierdza pełnej obsługi wszystkich etapów ani innych rodzajów misji.
 [Scenariusze taktyczne i kompilacja z zachowanym SDK](tactics-update.pl.md).
 
 Nowe próby powinny korzystać z wersji zawierającej [rejestr misji](mission-recording.pl.md).
@@ -45,6 +99,12 @@ Wyniki zapisuj osobno: PASS / FAIL / NIEURUCHOMIONY. Kompilacja nie potwierdza d
 
 ## UI
 
+- V12: nad przyciskiem widoczne `punkty/maksimum`, z wielkością czcionki
+  przycisku. Sprawdź odświeżanie przy OFF, po zwinięciu przycisku i po wczytaniu
+  zapisu ze środka misji. W kolejnym etapie Legacy wynik nie obejmuje wcześniejszych
+  misji, a maksimum nie maleje po zabiciach i stratach. Ujemny wynik ma zachować
+  minus. W v12 zwykła misja bez punktacji pokazuje `~wartość/—`; natywny
+  wynik bez maksimum daje `wartość/—`. Pole przepuszcza kliknięcia mapy.
 - W zwykłej turze XCOM z dostępnymi akcjami włącz autoplay. Nakładka tury i licznik celu misji (`UITurnOverlay`, `UISpecialMissionHUD`) nie mogą powodować stałej pauzy; automat powinien wydać legalny rozkaz.
 - Sprawdź rzeczywiste menu, dialog, sekwencję blokującą sterowanie i ręczne celowanie. Nowe rozkazy mają czekać; po zamknięciu menu lub anulowaniu celowania automat może wznowić pracę. Ekrany znajdujące się pod HUD-em nie powinny samodzielnie powodować pauzy.
 - Przy utrzymującej się blokadzie sprawdź status i wpisy `AutoplayXCom2` w `Launch.log`. Log powinien podawać przyczynę zmiany stanu i dane ekranu, bez powtarzania identycznego wpisu w każdej klatce.
@@ -55,6 +115,15 @@ Wyniki zapisuj osobno: PASS / FAIL / NIEURUCHOMIONY. Kompilacja nie potwierdza d
 
 ## Reguły walki
 
+- V9 — wykrwawienie: ratownik z rzeczywistym ładunkiem i AP powinien podejść
+  bezpieczną znaną trasą, zachować koszt stabilizacji i użyć jej dopiero przy
+  legalnym celu. Sprawdź brak ładunku, ostatnią turę wykrwawiania, niedostępną
+  trasę, przeszkodę przy pacjencie i zagrożonego rannego ratownika. Żołnierz
+  ustabilizowany nie powinien pozostawać celem ponownej stabilizacji.
+- V9 — łup: sprawdź darmową natywną akcję i automatyczny pickup po ruchu,
+  upływ terminu łupu, brak LOS, wsparcie i zagrożenia na całej trasie. Widoczny
+  przeciwnik, pamiętany niedawny kontakt, wykrwawienie w oddziale, ewakuacja,
+  gotowy cel albo aktywny licznik misji powinny blokować wycieczkę po łup.
 - Ranger, Specialist, Grenadier, Sharpshooter, Psi Operative, Reaper, Skirmisher, Templar, SPARK; brak amunicji, leczenie, wykrwawienie, melee, darmowe akcje i Lost headshot.
 - Weryfikacja każdej domyślnej nazwy umiejętności, ograniczeń ładunków, cooldownów, trafień, pancerza i osłon. Brak strzałów do ukrytych wrogów i VIP-a do schwytania.
 - Podpalenie/kwas na początku trasy i dalej na trasie: można wyjść z zagrożonego pola, ale nie przechodzić przez kolejne.
@@ -67,7 +136,10 @@ Wyniki zapisuj osobno: PASS / FAIL / NIEURUCHOMIONY. Kompilacja nie potwierdza d
 
 ## Cele i zakończenie misji
 
-Każdy wiersz wymaga pełnego przebiegu od włączenia do prawidłowego zakończenia, bez ręcznej akcji. Obecna wersja **nie ma potwierdzenia żadnego z nich**; szczególnie późniejsze skryptowane etapy wymagają implementacji i prób.
+Każdy wiersz wymaga pełnego przebiegu od włączenia do prawidłowego zakończenia.
+Potwierdzono pierwszą misję Legacy, przy jednym włączeniu i zatrzymaniu dopiero
+na końcu; log nie jest pełnym audytem każdego wejścia gracza. Cała drabinka
+i pozostałe kategorie nadal wymagają prób, szczególnie późniejsze etapy skryptowane.
 
 | Rodzaj | Wymagane sprawdzenie |
 | --- | --- |
@@ -83,6 +155,57 @@ Każdy wiersz wymaga pełnego przebiegu od włączenia do prawidłowego zakończ
 | Alien Nest / Lost Towers | Przejścia pięter/etapów, boss, interakcje i zakończenie |
 | Twierdza Wybranego | Portal, komora, sarkofag, boss i zakończenie |
 | Obrona Avengera / finał | Cele na obiektach, etapy skryptowane i faktyczny wynik |
+
+## Punktacja każdej symulacji
+
+Sprawdź `attempt_verdict` niezależnie od `outcome`: zwycięstwo i pewny
+wynik > 0 dają `pass`, zwycięstwo z wynikiem <= 0 lub porażka gry dają
+`fail`, a niepełne dane uniemożliwiają zaliczenie i dają `unknown`.
+Przypadki obejmują dodatni, zerowy i ujemny wynik, brak końca, niepełną
+historię, konflikt powtórzonych rekordów i przeniesione punkty Legacy.
+
+Uruchom aktualny analizator dla każdego raportu, także Gatecrashera i innych misji
+bez oficjalnych punktów. Sprawdź obecność `game_scoring.comparison` z profilem
+`wotc_legacy_observed_v2`, listą składowych i brakujących danych. Jest to wspólna
+miara porównawcza oparta na regułach gry; nie dodaje punktów do stanu misji.
+Wcześniej podane ręcznie wartości zostały zastąpione regułami odczytanymi z gry.
+V2 zaczyna od zera; baza +6000 na kwalifikowanego żołnierza w v1 została
+usunięta jako niepoparte założenie. Archiwalny v1 zachowujemy osobno.
+Nie porównuj sum obu profili bez przeliczenia.
+
+Przypadki analizy: pierwsza rana kontra ponowne obrażenia i leczenie, śmierć
+kontra wykrwawienie, potwierdzone fabularne wyłączenie, przeciwnik przejęty
+kontrolą umysłu, przeciwnik przywołany i z posiłków, opcjonalny cel, ratunek
+cywila, późne włączenie F8 i urwany log. Brak danych nie może dawać pozornie
+pełnego wyniku ani zaliczać wszystkich celów na podstawie zwycięstwa.
+
+### Oficjalny wynik Legacy
+
+Przy każdej misji zapisuj osobno: wynik, numer etapu, tury, zgony, wyłączenia
+i rany, oficjalny wynik punktowy misji oraz skumulowany, ewentualne restarty
+i ręczne działania. Medal zapisuj, gdy został faktycznie przyznany; SDK
+porównuje skumulowany wynik z progami po zakończeniu całej drabinki.
+
+Punkty zależą m.in. od celów, przeciwników, tur, obrażeń i przeżycia oddziału.
+Leczenie nie odtwarza utraconej premii za brak obrażeń. Fabularna jednostka
+pozostająca żywa po wyłączeniu może ponieść karę punktową jak za utratę.
+Nie należy odtwarzać wyniku tylko z końcowego HP i liczby zabitych.
+
+V15 dodaje `mission_points`, `mission_points_known` i `mission_final`.
+Do oceny próby potrzebny jest znany końcowy wkład bieżącej misji, po
+zatwierdzonym zakończeniu i nadrobieniu historii. Odczyt nie obiecuje nagród,
+które gra może zapisać później; porównaj go z ekranem podsumowania.
+
+V9 zapisuje odczyty `game_score.cumulative_score` tylko dla właściwego etapu.
+`recording_delta` obejmuje okres od pierwszego do ostatniego odczytu, nie
+gwarantuje punktów całej misji. Sprawdź przejście do kolejnego etapu: nie wolno
+przypisać jego wyniku poprzedniej misji. Końcowe premie po zamknięciu rejestracji
+mogą wymagać porównania z ekranem podsumowania.
+
+`score` w `APXREC` oznacza wewnętrzną ocenę rozkazu. `MaxScore` w tabelach
+`XCom_Challenge` oznacza początkową maksymalną pulę. Żadne z tych pól nie jest
+potwierdzeniem zdobytej punktacji. Przy braku oficjalnej liczby wpisuj
+**NIEZAREJESTROWANY**, bez wyliczania medalu z przybliżeń.
 
 ## Warunki awaryjne
 

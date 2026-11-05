@@ -1,6 +1,7 @@
 // One runtime-only actor per tactical HUD. Never serialized into a campaign.
 class APX_Controller extends Actor config(AutoplayXCom2)
-    dependson(X2GameRuleset, XComGameState, XComGameStateContext_Ability);
+    dependson(X2GameRuleset, XComGameState, XComGameStateContext_Ability,
+        XComGameStateContext_TacticalGameRule);
 
 var config name ToggleKey;
 var config float DecisionInterval;
@@ -46,6 +47,21 @@ struct VisitedPosition
     var TTile Tile;
 };
 
+struct RejectedAreaPlan
+{
+    var int UnitID;
+    var int AbilityID;
+    var int HistoryIndex;
+    var int Attempts;
+};
+
+var private array<RejectedAreaPlan> RejectedAreaPlans;
+var private XComGameStateHistory AreaRejectionHistory;
+var private int AreaRejectionPlayerID;
+var private int AreaRejectionTurn;
+var private int AreaRejectionLastHistory;
+var private bool bAreaRejectionSaturated;
+
 // Positions are copied only while the contact is visible. Never refresh a
 // lost contact from its live (hidden) unit state.
 struct RecentContact
@@ -62,6 +78,15 @@ var private int LastTurn;
 var private int ActionsThisTurn;
 var private int MeaningfulActionsThisTurn;
 var private bool bEndTurnRequested;
+var private bool bEndTurnPending;
+var private XComGameStateHistory EndTurnHistory;
+var private int EndTurnPlayerID;
+var private int EndTurnPlayerTurn;
+var private int EndTurnBattleID;
+var private int EndTurnStartStateIndex;
+var private int EndTurnRequestHistory;
+var private int EndTurnHistoryCursor;
+var private float EndTurnWaitSeconds;
 var private array<ActionUse> ActionUses;
 var private array<VisitedPosition> VisitedPositions;
 var private string Status;
@@ -80,6 +105,70 @@ var private array<RecentContact> RecentContacts;
 var private bool bContactHistoryInitialized;
 var private int ContactHistoryCursor;
 var private int AmbushPreparationActions;
+
+static function bool MayRetryAreaPlan(int CurrentHistory, int RejectedHistory, int Attempts)
+{
+    // A changed state permits reconsideration, with a strict per-ability bound.
+    return CurrentHistory > RejectedHistory && Attempts < 3;
+}
+
+function RefreshAreaRejectionScope(int PlayerID, int PlayerTurn)
+{
+    local int CurrentHistory;
+    CurrentHistory = `XCOMHISTORY.GetCurrentHistoryIndex();
+    if (AreaRejectionHistory != `XCOMHISTORY || AreaRejectionPlayerID != PlayerID
+        || AreaRejectionTurn != PlayerTurn || CurrentHistory < AreaRejectionLastHistory)
+    {
+        RejectedAreaPlans.Length = 0;
+        bAreaRejectionSaturated = false;
+        AreaRejectionHistory = `XCOMHISTORY;
+        AreaRejectionPlayerID = PlayerID;
+        AreaRejectionTurn = PlayerTurn;
+    }
+    AreaRejectionLastHistory = CurrentHistory;
+}
+
+function bool CanUseAreaPlan(XComGameState_Unit UnitState, AvailableAction Action)
+{
+    local int Index;
+    if (UnitState == none || `XCOMHISTORY == none || bAreaRejectionSaturated)
+        return false;
+    for (Index = 0; Index < RejectedAreaPlans.Length; ++Index)
+    {
+        if (RejectedAreaPlans[Index].UnitID == UnitState.ObjectID
+            && RejectedAreaPlans[Index].AbilityID == Action.AbilityObjectRef.ObjectID)
+            return MayRetryAreaPlan(`XCOMHISTORY.GetCurrentHistoryIndex(),
+                RejectedAreaPlans[Index].HistoryIndex, RejectedAreaPlans[Index].Attempts);
+    }
+    return true;
+}
+
+function RememberRejectedAreaPlan(XComGameState_Unit UnitState, AvailableAction Action)
+{
+    local RejectedAreaPlan Entry;
+    local int Index;
+    for (Index = 0; Index < RejectedAreaPlans.Length; ++Index)
+    {
+        if (RejectedAreaPlans[Index].UnitID == UnitState.ObjectID
+            && RejectedAreaPlans[Index].AbilityID == Action.AbilityObjectRef.ObjectID)
+        {
+            RejectedAreaPlans[Index].HistoryIndex = `XCOMHISTORY.GetCurrentHistoryIndex();
+            ++RejectedAreaPlans[Index].Attempts;
+            return;
+        }
+    }
+    // Extremely large/modded squads must still have a bounded rejection cache.
+    if (RejectedAreaPlans.Length >= 128)
+    {
+        bAreaRejectionSaturated = true;
+        return;
+    }
+    Entry.UnitID = UnitState.ObjectID;
+    Entry.AbilityID = Action.AbilityObjectRef.ObjectID;
+    Entry.HistoryIndex = `XCOMHISTORY.GetCurrentHistoryIndex();
+    Entry.Attempts = 1;
+    RejectedAreaPlans.AddItem(Entry);
+}
 
 static function bool IsContactFresh(int CurrentTurn, int SeenTurn, int MemoryTurns)
 {
@@ -293,6 +382,14 @@ function string GetStatusText()
     return Status @ "[" $ string(ToggleKey) $ "]";
 }
 
+// The passive HUD may run while autoplay is off. Forward only to an already
+// started recorder; observing text must never start recording or issue orders.
+function RecordDisplayedScore(string DisplayText)
+{
+    if (MissionRecorder != none)
+        MissionRecorder.RecordHUDScore(DisplayText);
+}
+
 function StopAutoplay(string Reason, optional bool bPreservePendingHack = false)
 {
     bEnabled = false;
@@ -479,6 +576,174 @@ function SetWaitStatus(name Reason, string DisplayStatus, optional string Detail
     `log("UI stack:" @ DescribeUIStack(PC), , 'AutoplayXCom2');
 }
 
+static function bool IsMatchingEndTurnEvidence(bool bSkipTurn,
+    int RequestedPlayerID, int ContextPlayerID)
+{
+    return bSkipTurn && RequestedPlayerID > 0 && ContextPlayerID == RequestedPlayerID;
+}
+
+static function bool HasEndTurnTransition(int RequestedPlayerID, int RequestedTurn,
+    int CurrentActionPlayerID, int CurrentOwnTurn)
+{
+    return RequestedPlayerID > 0 && RequestedTurn >= 0 && CurrentOwnTurn >= RequestedTurn
+        && ((CurrentActionPlayerID > 0 && CurrentActionPlayerID != RequestedPlayerID)
+            || CurrentOwnTurn > RequestedTurn);
+}
+
+static function bool EndTurnWaitExpired(float WaitSeconds)
+{
+    return WaitSeconds >= 5.0;
+}
+
+function ResetEndTurnRequest()
+{
+    bEndTurnPending = false;
+    bEndTurnRequested = false;
+    EndTurnHistory = none;
+    EndTurnPlayerID = 0;
+    EndTurnPlayerTurn = INDEX_NONE;
+    EndTurnBattleID = 0;
+    EndTurnStartStateIndex = INDEX_NONE;
+    EndTurnRequestHistory = INDEX_NONE;
+    EndTurnHistoryCursor = INDEX_NONE;
+    EndTurnWaitSeconds = 0.0;
+}
+
+function bool EndTurnTicketIsCurrent()
+{
+    local XComGameState_BattleData BattleData;
+
+    if (EndTurnHistory == none || EndTurnHistory != `XCOMHISTORY
+        || `TACTICALRULES == none
+        || EndTurnHistory.FindStartStateIndex() != EndTurnStartStateIndex
+        || EndTurnHistory.GetCurrentHistoryIndex() < EndTurnRequestHistory)
+        return false;
+    BattleData = XComGameState_BattleData(EndTurnHistory.GetSingleGameStateObjectForClass(
+        class'XComGameState_BattleData', true));
+    return BattleData != none && BattleData.ObjectID == EndTurnBattleID;
+}
+
+function ConfirmEndTurnRequest(string Evidence, int EvidenceHistory)
+{
+    bEndTurnPending = false;
+    bEndTurnRequested = true;
+    if (MissionRecorder != none)
+        MissionRecorder.Marker("end_turn_confirmed", "player=" $ EndTurnPlayerID
+            @ "turn=" $ EndTurnPlayerTurn @ "history=" $ EvidenceHistory
+            @ "evidence=" $ Evidence);
+}
+
+// The stock XGPlayer.EndTurn submits SkipTurn but always returns false. Only
+// committed history or an actual player/turn transition confirms our request.
+function bool PollEndTurnRequest(float DeltaTime)
+{
+    local XComGameState Frame;
+    local XComGameStateContext_TacticalGameRule RuleContext;
+    local XComGameState_Player PlayerState;
+    local StateObjectReference CurrentPlayer;
+    local int EndIndex, ScanEnd;
+
+    if (!bEndTurnPending)
+    {
+        if (bEndTurnRequested && !EndTurnTicketIsCurrent())
+        {
+            ResetEndTurnRequest();
+            StopWithStatus("End turn context changed after confirmation", StatusRejected);
+            return true;
+        }
+        return false;
+    }
+    if (!EndTurnTicketIsCurrent())
+    {
+        ResetEndTurnRequest();
+        StopWithStatus("End turn context changed before confirmation", StatusRejected);
+        return true;
+    }
+    EndIndex = EndTurnHistory.GetCurrentHistoryIndex();
+    ScanEnd = Min(EndIndex, EndTurnHistoryCursor + 256);
+    while (EndTurnHistoryCursor < ScanEnd)
+    {
+        ++EndTurnHistoryCursor;
+        Frame = EndTurnHistory.GetGameStateFromHistory(EndTurnHistoryCursor);
+        if (Frame == none)
+            continue;
+        RuleContext = XComGameStateContext_TacticalGameRule(Frame.GetContext());
+        if (RuleContext != none && IsMatchingEndTurnEvidence(
+            RuleContext.GameRuleType == eGameRule_SkipTurn,
+            EndTurnPlayerID, RuleContext.PlayerRef.ObjectID))
+        {
+            ConfirmEndTurnRequest("skip_turn_history", EndTurnHistoryCursor);
+            return true;
+        }
+    }
+    CurrentPlayer = `TACTICALRULES.GetCachedUnitActionPlayerRef();
+    PlayerState = XComGameState_Player(EndTurnHistory.GetGameStateForObjectID(EndTurnPlayerID));
+    if (PlayerState != none && HasEndTurnTransition(EndTurnPlayerID, EndTurnPlayerTurn,
+        CurrentPlayer.ObjectID, PlayerState.PlayerTurnCount))
+    {
+        ConfirmEndTurnRequest("player_or_turn_transition", EndIndex);
+        return true;
+    }
+    EndTurnWaitSeconds += FMax(0.0, DeltaTime);
+    if (EndTurnWaitExpired(EndTurnWaitSeconds) && EndTurnHistoryCursor >= EndIndex)
+    {
+        if (MissionRecorder != none)
+            MissionRecorder.Marker("end_turn_unconfirmed", "player=" $ EndTurnPlayerID
+                @ "turn=" $ EndTurnPlayerTurn @ "history=" $ EndIndex
+                @ "request_history=" $ EndTurnRequestHistory);
+        // Keep this ticket: a delayed confirmation may still arrive. Merely
+        // toggling OFF/ON must not submit another request for this same turn.
+        StopWithStatus("End turn was not confirmed by game history", StatusRejected);
+        return true;
+    }
+    SetWaitStatus('EndTurnPending', StatusWaiting, "player=" $ EndTurnPlayerID
+        @ "turn=" $ EndTurnPlayerTurn @ "history=" $ EndIndex);
+    return true;
+}
+
+function RequestEndTurn(XComTacticalController PC)
+{
+    local XComGameState_Player PlayerState;
+    local XComGameState_BattleData BattleData;
+    local StateObjectReference CurrentPlayer;
+    local bool bNativeReturn;
+
+    if (bEndTurnPending || bEndTurnRequested)
+        return;
+    if (PC == none || PC.m_XGPlayer == none || `TACTICALRULES == none || `XCOMHISTORY == none)
+        return;
+    CurrentPlayer = `TACTICALRULES.GetCachedUnitActionPlayerRef();
+    if (CurrentPlayer.ObjectID <= 0 || CurrentPlayer.ObjectID != PC.m_XGPlayer.ObjectID
+        || CurrentPlayer.ObjectID != `TACTICALRULES.GetLocalClientPlayerObjectID())
+    {
+        StopWithStatus("End turn belongs to a different player", StatusRejected);
+        return;
+    }
+    PlayerState = XComGameState_Player(`XCOMHISTORY.GetGameStateForObjectID(CurrentPlayer.ObjectID));
+    BattleData = XComGameState_BattleData(`XCOMHISTORY.GetSingleGameStateObjectForClass(
+        class'XComGameState_BattleData', true));
+    if (PlayerState == none || BattleData == none)
+    {
+        StopWithStatus("End turn player or battle state unavailable", StatusRejected);
+        return;
+    }
+    EndTurnHistory = `XCOMHISTORY;
+    EndTurnPlayerID = CurrentPlayer.ObjectID;
+    EndTurnPlayerTurn = PlayerState.PlayerTurnCount;
+    EndTurnBattleID = BattleData.ObjectID;
+    EndTurnStartStateIndex = EndTurnHistory.FindStartStateIndex();
+    EndTurnRequestHistory = EndTurnHistory.GetCurrentHistoryIndex();
+    EndTurnHistoryCursor = EndTurnRequestHistory;
+    EndTurnWaitSeconds = 0.0;
+    bEndTurnPending = true;
+    bNativeReturn = PC.PerformEndTurn(ePlayerEndTurnType_PlayerInput);
+    if (MissionRecorder != none)
+        MissionRecorder.Marker("end_turn_requested", "player=" $ EndTurnPlayerID
+            @ "turn=" $ EndTurnPlayerTurn @ "history=" $ EndTurnRequestHistory
+            @ "native_return=" $ string(bNativeReturn));
+    PollEndTurnRequest(0.0);
+}
+
 simulated event Tick(float DeltaTime)
 {
     local XComTacticalController PC;
@@ -541,6 +806,11 @@ simulated event Tick(float DeltaTime)
         SetWaitStatus('GamePaused', StatusGamePaused);
         return;
     }
+
+    // Confirm a pending submission even while the HUD hides for the turn
+    // transition. Never send a duplicate request while it is being observed.
+    if (PollEndTurnRequest(DeltaTime))
+        return;
 
     // A hack issued by us owns a blocking screen and visualization. Handle it
     // before the idle check; never dismiss unrelated dialogs or player hacks.
@@ -681,7 +951,7 @@ function MakeDecision(XComTacticalController PC)
     local array<TTile> CandidatePath, BestPath, AmbushPath;
     local array<vector> CandidateLocations, BestLocations;
     local vector CandidateAim, BestAim;
-    local int TargetIndex, BestTargetIndex, ChosenTargetID, AmbushTargetIndex;
+    local int TargetIndex, BestTargetIndex, ChosenTargetID, AmbushTargetIndex, RescuePatientID;
     local float Score, BestScore, AmbushScore;
     local bool bMove, bArea, bHavePlan, bSuccess, bCanExplore, bCombatThreats;
     local bool bVisibleThreats, bContactSearch, bCandidateMove, bGrenadeCandidate;
@@ -691,6 +961,7 @@ function MakeDecision(XComTacticalController PC)
     if (PlayerState == none || PC.m_XGPlayer == none
         || PC.m_XGPlayer.ObjectID != PlayerRef.ObjectID)
         return;
+    RefreshAreaRejectionScope(PlayerRef.ObjectID, PlayerState.PlayerTurnCount);
     if (PlayerState.PlayerTurnCount != LastTurn)
     {
         LastTurn = PlayerState.PlayerTurnCount;
@@ -698,10 +969,14 @@ function MakeDecision(XComTacticalController PC)
         MeaningfulActionsThisTurn = 0;
         ActionUses.Length = 0;
         VisitedPositions.Length = 0;
-        bEndTurnRequested = false;
+        // Toggle may reset LastTurn midway through the same pending/confirmed
+        // turn. Keep that ticket so OFF/ON cannot submit SkipTurn twice.
+        if (!EndTurnTicketIsCurrent() || EndTurnPlayerID != PlayerRef.ObjectID
+            || EndTurnPlayerTurn != PlayerState.PlayerTurnCount)
+            ResetEndTurnRequest();
         AmbushPreparationActions = 0;
     }
-    if (bEndTurnRequested)
+    if (bEndTurnPending || bEndTurnRequested)
         return;
     if (ActionsThisTurn >= Max(1, MaxActionsPerTurn))
     {
@@ -760,6 +1035,19 @@ function MakeDecision(XComTacticalController PC)
             BestLocations.Length = 0;
             bHavePlan = true;
         }
+        if (class'APX_MissionPlanner'.static.ChooseLootInteraction(UnitState, Candidate, TargetIndex, Score)
+            && TraceCandidateAction(UnitState, "loot", Candidate, TargetIndex, Score)
+            && Score > BestScore && CanUseAction(UnitState, Candidate, TargetIndex))
+        {
+            BestAction = Candidate;
+            BestTargetIndex = TargetIndex;
+            BestScore = Score;
+            BestUnit = UnitState;
+            bMove = false;
+            bArea = false;
+            BestLocations.Length = 0;
+            bHavePlan = true;
+        }
         CandidateLocations.Length = 0;
         if (AutoPlaceEvac && class'APX_EvacPlanner'.static.ChoosePlacement(
             UnitState, Candidate, CandidateLocations, Score)
@@ -789,7 +1077,7 @@ function MakeDecision(XComTacticalController PC)
                 MissionRecorder.Marker("grenade_scan", "unit=" $ UnitState.ObjectID
                     @ AreaPlanner.GetDiagnosticSummary());
         }
-        if (bGrenadeCandidate
+        if (bGrenadeCandidate && CanUseAreaPlan(UnitState, Candidate)
             && TraceCandidateAction(UnitState, "grenade", Candidate, TargetIndex, Score)
             && Score > BestScore && CanUseAction(UnitState, Candidate, TargetIndex))
         {
@@ -801,6 +1089,32 @@ function MakeDecision(XComTacticalController PC)
             BestAim = CandidateAim;
             bMove = false;
             bArea = true;
+            bHavePlan = true;
+        }
+        CandidatePath.Length = 0;
+        if (class'APX_MissionPlanner'.static.ChoosePoisonEscape(UnitState, CandidatePath, Score)
+            && TraceCandidateMove(UnitState, CandidatePath, Score)
+            && Score > BestScore && CanUseMove(UnitState, CandidatePath))
+        {
+            BestPath = CandidatePath;
+            BestScore = Score;
+            BestUnit = UnitState;
+            bMove = true;
+            bArea = false;
+            BestLocations.Length = 0;
+            bHavePlan = true;
+        }
+        CandidatePath.Length = 0;
+        if (class'APX_RepositionPlanner'.static.ChooseMove(UnitState, CandidatePath, Score)
+            && TraceCandidateMove(UnitState, CandidatePath, Score)
+            && Score > BestScore && CanUseMove(UnitState, CandidatePath))
+        {
+            BestPath = CandidatePath;
+            BestScore = Score;
+            BestUnit = UnitState;
+            bMove = true;
+            bArea = false;
+            BestLocations.Length = 0;
             bHavePlan = true;
         }
         CandidatePath.Length = 0;
@@ -819,6 +1133,38 @@ function MakeDecision(XComTacticalController PC)
             bArea = false;
             BestLocations.Length = 0;
             bHavePlan = true;
+        }
+        CandidatePath.Length = 0;
+        if (class'APX_MissionPlanner'.static.ChooseRescueMove(UnitState, CandidatePath, Score, RescuePatientID)
+            && TraceCandidateMove(UnitState, CandidatePath, Score)
+            && Score > BestScore && CanUseMove(UnitState, CandidatePath))
+        {
+            BestPath = CandidatePath;
+            BestScore = Score;
+            BestUnit = UnitState;
+            bMove = true;
+            bArea = false;
+            BestLocations.Length = 0;
+            bHavePlan = true;
+            if (MissionRecorder != none)
+                MissionRecorder.Marker("rescue_candidate", "unit=" $ UnitState.ObjectID
+                    @ "patient=" $ RescuePatientID @ "score=" $ Score);
+        }
+        CandidatePath.Length = 0;
+        if (!bCombatThreats
+            && class'APX_MissionPlanner'.static.ChooseLootMove(UnitState, CandidatePath, Score)
+            && TraceCandidateMove(UnitState, CandidatePath, Score)
+            && Score > BestScore && CanUseMove(UnitState, CandidatePath))
+        {
+            BestPath = CandidatePath;
+            BestScore = Score;
+            BestUnit = UnitState;
+            bMove = true;
+            bArea = false;
+            BestLocations.Length = 0;
+            bHavePlan = true;
+            if (MissionRecorder != none)
+                MissionRecorder.Marker("loot_candidate", "unit=" $ UnitState.ObjectID @ "score=" $ Score);
         }
     }
 
@@ -904,11 +1250,7 @@ function MakeDecision(XComTacticalController PC)
     {
         if (AutoEndTurn)
         {
-            bEndTurnRequested = PC.PerformEndTurn(ePlayerEndTurnType_PlayerInput);
-            if (MissionRecorder != none)
-                MissionRecorder.Marker("end_turn", "accepted=" $ string(bEndTurnRequested));
-            if (!bEndTurnRequested)
-                StopWithStatus("Engine rejected end turn", StatusRejected);
+            RequestEndTurn(PC);
         }
         else
             StopWithStatus("Turn complete; automatic end turn is disabled", StatusNoPlan);
@@ -951,7 +1293,14 @@ function MakeDecision(XComTacticalController PC)
         if (bArea && !AreaPlanner.PrepareForActivation(
             BestUnit, BestAction, BestAim, BestLocations))
         {
-            StopWithStatus("Grenade landing or affected objects changed", StatusRejected);
+            RememberRejectedAreaPlan(BestUnit, BestAction);
+            if (MissionRecorder != none)
+                MissionRecorder.Marker("area_revalidation_rejected", "unit=" $ BestUnit.ObjectID
+                    @ "ability_id=" $ BestAction.AbilityObjectRef.ObjectID
+                    @ "history=" $ `XCOMHISTORY.GetCurrentHistoryIndex()
+                    @ AreaPlanner.GetPreparationDiagnostic());
+            `log("Grenade preview rejected; replanning:" @ AreaPlanner.GetPreparationDiagnostic(), , 'AutoplayXCom2');
+            UntilDecision = FMax(0.25, DecisionInterval);
             return;
         }
         // Cache ownership before submitting; the action may create a hack UI.

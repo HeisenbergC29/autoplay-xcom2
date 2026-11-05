@@ -102,6 +102,23 @@ class MissionRecorderContracts(unittest.TestCase):
                       'preview_min_damage', 'preview_max_damage', 'explosive_falloff'):
             self.assertIn('|'+field+'=', area)
 
+    def test_move_trace_explains_loss_of_attack_eligibility_after_blue_move(self):
+        move = function_body(SOURCE, 'MoveFields')
+        self.assertIn('GetMoveAttackOptions(UnitState, VisibleEnemies,', move)
+        for field in ('best_attack_now', 'best_attack_after_move_ap', 'potential_attack_loss'):
+            self.assertIn('|' + field + '=', move)
+        self.assertIn('FMax(0.0, BestAttackNow - BestAttackAfterMove)', move)
+
+    def test_source_links_and_recognized_melee_envelope_are_visible_in_diagnostics(self):
+        action = function_body(SOURCE, 'ActionFields')
+        preview = function_body(SOURCE, 'RecordMoveThreatPreviews')
+        self.assertIn('GetKnownSourceBenefits(UnitState, TargetUnit,', action)
+        for field in ('known_released_allies', 'known_linked_enemies'):
+            self.assertIn('|' + field + '=', action)
+        self.assertIn('GetMeleeThreatReach(Enemy)', preview)
+        self.assertIn('|melee_threat_reach=', preview)
+        self.assertLess(preview.index('IsVisibleHostile('), preview.index('GetMeleeThreatReach('))
+
     def test_grenade_preview_redacts_unknown_targets_before_reading_health(self):
         area = function_body(SOURCE, 'RecordAreaTargetPreviews')
         own = area.index('bOwnTarget = IsOwnUnitAt(TargetRef.ObjectID, CurrentHistory);')
@@ -144,6 +161,13 @@ class MissionRecorderContracts(unittest.TestCase):
         self.assertNotIn('.TargetCover', preview)
         self.assertNotIn('_native_cover=', preview)
         self.assertIn('bDestinationLOS && DestinationVisibility.bVisibleFromDefault', preview)
+        # Per-contact values must come from the planner, so a future report
+        # can distinguish ranged cover changes from melee distance changes.
+        self.assertIn('ThreatRiskAtTile(UnitState, Enemy, CurrentTile, MeleeReach, Weight)', preview)
+        self.assertIn('ThreatRiskAtTile(UnitState, Enemy, DestinationTile, MeleeReach, Weight)', preview)
+        for field in ('enemy_template', 'melee_only', 'current_distance',
+                      'destination_distance', 'current_threat_risk', 'destination_threat_risk'):
+            self.assertIn('|' + field + '=', preview)
 
     def test_unknown_outcome_is_not_a_loss_and_observation_survives_user_stop(self):
         finish = function_body(SOURCE, 'Finish')

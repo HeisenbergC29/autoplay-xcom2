@@ -1,12 +1,27 @@
 # Autoplay XCOM 2 — War of the Chosen
 
+[Start pomocnika i komunikacja zespołu — issue #1](https://github.com/HeisenbergC29/autoplay-xcom2/issues/1) ·
+[Organizacja zespołu i import prac pomocnika](docs/TEAM.pl.md) ·
+[Stan przekazania projektu](docs/PROJECT-STATE.pl.md) ·
+[Instrukcje agentów](AGENTS.md) · [Wnoszenie zmian i testy](CONTRIBUTING.md)
+
 Mod w UnrealScript automatyzujący działania oddziału w misji. Docelowy profil użytkownika: **aktualne XCOM 2 Collection ze Steam na Windows, uruchamiane jako War of the Chosen, z oficjalnymi dodatkami i wyłącznie tym modem**. Nie wymaga Highlandera ani innych modów. Nie jest przeznaczony dla podstawowego XCOM 2 bez WOTC ani trybu wieloosobowego. [Szczegóły zgodności](docs/COMPATIBILITY.pl.md).
+
+**Cel projektu:** jeden autoplay wszystkich misji taktycznych tego profilu,
+obejmujący walkę, cele, interakcje, kolejne etapy i ewakuację, prowadzący do
+legalnego zwycięstwa. Próby Gatecrashera i Legacy rozwijają wspólny mod.
+Wyjątek dla scenariusza obiektywnie niemożliwego wymaga uzasadnienia stanem
+misji; sama porażka aktualnego planera tego nie dowodzi. Postęp mierzymy
+pełnymi misjami ukończonymi w grze. Od obecnej serii prób sukces wymaga
+zwycięstwa i wyniku misji większego od zera; zero lub wynik ujemny nie zalicza
+próby. Niepełna punktacja pozostawia ocenę niepotwierdzoną. Obecna alpha
+nie realizuje jeszcze całości.
 
 **Nowa wersja do prób Gatecrashera:** poprawiona ocena overwatch i przyczajenia,
 Aid Protocol, ostrożniejsze flankowanie oraz rejestr decyzji i wyników misji.
 [Jak zebrać raport po grze](docs/mission-recording.pl.md). Skrypt zbierający raport
 jest instalowany z modem i działa po usunięciu pobranych źródeł. Zwycięstwo na
-Commanderze lub Legendzie nie jest jeszcze potwierdzone.
+Commanderze lub Legendzie w Gatecrasherze nie jest jeszcze potwierdzone.
 
 [Pierwszy raport z gry](docs/report-2026-11-02.pl.md) ujawnił utratę pamięci
 kontaktu, zbyt wysoką ocenę ruchu na dach i brak propozycji granatów. Bieżący
@@ -29,11 +44,96 @@ Poprawione źródła wymagają ponownego zbudowania na Windows.
 
 [Czwarty raport](docs/report-2026-11-02-fourth.pl.md) potwierdza działanie zasadzki,
 trafiony overwatch i użycie granatu w `mission-report-v4`; misja nadal została
-przegrana. Bieżące źródła `mission-report-v5` dopuszczają bezpieczne dogonienie
+przegrana. Źródła `mission-report-v5` dopuszczają bezpieczne dogonienie
 strzelca otwierającego przed ujawnieniem i zapisują podgląd konkretnych celów
 wybranego granatu oraz geometrycznej osłony i LOS przy ruchu.
 
-**Stan: alpha; według najnowszego zgłoszenia użytkownika mod już wydaje rozkazy, ale przegrywa Gatecrasher na Legendzie i Dowódcy.** Bieżące źródła poprawiają ocenę osłon, zagrożeń i flankowania, dobieranie celów, granaty oraz wsparcie oddziału. Ta zmiana **wymaga nowej kompilacji i prób w grze**; nie ma jeszcze potwierdzenia poprawy wyniku misji. [Opis taktyki, kompilacja z zachowanym SDK i lista prób](docs/tactics-update.pl.md). Nie potwierdzono pełnego ukończenia wszystkich misji DLC.
+[Próba pierwszej misji Legacy Operations „Blast From the Past”](docs/report-2026-11-02-legacy.pl.md)
+na `mission-report-v5` także zakończyła się porażką. Źródła
+`mission-report-v6` ujednolicają ocenę zagrożeń za przeszkodami przy ruchu,
+Aid Protocol, hunker i overwatch oraz zapisują wkład ryzyka każdego widocznego
+przeciwnika. [Instrukcja kolejnej próby Legacy](docs/legacy-test.pl.md).
+V6 zostało uruchomione w kolejnej próbie opisanej poniżej.
+
+[Próba v6](docs/report-2026-11-02-legacy-v6.pl.md) potwierdziła działanie nowej
+ochrony i diagnostyki, ale skończyła się porażką. `mission-report-v7`
+stosuje ograniczenia wsparcia i trasy również do szarż wręcz oraz uwzględnia
+utratę możliwości ataku po ruchu, np. strzału karabinem wymagającego dwóch AP.
+[Próba v7](docs/report-2026-11-02-legacy-v7.pl.md) zakończyła się porażką
+w turze 3, potwierdzając działanie kontroli szarży i kosztu AP.
+
+Wersja **`mission-report-v8`** dodała wycenę znanych skutków zabicia źródła
+kontroli umysłu lub psi zombie, alternatywne punkty granatu dla pary wrogów
+oraz bardziej zachowawczą ocenę odwrotu w zasięgu wręcz.
+[Opis zmian i ocena sugestii taktycznych](docs/tactics-v8.pl.md).
+[Raport v8](docs/report-2026-11-03-legacy-v8-win.pl.md) potwierdza pierwsze
+zwycięstwo: `ChallengeAbductionGasStation`, pierwsza misja „Blast From the Past”,
+Dowódca, 14 tur i dwóch poległych. W logu widać załadowanie kolejnej misji
+`ChallengeAbductionCemetery`; jej próba autoplaya pozostaje do wykonania.
+Wersja **`mission-report-v9`** dodała podejście do wykrwawiającego się
+żołnierza przed stabilizacją, legalne zbieranie łupu i rejestrację punktacji.
+[Raport v9](docs/report-2026-11-03-legacy-v9.pl.md) potwierdza
+podejście i stabilizację snajpera, ale ponowna próba GasStation skończyła się
+porażką w turze 7, z wynikiem gry −10000. Ten sam raport zawiera też wygraną
+v8 w `SabotageCC` na trudności 3.
+[Zakres zmian, reguły punktacji i ograniczenia v9](docs/tactics-v9.pl.md).
+
+Wersja **`mission-report-v14`** uzupełnia katalog o przekazane konfiguracje
+gry, porównane z SDK: statystyki bazowe i warianty trudności, wyposażenie, parametry broni
+oraz odwołania do AI. Zachowuje pochodzenie i jawne braki danych.
+We wspólnej ocenie ryzyka uwzględnia też aktywne oznaczenie własnego żołnierza
+przez kapitana. W dostarczonej konfiguracji Marked daje przeciwnikom +10 do
+celności przeciw temu żołnierzowi; planer stosuje ograniczoną wagę ryzyka.
+[Konfiguracje, ustalenia i scenariusze v14](docs/config-knowledge-v14.pl.md).
+[Mechaniki broni, melee i zasadzki z v13](docs/enemy-knowledge-v13.pl.md)
+pozostają w użyciu. Dane załadowane przez grę mają pierwszeństwo przed
+statycznym katalogiem; katalog nie zastępuje natywnego podglądu ataku.
+
+[Uzupełnienie katalogu o konfiguracje DLC](docs/dlc-config-knowledge.pl.md)
+korzysta z pięciu nowych archiwów pochodzących wyłącznie z gry: `DLC_1`,
+`DLC_2`, `DLC_3`, `TLE` i `XCom_DLC_Day0`. Nie wymaga folderu DLC w SDK.
+Dodaje między innymi parametry władców obcych, SPARK-a i jednostek Legacy.
+Tamta aktualizacja dotyczyła narzędzi analizy i katalogu; nie zmieniała kodu
+działającego w grze ani rewizji `mission-report-v14`.
+
+[Raport v14](docs/report-2026-11-04-v14-poison.pl.md) zawiera trzy
+próby zakończone porażką. Ostatnie GasStation kończy się w turze 9 z natywnym
+odczytem −15100; stabilizacja jest potwierdzona. Raport wskazuje na potrzebę
+rozróżnienia chmur trucizny od trwającego zatrucia i oceny ruchu przed słabym
+strzałem przy zachowaniu AP.
+
+Wersja **`mission-report-v15`** dodaje jawną kontrolę chmur i bezpieczne
+wyjście z nich oraz ograniczoną ocenę niebieskiego ruchu z zachowaniem
+podstawowego strzału. Ocenia też wsparcie lub leczenie z zachowaniem
+aktualnie legalnego ataku, respektując rzeczywiste typy i koszty AP.
+Projekcja poprawy trafienia jest heurystyką; po ruchu
+atak ponownie sprawdza gra. Analizator osobno ocenia zwycięstwo z dodatnim
+wynikiem misji. [Zakres v15 i kolejna próba](docs/tactics-v15.pl.md).
+[Najnowszy raport v15](docs/report-2026-11-04-v15-stops.pl.md) potwierdza
+jedno przestawienie poprawiające strzał z 47% do rzeczywistych 68%, lecz
+`SabotageCC` na trudności 3 kończy się porażką w turze 18. W tej próbie
+wystąpiły trzy zatrzymania przy ponownej kontroli tego samego granatu.
+
+Bieżące **`mission-report-v16`** odrzuca taki kandydat i ponownie wybiera
+akcję, zachowując kontrolę bezpieczeństwa wybuchu. Blokuje powtarzanie
+odrzuconej zdolności w niezmienionej historii i ogranicza ponowne próby.
+Poprawia też potwierdzanie końca tury: stockowe API może zwrócić `false`
+pomimo wysłania żądania. [Przyczyny zatrzymań i zakres v16](docs/tactics-v16.pl.md).
+V16 wymaga nowej kompilacji na Windows i sprawdzenia w grze.
+
+Ocena porównawcza nadal używa profilu `wotc_legacy_observed_v2` od `~0/—`;
+reguły punktacji nie zostały zmienione przez v15 ani v16. Zmieniło się kryterium
+zaliczenia próby, nie sposób naliczania punktów.
+[Zasady licznika](docs/score-display-v10.pl.md).
+
+**Stan: alpha; historyczne v8 wygrało pierwszą misję Legacy na Dowódcy.**
+To oficjalne zwycięstwo nie potwierdza jeszcze nowego wymogu dodatniego wyniku.
+Pełna drabinka Legacy, wygrana Gatecrashera i wszystkie pozostałe rodzaje misji
+nadal wymagają osobnych prób. Każdy nowy raport otrzymuje porównawczą punktację
+według wspólnego profilu reguł odczytanych z gry, także poza Legacy. Oficjalny
+wynik Legacy pozostaje osobnym odczytem; niepełne dane dają częściową ocenę.
+Pole `score` w rejestrze decyzji nadal jest oceną planera.
+[Instrukcja następnej próby](docs/legacy-test.pl.md).
 
 Dotychczasowy plik `.u` i konfigurację zweryfikowano; importy binarne prowadzą tylko do standardowych pakietów `Core`, `Engine`, `XComGame`. Repozytorium nie zawiera SDK ani plików gry. Szczegóły: [wyniki kontroli SDK i kompilacji](docs/SDK-AUDIT.pl.md).
 
@@ -60,9 +160,10 @@ Przycisk używa oryginalnych elementów UI, bez zastępowania plików Flash. Po�
 | Walka wręcz | Wybrane ataki Rangera, Templariusza i Renegata, z trasą wyznaczaną przez silnik |
 | Niszczenie celów | Zwykłe strzały do widocznych obiektów oznaczonych przez grę jako wrogie cele misji, np. przekaźniki; bez atakowania neutralnej scenerii |
 | Granaty | Frag/Alien rzucane i wystrzeliwane, natywna trajektoria i promień wybuchu, ocena grup widocznych wrogów; kontrola sojuszników, cywilów, celów misji i niebezpiecznych obiektów na trasie i w wybuchu |
-| Wsparcie | Leczenie i stabilizacja, przeładowanie, overwatch, hunker down |
+| Wsparcie | Leczenie i stabilizacja; podejście ratownika do wykrwawiającego się sojusznika z zachowaniem AP na stabilizację; przeładowanie, overwatch, hunker down |
+| Łup | Natywne darmowe `Loot`; krótkie bezpieczne podejście do widocznego łupu po walce, gdy nie koliduje z ratunkiem, ewakuacją, celem ani aktywnym terminem |
 | Zasadzka | Przed atakiem z ukrycia: zachowanie strzelca otwierającego, krótkie ruchy pozostałych do linii ostrzału i legalny overwatch; ograniczony budżet przygotowań |
-| Ruch | Legalne niebieskie ruchy, trasowanie A*, ocena osłon względem widocznych wrogów, kontrola ognia/kwasu i innych zagrożeń na trasie |
+| Ruch | Legalne niebieskie ruchy, trasowanie A*, kierunkowe osłony i wsparcie; ograniczony wariant ruchu przed podstawowym strzałem; kontrola zagrożeń i wyjście z jawnej chmury trucizny |
 | Eksploracja | Gdy brak znanych celów i przydatnych akcji: ograniczone obliczeniowo próbkowanie niezbadanych pól mapy i podział celów między żołnierzy; bez odczytu pozycji ukrytych wrogów |
 | Cele | Rozpoznawane interakcje: ładunki, skrzynie, dowody, obiekty misji, oznaczanie zasobów, wybrane obiekty fabularne, przenoszenie VIP-a i podejście do cywilów |
 | Hakowanie | Wyłącznie ekran wywołany własnym rozkazem; wybór dostępnej nagrody z najwyższą pokazywaną szansą, zwykły rzut gry, zamknięcie po zakończeniu animacji |
@@ -124,8 +225,10 @@ potwierdziła **0 błędów i 8 ostrzeżeń SDK**, zarówno dla bazy, jak i moda
 Dotyczy to wcześniejszej kompilacji. Przechowywany ZIP ma kompletną konfigurację,
 27 nazw zdolności, obie lokalizacje i prawidłowy `.u`; jego 464 importy prowadzą
 tylko do `Core`, `Engine` i `XComGame`, a dziewięć klas moda jest obecnych.
-Najnowsze zgłoszenie użytkownika potwierdza wydawanie rozkazów po poprawce HUD-u.
-**Nowe zmiany taktyki nie mają jeszcze kompilacji ani wyniku w grze.** Obecne
+Najnowszy raport potwierdza uruchomienie v15, rzeczywistą poprawę jednego
+strzału po ruchu i trzy zatrzymania przed rzutem granatu; misja zakończyła
+się porażką. Poprawki zatrzymań v16 wymagają nowej kompilacji i sprawdzenia
+w grze. Obecne
 środowisko Linux pozwala uruchamiać testy Python i PowerShell, ale nie zawiera
 SDK Windows ani działającej gry.
 

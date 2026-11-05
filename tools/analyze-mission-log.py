@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import argparse
 from collections import Counter
+import importlib.util
 import json
 from pathlib import Path, PurePosixPath
 import re
@@ -22,6 +23,10 @@ MAX_RECORDS = 100000
 KEY = re.compile(r'^[a-z_][a-z0-9_]*$')
 INTEGER = re.compile(r'^-?\d+$')
 DECIMAL = re.compile(r'^-?\d+(?:\.\d+)?$')
+SCORING_SPEC = importlib.util.spec_from_file_location(
+    'apx_game_scoring', Path(__file__).with_name('game_scoring.py'))
+SCORING = importlib.util.module_from_spec(SCORING_SPEC)
+SCORING_SPEC.loader.exec_module(SCORING)
 
 
 def decode_log(data: bytes) -> str:
@@ -261,6 +266,7 @@ def analyze_logs(logs: list[tuple[str, str]]) -> dict:
     sessions = {}
     malformed = []
     seen = {}
+    conflicting_sessions = set()
     duplicate_count = 0
     record_count = 0
     for filename, content in logs:
@@ -279,6 +285,7 @@ def analyze_logs(logs: list[tuple[str, str]]) -> dict:
             if key in seen:
                 duplicate_count += 1
                 if seen[key] != record:
+                    conflicting_sessions.add(record['session'])
                     malformed.append({'file': filename, 'line': number,
                                       'reason': 'conflicting record with same session and sequence'})
                 continue
@@ -286,13 +293,25 @@ def analyze_logs(logs: list[tuple[str, str]]) -> dict:
             record['log_file'] = filename
             record['log_line'] = number
             sessions.setdefault(record['session'], []).append(record)
+    native_profiles = SCORING.native_rule_snapshots(logs)
+    comparison_profile = SCORING.load_profile()
+    summaries = []
+    for name, records in sorted(sessions.items()):
+        summary = summarize_session(name, records)
+        summary['game_scoring'] = SCORING.score_session(
+            records, SCORING.native_rules_for_session(records, native_profiles), comparison_profile)
+        summary['attempt_verdict'] = SCORING.assess_attempt(
+            records, summary['outcome'], summary['game_scoring'], name in conflicting_sessions)
+        summaries.append(summary)
     return {
         'format_version': 1,
         'input_logs': [name for name, _ in logs],
         'record_count': len(seen),
         'duplicate_records': duplicate_count,
         'malformed_records': malformed,
-        'sessions': [summarize_session(name, records) for name, records in sorted(sessions.items())],
+        'sessions': summaries,
+        'native_scoring_profiles': native_profiles,
+        'attempt_criterion': SCORING.ATTEMPT_CRITERION,
         'limitations': [
             'Observed HP losses are changes between snapshots, not a complete damage ledger.',
             'Enemy snapshots contain only player-visible contacts; disappearance is not a confirmed kill.',
@@ -300,6 +319,9 @@ def analyze_logs(logs: list[tuple[str, str]]) -> dict:
             'Missing logs or end markers do not establish a mission result.',
             'Accepted actions are autoplay submissions; result records include friendly reactions and incoming actions too.',
             'Result hit enums include non-attack abilities; they are not a weapon accuracy percentage.',
+            'Comparison points use one game-derived profile with explicit conventions; missing components prevent a final total.',
+            'Native score snapshots are authoritative observations; initialization MaxScore is not earned score.',
+            'Attempt acceptance uses the recorded terminal mission contribution; later debrief awards are not reconstructed.',
         ],
     }
 
@@ -323,6 +345,28 @@ def human_summary(report: dict) -> str:
             totals = session['grenade_diagnostics']['totals']
             lines.append('  Grenade scan checks: ' + ', '.join(
                 f'{key}={totals.get(key, 0)}' for key in ('supported', 'evaluated', 'accepted', 'range', 'trajectory', 'blast')))
+        scoring = session['game_scoring']
+        official = scoring['official']
+        if official['status'] == 'observed_native':
+            lines.append(f"  Observed native cumulative score={official['cumulative_score']}, "
+                         f"recording delta={official['recording_delta']}; later end awards may be pending.")
+        else:
+            lines.append('  Native earned score was not recorded.')
+        comparison = scoring['comparison']
+        if comparison['observed_subtotal'] is not None:
+            lines.append(f"  Comparison ({comparison['profile_id']}): {comparison['status']}, "
+                         f"observed subtotal={comparison['observed_subtotal']}, total={comparison['total']}")
+        else:
+            lines.append(f"  Comparison ({comparison['profile_id']}): {comparison['status']}; "
+                         'no award components could be reconstructed, total unavailable.')
+        if comparison['missing_components']:
+            lines.append('  Comparison incomplete: ' + ', '.join(comparison['missing_components']))
+        verdict = session['attempt_verdict']
+        lines.append(f"  Attempt assessment (victory and mission score > 0): {verdict['status'].upper()}; "
+                     f"score={verdict['score']}, source={verdict['score_source']}, "
+                     f"score status={verdict['score_status']}. {verdict['explanation']}")
+        if verdict['score'] is None and verdict['observed_score'] is not None:
+            lines.append(f"  Provisional observed mission points={verdict['observed_score']}; not a final acceptance score.")
         for warning in session['warnings']:
             lines.append('  Warning: ' + warning)
     if report['malformed_records']:

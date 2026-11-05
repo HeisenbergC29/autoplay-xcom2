@@ -117,7 +117,7 @@ class AmbushPolicyTests(unittest.TestCase):
         self.assertIn('foreach VisibleObjects(DetectorRef)', path)
         self.assertNotIn('IterateByClassType', path)
         self.assertIn('GetPathPointsFromPath(', path)
-        self.assertIn('TileContainsHazard(', path)
+        self.assertIn('HasBlockingHazard(', path)
 
     def test_coordinator_runs_before_dispatch_and_never_transfers_to_enemy_ai(self):
         source = (CLASSES / 'APX_Controller.uc').read_text()

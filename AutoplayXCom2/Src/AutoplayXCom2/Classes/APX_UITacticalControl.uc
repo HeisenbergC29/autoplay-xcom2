@@ -2,6 +2,7 @@ class APX_UITacticalControl extends UIPanel config(AutoplayXCom2);
 
 // Coordinates use the stock UI's scaled coordinate space. The origin is the
 // centre of the right edge; users of other HUD mods can move this entire panel.
+// OffsetY remains the button's position; the score occupies the row above it.
 var config float OffsetX;
 var config float OffsetY;
 var config float ButtonWidth;
@@ -14,8 +15,10 @@ var localized string DisableLabel;
 var localized string IndicatorTooltip;
 
 var APX_Controller Controller;
+var APX_MissionScore ScoreCounter;
 var UIButton ToggleButton;
 var UIBGBox Indicator;
+var UIText ScoreLabel;
 var UIText StatusLabel;
 var bool bExpanded;
 var bool bPendingCollapse;
@@ -26,23 +29,31 @@ simulated function APX_UITacticalControl InitAutoplayControl()
 {
     InitPanel('APX_AutoplayControl');
     SetAnchor(class'UIUtilities'.const.ANCHOR_MIDDLE_RIGHT);
-    SetPosition(OffsetX, OffsetY);
-    SetSize(ButtonWidth + 20.0, 54.0);
+    SetPosition(OffsetX, OffsetY - 31.0);
+    SetSize(ButtonWidth + 20.0, 85.0);
     DisableNavigation();
 
     Controller = class'APX_Controller'.static.GetOrCreate();
+    ScoreCounter = new(self) class'APX_MissionScore';
 
     ToggleButton = Spawn(class'UIButton', self);
     ToggleButton.InitButton('APX_ToggleButton', EnableLabel, OnToggleClicked);
     ToggleButton.SetResizeToText(false);
     ToggleButton.SetSize(ButtonWidth, 30.0);
-    ToggleButton.SetPosition(0.0, 0.0);
+    ToggleButton.SetPosition(0.0, 31.0);
     ToggleButton.DisableNavigation();
     ToggleButton.ProcessMouseEvents(OnControlMouseEvent);
 
+    ScoreLabel = Spawn(class'UIText', self);
+    ScoreLabel.InitText('APX_Score');
+    ScoreLabel.SetPosition(0.0, 0.0);
+    ScoreLabel.SetSize(ButtonWidth, 30.0);
+    ScoreLabel.DisableMouseHit();
+    ScoreLabel.DisableNavigation();
+
     StatusLabel = Spawn(class'UIText', self);
     StatusLabel.InitText('APX_Status');
-    StatusLabel.SetPosition(0.0, 31.0);
+    StatusLabel.SetPosition(0.0, 62.0);
     StatusLabel.SetSize(ButtonWidth, 22.0);
     StatusLabel.DisableMouseHit();
     StatusLabel.DisableNavigation();
@@ -50,7 +61,7 @@ simulated function APX_UITacticalControl InitAutoplayControl()
     // Keep a small hit target alive when collapsed. A zero-alpha or hidden
     // Flash control can stop receiving mouse events, hence a visible sliver.
     Indicator = Spawn(class'UIBGBox', self);
-    Indicator.InitBG('APX_Indicator', ButtonWidth + 8.0, 0.0, 8.0, 30.0);
+    Indicator.InitBG('APX_Indicator', ButtonWidth + 8.0, 31.0, 8.0, 30.0);
     Indicator.DisableNavigation();
     Indicator.ProcessMouseEvents(OnControlMouseEvent);
     Indicator.SetTooltipText(IndicatorTooltip);
@@ -131,6 +142,19 @@ simulated function Collapse()
 
 simulated function UpdateStatus()
 {
+    local string ScoreText;
+
+    // UIText caches its HTML, so unchanged score/font values do not issue
+    // another Flash update. Keep this independent of autoplay's run state.
+    if (ScoreCounter != none && ScoreLabel != none && ToggleButton != none)
+    {
+        ScoreText = ScoreCounter.GetText();
+        ScoreLabel.SetCenteredText(class'UIUtilities_Text'.static.GetColoredText(
+            ScoreText, eUIState_Normal, ToggleButton.FontSize));
+        if (Controller != none)
+            Controller.RecordDisplayedScore(ScoreText);
+    }
+
     if (Controller == none)
         return;
 
@@ -153,7 +177,7 @@ simulated function UpdateStatus()
 
 simulated event Tick(float DeltaTime)
 {
-    if (bIsRemoved || Controller == none)
+    if (bIsRemoved)
         return;
 
     if (bPendingCollapse)
@@ -180,6 +204,9 @@ simulated event Removed()
         Controller.Destroy();
         Controller = none;
     }
+    if (ScoreCounter != none)
+        ScoreCounter.Cleanup();
+    ScoreCounter = none;
     super.Removed();
 }
 

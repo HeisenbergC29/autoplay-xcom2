@@ -113,10 +113,31 @@ class CompiledTableTests(unittest.TestCase):
         self.assertIn("APX_SquadPlanner", report["own_classes"])
         self.assertEqual(set(report["import_roots"]), {'Core', 'Engine', 'XComGame'})
 
+    def test_accepts_native_score_display_helper(self):
+        data, _ = table_fixture(extra_classes={"APX_MissionScore": "Object", "APX_ComparisonScore": "Object"})
+        report = CHECKS.parse_ue3_package(data)
+        self.assertIn("APX_MissionScore", report["own_classes"])
+        self.assertIn("APX_ComparisonScore", report["own_classes"])
+        self.assertEqual(set(report["import_roots"]), {'Core', 'Engine', 'XComGame'})
+
+    def test_accepts_enemy_knowledge_helper_without_external_packages(self):
+        data, _ = table_fixture(extra_classes={"APX_EnemyKnowledge": "Object"})
+        report = CHECKS.parse_ue3_package(data)
+        self.assertIn("APX_EnemyKnowledge", report["own_classes"])
+        self.assertEqual(set(report["import_roots"]), {'Core', 'Engine', 'XComGame'})
+
     def test_rejects_unknown_additional_class(self):
         data, _ = table_fixture(extra_classes={"UnrelatedClass": "Object"})
         with self.assertRaisesRegex(CHECKS.InvalidPackage, "unexpected mod classes"):
             CHECKS.parse_ue3_package(data)
+
+    def test_accepts_v15_planning_helpers_without_external_packages(self):
+        helpers = {name: 'Object' for name in
+                   ('APX_HazardKnowledge', 'APX_RepositionPlanner', 'APX_ActionEconomy')}
+        data, _ = table_fixture(extra_classes=helpers)
+        report = CHECKS.parse_ue3_package(data)
+        self.assertTrue(set(helpers) <= set(report['own_classes']))
+        self.assertEqual(set(report['import_roots']), {'Core', 'Engine', 'XComGame'})
 
     def test_parses_handcrafted_stock_roots_and_nine_classes(self):
         data, _ = table_fixture()

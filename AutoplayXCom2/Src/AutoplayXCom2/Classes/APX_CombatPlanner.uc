@@ -25,7 +25,8 @@ static function bool ChooseAction(XComGameState_Unit UnitState,
     local array<StateObjectReference> VisibleEnemies;
     local name AbilityName;
     local int Index, SelfIndex;
-    local float CandidateScore, MeleePenalty;
+    local float CandidateScore, MeleePenalty, RetainedAttackValue;
+    local int FollowUpAbilityID, FollowUpTargetID;
     local bool bFound;
 
     Action = EmptyAction;
@@ -103,6 +104,9 @@ static function bool ChooseAction(XComGameState_Unit UnitState,
                     Candidate.AvailableTargets[Index].PrimaryTarget.ObjectID));
                 CandidateScore = ScoreMedical(UnitState, TargetUnit,
                     default.StabilizeAbilities.Find(AbilityName) != INDEX_NONE);
+                CandidateScore = class'APX_ActionEconomy'.static.ScoreWithRetainedAttack(
+                    UnitState, Ability, CandidateScore, VisibleEnemies,
+                    FollowUpAbilityID, FollowUpTargetID, RetainedAttackValue);
                 if (CandidateScore > Score)
                 {
                     Action = Candidate;
@@ -119,6 +123,9 @@ static function bool ChooseAction(XComGameState_Unit UnitState,
                 TargetUnit = XComGameState_Unit(History.GetGameStateForObjectID(
                     Candidate.AvailableTargets[Index].PrimaryTarget.ObjectID));
                 CandidateScore = ScoreSupport(UnitState, TargetUnit, AbilityName, VisibleEnemies);
+                CandidateScore = class'APX_ActionEconomy'.static.ScoreWithRetainedAttack(
+                    UnitState, Ability, CandidateScore, VisibleEnemies,
+                    FollowUpAbilityID, FollowUpTargetID, RetainedAttackValue);
                 if (CandidateScore > Score)
                 {
                     Action = Candidate;
@@ -152,9 +159,19 @@ static function bool HasRequiredMeleePath(XComGameState_Unit SourceUnit,
 {
     local array<TTile> Destinations, Path;
     local XGUnit UnitVisualizer;
+    local X2AbilityToHitCalc_StandardAim MeleeCalc;
     local int Index;
+    local float StartSupport;
+    local bool bRequireSupport;
 
     RiskPenalty = 0.0;
+    // The native counterattack conversion can also defeat a guaranteed melee
+    // preview. Check the visible capability before stationary/path shortcuts;
+    // never inspect the enemy's private once-per-turn counter value.
+    MeleeCalc = X2AbilityToHitCalc_StandardAim(AbilityTemplate.AbilityToHitCalc);
+    if (MeleeCalc != none && MeleeCalc.bMeleeAttack
+        && class'APX_EnemyKnowledge'.static.HasMeleeCounter(TargetUnit))
+        return false;
     if (AbilityTemplate.TargetingMethod == none || !AbilityTemplate.TargetingMethod.default.ProvidesPath)
         return true;
     if (AbilityTemplate.AbilityTargetStyle == none
@@ -171,6 +188,17 @@ static function bool HasRequiredMeleePath(XComGameState_Unit SourceUnit,
     if (Destinations[0] == SourceUnit.TileLocation)
         return true;
 
+    // A moving attack must obey the same formation and visible-terrain
+    // limits as a normal combat move, even when the target is a likely kill.
+    bRequireSupport = !class'APX_MissionPlanner'.static.ShouldEvacuate(SourceUnit);
+    StartSupport = class'APX_MissionPlanner'.static.NearestSupportDistance(
+        SourceUnit, SourceUnit.TileLocation);
+    if (!class'APX_MissionPlanner'.static.IsKnownCombatTile(Destinations[0])
+        || !class'APX_MissionPlanner'.static.IsSupportedCombatDestination(SourceUnit, Destinations[0])
+        || (bRequireSupport && !class'APX_MissionPlanner'.static.IsSupportedAdvanceDestination(
+            StartSupport, class'APX_MissionPlanner'.static.NearestSupportDistance(SourceUnit, Destinations[0]))))
+        return false;
+
     // This is the same destination/path selection used by ActivateAbility_Internal
     // when an AI activates a moving-melee ability without a supplied path.
     if (!UnitVisualizer.m_kReachableTilesCache.BuildPathToTile(Destinations[0], Path)
@@ -178,7 +206,12 @@ static function bool HasRequiredMeleePath(XComGameState_Unit SourceUnit,
         return false;
     for (Index = 1; Index < Path.Length; ++Index)
     {
-        if (class'XComPath'.static.TileContainsHazard(SourceUnit, Path[Index]))
+        if (class'APX_HazardKnowledge'.static.HasBlockingHazard(SourceUnit, Path[Index])
+            || !class'APX_MissionPlanner'.static.IsKnownCombatTile(Path[Index])
+            || !class'X2TacticalVisibilityHelpers'.static.CanSquadSeeLocation(
+                SourceUnit.ControllingPlayer.ObjectID, Path[Index])
+            || (bRequireSupport && !class'APX_MissionPlanner'.static.IsSupportedAdvanceStep(
+                StartSupport, class'APX_MissionPlanner'.static.NearestSupportDistance(SourceUnit, Path[Index]))))
             return false;
     }
     // Melee spends its own AP and can strand the attacker beside other aliens.
@@ -301,14 +334,112 @@ static function float BurstKillChance(float MinDamage, float MaxDamage,
     return EstimatedKillChance(MinDamage, MaxDamage, Health, 100.0) * AllHit;
 }
 
+// This is the same historical ownership lookup used by the stock mind-control
+// removal effect. Read only ownership of a currently visible affected unit,
+// never its old position or other hidden contacts.
+static function bool WasControlledByPlayerBeforeEffect(XComGameState_Unit UnitState,
+    XComGameState_Effect EffectState, int PlayerID)
+{
+    local XComGameState_Effect OriginalEffect;
+    local XComGameState OriginalState;
+    local XComGameState_Unit PreviousUnit;
+
+    if (UnitState == none || EffectState == none || PlayerID <= 0)
+        return false;
+    OriginalEffect = XComGameState_Effect(`XCOMHISTORY.GetOriginalGameStateRevision(EffectState.ObjectID));
+    if (OriginalEffect == none)
+        return false;
+    OriginalState = OriginalEffect.GetParentGameState();
+    if (OriginalState == none || OriginalState.HistoryIndex <= 0)
+        return false;
+    PreviousUnit = XComGameState_Unit(`XCOMHISTORY.GetGameStateForObjectID(
+        UnitState.ObjectID,, OriginalState.HistoryIndex - 1));
+    return PreviousUnit != none && PreviousUnit.ControllingPlayer.ObjectID == PlayerID;
+}
+
+// Count actual active links on visible contacts, rather than valuing an enemy
+// merely because its character template can create zombies or mind control.
+// A death-linked zombie is not also counted as a rescued ally if both effects
+// exist on it. No source effect is removed here; the game resolves every result.
+static function GetKnownSourceBenefits(XComGameState_Unit SourceUnit,
+    XComGameState_Unit Enemy, out int ReleasedAllies, out int LinkedEnemies)
+{
+    local array<StateObjectReference> VisibleEnemies;
+    local array<int> CountedTargets;
+    local StateObjectReference TargetRef, EffectRef, KillLinkedRef;
+    local XComGameState_Unit LinkedUnit;
+    local XComGameState_Effect EffectState;
+    local X2Effect_Persistent EffectTemplate;
+    local bool bCanEndZombie, bReleased, bLinked;
+    local int Index, PlayerID;
+
+    ReleasedAllies = 0;
+    LinkedEnemies = 0;
+    if (SourceUnit == none || Enemy == none)
+        return;
+    PlayerID = SourceUnit.ControllingPlayer.ObjectID;
+    class'X2TacticalVisibilityHelpers'.static.GetAllVisibleEnemiesForPlayer(PlayerID, VisibleEnemies);
+    if (!IsVisibleHostile(SourceUnit, Enemy, VisibleEnemies))
+        return;
+    KillLinkedRef = Enemy.FindAbility('KillSiredZombies');
+    bCanEndZombie = KillLinkedRef.ObjectID > 0;
+    for (Index = 0; Index < Min(64, VisibleEnemies.Length); ++Index)
+    {
+        TargetRef = VisibleEnemies[Index];
+        if (TargetRef.ObjectID == Enemy.ObjectID || CountedTargets.Find(TargetRef.ObjectID) != INDEX_NONE)
+            continue;
+        LinkedUnit = XComGameState_Unit(`XCOMHISTORY.GetGameStateForObjectID(TargetRef.ObjectID));
+        if (LinkedUnit == none || !LinkedUnit.IsAlive() || LinkedUnit.IsIncapacitated()
+            || LinkedUnit.bRemovedFromPlay || LinkedUnit.GetMyTemplate().bIsCosmetic
+            || !SourceUnit.IsEnemyUnit(LinkedUnit))
+            continue;
+        bReleased = false;
+        bLinked = false;
+        foreach LinkedUnit.AffectedByEffects(EffectRef)
+        {
+            EffectState = XComGameState_Effect(`XCOMHISTORY.GetGameStateForObjectID(EffectRef.ObjectID));
+            if (EffectState == none || EffectState.bRemoved
+                || EffectState.ApplyEffectParameters.SourceStateObjectRef.ObjectID != Enemy.ObjectID
+                || EffectState.ApplyEffectParameters.TargetStateObjectRef.ObjectID != LinkedUnit.ObjectID)
+                continue;
+            EffectTemplate = EffectState.GetX2Effect();
+            if (EffectTemplate == none)
+                continue;
+            if (bCanEndZombie && EffectTemplate.EffectName == class'X2Ability_Sectoid'.default.SireZombieLinkName)
+                bLinked = true;
+            if (X2Effect_MindControl(EffectTemplate) != none && EffectTemplate.bRemoveWhenSourceDies
+                && LinkedUnit.IsMindControlled()
+                && WasControlledByPlayerBeforeEffect(LinkedUnit, EffectState, PlayerID))
+                bReleased = true;
+        }
+        if (bLinked)
+            ++LinkedEnemies;
+        else if (bReleased)
+            ++ReleasedAllies;
+        if (bLinked || bReleased)
+            CountedTargets.AddItem(TargetRef.ObjectID);
+    }
+}
+
+// A source kill can remove further enemies or restore a controlled squadmate.
+// This bounded benefit is conditional on the actual attack's kill estimate;
+// restoration does not promise immediate AP: the stock effect clears the old
+// budget, then grants a fresh one only when the restored owner is on turn.
+static function float ScoreSourceBenefits(float KillChance, int ReleasedAllies, int LinkedEnemies)
+{
+    return FClamp(KillChance, 0.0, 1.0)
+        * FMin(90.0, float(Max(0, ReleasedAllies)) * 45.0 + float(Max(0, LinkedEnemies)) * 25.0);
+}
+
 static function float ScoreAttack(XComGameState_Ability Ability,
     AvailableTarget Target, XComGameState_Unit TargetUnit)
 {
     local ShotBreakdown Breakdown;
     local WeaponDamageValue MinDamage, MaxDamage;
     local X2AbilityMultiTarget_BurstFire BurstFire;
-    local int HitChance, AllowsShield, Shots;
-    local float Armor, Health, MinHPDamage, MaxHPDamage, Threat, Result;
+    local XComGameState_Unit SourceUnit;
+    local int HitChance, AllowsShield, Shots, ReleasedAllies, LinkedEnemies;
+    local float Armor, Health, MinHPDamage, MaxHPDamage, Threat, Result, KillChance;
 
     if (Ability.GetMyTemplate().AbilityToHitCalc == none)
         return -10000.0;
@@ -332,15 +463,24 @@ static function float ScoreAttack(XComGameState_Ability Ability,
     // Remove dangerous weapons first when kill probabilities are comparable.
     // Do not reserve a target optimistically: the controller recomputes after
     // every actual result, so a missed kill naturally leaves a follow-up shot.
-    Threat = FClamp(TargetUnit.GetCurrentStat(eStat_Offense) / 65.0, 0.75, 1.35);
-    if (TargetUnit.GetTeam() == eTeam_TheLost)
-        Threat = 0.6;
+    Threat = class'APX_EnemyKnowledge'.static.TargetThreat(TargetUnit);
     Result = ScoreDamage(MinHPDamage, MaxHPDamage, Health, HitChance, Threat,
         1.0 - TargetUnit.GetCurrentStat(eStat_HP) / FMax(1.0, TargetUnit.GetMaxStat(eStat_HP)));
+    KillChance = EstimatedKillChance(MinHPDamage, MaxHPDamage, Health, HitChance);
     if (Shots > 1)
+    {
         Result += (BurstKillChance(MinHPDamage, MaxHPDamage, Health, HitChance, Shots)
-            - EstimatedKillChance(MinHPDamage, MaxHPDamage, Health, HitChance))
-            * 65.0 * FClamp(Threat, 0.6, 1.5);
+            - KillChance) * 65.0 * FClamp(Threat, 0.6, 1.5);
+        KillChance = BurstKillChance(MinHPDamage, MaxHPDamage, Health, HitChance, Shots);
+    }
+    SourceUnit = XComGameState_Unit(`XCOMHISTORY.GetGameStateForObjectID(Ability.OwnerStateObject.ObjectID));
+    // Multi-target actions need their own accounting so an affected linked
+    // unit is not valued again as a consequence of the primary source kill.
+    if (KillChance > 0.0 && Target.AdditionalTargets.Length == 0)
+    {
+        GetKnownSourceBenefits(SourceUnit, TargetUnit, ReleasedAllies, LinkedEnemies);
+        Result += ScoreSourceBenefits(KillChance, ReleasedAllies, LinkedEnemies);
+    }
     // Spend free attacks before turn-ending shots and conserve scarce attacks
     // when an ordinary shot gives essentially the same outcome.
     if (Ability.GetMyTemplateName() == 'LightningHands'
@@ -400,15 +540,97 @@ static function float ScoreObjectiveAttack(XComGameState_Unit SourceUnit,
     return Result;
 }
 
+// Bleeding is a distinct rescue state. Unconscious/stabilized soldiers need
+// revival or evacuation instead; dead bodies must never become healing goals.
+// Do not require IsAbleToAct/!IsIncapacitated on the patient being rescued.
+static function bool IsRescuePatient(XComGameState_Unit SourceUnit,
+    XComGameState_Unit TargetUnit)
+{
+    return SourceUnit != none && TargetUnit != none
+        && SourceUnit.ObjectID != TargetUnit.ObjectID
+        && SourceUnit.GetAssociatedPlayerID() == TargetUnit.GetAssociatedPlayerID()
+        && SourceUnit.GetTeam() == eTeam_XCom && TargetUnit.GetTeam() == eTeam_XCom
+        && SourceUnit.IsFriendlyUnit(TargetUnit)
+        && !TargetUnit.bRemoved && !TargetUnit.bRemovedFromPlay
+        && TargetUnit.GetMyTemplate() != none && !TargetUnit.GetMyTemplate().bIsCosmetic
+        && TargetUnit.IsBleedingOut() && !TargetUnit.IsBeingCarried();
+}
+
+// CanActivateAbility checks the real shooter, cooldown, ammo/charges and AP,
+// independently of whether a target currently lies in the medikit's range.
+// This lets navigation propose a rescue without inventing an extra medikit.
+static function XComGameState_Ability GetReadyStabilizeAbility(
+    XComGameState_Unit SourceUnit, XComGameState_Unit TargetUnit)
+{
+    local StateObjectReference AbilityRef;
+    local XComGameState_Ability Ability;
+    local X2AbilityTemplate Template;
+
+    if (!IsRescuePatient(SourceUnit, TargetUnit) || !SourceUnit.IsAbleToAct())
+        return none;
+    foreach SourceUnit.Abilities(AbilityRef)
+    {
+        Ability = XComGameState_Ability(`XCOMHISTORY.GetGameStateForObjectID(AbilityRef.ObjectID));
+        if (Ability == none || Ability.OwnerStateObject.ObjectID != SourceUnit.ObjectID
+            || default.StabilizeAbilities.Find(Ability.GetMyTemplateName()) == INDEX_NONE
+            || !Ability.IsAbilityInputTriggered() || Ability.IsAbilityFreeAiming())
+            continue;
+        Template = Ability.GetMyTemplate();
+        // Only the configured single-target stabilization contract is known.
+        // Radius/revival abilities need an explicit planner of their own.
+        if (Template == none || Template.Hostility != eHostility_Defensive
+            || Template.AbilityTargetStyle == none
+            || Template.AbilityTargetStyle.Class != class'X2AbilityTarget_Single'
+            || Template.AbilityMultiTargetStyle != none)
+            continue;
+        if (Ability.CanActivateAbility(SourceUnit) == 'AA_Success'
+            && Template.CheckTargetConditions(Ability, SourceUnit, TargetUnit) == 'AA_Success')
+            return Ability;
+    }
+    return none;
+}
+
+// A position proposal, not an activation. The next decision still needs the
+// native available-target cache to authorize the actual stabilization order.
+static function bool CanStabilizeFromTile(XComGameState_Unit SourceUnit,
+    XComGameState_Unit TargetUnit, XComGameState_Ability Ability, TTile Tile)
+{
+    local X2AbilityTemplate Template;
+    local vector SourceLocation, TargetLocation;
+    local float HitRange;
+
+    if (!IsRescuePatient(SourceUnit, TargetUnit) || Ability == none
+        || Ability.OwnerStateObject.ObjectID != SourceUnit.ObjectID)
+        return false;
+    Template = Ability.GetMyTemplate();
+    if (Template == none || Template.AbilityTargetStyle == none
+        || Template.AbilityTargetStyle.Class != class'X2AbilityTarget_Single'
+        || Template.AbilityMultiTargetStyle != none
+        || default.StabilizeAbilities.Find(Ability.GetMyTemplateName()) == INDEX_NONE)
+        return false;
+    HitRange = Template.AbilityTargetStyle.GetHitRange(Ability);
+    if (HitRange < 0.0)
+        return true;
+    SourceLocation = `XWORLD.GetPositionFromTileCoordinates(Tile);
+    TargetLocation = `XWORLD.GetPositionFromTileCoordinates(TargetUnit.TileLocation);
+    return VSizeSq(SourceLocation - TargetLocation) <= Square(HitRange);
+}
+
 static function float ScoreMedical(XComGameState_Unit SourceUnit,
     XComGameState_Unit TargetUnit, bool bStabilize)
 {
     local float Health, MaxHealth, MissingHealth;
 
-    if (TargetUnit == none || !SourceUnit.IsFriendlyUnit(TargetUnit))
+    if (SourceUnit == none || TargetUnit == none)
+        return -10000.0;
+    if (TargetUnit.bRemoved || TargetUnit.bRemovedFromPlay || !SourceUnit.IsFriendlyUnit(TargetUnit))
         return -10000.0;
     if (bStabilize)
-        return TargetUnit.IsBleedingOut() ? 400.0 : -10000.0;
+    {
+        if (TargetUnit.IsBleedingOut())
+            return 400.0;
+        return -10000.0;
+    }
     if (!TargetUnit.IsAlive() || TargetUnit.IsBleedingOut())
         return -10000.0;
 
@@ -489,14 +711,10 @@ static function float DefensiveRisk(XComGameState_Unit UnitState,
 {
     local XComGameState_Unit Enemy;
     local StateObjectReference EnemyRef;
-    local vector UnitLocation, EnemyLocation;
-    local float Distance, Angle, Risk, TotalRisk, WorstRisk;
-    local ECoverType Cover;
-    local int CoverLevel;
+    local float Distance, Risk, TotalRisk, WorstRisk;
 
     RangedThreats = 0;
     NearbyMelee = 0;
-    UnitLocation = `XWORLD.GetPositionFromTileCoordinates(UnitState.TileLocation);
     foreach VisibleEnemies(EnemyRef)
     {
         Enemy = XComGameState_Unit(`XCOMHISTORY.GetGameStateForObjectID(EnemyRef.ObjectID));
@@ -510,15 +728,10 @@ static function float DefensiveRisk(XComGameState_Unit UnitState,
             continue;
         }
         ++RangedThreats;
-        EnemyLocation = `XWORLD.GetPositionFromTileCoordinates(Enemy.TileLocation);
-        Cover = `XWORLD.GetCoverTypeForTarget(EnemyLocation, UnitLocation, Angle);
-        CoverLevel = 0;
-        if (Cover == CT_MidLevel)
-            CoverLevel = 1;
-        if (Cover == CT_Standing)
-            CoverLevel = 2;
-        Risk = class'APX_MissionPlanner'.static.DirectionalRisk(CoverLevel, Distance,
-            UnitState.GetMyTemplate().bCanTakeCover, false);
+        // The same obstruction discount as movement: otherwise Aid Protocol
+        // can displace an escape by valuing an obstructed shot as fully open.
+        Risk = class'APX_MissionPlanner'.static.ThreatRiskAtTile(
+            UnitState, Enemy, UnitState.TileLocation);
         TotalRisk += Risk;
         WorstRisk = FMax(WorstRisk, Risk);
     }

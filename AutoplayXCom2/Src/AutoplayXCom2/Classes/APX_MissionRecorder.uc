@@ -1,8 +1,9 @@
 // Runtime-only diagnostic observer. Never changes state, rolls RNG or issues orders.
-// Records only the local squad and contacts visible to that player.
+// Records the local squad, visible contacts and public mission/scoring facts.
 class APX_MissionRecorder extends Object config(AutoplayXCom2)
     dependson(X2GameRuleset, XComGameState_Ability, X2TacticalGameRulesetDataStructures,
-        X2GameRulesetVisibilityDataStructures);
+        X2GameRulesetVisibilityDataStructures, XComGameState,
+        X2StrategyGameRulesetDataStructures, X2ChallengeModeDataStructures);
 
 var config int MaxRecords;
 var config int MaxHistoryFramesPerObserve;
@@ -12,6 +13,7 @@ struct RecordedUnit
     var int UnitID;
     var string Snapshot;
     var string Abilities;
+    var string Knowledge;
 };
 
 var private array<RecordedUnit> Units;
@@ -28,6 +30,17 @@ var private bool bFinished;
 var private bool bLimitReported;
 var private bool bEndPending;
 var private int LastEndHistory;
+var private string RecordedMissionType;
+var private string LastGameScore;
+var private string LastHUDScore;
+var private int RecordedLadderIndex;
+var private int RecordedLadderRung;
+var private bool bHasLadderScore;
+var private array<string> RecordedScoreKeys;
+var private array<string> RecordedScoreRules;
+var private array<string> CompletedObjectiveIDs;
+var private array<int> RescuedCivilianIDs;
+var private APX_MissionScore NativeScoreProbe;
 
 function string Safe(string Value)
 {
@@ -75,11 +88,312 @@ function Start(int PlayerID)
     Mission = "unknown";
     if (BattleData != none)
         Mission = BattleData.MapData.ActiveMission.sType;
+    RecordedMissionType = Mission;
     bStarted = true;
     Emit("start", "|player=" $ PlayerID $ "|mission=" $ Safe(Mission)
         $ "|difficulty=" $ `TacticalDifficultySetting $ "|history=" $ HistoryCursor
-        $ "|revision=mission-report-v5");
+        $ "|revision=mission-report-v16");
+    // F8 starts observation, not the mission. Even turn one may already have
+    // processed damage, objectives or native starting allowances.
+    Emit("scoring_coverage", "|complete=false|reason=recording_begins_at_f8"
+        $ "|history=" $ HistoryCursor);
+    RegisterScoreObservers();
     Observe("start");
+}
+
+// These callbacks only observe UI objective and rescue notifications. Native
+// scoring remains the game's responsibility; never call its Add* scoring APIs.
+function RegisterScoreObservers()
+{
+    local X2EventManager EventManager;
+    local Object Listener;
+
+    EventManager = `XEVENTMGR;
+    if (EventManager == none)
+        return;
+    Listener = self;
+    EventManager.RegisterForEvent(Listener, 'MissionObjectiveMarkedCompleted',
+        OnObjectiveCompleted, ELD_OnStateSubmitted);
+    EventManager.RegisterForEvent(Listener, 'CivilianRescued',
+        OnCivilianRescued, ELD_OnStateSubmitted);
+}
+
+function UnregisterScoreObservers()
+{
+    local X2EventManager EventManager;
+    local Object Listener;
+
+    if (NativeScoreProbe != none)
+    {
+        NativeScoreProbe.Cleanup();
+        NativeScoreProbe = none;
+    }
+    EventManager = `XEVENTMGR;
+    if (EventManager == none)
+        return;
+    Listener = self;
+    EventManager.UnRegisterFromEvent(Listener, 'MissionObjectiveMarkedCompleted');
+    EventManager.UnRegisterFromEvent(Listener, 'CivilianRescued');
+}
+
+function int TurnAtHistory(int HistoryIndex)
+{
+    local XComGameState_Player PlayerState;
+
+    PlayerState = XComGameState_Player(`XCOMHISTORY.GetGameStateForObjectID(
+        OwnerPlayerID, eReturnType_Reference, HistoryIndex));
+    return PlayerState != none ? PlayerState.PlayerTurnCount : -1;
+}
+
+function bool IsRecordingMission()
+{
+    local XComGameState_BattleData BattleData;
+
+    if (!bStarted || bFinished || bLimitReported || `XCOMHISTORY == none)
+        return false;
+    BattleData = XComGameState_BattleData(`XCOMHISTORY.GetSingleGameStateObjectForClass(
+        class'XComGameState_BattleData', true));
+    return BattleData != none && BattleData.MapData.ActiveMission.sType == RecordedMissionType;
+}
+
+function EventListenerReturn OnObjectiveCompleted(Object EventData, Object EventSource,
+    XComGameState GameState, Name Event, Object CallbackData)
+{
+    local SeqAct_DisplayMissionObjective DisplayAction;
+    local XComGameState_ObjectivesList ObjectiveList;
+    local ObjectiveDisplayInfo Info;
+    local string ObjectiveID, ObjectiveName;
+    local int HistoryIndex;
+    local bool bFound;
+
+    if (!IsRecordingMission() || GameState == none)
+        return ELR_NoInterrupt;
+    DisplayAction = SeqAct_DisplayMissionObjective(EventSource);
+    ObjectiveList = XComGameState_ObjectivesList(EventData);
+    if (DisplayAction == none || ObjectiveList == none)
+        return ELR_NoInterrupt;
+    foreach ObjectiveList.ObjectiveDisplayInfos(Info)
+    {
+        if (Info.MissionType == RecordedMissionType && Info.TextPoolIndex == DisplayAction.TextPoolIndex
+            && Info.LineIndex == DisplayAction.LineIndex && Info.GroupID == DisplayAction.GroupID
+            && Info.ShowCompleted && Info.ShowCheckBox && !Info.HideInTactical)
+        {
+            ObjectiveName = Info.DisplayLabel;
+            bFound = true;
+            break;
+        }
+    }
+    // A matching visible completed checkbox is required; do not reveal hidden
+    // objectives or assign completion to unrelated strategy/UI notifications.
+    if (!bFound)
+        return ELR_NoInterrupt;
+    ObjectiveID = RecordedMissionType $ ":" $ DisplayAction.TextPoolIndex $ ":"
+        $ DisplayAction.LineIndex $ ":" $ DisplayAction.GroupID;
+    if (CompletedObjectiveIDs.Find(ObjectiveID) != INDEX_NONE)
+        return ELR_NoInterrupt;
+    CompletedObjectiveIDs.AddItem(ObjectiveID);
+    RecordObjectiveScoreRule(DisplayAction, ObjectiveID);
+    HistoryIndex = GameState.HistoryIndex;
+    Emit("objective_completed", "|source=mission_ui_event|objective_id=" $ Safe(ObjectiveID)
+        $ "|objective_name=" $ Safe(ObjectiveName) $ "|turn=" $ TurnAtHistory(HistoryIndex)
+        $ "|completion_turn=" $ TurnAtHistory(HistoryIndex) $ "|history=" $ HistoryIndex);
+    return ELR_NoInterrupt;
+}
+
+function EventListenerReturn OnCivilianRescued(Object EventData, Object EventSource,
+    XComGameState GameState, Name Event, Object CallbackData)
+{
+    local XComGameState_Unit Rescuer, Civilian;
+    local array<StateObjectReference> VisibleObjects;
+    local int CivilianID;
+
+    if (!IsRecordingMission() || GameState == none)
+        return ELR_NoInterrupt;
+    // Stock TriggerEvent sends the rescuer as data and the rescued civilian
+    // as source. Only the recording player's rescues belong in this ledger.
+    Rescuer = XComGameState_Unit(EventData);
+    Civilian = XComGameState_Unit(EventSource);
+    if (Rescuer == none || Civilian == none || Rescuer.GetAssociatedPlayerID() != OwnerPlayerID
+        || RescuedCivilianIDs.Find(Civilian.ObjectID) != INDEX_NONE)
+        return ELR_NoInterrupt;
+    RescuedCivilianIDs.AddItem(Civilian.ObjectID);
+    class'X2TacticalVisibilityHelpers'.static.GetAllVisibleObjectsForPlayer(
+        OwnerPlayerID, VisibleObjects, , GameState.HistoryIndex);
+    if (Civilian.GetAssociatedPlayerID() == OwnerPlayerID
+        || VisibleObjects.Find('ObjectID', Civilian.ObjectID) != INDEX_NONE)
+        CivilianID = Civilian.ObjectID;
+    Emit("civilian_rescued", "|source=mission_event|civilian_id=" $ CivilianID
+        $ "|rescuer=" $ Rescuer.ObjectID $ "|turn=" $ TurnAtHistory(GameState.HistoryIndex)
+        $ "|history=" $ GameState.HistoryIndex);
+    return ELR_NoInterrupt;
+}
+
+function RecordGameScore(string Phase)
+{
+    local XComGameState_LadderProgress Ladder;
+    local XComGameState_BattleData BattleData;
+    local string Fields, ScorePhase;
+    local int MissionPoints;
+    local bool bPointsKnown, bMissionFinal;
+
+    if (`XCOMHISTORY == none || !IsRecordingMission())
+        return;
+    Ladder = XComGameState_LadderProgress(`XCOMHISTORY.GetSingleGameStateObjectForClass(
+        class'XComGameState_LadderProgress', true));
+    if (Ladder == none)
+        return;
+    if (bHasLadderScore && (Ladder.LadderIndex != RecordedLadderIndex
+        || Ladder.LadderRung != RecordedLadderRung))
+        return;
+    bHasLadderScore = true;
+    RecordedLadderIndex = Ladder.LadderIndex;
+    RecordedLadderRung = Ladder.LadderRung;
+    RecordBaseScoreRules();
+    Fields = "|source=legacy_runtime|ladder_index=" $ Ladder.LadderIndex
+        $ "|ladder_rung=" $ Ladder.LadderRung $ "|cumulative_score=" $ Ladder.CumulativeScore;
+    if (NativeScoreProbe == none)
+        NativeScoreProbe = new(self) class'APX_MissionScore';
+    bPointsKnown = NativeScoreProbe.ReadNativeMissionPoints(MissionPoints);
+    BattleData = XComGameState_BattleData(`XCOMHISTORY.GetSingleGameStateObjectForClass(
+        class'XComGameState_BattleData', true));
+    // An observed terminal snapshot, after our history cursor has caught up.
+    // This never promises awards that have not yet been committed by the game.
+    bMissionFinal = Phase == "finish" && BattleData != none
+        && BattleData.VictoriousPlayer.ObjectID != 0 && !bLimitReported
+        && HistoryCursor == `XCOMHISTORY.GetCurrentHistoryIndex();
+    Fields $= "|mission_points_known=" $ bPointsKnown $ "|mission_final=" $ bMissionFinal;
+    if (bPointsKnown)
+        Fields $= "|mission_points=" $ MissionPoints;
+    if (Fields == LastGameScore && Phase != "start" && Phase != "finish")
+        return;
+    ScorePhase = "observe";
+    if (Phase == "start" || Phase == "finish")
+        ScorePhase = Phase;
+    Emit("game_score", Fields $ "|phase=" $ ScorePhase
+        $ "|history=" $ `XCOMHISTORY.GetCurrentHistoryIndex());
+    LastGameScore = Fields;
+}
+
+// Native Get* APIs expose installed configuration without granting any points.
+// A stale recorder must never read the next ladder rung's configuration.
+function XComChallengeModeManager RuntimeScoreManager()
+{
+    local XComGameState_LadderProgress Ladder;
+    local XComChallengeModeManager Manager;
+
+    if (!bHasLadderScore || !IsRecordingMission())
+        return none;
+    Manager = `CHALLENGEMODE_MGR;
+    if (Manager == none)
+        return none;
+    Ladder = XComGameState_LadderProgress(`XCOMHISTORY.GetSingleGameStateObjectForClass(
+        class'XComGameState_LadderProgress', true));
+    if (Ladder == none || Ladder.LadderIndex != RecordedLadderIndex
+        || Ladder.LadderRung != RecordedLadderRung)
+        return none;
+    return Manager;
+}
+
+function EmitScoreRule(string Fields)
+{
+    // Full configuration is the key: revising a rule must remain observable,
+    // while repeated observations in later history frames need no duplicate.
+    if (RecordedScoreRules.Find(Fields) != INDEX_NONE)
+        return;
+    RecordedScoreRules.AddItem(Fields);
+    Emit("score_rule", "|source=legacy_runtime" $ Fields
+        $ "|history=" $ `XCOMHISTORY.GetCurrentHistoryIndex());
+}
+
+function RecordBaseScoreRules()
+{
+    local XComChallengeModeManager Manager;
+    local ChallengeSoldierScoring Soldier;
+    local ChallengeTimeScoring TimeRule;
+
+    Manager = RuntimeScoreManager();
+    if (Manager == none)
+        return;
+    Manager.GetSoldierScoring(Soldier);
+    EmitScoreRule("|kind=soldier|uninjured_bonus=" $ Soldier.UninjuredBonus
+        $ "|survival_bonus=" $ Soldier.WoundedBonus $ "|rescued_bonus=" $ Soldier.RescuedCivilianBonus);
+    Manager.GetTimeScoring(TimeRule);
+    EmitScoreRule("|kind=time|points_per_interval=" $ TimeRule.PointsPerInterval
+        $ "|interval_seconds=" $ TimeRule.IntervalInSeconds);
+}
+
+function RecordVisibleEnemyScoreRule(XComGameState_Unit UnitState)
+{
+    local XComChallengeModeManager Manager;
+    local ChallengeEnemyScoring Enemy;
+
+    if (UnitState == none || UnitState.GetMyTemplate() == none)
+        return;
+    Manager = RuntimeScoreManager();
+    if (Manager == none)
+        return;
+    Manager.GetEnemyScoring(Enemy, string(UnitState.GetMyTemplateName()));
+    EmitScoreRule("|kind=enemy|template=" $ UnitState.GetMyTemplateName()
+        $ "|starting_points=" $ Enemy.StartingPoints $ "|min_points=" $ Enemy.MinPoints
+        $ "|decrease_per_turn=" $ Enemy.DecreasePerTurn $ "|turn_offset=" $ Enemy.TurnOffset
+        $ "|spawned_points=" $ Enemy.SpawnedPoints $ "|reinforcement_points=" $ Enemy.ReinforcementPoints
+        $ "|disabled_points=" $ Enemy.DisabledPoints $ "|min_disabled_points=" $ Enemy.MinDisabledPoints);
+}
+
+function RecordObjectiveScoreRule(SeqAct_DisplayMissionObjective DisplayAction, string ObjectiveID)
+{
+    local XComChallengeModeManager Manager;
+    local ChallengeObjectiveScoring Objective;
+
+    if (DisplayAction == none)
+        return;
+    Manager = RuntimeScoreManager();
+    if (Manager == none)
+        return;
+    Manager.GetObjectiveScoring(Objective, RecordedMissionType, DisplayAction.TextPoolIndex,
+        DisplayAction.GroupID, DisplayAction.LineIndex);
+    EmitScoreRule("|kind=objective|mission=" $ Safe(RecordedMissionType)
+        $ "|objective_id=" $ Safe(ObjectiveID)
+        $ "|text_pool_index=" $ DisplayAction.TextPoolIndex
+        $ "|group_id=" $ DisplayAction.GroupID $ "|line_index=" $ DisplayAction.LineIndex
+        $ "|starting_points=" $ Objective.StartingPoints $ "|min_points=" $ Objective.MinPoints
+        $ "|decrease_per_turn=" $ Objective.DecreasePerTurn $ "|turn_offset=" $ Objective.TurnOffset);
+}
+
+function RecordScoreDeltas(XComGameState HistoryState)
+{
+    local XComGameState_ChallengeScore ScoreState;
+    local string ScoreKey;
+
+    foreach HistoryState.IterateByClassType(class'XComGameState_ChallengeScore', ScoreState)
+    {
+        // Native award helpers may revise an existing object. Keep each history
+        // observation without treating its fields as a summable award ledger.
+        ScoreKey = HistoryState.HistoryIndex $ ":" $ ScoreState.ObjectID;
+        if (RecordedScoreKeys.Find(ScoreKey) != INDEX_NONE)
+            continue;
+        RecordedScoreKeys.AddItem(ScoreKey);
+        Emit("score_delta", "|source=game_runtime|score_id=" $ ScoreState.ObjectID
+            $ "|scoring_type=" $ string(ScoreState.ScoringType)
+            $ "|added_points=" $ ScoreState.AddedPoints $ "|ladder_bonus=" $ ScoreState.LadderBonus
+            $ "|history=" $ HistoryState.HistoryIndex
+            $ "|turn=" $ TurnAtHistory(HistoryState.HistoryIndex));
+    }
+}
+
+// Preserve the exact displayed value, including the comparison marker and
+// missing-value glyph. A fresh recorder observes its first value after F8.
+function RecordHUDScore(string DisplayText)
+{
+    local string Fields;
+
+    if (!bStarted || bFinished || DisplayText == LastHUDScore)
+        return;
+    LastHUDScore = DisplayText;
+    Fields = "|display=" $ Safe(DisplayText);
+    if (Left(DisplayText, 1) == "~")
+        Fields $= "|comparison_profile=" $ class'APX_ComparisonScore'.static.GetProfileID();
+    Emit("hud_score", Fields);
 }
 
 function Marker(string Kind, string Details)
@@ -110,8 +424,10 @@ function int UnitIndex(int UnitID)
 function RecordUnit(XComGameState_Unit UnitState, bool bFriendly, bool bForce)
 {
     local XComGameState_Item Weapon;
+    local UnitValue SpawnedValue, KilledValue;
     local int Index, ActionPoints, Ammo;
     local string Fields, Scope;
+    local bool bScoreEligible, bLadderKilled;
 
     if (UnitState == none || UnitState.GetMyTemplate() == none
         || UnitState.GetMyTemplate().bIsCosmetic)
@@ -137,10 +453,25 @@ function RecordUnit(XComGameState_Unit UnitState, bool bFriendly, bool bForce)
         $ "|alive=" $ UnitState.IsAlive() $ "|incapacitated=" $ UnitState.IsIncapacitated()
         $ "|removed=" $ UnitState.bRemovedFromPlay;
     if (bFriendly)
+    {
+        // Mirror the stock ladder's soldier eligibility checks on owned units
+        // only. Enemy metrics remain limited to their ordinary visible state.
+        bScoreEligible = UnitState.GetPreviousTeam() == eTeam_XCom && !UnitState.bMissionProvided
+            && !UnitState.GetUnitValue('NewSpawnedUnit', SpawnedValue);
+        bLadderKilled = UnitState.GetUnitValue('LadderKilledScored', KilledValue);
         Fields $= "|concealed=" $ UnitState.IsConcealed()
             $ "|bleeding_out=" $ UnitState.IsBleedingOut()
+            $ "|bleeding_turns_remaining=" $ UnitState.GetBleedingOutTurnsRemaining()
             $ "|panicked=" $ UnitState.IsPanicked()
-            $ "|mind_controlled=" $ UnitState.IsMindControlled();
+            $ "|mind_controlled=" $ UnitState.IsMindControlled()
+            $ "|unconscious=" $ UnitState.IsUnconscious()
+            $ "|poisoned=" $ UnitState.IsPoisoned()
+            $ "|poison_cloud=" $ class'APX_HazardKnowledge'.static.IsKnownPoisonCloudAtTile(
+                UnitState, UnitState.TileLocation)
+            $ "|poison_cloud_harmful=" $ class'APX_HazardKnowledge'.static.NeedsPoisonEscape(UnitState)
+            $ "|score_eligible=" $ bScoreEligible $ "|highest_hp=" $ UnitState.HighestHP
+            $ "|lowest_hp=" $ UnitState.LowestHP $ "|ladder_killed_scored=" $ bLadderKilled;
+    }
     Index = UnitIndex(UnitState.ObjectID);
     if (bForce || Units[Index].Snapshot != Fields)
     {
@@ -149,6 +480,69 @@ function RecordUnit(XComGameState_Unit UnitState, bool bFriendly, bool bForce)
     }
     if (bFriendly && UnitState.IsAbleToAct())
         RecordAvailability(UnitState, Index);
+}
+
+// Called only from the current native visible-enemy list. These are installed
+// template parameters and public unit stats, not AP, cooldown or AI readiness.
+function RecordEnemyKnowledge(XComGameState_Unit Enemy)
+{
+    local XComGameState_Item Weapon;
+    local X2CharacterTemplate Character;
+    local string Fields, WeaponName, Immunities;
+    local name ImmuneType;
+    local int Index, Flags;
+    local float Weight, TargetWeight;
+
+    if (Enemy == none || Enemy.GetMyTemplate() == none)
+        return;
+    Character = Enemy.GetMyTemplate();
+    Weapon = Enemy.GetPrimaryWeapon();
+    WeaponName = "unknown";
+    if (Weapon != none)
+        WeaponName = string(Weapon.GetMyTemplateName());
+    foreach Character.ImmuneTypes(ImmuneType)
+    {
+        if (Immunities != "")
+            Immunities $= ",";
+        Immunities $= string(ImmuneType);
+    }
+    Weight = class'APX_EnemyKnowledge'.static.ThreatWeight(Enemy);
+    Flags = class'APX_EnemyKnowledge'.static.CapabilityFlags(Enemy);
+    TargetWeight = class'APX_EnemyKnowledge'.static.TargetThreatValue(Weight,
+        (Flags & class'APX_EnemyKnowledge'.const.Capability_Control) != 0,
+        (Flags & class'APX_EnemyKnowledge'.const.Capability_Area) != 0,
+        (Flags & class'APX_EnemyKnowledge'.const.Capability_Support) != 0,
+        Enemy.GetTeam() == eTeam_TheLost);
+    Fields = "|source=visible_template|enemy=" $ Enemy.ObjectID
+        $ "|template=" $ Enemy.GetMyTemplateName() $ "|primary_weapon=" $ Safe(WeaponName)
+        $ "|weapon_mean_damage=" $ class'APX_EnemyKnowledge'.static.PrimaryWeaponMeanDamage(Enemy)
+        $ "|aim=" $ Enemy.GetCurrentStat(eStat_Offense)
+        $ "|mobility=" $ Enemy.GetCurrentStat(eStat_Mobility)
+        $ "|armor=" $ Enemy.GetArmorMitigationForUnitFlag()
+        $ "|base_hp=" $ Character.GetCharacterBaseStat(eStat_HP)
+        $ "|base_aim=" $ Character.GetCharacterBaseStat(eStat_Offense)
+        $ "|base_defense=" $ Character.GetCharacterBaseStat(eStat_Defense)
+        $ "|base_mobility=" $ Character.GetCharacterBaseStat(eStat_Mobility)
+        $ "|base_will=" $ Character.GetCharacterBaseStat(eStat_Will)
+        $ "|base_dodge=" $ Character.GetCharacterBaseStat(eStat_Dodge)
+        $ "|base_armor=" $ Character.GetCharacterBaseStat(eStat_ArmorMitigation)
+        $ "|base_psi=" $ Character.GetCharacterBaseStat(eStat_PsiOffense)
+        $ "|base_hack_defense=" $ Character.GetCharacterBaseStat(eStat_HackDefense)
+        $ "|base_detection=" $ Character.GetCharacterBaseStat(eStat_DetectionRadius)
+        $ "|base_crit=" $ Character.GetCharacterBaseStat(eStat_CritChance)
+        $ "|can_take_cover=" $ Character.bCanTakeCover
+        $ "|robotic=" $ Character.bIsRobotic
+        $ "|tech_vulnerable=" $ Character.bWeakAgainstTechLikeRobot
+        $ "|immune_types=" $ Safe(Immunities)
+        $ "|threat_weight=" $ Weight $ "|target_threat=" $ TargetWeight
+        $ "|capabilities=" $ Flags
+        $ "|melee_counter_possible=" $ class'APX_EnemyKnowledge'.static.HasMeleeCounter(Enemy);
+    Index = UnitIndex(Enemy.ObjectID);
+    if (Units[Index].Knowledge != Fields)
+    {
+        Emit("enemy_knowledge", Fields);
+        Units[Index].Knowledge = Fields;
+    }
 }
 
 function RecordAvailability(XComGameState_Unit UnitState, int Index)
@@ -196,6 +590,8 @@ function string AbilityHandler(XComGameState_Unit UnitState, name AbilityName)
         return "combat";
     if (AbilityName == 'StandardMove')
         return "movement";
+    if (AbilityName == 'Loot')
+        return "loot";
     if (AbilityName == 'ThrowGrenade' || AbilityName == 'LaunchGrenade')
         return "grenade";
     if (AbilityName == 'Evac' || AbilityName == 'PlaceEvacZone')
@@ -220,6 +616,7 @@ function Observe(string Phase)
 
     if (!bStarted || bFinished || bLimitReported || `XCOMHISTORY == none)
         return;
+    RecordGameScore(Phase);
     PlayerState = XComGameState_Player(`XCOMHISTORY.GetGameStateForObjectID(OwnerPlayerID));
     PhaseState = "|phase=" $ Safe(Phase);
     if (PlayerState != none)
@@ -246,6 +643,8 @@ function Observe(string Phase)
             continue;
         VisibleIDs.AddItem(UnitState.ObjectID);
         RecordUnit(UnitState, false, PreviousVisibleIDs.Find(UnitState.ObjectID) == INDEX_NONE);
+        RecordVisibleEnemyScoreRule(UnitState);
+        RecordEnemyKnowledge(UnitState);
     }
     for (Index = 0; Index < PreviousVisibleIDs.Length; ++Index)
     {
@@ -282,6 +681,7 @@ function RecordResults()
         HistoryState = `XCOMHISTORY.GetGameStateFromHistory(HistoryCursor);
         if (HistoryState == none)
             continue;
+        RecordScoreDeltas(HistoryState);
         Context = XComGameStateContext_Ability(HistoryState.GetContext());
         if (Context == none)
             continue;
@@ -327,6 +727,7 @@ function RecordResults()
             continue;
         }
         Emit("result", "|history=" $ HistoryCursor $ "|source=" $ SourceID
+            $ "|turn=" $ TurnAtHistory(HistoryCursor)
             $ "|source_scope=" $ SourceScope
             $ "|target=" $ TargetID $ "|ability=" $ Safe(AbilityName)
             $ "|hit=" $ string(Context.ResultContext.HitResult)
@@ -343,6 +744,7 @@ function RecordResults()
             if (TargetIndex >= Context.ResultContext.MultiTargetHitResults.Length)
                 continue;
             Emit("result_target", "|history=" $ HistoryCursor $ "|source=" $ SourceID
+                $ "|turn=" $ TurnAtHistory(HistoryCursor)
                 $ "|source_scope=" $ SourceScope
                 $ "|target=" $ TargetID $ "|ability=" $ Safe(AbilityName)
                 $ "|target_index=" $ TargetIndex
@@ -366,6 +768,9 @@ function string TargetHealthFields(int TargetID, int HistoryIndex)
         return "";
     return "|target_hp_before=" $ BeforeUnit.GetCurrentStat(eStat_HP)
         $ "|target_hp_after=" $ AfterUnit.GetCurrentStat(eStat_HP)
+        $ "|target_alive_after=" $ AfterUnit.IsAlive()
+        $ "|target_incapacitated_after=" $ AfterUnit.IsIncapacitated()
+        $ "|target_bleeding_out_after=" $ AfterUnit.IsBleedingOut()
         $ "|target_shield_before=" $ BeforeUnit.GetCurrentStat(eStat_ShieldHP)
         $ "|target_shield_after=" $ AfterUnit.GetCurrentStat(eStat_ShieldHP);
 }
@@ -377,7 +782,11 @@ function string ActionFields(XComGameState_Unit UnitState, string Kind,
     local XComGameState_Unit TargetUnit;
     local ShotBreakdown Breakdown;
     local WeaponDamageValue MinDamage, MaxDamage;
-    local int TargetID, Chance, AllowsShield;
+    local int TargetID, Chance, AllowsShield, ReleasedAllies, LinkedEnemies;
+    local int ComboAbilityID, ComboTargetID;
+    local float RetainedAttackValue;
+    local bool bHasAPCombo;
+    local array<StateObjectReference> VisibleEnemies;
     local string AbilityName, Reason;
 
     Ability = XComGameState_Ability(`XCOMHISTORY.GetGameStateForObjectID(
@@ -391,6 +800,12 @@ function string ActionFields(XComGameState_Unit UnitState, string Kind,
         Reason = class'APX_CombatPlanner'.static.GetActionReason(UnitState, Ability.GetMyTemplateName());
         if (Ability.GetMyTemplateName() == 'ThrowGrenade' || Ability.GetMyTemplateName() == 'LaunchGrenade')
             Reason = "explosive_area_attack";
+        if (class'APX_ActionEconomy'.static.IsSupportedPreparation(Ability.GetMyTemplateName()))
+        {
+            class'APX_MissionPlanner'.static.GetVisibleThreats(UnitState, VisibleEnemies);
+            bHasAPCombo = class'APX_ActionEconomy'.static.GetRetainedAttack(UnitState, Ability,
+                VisibleEnemies, ComboAbilityID, ComboTargetID, RetainedAttackValue);
+        }
     }
     if (TargetIndex >= 0 && TargetIndex < Action.AvailableTargets.Length)
     {
@@ -402,12 +817,19 @@ function string ActionFields(XComGameState_Unit UnitState, string Kind,
             Chance = Ability.GetShotBreakdown(Action.AvailableTargets[TargetIndex], Breakdown);
             Ability.GetDamagePreview(Action.AvailableTargets[TargetIndex].PrimaryTarget,
                 MinDamage, MaxDamage, AllowsShield);
+            class'APX_CombatPlanner'.static.GetKnownSourceBenefits(UnitState, TargetUnit,
+                ReleasedAllies, LinkedEnemies);
         }
     }
     return "|kind=" $ Safe(Kind) $ "|unit=" $ UnitState.ObjectID
         $ "|ability=" $ Safe(AbilityName) $ "|reason=" $ Safe(Reason) $ "|target=" $ TargetID
         $ "|target_index=" $ TargetIndex $ "|score=" $ Score $ "|chance=" $ Chance
-        $ "|raw_min_damage=" $ MinDamage.Damage $ "|raw_max_damage=" $ MaxDamage.Damage;
+        $ "|raw_min_damage=" $ MinDamage.Damage $ "|raw_max_damage=" $ MaxDamage.Damage
+        $ "|ap_combo_available=" $ bHasAPCombo
+        $ "|ap_combo_followup_ability_id=" $ ComboAbilityID $ "|ap_combo_followup_target=" $ ComboTargetID
+        $ "|ap_combo_retained_attack_value=" $ RetainedAttackValue
+        $ "|ap_combo_model=current_legal_attack_after_stationary_preparation"
+        $ "|known_released_allies=" $ ReleasedAllies $ "|known_linked_enemies=" $ LinkedEnemies;
 }
 
 function CandidateAction(XComGameState_Unit UnitState, string Kind,
@@ -420,7 +842,10 @@ function string MoveFields(XComGameState_Unit UnitState, const out array<TTile> 
 {
     local array<StateObjectReference> VisibleEnemies;
     local TTile Destination;
-    local float CurrentRisk, CandidateRisk, SupportScore;
+    local float CurrentRisk, CandidateRisk, SupportScore, BestAttackNow, BestAttackAfterMove;
+    local float NativeAttackValue, ProjectedAttackValue;
+    local int ForecastTarget, NativeChance, ProjectedChance;
+    local bool bHasForecast;
 
     if (Path.Length == 0)
         return "|kind=move|unit=" $ UnitState.ObjectID $ "|score=" $ Score $ "|path_tiles=0";
@@ -429,12 +854,27 @@ function string MoveFields(XComGameState_Unit UnitState, const out array<TTile> 
     CurrentRisk = class'APX_MissionPlanner'.static.ExposureRisk(UnitState, UnitState.TileLocation, VisibleEnemies);
     CandidateRisk = class'APX_MissionPlanner'.static.ExposureRisk(UnitState, Destination, VisibleEnemies);
     SupportScore = class'APX_MissionPlanner'.static.SquadPositionScore(UnitState, Destination);
+    class'APX_MissionPlanner'.static.GetMoveAttackOptions(UnitState, VisibleEnemies,
+        BestAttackNow, BestAttackAfterMove);
+    bHasForecast = class'APX_RepositionPlanner'.static.EvaluateDestination(UnitState, Destination,
+        ForecastTarget, NativeChance, ProjectedChance, NativeAttackValue, ProjectedAttackValue);
     return "|kind=move|unit=" $ UnitState.ObjectID $ "|score=" $ Score
         $ "|path_tiles=" $ Path.Length $ "|x=" $ Path[Path.Length - 1].X
         $ "|y=" $ Path[Path.Length - 1].Y $ "|z=" $ Path[Path.Length - 1].Z
         $ "|ap_before=" $ UnitState.NumActionPoints() $ "|visible_threats=" $ VisibleEnemies.Length
         $ "|current_risk=" $ CurrentRisk $ "|candidate_risk=" $ CandidateRisk
-        $ "|support_score=" $ SupportScore;
+        $ "|support_score=" $ SupportScore
+        $ "|current_poison_cloud=" $ class'APX_HazardKnowledge'.static.IsKnownPoisonCloudAtTile(
+            UnitState, UnitState.TileLocation)
+        $ "|destination_poison_cloud=" $ class'APX_HazardKnowledge'.static.IsKnownPoisonCloudAtTile(
+            UnitState, Destination)
+        $ "|needs_poison_escape=" $ class'APX_HazardKnowledge'.static.NeedsPoisonEscape(UnitState)
+        $ "|offensive_forecast=" $ bHasForecast $ "|forecast_target=" $ ForecastTarget
+        $ "|native_chance_now=" $ NativeChance $ "|projected_chance=" $ ProjectedChance
+        $ "|projected_attack_value=" $ ProjectedAttackValue
+        $ "|forecast_model=bounded_geometry"
+        $ "|best_attack_now=" $ BestAttackNow $ "|best_attack_after_move_ap=" $ BestAttackAfterMove
+        $ "|potential_attack_loss=" $ FMax(0.0, BestAttackNow - BestAttackAfterMove);
 }
 
 function CandidateMove(XComGameState_Unit UnitState, const out array<TTile> Path, float Score)
@@ -594,13 +1034,15 @@ function RecordMoveThreatPreviews(XComGameState_Unit UnitState, const out array<
     local TTile CurrentTile, DestinationTile, EnemyTile;
     local vector CurrentLocation, DestinationLocation, EnemyLocation;
     local GameRulesCache_VisibilityInfo CurrentVisibility, DestinationVisibility;
-    local float Angle;
+    local float Angle, MeleeReach, Weight, TargetWeight;
     local string CurrentCover, DestinationCover;
     local bool bCurrentLOS, bDestinationLOS, bCurrentDefaultView, bDestinationDefaultView;
-    local int Count;
+    local int Count, MarkedAimBonus;
 
     if (UnitState == none || UnitState.GetAssociatedPlayerID() != OwnerPlayerID || Path.Length < 2)
         return;
+    MarkedAimBonus = class'APX_EnemyKnowledge'.static.KnownMarkedAimBonus(UnitState);
+    TargetWeight = class'APX_EnemyKnowledge'.static.TargetStatusWeight(UnitState);
     CurrentTile = UnitState.TileLocation;
     DestinationTile = Path[Path.Length - 1];
     CurrentLocation = `XWORLD.GetPositionFromTileCoordinates(CurrentTile);
@@ -623,7 +1065,16 @@ function RecordMoveThreatPreviews(XComGameState_Unit UnitState, const out array<
         // explicitly checks cover separately: tile LOS does not fill TargetCover.
         bCurrentDefaultView = bCurrentLOS && CurrentVisibility.bVisibleFromDefault;
         bDestinationDefaultView = bDestinationLOS && DestinationVisibility.bVisibleFromDefault;
+        MeleeReach = class'APX_MissionPlanner'.static.GetMeleeThreatReach(Enemy);
+        Weight = class'APX_EnemyKnowledge'.static.ThreatWeight(Enemy);
         Emit("move_threat_preview", "|source=" $ UnitState.ObjectID $ "|enemy=" $ Enemy.ObjectID
+            $ "|enemy_template=" $ Enemy.GetMyTemplateName() $ "|melee_only=" $ Enemy.IsMeleeOnly()
+            $ "|melee_threat_reach=" $ MeleeReach $ "|threat_weight=" $ Weight
+            $ "|marked_aim_bonus=" $ MarkedAimBonus $ "|target_status_weight=" $ TargetWeight
+            $ "|current_distance=" $ class'APX_MissionPlanner'.static.TileDistance(CurrentTile, EnemyTile)
+            $ "|destination_distance=" $ class'APX_MissionPlanner'.static.TileDistance(DestinationTile, EnemyTile)
+            $ "|current_threat_risk=" $ class'APX_MissionPlanner'.static.ThreatRiskAtTile(UnitState, Enemy, CurrentTile, MeleeReach, Weight)
+            $ "|destination_threat_risk=" $ class'APX_MissionPlanner'.static.ThreatRiskAtTile(UnitState, Enemy, DestinationTile, MeleeReach, Weight)
             $ "|current_cover=" $ CurrentCover $ "|destination_cover=" $ DestinationCover
             $ "|current_los=" $ bCurrentLOS $ "|destination_los=" $ bDestinationLOS
             $ "|current_default_view=" $ bCurrentDefaultView
@@ -684,10 +1135,12 @@ function Finish(string Reason)
     Observe("finish");
     if (`XCOMHISTORY != none)
         PendingHistory = Max(0, `XCOMHISTORY.GetCurrentHistoryIndex() - HistoryCursor);
+    RecordGameScore("finish");
     Outcome = "unknown";
     if (BattleData != none && BattleData.VictoriousPlayer.ObjectID != 0)
         Outcome = BattleData.bLocalPlayerWon ? "win" : "loss";
     Emit("end", "|reason=" $ Safe(Reason) $ "|outcome=" $ Outcome
         $ "|history=" $ HistoryCursor $ "|history_pending=" $ PendingHistory);
+    UnregisterScoreObservers();
     bFinished = true;
 }

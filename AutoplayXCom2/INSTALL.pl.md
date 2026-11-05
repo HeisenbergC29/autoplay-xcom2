@@ -10,8 +10,65 @@ Instrukcja `docs/tactics-update.pl.md` opisuje budowanie z zachowanym SDK.
 Rewizja `mission-report-v4` przygotowuje pozostałych żołnierzy do zasadzki przed
 strzałem z ukrycia i poprawia ocenę granatu na pojedynczy cel.
 Raport z `mission-report-v4` potwierdził wykonanie zasadzki i granatu, ale misja
-została przegrana. Bieżące źródła `mission-report-v5` poprawiają doganianie oddziału
+została przegrana. Źródła `mission-report-v5` poprawiają doganianie oddziału
 przed ujawnieniem oraz szczegółowość podglądów osłon i granatów w raporcie.
+Próba pierwszej misji Legacy Operations na v5 zakończyła się porażką.
+`mission-report-v6` ujednolica ocenę zagrożeń za przeszkodami przy
+ruchu i obronie oraz dodaje wkład ryzyka każdego widocznego przeciwnika.
+Próba v6 również zakończyła się porażką. `mission-report-v7` ogranicza
+szarże oddalające jednostkę od wsparcia i uwzględnia utratę legalnego ataku
+przez zużycie AP na ruch; próba v7 także zakończyła się porażką.
+Wersja `mission-report-v8` dodała priorytet dobicia źródła kontroli,
+alternatywne punkty granatu dla pary wrogów i rozpoznany zasięg zagrożenia
+wręcz. Użytkownik potwierdził zwycięstwo v8 w pierwszej misji Legacy.
+Wersja `mission-report-v9` dodała podejście do wykrwawiającego się sojusznika,
+zbieranie łupu oraz telemetrię punktacji. Raport potwierdza podejście i stabilizację,
+lecz najnowsza próba GasStation zakończyła się porażką.
+Pole nad przyciskiem pokazuje punkty bieżącej misji
+oraz maksimum. Czcionka ma wielkość tekstu przycisku; licznik pozostaje widoczny
+przy wyłączonym autoplay. Natywne punkty są odczytywane z gry. Znany wynik bez
+maksimum pozostaje widoczny, np. `1200/—`.
+
+W niepunktowanej misji ocena porównawcza zaczyna od `~0/—`. V12 usuwa błędną
+bazę 6000 punktów na żołnierza z v11. Pierwsza rana odejmuje 1000, potwierdzona
+strata 5000; każda kara jest naliczana najwyżej raz na jednostkę. Zabicia,
+jawne cele i ratunek cywilów zachowują reguły wspólnego profilu v2. Tylda
+oznacza ocenę częściową, a maksimum pozostaje nieznane.
+
+Wersja `mission-report-v14` dodaje do katalogu dane z konfiguracji gry i SDK:
+statystyki według trudności, wyposażenie, parametry broni i odwołania do AI.
+Wspólna ocena ryzyka uwzględnia aktywne oznaczenie własnego żołnierza
+przez kapitana. W przekazanej konfiguracji Marked daje +10 celności przeciw
+oznaczonemu celowi, bez dodatkowej premii do krytyka. Jest to podstawa
+ograniczonej wagi planera; trafienia nadal oblicza gra.
+Pozostają mechaniki v13: rozróżnianie broni, priorytet znanych zdolności,
+ochrona przed kontrą melee, zasięg zombie i limit ekspozycji przy zasadzce.
+Brakujące sekcje konfiguracji pozostają jawne; katalog nie zastępuje danych
+załadowanych w bieżącej grze. Opis: `docs/config-knowledge-v14.pl.md`.
+
+Wersja `mission-report-v15` dodaje kontrolę jawnych chmur trucizny,
+bezpieczne wyjście na czyste pole oraz ograniczony wariant ruchu przed
+podstawowym strzałem z zachowaniem AP. Ocenia też Aid Protocol lub leczenie
+przed zachowanym legalnym atakiem, według rzeczywistych typów i kosztów AP.
+Wyjście z chmury nie leczy już
+nałożonego zatrucia. Przyszłe trafienie jest szacowane ostrożnie; po ruchu
+legalność i rzeczywistą szansę ponownie sprawdza gra.
+
+Od tej serii prób sukces wymaga zwycięstwa oraz wyniku misji większego od
+zera. Zwycięstwo z wynikiem zero lub ujemnym nie zalicza próby, a niepełna
+punktacja nie potwierdza sukcesu. Oficjalny rezultat gry pozostaje osobno.
+Opis mechanik v15: `docs/tactics-v15.pl.md`.
+
+Bieżące `mission-report-v16` poprawia dwa źródła samoczynnego zatrzymania.
+Odrzucony podgląd granatu powoduje wybór innej akcji z ograniczonym
+ponawianiem, przy zachowaniu kontroli bezpieczeństwa. Koniec tury jest
+potwierdzany przez historię lub zmianę gracza/tury, zamiast samego wyniku
+bool funkcji silnika. Opis: `docs/tactics-v16.pl.md` oraz
+`docs/report-2026-11-04-v15-stops.pl.md`.
+
+Zbuduj i zainstaluj nową wersję; sama podmiana konfiguracji nie wystarczy.
+Instrukcja próby to `docs/legacy-test.pl.md`, a opis licznika to
+`docs/score-display-v10.pl.md` w źródłach.
 
 ## Wymagania
 
@@ -130,11 +187,20 @@ Raport ZIP pojawi się w `<Dokumenty>\AutoplayXCom2-Reports`. Skrypt działa tak
 po usunięciu pobranego folderu źródeł. Załącz raport do zgłoszenia wraz z poziomem
 trudności, wynikiem misji i stratami. Szczegóły: `docs/mission-recording.pl.md`
 w repozytorium. To zapis diagnostyczny, nie film ani replay.
-W nowym raporcie wpis `revision=mission-report-v5` identyfikuje tę wersję.
+W nowym raporcie wpis `revision=mission-report-v16` identyfikuje tę wersję.
 Znaczniki `ambush_setup` pokazują przygotowania, a `grenade_scan` zawiera również
 liczby ocenionych okazji do granatu na pojedynczy cel i ostatni podgląd obrażeń.
 `area_target_preview` opisuje cele wybranego granatu; `move_threat_preview`
-pozwala sprawdzić osłony wybranych ruchów. Podglądy nie są gwarancją wyniku akcji.
+pozwala sprawdzić osłony wybranych ruchów, odległość, klasyfikację wręcz i wkład
+ryzyka każdego widocznego wroga. Podglądy nie są gwarancją wyniku akcji.
+V9 zapisuje także `rescue_candidate`, `loot_candidate` i odczyty oficjalnego
+wyniku Legacy (`game_score`), gdy należą do bieżącego etapu. Analizator źródeł
+wylicza wspólną punktację porównawczą dla wszystkich misji; oznacza braki danych
+i nie zastępuje nią oficjalnego wyniku gry. V11 udostępnia tę samą skalę
+porównawczą także na HUD-zie misji niepunktowanych, zawsze z tyldą i bez
+znanego maksimum. Zakres obserwacji HUD-u i raportu może się różnić.
+Do raportu warto nadal dopisać wynik
+z ekranu podsumowania oraz wszelkie ręczne działania i restarty.
 
 - Stałe „PAUSED: SCREEN / MENU” na zwykłym HUD-zie w wersji `0.1.0-alpha`: pobierz aktualne źródła, ponownie zbuduj i zastąp cały folder moda; sama zmiana INI nie wystarczy. Po aktualizacji uruchom grę ponownie.
 - Jeśli aktualna kompilacja nadal czeka, prześlij `Launch.log` z `<Dokumenty>\My Games\XCOM2 War of the Chosen\XComGame\Logs`. Wpisy `AutoplayXCom2: Waiting:` oraz `UI stack:` wskazują rozpoznaną przyczynę; powtarzane są tylko po zmianie przyczyny.
@@ -143,7 +209,13 @@ pozwala sprawdzić osłony wybranych ruchów. Podglądy nie są gwarancją wynik
 - Log gry: `<Dokumenty>\My Games\XCOM2 War of the Chosen\XComGame\Logs\Launch.log`. Do zgłoszenia dołącz typ misji, etap i listę pozostałych modów.
 - Wyłączenie moda: odznacz go w launcherze. Bieżące włączenie autoplaya nie jest zapisywane w kampanii.
 
-Wcześniejszą kompilację i zależności binarne sprawdzono, a użytkownik potwierdził
-wydawanie rozkazów po poprawce HUD-u. Nowe zmiany taktyki **wymagają kompilacji
-i prób w grze**. Nie potwierdzono pełnej obsługi każdej skryptowanej misji DLC
+Wcześniejszą kompilację i zależności binarne sprawdzono. Raporty potwierdzają
+zwycięstwa v8 i działanie ratunku v9; wcześniejszy raport v12 z `SabotageCC`
+kończy się porażką. Potwierdza start punktacji porównawczej od zera.
+Najnowszy raport v15 potwierdza jedną poprawę celowania po ruchu 47→68%,
+lecz SabotageCC kończy się porażką w turze 18. Trzy zatrzymania przed rzutem
+granatu są opisane osobno od odrzuconych rozkazów silnika. Poprawki v16
+wymagają nowej kompilacji i próby.
+Nie potwierdzono
+pełnej obsługi każdej skryptowanej misji DLC
 ani konkretnego najnowszego numeru builda Steam. Stan weryfikacji opisuje README.
