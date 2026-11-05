@@ -44,9 +44,11 @@ class ScoreHUDContracts(unittest.TestCase):
 
     def test_score_refresh_uses_the_actual_button_font_even_with_autoplay_off(self):
         update = function_body(self.source, 'UpdateStatus')
-        self.assertIn('ScoreText = ScoreCounter.GetText()', update)
+        self.assertIn('ScoreText = GetDisplayedScoreText()', update)
+        displayed = function_body(self.source, 'GetDisplayedScoreText')
+        self.assertIn('CachedScoreText = ScoreCounter.GetText()', displayed)
         self.assertIn('ScoreText, eUIState_Normal, ToggleButton.FontSize', update)
-        self.assertLess(update.index('ScoreCounter.GetText()'), update.index('if (Controller == none)'))
+        self.assertLess(update.index('ScoreText = GetDisplayedScoreText()'), update.index('if (Controller == none)'))
         tick = function_body(self.source, 'Tick')
         self.assertIn('RefreshRemaining = 0.25', tick)
         self.assertIn('UpdateStatus()', tick)
@@ -60,7 +62,7 @@ class ScoreHUDContracts(unittest.TestCase):
     def test_telemetry_records_the_same_displayed_text_without_starting_autoplay(self):
         update = function_body(self.source, 'UpdateStatus')
         self.assertIn('Controller.RecordDisplayedScore(ScoreText)', update)
-        self.assertLess(update.index('ScoreText = ScoreCounter.GetText()'),
+        self.assertLess(update.index('ScoreText = GetDisplayedScoreText()'),
                         update.index('Controller.RecordDisplayedScore(ScoreText)'))
         classes = HUD.parent
         forward = function_body((classes / 'APX_Controller.uc').read_text(), 'RecordDisplayedScore')
