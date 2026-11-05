@@ -12,7 +12,8 @@ Przy włączonym `APX_UITacticalControl` panel statusu odświeża się
 co 0,25 s również przy F8 OFF. Dotychczas każde takie odświeżenie
 uruchamiało `APX_MissionScore.GetText`, który dla aktualnego
 `ChallengeData` woła natywne `GetTotalScore()`. W najnowszej
-próbie BerserkerMP v18 było 460 wpisów `GetTotalScore` w okresie
+próbie BerserkerMP v18 było 460 wierszy `GetTotalScore`, czyli 230 par zapisu
+pojedynczego odczytu (ScoreType i TotalScore) w okresie
 około 160 s. Koincydencja nie dowodzi przyczyny zawieszenia.
 
 W tym wariancie panel statusu zachowuje 4 Hz. Sam **tekst HUD**
