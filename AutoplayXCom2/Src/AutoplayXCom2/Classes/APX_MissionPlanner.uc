@@ -1369,8 +1369,21 @@ static function bool HasLegalMove(XComGameState_Unit UnitState)
 // The distance heuristic can get stuck behind a wall: a real route may first
 // move away from its goal. Use the game's unrestricted A* only for planning,
 // then rebuild a blue-range prefix from the actual reachable cache for dispatch.
+// Walking repeatedly to the same two endpoints is not objective progress.
+static function bool IsRecentRouteTile(TTile Tile, const out array<TTile> RecentTiles)
+{
+    local int Index;
+    for (Index = 0; Index < RecentTiles.Length; ++Index)
+    {
+        if (RecentTiles[Index] == Tile)
+            return true;
+    }
+    return false;
+}
+
 static function bool ChooseRoutePrefix(XComGameState_Unit UnitState,
-    XGUnit UnitVisualizer, TTile GoalTile, out array<TTile> Path)
+    XGUnit UnitVisualizer, TTile GoalTile, out array<TTile> Path,
+    optional const out array<TTile> RecentTiles)
 {
     local array<TTile> FullPath, CandidatePath;
     local int Index, PathIndex;
@@ -1387,6 +1400,7 @@ static function bool ChooseRoutePrefix(XComGameState_Unit UnitState,
     for (Index = FullPath.Length - 1; Index > 0; --Index)
     {
         if (TileDistance(FullPath[Index], UnitState.TileLocation) < 1
+            || IsRecentRouteTile(FullPath[Index], RecentTiles)
             || !UnitVisualizer.m_kReachableTilesCache.IsTileReachable(FullPath[Index]))
             continue;
         PathCost = UnitVisualizer.m_kReachableTilesCache.GetPathCostToTile(FullPath[Index]);
@@ -1519,7 +1533,7 @@ static function bool ChoosePoisonEscape(XComGameState_Unit UnitState,
 }
 
 static function bool ChooseMove(XComGameState_Unit UnitState,
-    out array<TTile> Path, out float Score)
+    out array<TTile> Path, out float Score, optional const out array<TTile> RecentTiles)
 {
     local XGUnit UnitVisualizer;
     local array<TTile> Tiles, CandidatePath;
@@ -1556,7 +1570,7 @@ static function bool ChooseMove(XComGameState_Unit UnitState,
     // only after greedy failure would oscillate back toward a wall on the next
     // action whenever the necessary detour initially increases direct distance.
     if (!bCombatGoal && VisibleEnemies.Length == 0
-        && ChooseRoutePrefix(UnitState, UnitVisualizer, GoalTile, Path))
+        && ChooseRoutePrefix(UnitState, UnitVisualizer, GoalTile, Path, RecentTiles))
     {
         Score = ScoreRouteAdvance(SquadPositionScore(UnitState, UnitState.TileLocation),
             SquadPositionScore(UnitState, Path[Path.Length - 1]));
@@ -1586,6 +1600,8 @@ static function bool ChooseMove(XComGameState_Unit UnitState,
         Tile = Tiles[Index];
         PathCost = UnitVisualizer.m_kReachableTilesCache.GetPathCostToTile(Tile);
         if (TileDistance(Tile, UnitState.TileLocation) < 1
+            || (!bCombatGoal && !ShouldEvacuate(UnitState)
+                && IsRecentRouteTile(Tile, RecentTiles))
             || class'APX_HazardKnowledge'.static.HasBlockingHazard(UnitState, Tile)
             || (bCombatGoal && !IsKnownCombatTile(Tile))
             || (bCombatGoal && !IsSupportedCombatDestination(UnitState, Tile))
