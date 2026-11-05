@@ -60,8 +60,10 @@ and [docs/PROJECT-STATE.pl.md](docs/PROJECT-STATE.pl.md) before changing this pr
 - Native mission points exclude earlier ladder missions. Keep the zero-based
   `wotc_legacy_observed_v2` comparison and its partial marker; never invent initial
   bonuses, a maximum, or scoring changes to turn a failed benchmark green.
-- No extra AP/ammo, forced hits/victory, RNG lookahead, hidden contacts, or enemy
-  current AP/ammo/cooldown/charge/private-intent inspection. SDK template knowledge
+- No artificially granted AP/ammo outside normal legal ability effects, forced
+  hits/victory, RNG lookahead, hidden contacts, or enemy current
+  AP/ammo/cooldown/charge/private-intent inspection. Native bonus actions, free
+  reloads and AP-granting abilities remain legitimate when available. SDK template knowledge
   and observations currently visible to the player are legitimate inputs.
 - Keep runtime game-state/history reads observational. Do not move a live history
   unit temporarily to fake a shot preview. Label geometric forecasts as estimates.
