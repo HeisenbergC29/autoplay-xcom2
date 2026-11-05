@@ -43,11 +43,13 @@ class ConfigDefaultsTests(unittest.TestCase):
         combat = [(key, value) for section, key, value in entries
                   if section == 'AutoplayXCom2.APX_CombatPlanner' and key.endswith('Abilities')]
         self.assertEqual(Counter(key for key, _ in combat), {
-            'AttackAbilities': 16, 'HealAbilities': 4, 'StabilizeAbilities': 2,
+            'AttackAbilities': 18, 'HealAbilities': 4, 'StabilizeAbilities': 2,
             'ReloadAbilities': 1, 'OverwatchAbilities': 4, 'HunkerAbilities': 1,
             'SupportAbilities': 1})
         self.assertEqual(len(combat), len(set(combat)))
         self.assertTrue({('AttackAbilities', 'StandardShot'), ('AttackAbilities', 'Rend'),
+                         ('AttackAbilities', 'DevastatingPunch'),
+                         ('AttackAbilities', 'DevastatingPunchMP'),
                          ('HealAbilities', 'GremlinHeal'), ('ReloadAbilities', 'Reload'),
                          ('OverwatchAbilities', 'Overwatch'),
                          ('SupportAbilities', 'AidProtocol')} <= set(combat))
