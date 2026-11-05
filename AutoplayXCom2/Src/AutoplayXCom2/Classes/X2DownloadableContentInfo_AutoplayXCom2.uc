@@ -7,14 +7,24 @@ static event OnPostTemplatesCreated()
 {
     local X2AbilityTemplateManager Manager;
     local array<X2AbilityTemplate> Templates;
-    local int Index;
+    local int Index, Matched;
 
     Manager = class'X2AbilityTemplateManager'.static.GetAbilityTemplateManager();
     if (Manager == none)
+    {
+        `log("MP visualization patch|revision=mission-report-v18|status=manager_unavailable", true, 'AutoplayXCom2');
         return;
+    }
     Manager.FindAbilityTemplateAllDifficulties('DevastatingPunchMP', Templates);
     for (Index = 0; Index < Templates.Length; ++Index)
-        PatchMPFailureVisualization(Templates[Index]);
+    {
+        if (PatchMPFailureVisualization(Templates[Index]))
+            ++Matched;
+    }
+    // One initialization summary, including safe skips of unknown shapes.
+    // A match means both flags are present, including an idempotent re-run.
+    `log("MP visualization patch|revision=mission-report-v18|templates=" $ Templates.Length
+        $ "|matched=" $ Matched $ "|skipped=" $ (Templates.Length - Matched), true, 'AutoplayXCom2');
 }
 
 // No game-state mutations, damage changes, roll changes or action-cost changes.
