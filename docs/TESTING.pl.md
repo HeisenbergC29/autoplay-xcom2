@@ -1,12 +1,18 @@
 # Testy odbiorcze
 
-Najnowszy [raport v15](report-2026-11-04-v15-stops.pl.md): `SabotageCC`,
+Raport z rewizją v17 obejmuje dwie porażki i awarię; analiza jest w
+[issue #15](https://github.com/HeisenbergC29/autoplay-xcom2/issues/15).
+Dokładny SHA kompilacji nie jest potwierdzony. Bieżąca próba v18 izoluje
+wyłącznie poprawkę wizualizacji MP; nie jest potwierdzoną naprawą crasha.
+[Instrukcja porównania A/B](experiment-15-berserker-mp-visualization.pl.md).
+
+[Raport v15](report-2026-11-04-v15-stops.pl.md): `SabotageCC`,
 trudność 3, **FAIL** w turze 18, 80 przyjętych rozkazów i zero odrzuceń
 przez silnik. Częściowy wynik porównawczy −17500. Jedno przestawienie
 przed strzałem 47→68%: **POTWIERDZONE**; próby chmury trucizny i kombinacji
 AP: **NIEURUCHOMIONE**. Trzy zatrzymania przed rzutem granatu są osobnym
 błędem od odrzuconego rozkazu. Kompilacja Windows i próba bieżącej rewizji
-`mission-report-v17`: **NIEURUCHOMIONE**.
+`mission-report-v18`: **NIEURUCHOMIONE**.
 [Zakres i scenariusze v17](tactics-v17.pl.md) ·
 [Zachowane scenariusze v16](tactics-v16.pl.md).
 
@@ -16,7 +22,15 @@ gry pozostaje zapisane. Brak pewnego końcowego wyniku daje **NIEPOTWIERDZONY**,
 bez zaliczenia na podstawie częściowego `~wynik/—`. Dawne opisy zwycięstw
 v8 zachowują znaczenie historycznego wyniku gry.
 
-V17: sprawdź legalne `DevastatingPunch` i `DevastatingPunchMP` Berserkera
+V18: sprawdź startupowe `MP visualization patch`, rewizję v18, `templates > 0`,
+`matched > 0`, `skipped=0`, a potem rzeczywisty `DevastatingPunchMP`.
+Pominięte warianty trudności dają wynik nierozstrzygający.
+Bez tych danych brak redscreen
+nie potwierdza działania poprawki. Porównanie wymaga dwóch kompilacji i
+restartów gry; F8 OFF nie wyłącza poprawki szablonu. Zapis z późnej fazy bez
+nowego ciosu nie weryfikuje wizualizacji. Późniejszą awarię oceniaj osobno.
+
+Zachowaj scenariusze v17: legalne `DevastatingPunch` i `DevastatingPunchMP` Berserkera
 sterowanego przez gracza oraz zachowanie ograniczeń AP, ścieżki, zagrożeń,
 wsparcia i kontry. Własny żołnierz przejęty aktywną odwracalną kontrolą
 umysłu nie może być wybrany jako cel ataku ani narażony przez wybrany granat.
@@ -62,7 +76,7 @@ Ten sam raport zawiera zwycięstwo v8 w `SabotageCC` na trudności 3.
 Wcześniejsze zwycięstwo v8 w pierwszej misji Legacy pozostaje osobną próbą;
 Cemetery nadal nie ma udokumentowanej próby autoplaya.
 V10 działało w zwykłej niepunktowanej misji. Wyświetlanie liczb Legacy
-oraz bieżące zmiany v17 nadal wymagają kompilacji Windows i próby w grze.
+oraz bieżące zmiany v18 nadal wymagają kompilacji Windows i próby w grze.
 [Instrukcja Legacy](legacy-test.pl.md) · [Licznik v12](score-display-v10.pl.md).
 
 Dotychczasowy wynik zgłoszony przez użytkownika: **PASS** — mod wydaje rozkazy;

@@ -6,10 +6,12 @@ poziom potwierdzenia działania.
 
 ## Baza kodu
 
-- Bieżąca rewizja źródeł: `mission-report-v17`. Commit rewizji i testu:
-  `97e79e3b20547c2a9c75a2cd352d80900741faba`.
-- Wspólna baza po scaleniu PR #7 i #9: `84c1168`; kolejne gałęzie zaczynaj
-  od aktualnego `main`, uwzględniając końcową integrację v17 z issue #13.
+- Bieżąca rewizja źródeł: `mission-report-v18`, izolowana poprawka
+  wizualizacji MP z PR #16 oraz diagnostyka jej zastosowania.
+  [Integracja PR #19](https://github.com/HeisenbergC29/autoplay-xcom2/pull/19).
+- Baza porównawcza v17: `ba4550a8495c5c7d504eca681a6465b2c433ae37`.
+  PR #16 scalono jako `42b36d4`; kolejne gałęzie zaczynaj od aktualnego
+  `main`, uwzględniając integrację v18 z issue #18.
 - Zachowany bazowy commit v16: `9458b185e6602a07d448010c45bc5aeb74fd8d80`.
 - Opublikowany kod v15 do porównania:
   `9832d72d14b75adb110a1d5ac74a32e290306b0e`. Dokładną bazę swojego
@@ -45,6 +47,12 @@ Chroni również odzyskiwalnego własnego żołnierza z rozpoznanym aktywnym
 efektem kontroli umysłu przed atakiem i granatem. Poprawki v16 pozostają.
 [Zakres, źródła i próby v17](tactics-v17.pl.md).
 
+V18 dodaje tylko flagi ukrywania nieudanego wyniku wizualizacji obrażeń
+w rozpoznanym szablonie `DevastatingPunchMP` oraz startupowe podsumowanie.
+Nie zmienia rozgrywki, taktyki, HUD ani punktacji. Przyczyna późniejszej
+awarii pozostaje niepotwierdzona.
+[Zakres i próba A/B v18](experiment-15-berserker-mp-visualization.pl.md).
+
 ## Pierwszy przegląd importu
 
 Źródło pomocnika:
@@ -62,15 +70,25 @@ v15, co nie oznacza wspólnego przodka commitów.
 
 ## Potwierdzenie i ograniczenia
 
-| Dowód | Stan integracji v17 |
+V18: **518 testów Python z prywatnym SDK/configami zaliczonych, bez
+pominięć**; audyt **17 klas / 31 nazw zdolności PASS**. Końcowe publiczne
+CI integracji jest śledzone w PR #19. Kompilacja Windows WOTC SDK i próba
+v18 w grze: **NIEURUCHOMIONE**. Samo scalenie nie potwierdza naprawy awarii.
+
+| Dowód | Historyczna baza v17 |
 | --- | --- |
 | Testy Python z prywatnym SDK i configami | 513 zaliczonych, bez pominięć |
 | Audyt referencji | 17 klas moda, 31 skonfigurowanych nazw zdolności |
 | Pomocnicy budowania, zbierania SDK i raportów | trzy zestawy PowerShell zaliczone lokalnie w PowerShell 7.6.9 |
 | Publiczny zestaw bez prywatnych wejść | 455 zaliczonych, 58 pominiętych; [CI kodu v17](https://github.com/HeisenbergC29/autoplay-xcom2/actions/runs/42021235262) |
 | Pomocnicy PowerShell na Windows | trzy zestawy zaliczone w tym samym CI; to nie kompilacja WOTC |
-| Kompilacja v17 w Windows WOTC SDK | NIEURUCHOMIONA |
-| Pełna próba v17 w grze | NIEURUCHOMIONA |
+| Kompilacja v17 w Windows WOTC SDK | brak logu kompilacji i dokładnego SHA |
+| Próby z rewizją v17 w grze | dwie porażki i awaria, bez odbioru wersji |
+
+Nowy raport v17 opisano w [issue #15](https://github.com/HeisenbergC29/autoplay-xcom2/issues/15).
+Rewizja logu potwierdza uruchomienie moda, ale nie dokładny commit
+zbudowanych źródeł. Potwierdzone końce tury i przyjęte ciosy są dowodem
+tych obserwacji, nie skuteczności całej misji ani usunięcia awarii.
 
 Liczby historycznej bazy v16: 505 testów z prywatnymi wejściami bez pominięć,
 17 klas i 29 nazw zdolności; publicznie 450 zaliczonych i 55 pominiętych.

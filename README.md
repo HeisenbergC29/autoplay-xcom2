@@ -119,17 +119,22 @@ akcję, zachowując kontrolę bezpieczeństwa wybuchu. Blokuje powtarzanie
 odrzuconej zdolności w niezmienionej historii i ogranicza ponowne próby.
 Poprawia też potwierdzanie końca tury: stockowe API może zwrócić `false`
 pomimo wysłania żądania. [Przyczyny zatrzymań i zakres v16](docs/tactics-v16.pl.md).
-Bieżące **`mission-report-v17`** zachowuje te poprawki, dodaje obsługę
+Rewizja **`mission-report-v17`** zachowuje te poprawki, dodaje obsługę
 natywnych ciosów Berserkera sterowanego przez gracza i chroni własnego
 żołnierza przejętego rozpoznaną odwracalną kontrolą umysłu przed atakiem
 oraz granatem. To dwa porty pomocnika przyjęte po przeglądzie; filtr pamięci
 marszu z PR #11 wymaga poprawek i nie jest częścią tej rewizji.
 [Zakres v17 i próby użytkownika](docs/tactics-v17.pl.md).
-V17 wymaga nowej kompilacji na Windows i sprawdzenia w grze; opublikowane
+Bieżące **`mission-report-v18`** dodaje izolowaną poprawkę wizualizacji
+`DevastatingPunchMP` z PR #16 oraz podsumowanie jej zastosowania przy starcie.
+Nie zmienia taktyki, HUD ani punktacji. Raport v17 obejmuje dwie porażki i
+awarię; przyczyna awarii nadal nie jest potwierdzona.
+[Próba porównawcza v17/v18](docs/experiment-15-berserker-mp-visualization.pl.md).
+Kompilacja Windows i próba v18 w grze pozostają nieuruchomione; opublikowane
 źródła nie oznaczają nowego wydania binarnego.
 
 Ocena porównawcza nadal używa profilu `wotc_legacy_observed_v2` od `~0/—`;
-reguły punktacji nie zostały zmienione przez v15–v17. Zmieniło się kryterium
+reguły punktacji nie zostały zmienione przez v15–v18. Zmieniło się kryterium
 zaliczenia próby, nie sposób naliczania punktów.
 [Zasady licznika](docs/score-display-v10.pl.md).
 
