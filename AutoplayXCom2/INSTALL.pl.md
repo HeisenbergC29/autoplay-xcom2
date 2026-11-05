@@ -73,12 +73,17 @@ rozpoznaną odwracalną kontrolą umysłu przed atakiem i granatem. Opis i prób
 częścią v17. Późniejszy raport v17 obejmuje dwie porażki i awarię;
 nie potwierdza dokładnego SHA kompilacji ani odbioru wersji.
 
-Bieżące `mission-report-v18` dodaje wyłącznie poprawkę wizualizacji
+Rewizja `mission-report-v18` dodaje wyłącznie poprawkę wizualizacji
 `DevastatingPunchMP` i diagnostykę jej zastosowania przy starcie.
 Nie jest potwierdzoną naprawą awarii. Próba porównawcza:
 `docs/experiment-15-berserker-mp-visualization.pl.md`.
-Kompilacja Windows i gra v18 pozostają nieuruchomione; aktualizacja
-źródeł nie jest nową paczką binarną.
+Bieżące `mission-report-v19` dodaje cache samego tekstu punktów HUD.
+Status nadal odświeża się co około 0,25 s, wynik przy zmianie historii na
+następnym odświeżeniu, a przy stabilnej historii co około 1 s. Odczyt
+końcowy nie korzysta z tego cache. Działa również przy F8 OFF.
+Instrukcja osobnego porównania: `docs/experiment-17-hud-polling.pl.md`.
+Kompilacja Windows i gra v19 pozostają nieuruchomione; aktualizacja
+źródeł nie jest nową paczką binarną ani potwierdzoną naprawą zawieszenia.
 
 Zbuduj i zainstaluj nową wersję; sama podmiana konfiguracji nie wystarczy.
 Instrukcja próby to `docs/legacy-test.pl.md`, a opis licznika to
@@ -201,7 +206,9 @@ Raport ZIP pojawi się w `<Dokumenty>\AutoplayXCom2-Reports`. Skrypt działa tak
 po usunięciu pobranego folderu źródeł. Załącz raport do zgłoszenia wraz z poziomem
 trudności, wynikiem misji i stratami. Szczegóły: `docs/mission-recording.pl.md`
 w repozytorium. To zapis diagnostyczny, nie film ani replay.
-W nowym raporcie wpis `revision=mission-report-v18` identyfikuje tę wersję.
+W nowym raporcie wpis `revision=mission-report-v19` identyfikuje tę wersję.
+Startupowy `HUD score polling` podaje rewizję, interwały 1,0/0,25 s
+i aktywną invalidację przy zmianie historii. F8 OFF nie wyłącza cache HUD.
 Przy starcie sprawdź również `MP visualization patch`: `templates > 0`,
 `matched > 0` i `skipped=0`. Pominięte warianty trudności wymagają przeglądu
 podsumowania; samo dodatnie `matched` nie potwierdza wybranego wariantu.
@@ -231,7 +238,7 @@ zwycięstwa v8 i działanie ratunku v9; wcześniejszy raport v12 z `SabotageCC`
 kończy się porażką. Potwierdza start punktacji porównawczej od zera.
 Najnowszy raport v15 potwierdza jedną poprawę celowania po ruchu 47→68%,
 lecz SabotageCC kończy się porażką w turze 18. Trzy zatrzymania przed rzutem
-granatu są opisane osobno od odrzuconych rozkazów silnika. Bieżące źródła v18
+granatu są opisane osobno od odrzuconych rozkazów silnika. Bieżące źródła v19
 wymagają nowej kompilacji i próby.
 Nie potwierdzono
 pełnej obsługi każdej skryptowanej misji DLC

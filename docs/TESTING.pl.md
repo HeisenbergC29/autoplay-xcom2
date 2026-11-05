@@ -2,9 +2,16 @@
 
 Raport z rewizją v17 obejmuje dwie porażki i awarię; analiza jest w
 [issue #15](https://github.com/HeisenbergC29/autoplay-xcom2/issues/15).
-Dokładny SHA kompilacji nie jest potwierdzony. Bieżąca próba v18 izoluje
-wyłącznie poprawkę wizualizacji MP; nie jest potwierdzoną naprawą crasha.
-[Instrukcja porównania A/B](experiment-15-berserker-mp-visualization.pl.md).
+Dokładny SHA kompilacji nie jest potwierdzony. Poprawka MP z v18 pozostaje
+w bazie; jej [wcześniejsza próba A/B](experiment-15-berserker-mp-visualization.pl.md)
+nie jest tym samym eksperymentem co obecny cache HUD.
+
+Według [analizy pomocnika #21](https://github.com/HeisenbergC29/autoplay-xcom2/issues/21)
+v18 dopasowało szablon MP i wykonało dwa ciosy bez dawnego redscreen,
+lecz później nastąpiło zawieszenie w fazie wroga. Nie ma podstaw do
+utożsamienia go z wcześniejszym potwierdzonym wyjątkiem v17. Ukryty HUD
+sam nie dowodzi przyczyny. Bieżące v19 izoluje odczyty tekstu HUD.
+[Instrukcja porównania v18/v19](experiment-17-hud-polling.pl.md).
 
 [Raport v15](report-2026-11-04-v15-stops.pl.md): `SabotageCC`,
 trudność 3, **FAIL** w turze 18, 80 przyjętych rozkazów i zero odrzuceń
@@ -12,7 +19,7 @@ przez silnik. Częściowy wynik porównawczy −17500. Jedno przestawienie
 przed strzałem 47→68%: **POTWIERDZONE**; próby chmury trucizny i kombinacji
 AP: **NIEURUCHOMIONE**. Trzy zatrzymania przed rzutem granatu są osobnym
 błędem od odrzuconego rozkazu. Kompilacja Windows i próba bieżącej rewizji
-`mission-report-v18`: **NIEURUCHOMIONE**.
+`mission-report-v19`: **NIEURUCHOMIONE**.
 [Zakres i scenariusze v17](tactics-v17.pl.md) ·
 [Zachowane scenariusze v16](tactics-v16.pl.md).
 
@@ -22,7 +29,17 @@ gry pozostaje zapisane. Brak pewnego końcowego wyniku daje **NIEPOTWIERDZONY**,
 bez zaliczenia na podstawie częściowego `~wynik/—`. Dawne opisy zwycięstw
 v8 zachowują znaczenie historycznego wyniku gry.
 
-V18: sprawdź startupowe `MP visualization patch`, rewizję v18, `templates > 0`,
+V19: potwierdź `HUD score polling|revision=mission-report-v19`, odczyt
+przy F8 ON/OFF, pierwszym pokazaniu, zmianie historii i okresowo przy
+stabilnej historii. Zmiana historii jest widoczna na następnym odświeżeniu
+statusu, około 0,25 s; stabilny tekst może pozostać przez około 1 s plus
+opóźnienie planowania UI. Wynik końcowy musi być odczytany bez cache HUD.
+Przy częstych zmianach historii odczyt może pozostać przy około 4 Hz.
+Porównuj podsumowania `GetTotalScore - TotalScore:`, nie wszystkie wiersze
+ScoreType. Oceniaj osobno częstotliwość odczytów i zawieszenie.
+
+Zachowaj scenariusz MP z v18: sprawdź startupowe `MP visualization patch`
+z rewizją aktualnej kompilacji (v19 dla wariantu B), `templates > 0`,
 `matched > 0`, `skipped=0`, a potem rzeczywisty `DevastatingPunchMP`.
 Pominięte warianty trudności dają wynik nierozstrzygający.
 Bez tych danych brak redscreen
@@ -76,7 +93,7 @@ Ten sam raport zawiera zwycięstwo v8 w `SabotageCC` na trudności 3.
 Wcześniejsze zwycięstwo v8 w pierwszej misji Legacy pozostaje osobną próbą;
 Cemetery nadal nie ma udokumentowanej próby autoplaya.
 V10 działało w zwykłej niepunktowanej misji. Wyświetlanie liczb Legacy
-oraz bieżące zmiany v18 nadal wymagają kompilacji Windows i próby w grze.
+oraz bieżące zmiany v19 nadal wymagają kompilacji Windows i próby w grze.
 [Instrukcja Legacy](legacy-test.pl.md) · [Licznik v12](score-display-v10.pl.md).
 
 Dotychczasowy wynik zgłoszony przez użytkownika: **PASS** — mod wydaje rozkazy;

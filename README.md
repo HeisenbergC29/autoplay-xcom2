@@ -125,16 +125,21 @@ natywnych ciosów Berserkera sterowanego przez gracza i chroni własnego
 oraz granatem. To dwa porty pomocnika przyjęte po przeglądzie; filtr pamięci
 marszu z PR #11 wymaga poprawek i nie jest częścią tej rewizji.
 [Zakres v17 i próby użytkownika](docs/tactics-v17.pl.md).
-Bieżące **`mission-report-v18`** dodaje izolowaną poprawkę wizualizacji
+Rewizja **`mission-report-v18`** dodaje izolowaną poprawkę wizualizacji
 `DevastatingPunchMP` z PR #16 oraz podsumowanie jej zastosowania przy starcie.
 Nie zmienia taktyki, HUD ani punktacji. Raport v17 obejmuje dwie porażki i
 awarię; przyczyna awarii nadal nie jest potwierdzona.
 [Próba porównawcza v17/v18](docs/experiment-15-berserker-mp-visualization.pl.md).
-Kompilacja Windows i próba v18 w grze pozostają nieuruchomione; opublikowane
+Bieżące **`mission-report-v19`** ogranicza odczyty tekstu punktów HUD przy
+stabilnej historii, zachowując odświeżanie przy OFF i natywny odczyt końcowy.
+Według analizy pomocnika v18 wykonało ciosy MP bez dawnego redscreen, ale
+później nastąpiło zawieszenie; przyczyna pozostaje nieustalona.
+[Osobna próba v18/v19](docs/experiment-17-hud-polling.pl.md).
+Kompilacja Windows i próba v19 w grze pozostają nieuruchomione; opublikowane
 źródła nie oznaczają nowego wydania binarnego.
 
 Ocena porównawcza nadal używa profilu `wotc_legacy_observed_v2` od `~0/—`;
-reguły punktacji nie zostały zmienione przez v15–v18. Zmieniło się kryterium
+reguły punktacji nie zostały zmienione przez v15–v19. Zmieniło się kryterium
 zaliczenia próby, nie sposób naliczania punktów.
 [Zasady licznika](docs/score-display-v10.pl.md).
 

@@ -25,6 +25,7 @@ automat i co rzeczywiście wydarzyło się po rozkazach.
 [V16: odrzucenie granatu i potwierdzanie końca tury](tactics-v16.pl.md).
 [V17: ciosy Berserkera i ochrona przejętego sojusznika](tactics-v17.pl.md).
 [V18: izolowana poprawka wizualizacji MP](experiment-15-berserker-mp-visualization.pl.md).
+[V19: osobny cache tekstu punktów HUD](experiment-17-hud-polling.pl.md).
 
 Wynik misji, punktację porównawczą i oficjalne punkty gry zapisujemy oddzielnie.
 `score` w rekordach `candidate`/`chosen` jest oceną heurystyki, a startowe
@@ -99,7 +100,7 @@ osobnym faktem. [Reguła i przykłady](tactics-v15.pl.md).
 
 ## Zbudowanie i pierwsza próba
 
-1. Pobierz aktualne źródła v18, rozpakuj je i zbuduj jak poprzednio na zachowanym
+1. Pobierz aktualne źródła v19, rozpakuj je i zbuduj jak poprzednio na zachowanym
    SDK WOTC. Bez `-BuildBase`, jeśli pakiety bazowe są już przygotowane.
 2. Zainstaluj nowy `dist\AutoplayXCom2.zip` i uruchom grę ponownie. Stara paczka
    z `release` nie zawiera rejestratora.
@@ -425,3 +426,20 @@ przed rozpoczęciem rejestratora przez F8; zachowaj log od startu gry.
 F8 OFF nie cofa poprawki, która dotyczy też ręcznie wykonywanych ciosów.
 Potwierdzenie szablonu i brak redscreen nie dowodzą usunięcia późniejszej
 awarii. [Porównanie dwóch kompilacji](experiment-15-berserker-mp-visualization.pl.md).
+
+Rewizja `mission-report-v19` oznacza osobny cache tekstu HUD z PR #22.
+Startupowy wpis `HUD score polling|revision=mission-report-v19` zawiera
+`stable_interval_seconds=1.0`, `status_interval_seconds=0.25` i
+`history_invalidation=true`. Odczyt przy stabilnej historii jest okresowy;
+zmiana obiektu/indeksu historii odświeża tekst na następnym odświeżeniu UI.
+Przy częstej zmianie historii odczyty mogą pozostać przy około 4 Hz.
+`RecordDisplayedScore` nadal zapisuje dokładnie wyświetlany tekst, a
+końcowy odczyt natywny nie korzysta z cache HUD.
+
+W v19 wpis `MP visualization patch` również podaje rewizję v19; mechanizm
+poprawki MP pozostaje taki jak w bazie v18. Samo F8 OFF nie wyłącza
+cache ani innych odczytów moda. Porównując częstość natywnego odczytu,
+licz podsumowania `GetTotalScore - TotalScore:`: pojedyncze wywołanie
+może dopisywać wiele wierszy ScoreType, więc ogólna liczba linii i stałe
+parowanie nie są miarą liczby wywołań.
+[Osobne porównanie v18/v19](experiment-17-hud-polling.pl.md).

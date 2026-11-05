@@ -6,12 +6,14 @@ poziom potwierdzenia działania.
 
 ## Baza kodu
 
-- Bieżąca rewizja źródeł: `mission-report-v18`, izolowana poprawka
-  wizualizacji MP z PR #16 oraz diagnostyka jej zastosowania.
-  [Integracja PR #19](https://github.com/HeisenbergC29/autoplay-xcom2/pull/19).
+- Bieżąca rewizja źródeł: `mission-report-v19`, osobny cache tekstu HUD
+  z PR #22; integrację i diagnostykę koordynuje LEAD w issue #23.
+- Dokładna baza A eksperymentu HUD: v18
+  `e30bf6a18ac6a35a4644e7b09a91157d85c0f518`. Wariant B wskazuje LEAD
+  w [issue #4](https://github.com/HeisenbergC29/autoplay-xcom2/issues/4).
 - Baza porównawcza v17: `ba4550a8495c5c7d504eca681a6465b2c433ae37`.
   PR #16 scalono jako `42b36d4`; kolejne gałęzie zaczynaj od aktualnego
-  `main`, uwzględniając integrację v18 z issue #18.
+  `main`, uwzględniając późniejsze integracje, obecnie v19 z issue #23.
 - Zachowany bazowy commit v16: `9458b185e6602a07d448010c45bc5aeb74fd8d80`.
 - Opublikowany kod v15 do porównania:
   `9832d72d14b75adb110a1d5ac74a32e290306b0e`. Dokładną bazę swojego
@@ -53,6 +55,19 @@ Nie zmienia rozgrywki, taktyki, HUD ani punktacji. Przyczyna późniejszej
 awarii pozostaje niepotwierdzona.
 [Zakres i próba A/B v18](experiment-15-berserker-mp-visualization.pl.md).
 
+V19 buforuje wyłącznie tekst punktów HUD. Status pozostaje odświeżany
+co około 0,25 s, a tekst przy zmianie historii i okresowo co około 1 s
+przy stabilnej historii, także przy OFF. Końcowy odczyt natywny pozostaje
+niezbuforowany. Nie obejmuje nowych zmian taktyki ani punktacji.
+[Zakres i porównanie v18/v19](experiment-17-hud-polling.pl.md).
+
+Według analizy HELPER w [#21](https://github.com/HeisenbergC29/autoplay-xcom2/issues/21)
+v18 zastosowało poprawkę MP i wykonało dwa ciosy bez dawnego redscreen,
+ale później nastąpiło zawieszenie. Nie ustalono przyczyny ani nowego
+wyjątku ACCESS_VIOLATION. To przekazanie pomocnika, bez niezależnej analizy
+nowego surowego logu przez LEAD. #20 (skupienie pod AoE) pozostaje osobnym
+tematem; PR #11 nadal wymaga poprawek.
+
 ## Pierwszy przegląd importu
 
 Źródło pomocnika:
@@ -70,10 +85,17 @@ v15, co nie oznacza wspólnego przodka commitów.
 
 ## Potwierdzenie i ograniczenia
 
-V18: **518 testów Python z prywatnym SDK/configami zaliczonych, bez
-pominięć**; audyt **17 klas / 31 nazw zdolności PASS**. Końcowe publiczne
-CI integracji jest śledzone w PR #19. Kompilacja Windows WOTC SDK i próba
-v18 w grze: **NIEURUCHOMIONE**. Samo scalenie nie potwierdza naprawy awarii.
+PR #22 oraz kod integracji v19 zaliczyły **524 testy z prywatnymi
+wejściami bez pominięć** i audyt **17 klas / 31 nazw zdolności PASS**.
+Publiczne CI PR #22: 464 PASS / 60 SKIP oraz trzy zestawy PowerShell PASS.
+Końcowe CI v19 jest śledzone w [PR #24](https://github.com/HeisenbergC29/autoplay-xcom2/pull/24).
+Kompilacja Windows WOTC SDK i gra v19:
+**NIEURUCHOMIONE**. Samo scalenie nie potwierdza naprawy zawieszenia.
+
+Historyczna integracja v18: 518 testów z prywatnymi wejściami bez pominięć,
+audyt 17 klas / 31 zdolności; publiczne CI śledzone w PR #19. Raporty
+pomocnika potwierdzają uruchomienie rewizji v18, ale nie dokładny SHA
+kompilacji ani zaliczenie wersji.
 
 | Dowód | Historyczna baza v17 |
 | --- | --- |
