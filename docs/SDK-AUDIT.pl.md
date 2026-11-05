@@ -556,3 +556,23 @@ nieustalona. Kompilacja Windows WOTC SDK i próba v18 w grze:
 do oceny potrzebny jest rzeczywisty cios oraz startupowe `templates > 0`,
 `matched > 0` i `skipped=0`. Pominięte warianty trudności wymagają przeglądu.
 [Instrukcja A/B](experiment-15-berserker-mp-visualization.pl.md).
+
+## V19 — osobny cache tekstu punktów HUD
+
+PR #22 buforuje tylko tekst panelu; pozostawia natywne obliczenia,
+końcowy odczyt, formatowanie oraz zapis faktycznie wyświetlanego tekstu.
+Invalidacja obejmuje obiekt i indeks historii, pierwszy odczyt oraz
+okresowy termin przy stabilnej historii. OFF nie wstrzymuje odświeżania.
+Integracja v19 i startupowy opis interwałów są koordynowane w issue #23.
+
+Przejrzany PR #22 oraz kod integracji v19 zaliczyły **524 testy bez
+pominięć** z prywatnym SDK i konfiguracjami; audyt **17 klas / 31 nazw
+zdolności PASS**. Publiczne CI PR #22: 464 PASS / 60 SKIP oraz trzy zestawy
+PowerShell PASS. Końcowe CI v19 jest śledzone w PR #24. Windows WOTC SDK i gra v19:
+**NIEURUCHOMIONE**.
+
+Nowe zawieszenie v18 opisuje analiza HELPER w #21. Przyczyna nadal nie
+jest ustalona; ukrycie HUD podczas fazy wroga samo jej nie dowodzi.
+Baza A zachowuje tę samą poprawkę MP, a B zmienia tylko harmonogram
+odczytu tekstu i identyfikację diagnostyczną.
+[Porównanie v18/v19](experiment-17-hud-polling.pl.md).

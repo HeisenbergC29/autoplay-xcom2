@@ -7,7 +7,7 @@ Ustalenia właściciela projektu z 5 listopada 2026, po korekcie oznaczeń
 Punkt wejścia i inwentaryzacja importu: [issue #1](https://github.com/HeisenbergC29/autoplay-xcom2/issues/1).
 Gotowe zadania niezależne: [diagnostyka raportów #2](https://github.com/HeisenbergC29/autoplay-xcom2/issues/2)
 i [macierz misji #3](https://github.com/HeisenbergC29/autoplay-xcom2/issues/3).
-Osobny dowód kompilacji/gry użytkownika: [próby v18 #4](https://github.com/HeisenbergC29/autoplay-xcom2/issues/4).
+Osobny dowód kompilacji/gry użytkownika: [próby v19 #4](https://github.com/HeisenbergC29/autoplay-xcom2/issues/4).
 
 ## Podział odpowiedzialności
 
@@ -72,6 +72,12 @@ PR #16 dodaje izolowaną poprawkę wizualizacji MP. Integracja v18 i diagnostyka
 jej zastosowania są koordynowane przez LEAD w issue #18. Przyczyna awarii
 z raportu v17 pozostaje nieustalona; próby użytkownika opisuje
 [eksperyment #15](experiment-15-berserker-mp-visualization.pl.md).
+
+PR #22 wprowadza osobny cache tekstu HUD; integracja v19 jest koordynowana
+przez LEAD w issue #23. Baza porównania to dokładne v18, z zachowaną
+poprawką MP. Zawieszenie z #21 pozostaje nieustalone, a zmiany taktyczne
+#20 i poprawki PR #11 są poza tym eksperymentem.
+[Próba v18/v19](experiment-17-hud-polling.pl.md).
 
 ## Przekazanie i decyzja o scaleniu
 

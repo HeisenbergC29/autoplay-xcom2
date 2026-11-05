@@ -1,4 +1,4 @@
-# Próba Legacy i ciągłość autoplaya — v18
+# Próba Legacy i ciągłość autoplaya — v19
 
 Pierwsza misja `ChallengeAbductionGasStation` została wcześniej ukończona
 zwycięstwem na v8: Dowódca, 14 tur, dwóch poległych.
@@ -11,12 +11,13 @@ przegrane próby. Ostatnie GasStation kończy się w turze 9 z natywnym
 odczytem −15100. Potwierdzono stabilizację, lecz raport nie zapisuje
 geometrii chmur trucizny ani nie dowodzi istnienia lepszej trasy do strzału.
 
-Najnowszy [raport v15](report-2026-11-04-v15-stops.pl.md) potwierdza poprawę
+[Raport v15](report-2026-11-04-v15-stops.pl.md) potwierdza poprawę
 jednego strzału po ruchu z 47% do 68%, ale kończy się porażką SabotageCC
 w turze 18. Trzy zatrzymania przed rzutem tego samego granatu wymagają
 osobnej kontroli ciągłości działania.
 
-Do kolejnej próby **zbuduj i zainstaluj v18**.
+Do kolejnej próby **zbuduj i zainstaluj v19**.
+[Osobny eksperyment HUD v18/v19](experiment-17-hud-polling.pl.md) ·
 [Izolowana próba wizualizacji MP v17/v18](experiment-15-berserker-mp-visualization.pl.md) ·
 [Berserker i ochrona przejętego sojusznika](tactics-v17.pl.md) ·
 [Zatrzymania granatu i potwierdzanie końca tury](tactics-v16.pl.md) ·
@@ -66,7 +67,7 @@ rzeczywisty brak potwierdzenia musi dać ograniczone oczekiwanie i diagnozę.
 ## Przebieg porównawczy
 
 1. Uruchom wybrany zapis Legacy Operations „Blast From the Past” na nowej
-   v18. Dla kontynuacji wcześniejszego zwycięstwa oczekiwany jest
+   v19. Dla kontynuacji wcześniejszego zwycięstwa oczekiwany jest
    `ChallengeAbductionCemetery`, etap 2; próba GasStation dotyczy
    `ChallengeAbductionGasStation`, etap 1. Zapisz etap i trudność.
 2. Po uzyskaniu sterowania, przed F8, sprawdź licznik nad przyciskiem.
@@ -74,7 +75,7 @@ rzeczywisty brak potwierdzenia musi dać ograniczone oczekiwanie i diagnozę.
    czcionki i przepuszczać kliknięcia mapy. Maksimum nie powinno maleć po
    zabiciach; w drugim etapie licznik nie może doliczać punktów poprzedniej misji.
 3. Włącz autoplay klawiszem F8. Automat startuje wyłączony po zmianie misji.
-   W `Launch.log` sprawdź `revision=mission-report-v18`; inna rewizja oznacza
+   W `Launch.log` sprawdź `revision=mission-report-v19`; inna rewizja oznacza
    uruchomienie starszego kodu. Pozwól misji dojść do wyniku; zapisz ewentualne
    ręczne działania, ich moment i powód.
 4. Po misji, przed ponownym uruchomieniem gry, otwórz PowerShell w folderze
@@ -103,7 +104,11 @@ Zbieranie raportu działa po usunięciu pobranych źródeł moda.
 
 ## Co obserwować w następnym etapie
 
-- V18: najpierw sprawdź startupowe `MP visualization patch` z `templates > 0`,
+- V19: potwierdź startupowy `HUD score polling` i rewizję v19. Sprawdź
+  aktualizację punktów przy ON/OFF, opóźnienie przy stabilnej historii
+  i niezbuforowany wynik końcowy według [próby HUD A/B](experiment-17-hud-polling.pl.md).
+  Samo OFF nie oznacza wyłączenia moda ani cache.
+- Zachowaj scenariusz MP z v18: sprawdź startupowe `MP visualization patch` z `templates > 0`,
   `matched > 0` i `skipped=0`.
   Do oceny wizualizacji potrzebny jest rzeczywisty cios `DevastatingPunchMP`;
   brak tej okazji oznacza nieuruchomioną próbę. F8 OFF nie wyłącza poprawki
