@@ -24,6 +24,12 @@ var bool bExpanded;
 var bool bPendingCollapse;
 var float CollapseRemaining;
 var float RefreshRemaining;
+// Cache only HUD text; authoritative mission score reads stay uncached.
+var float ScoreRefreshRemaining;
+var bool bScoreTextValid;
+var string CachedScoreText;
+var XComGameStateHistory CachedScoreHistory;
+var int CachedScoreHistoryIndex;
 
 simulated function APX_UITacticalControl InitAutoplayControl()
 {
@@ -35,6 +41,10 @@ simulated function APX_UITacticalControl InitAutoplayControl()
 
     Controller = class'APX_Controller'.static.GetOrCreate();
     ScoreCounter = new(self) class'APX_MissionScore';
+    bScoreTextValid = false;
+    CachedScoreHistory = none;
+    CachedScoreHistoryIndex = -1;
+    ScoreRefreshRemaining = 0.0;
 
     ToggleButton = Spawn(class'UIButton', self);
     ToggleButton.InitButton('APX_ToggleButton', EnableLabel, OnToggleClicked);
@@ -140,6 +150,42 @@ simulated function Collapse()
     StatusLabel.AddTween("_alpha", 0.0, FMax(0.01, FadeSeconds));
 }
 
+// This is a display scheduling rule, not a rule about the true score.
+// A fresh game-state index is new evidence even if the timer has not expired.
+static function bool ShouldRefreshScoreForHUD(bool bValid, bool bHistoryChanged,
+    float SecondsUntilRefresh)
+{
+    return !bValid || bHistoryChanged || SecondsUntilRefresh <= 0.0;
+}
+
+simulated function string GetDisplayedScoreText()
+{
+    local XComGameStateHistory History;
+    local int HistoryIndex;
+
+    if (ScoreCounter == none)
+        return "";
+
+    History = `XCOMHISTORY;
+    HistoryIndex = -1;
+    if (History != none)
+        HistoryIndex = History.GetCurrentHistoryIndex();
+
+    if (ShouldRefreshScoreForHUD(bScoreTextValid,
+        History != CachedScoreHistory || HistoryIndex != CachedScoreHistoryIndex,
+        ScoreRefreshRemaining))
+    {
+        // GetText is unchanged. A history delta or one elapsed second
+        // gives an up-to-date native score even while autoplay is OFF.
+        CachedScoreText = ScoreCounter.GetText();
+        bScoreTextValid = true;
+        CachedScoreHistory = History;
+        CachedScoreHistoryIndex = HistoryIndex;
+        ScoreRefreshRemaining = 1.0;
+    }
+    return CachedScoreText;
+}
+
 simulated function UpdateStatus()
 {
     local string ScoreText;
@@ -148,7 +194,7 @@ simulated function UpdateStatus()
     // another Flash update. Keep this independent of autoplay's run state.
     if (ScoreCounter != none && ScoreLabel != none && ToggleButton != none)
     {
-        ScoreText = ScoreCounter.GetText();
+        ScoreText = GetDisplayedScoreText();
         ScoreLabel.SetCenteredText(class'UIUtilities_Text'.static.GetColoredText(
             ScoreText, eUIState_Normal, ToggleButton.FontSize));
         if (Controller != none)
@@ -187,6 +233,9 @@ simulated event Tick(float DeltaTime)
             Collapse();
     }
 
+    // Timer runs even while the automation is OFF; a native score that
+    // changes without a history commit is refreshed after at most one second.
+    ScoreRefreshRemaining -= DeltaTime;
     RefreshRemaining -= DeltaTime;
     if (RefreshRemaining <= 0.0)
     {
@@ -207,6 +256,11 @@ simulated event Removed()
     if (ScoreCounter != none)
         ScoreCounter.Cleanup();
     ScoreCounter = none;
+    bScoreTextValid = false;
+    CachedScoreText = "";
+    CachedScoreHistory = none;
+    CachedScoreHistoryIndex = -1;
+    ScoreRefreshRemaining = 0.0;
     super.Removed();
 }
 
