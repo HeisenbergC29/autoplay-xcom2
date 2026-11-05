@@ -21,6 +21,8 @@ automat i co rzeczywiście wydarzyło się po rozkazach.
 [Raport v12 i napotkane zdolności](report-2026-11-04-v12-enemies.pl.md).
 [Raport v14: ruch, trucizna i trzy porażki](report-2026-11-04-v14-poison.pl.md).
 [V15: AP, chmury i dodatni wynik misji](tactics-v15.pl.md).
+[Raport v15: trzy zatrzymania przed rzutem](report-2026-11-04-v15-stops.pl.md).
+[V16: odrzucenie granatu i potwierdzanie końca tury](tactics-v16.pl.md).
 
 Wynik misji, punktację porównawczą i oficjalne punkty gry zapisujemy oddzielnie.
 `score` w rekordach `candidate`/`chosen` jest oceną heurystyki, a startowe
@@ -95,7 +97,7 @@ osobnym faktem. [Reguła i przykłady](tactics-v15.pl.md).
 
 ## Zbudowanie i pierwsza próba
 
-1. Pobierz aktualne źródła v15, rozpakuj je i zbuduj jak poprzednio na zachowanym
+1. Pobierz aktualne źródła v16, rozpakuj je i zbuduj jak poprzednio na zachowanym
    SDK WOTC. Bez `-BuildBase`, jeśli pakiety bazowe są już przygotowane.
 2. Zainstaluj nowy `dist\AutoplayXCom2.zip` i uruchom grę ponownie. Stara paczka
    z `release` nie zawiera rejestratora.
@@ -376,3 +378,25 @@ Podglądy czynności przygotowawczych dodają `ap_combo_available`,
 atak obecnie legalny i mieszczący się w projektowanych pozostałych AP
 po Aid Protocol lub czynności medycznej. Nie kolejkuje tego ataku;
 po rzeczywistej akcji kontroler ponownie ocenia cały oddział.
+
+
+Od `mission-report-v16` `area_revalidation_rejected` opisuje granat odrzucony
+przy końcowej kontroli, zanim powstał rozkaz dla silnika. Szczegóły zawierają
+`unit`, `ability_id`, `history` oraz `reason`, `available_code`,
+`evaluation_stage`, `evaluation_reason`, `impact_delta_sq`,
+`location_delta_sq`, `expected_targets` i `fresh_targets`. Liczby świeżych
+celów pozostają −1 do przejścia pełnej kontroli bezpieczeństwa. Taki wpis
+może poprzedzać kolejną decyzję
+i inną akcję bez `autoplay_stop`. Zero odrzuconych rozkazów nie oznacza braku
+odrzuconych podglądów. W v15 ogólny komunikat nie wystarcza do wskazania,
+który konkretny warunek nie został spełniony.
+
+Potwierdzenie końca tury w v16 zapisują znaczniki `end_turn_requested`,
+`end_turn_confirmed` i `end_turn_unconfirmed`. Potwierdzenie korzysta
+z nowego kontekstu `SkipTurn` (`evidence=skip_turn_history`) lub zmiany
+gracza/tury (`evidence=player_or_turn_transition`). Pole `native_return`
+przy żądaniu jest diagnostyką; sam wynik `PerformEndTurn()` nie dowodzi
+przyjęcia ani odrzucenia. Żądanie, potwierdzenie i brak potwierdzenia trzeba
+oceniać razem z historią oraz zakresem misji. Po limicie oczekiwania
+zapamiętane niejasne żądanie nadal blokuje jego duplikat po OFF/ON.
+[Interpretacja zatrzymań i scenariusze](tactics-v16.pl.md).

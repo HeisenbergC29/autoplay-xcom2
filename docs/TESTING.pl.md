@@ -1,11 +1,12 @@
 # Testy odbiorcze
 
-Najnowszy [raport v14](report-2026-11-04-v14-poison.pl.md) zawiera trzy
-próby zakończone porażką. Ostatnie GasStation: trudność 2, **FAIL** w turze 9,
-31 przyjętych rozkazów, zero odrzuceń i natywny odczyt −15100. Stabilizacja:
-**PASS**. Aktywna waga Marked: **NIEPOTWIERDZONA**, bo wszystkie podglądy
-mają bonus 0. Kompilacja Windows i próba zmian v15: **NIEURUCHOMIONE**.
-[Zakres i scenariusze v15](tactics-v15.pl.md).
+Najnowszy [raport v15](report-2026-11-04-v15-stops.pl.md): `SabotageCC`,
+trudność 3, **FAIL** w turze 18, 80 przyjętych rozkazów i zero odrzuceń
+przez silnik. Częściowy wynik porównawczy −17500. Jedno przestawienie
+przed strzałem 47→68%: **POTWIERDZONE**; próby chmury trucizny i kombinacji
+AP: **NIEURUCHOMIONE**. Trzy zatrzymania przed rzutem granatu są osobnym
+błędem od odrzuconego rozkazu. Kompilacja Windows i próba poprawek v16:
+**NIEURUCHOMIONE**. [Zakres i scenariusze v16](tactics-v16.pl.md).
 
 Od bieżącej serii **PASS wymaga zwycięstwa oraz wyniku misji > 0**.
 Zwycięstwo przy zerze lub wyniku ujemnym daje FAIL próby; oficjalne zwycięstwo
@@ -13,7 +14,16 @@ gry pozostaje zapisane. Brak pewnego końcowego wyniku daje **NIEPOTWIERDZONY**,
 bez zaliczenia na podstawie częściowego `~wynik/—`. Dawne opisy zwycięstw
 v8 zachowują znaczenie historycznego wyniku gry.
 
-V15: porównaj słaby podstawowy strzał przy dwóch AP z bezpiecznym ruchem
+V16: sprawdź odrzucenie nieaktualnego granatu bez wyłączenia autoplaya,
+wybór innej legalnej akcji, blokadę powtórzenia przy tej samej historii,
+ponowienie po zmianie stanu i limit trzech niepowodzeń danej zdolności
+w turze. Kontrola wybuchu, celów i sojuszników nadal musi działać.
+Przy kończeniu tury sprawdź żądanie zwracające `false`, ale zatwierdzające
+`SkipTurn`, opóźnione zatwierdzenie, zmianę gracza/tury, pauzę i rzeczywisty
+brak potwierdzenia. Żaden z tych przypadków nie może wielokrotnie wysłać
+tego samego końca tury.
+
+Zachowaj scenariusze V15: porównaj słaby podstawowy strzał przy dwóch AP z bezpiecznym ruchem
 poprawiającym celowanie, a dobry strzał z małą możliwą poprawą. Sprawdź
 niewystarczające AP po ruchu, dwupunktowy strzał snajpera, różne typy AP,
 wsparcie lub leczenie przed końcem tury i każdorazowe ponowne sprawdzenie
@@ -41,7 +51,7 @@ Ten sam raport zawiera zwycięstwo v8 w `SabotageCC` na trudności 3.
 Wcześniejsze zwycięstwo v8 w pierwszej misji Legacy pozostaje osobną próbą;
 Cemetery nadal nie ma udokumentowanej próby autoplaya.
 V10 działało w zwykłej niepunktowanej misji. Wyświetlanie liczb Legacy
-oraz nowe mechaniki v15 nadal wymagają kompilacji Windows i próby w grze.
+oraz poprawki ciągłości działania v16 nadal wymagają kompilacji Windows i próby w grze.
 [Instrukcja Legacy](legacy-test.pl.md) · [Licznik v12](score-display-v10.pl.md).
 
 Dotychczasowy wynik zgłoszony przez użytkownika: **PASS** — mod wydaje rozkazy;

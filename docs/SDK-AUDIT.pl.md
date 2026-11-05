@@ -472,3 +472,39 @@ budowania, kolektora raportów, 88 lokalnych odnośników w zmienionych
 dokumentach i `git diff --check`. Testy obejmują typy AP i koszty darmowych
 akcji, prognozę podstawowego strzału, wyjście z chmury i warunek dodatniego
 wyniku. Nie przeprowadzono kompilacji Windows ani próby v15 w grze.
+
+
+## V16 — odrzucony podgląd granatu i koniec tury
+
+Późniejszy [raport v15](report-2026-11-04-v15-stops.pl.md) potwierdza
+uruchomienie v15 i jeden zgodny podgląd ruchu przed strzałem: prognoza
+47→68%, następny rzeczywisty odczyt 68%. Misja SabotageCC na trudności 3
+zakończyła się porażką w turze 18. Chmury trucizny i kombinacje AP nie
+wystąpiły w tej próbie.
+
+Trzy zatrzymania w turze 10 nastąpiły przed aktywacją tego samego granatu.
+Nie są odrzuceniami rozkazu przez silnik. Ogólny komunikat v15 nie pozwala
+rozstrzygnąć, czy zmieniło się lądowanie, bezpieczeństwo wybuchu czy zestaw
+celów. V16 zachowuje te kontrole, dodaje rozróżnione przyczyny i pamięć
+odrzuconej zdolności; blokuje ten sam stan i ogranicza ponowienia po zmianie
+historii. Następna decyzja może wybrać inną akcję bez wyłączania autoplaya.
+
+Osobne starsze zatrzymania `Engine rejected end turn` wynikają z błędnej
+interpretacji API. `XGPlayer.uc:437–446` wysyła `eGameRule_SkipTurn`, ale
+po wysłaniu również zwraca `false`. V16 oczekuje ograniczony czas na
+pasujący kontekst historii lub rzeczywistą zmianę gracza/tury i zapobiega
+ponownemu wysyłaniu tego samego żądania. Zakres sprawdzania obejmuje
+historię, misję i lokalnego gracza.
+
+Reguły punktacji v2, wymóg zwycięstwa z wynikiem > 0 oraz katalog DLC
+pozostają bez zmian. Liczba klas moda pozostaje 17. Kompilacja Windows
+oraz próba v16 w grze wymagają osobnej weryfikacji.
+[Zakres zmian i testy odbiorcze v16](tactics-v16.pl.md).
+
+Kontrola końcowa v16: **505 testów Python zaliczonych bez pominięć**
+z SDK oraz konfiguracją bazową i DLC gry. Audyt referencji potwierdził
+17 klas moda i 29 skonfigurowanych nazw zdolności. Przeszły testy skryptu
+budowania, kolektora raportów, 98 lokalnych odnośników w zmienionych
+dokumentach i `git diff --check`. Niezależny przegląd nie znalazł uwag
+blokujących w pamięci odrzuceń, limitach ponowień ani potwierdzaniu końca
+tury. Nie przeprowadzono kompilacji Windows ani próby v16 w grze.

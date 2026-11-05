@@ -91,23 +91,33 @@ Dodaje między innymi parametry władców obcych, SPARK-a i jednostek Legacy.
 Tamta aktualizacja dotyczyła narzędzi analizy i katalogu; nie zmieniała kodu
 działającego w grze ani rewizji `mission-report-v14`.
 
-[Najnowszy raport v14](docs/report-2026-11-04-v14-poison.pl.md) zawiera trzy
+[Raport v14](docs/report-2026-11-04-v14-poison.pl.md) zawiera trzy
 próby zakończone porażką. Ostatnie GasStation kończy się w turze 9 z natywnym
 odczytem −15100; stabilizacja jest potwierdzona. Raport wskazuje na potrzebę
 rozróżnienia chmur trucizny od trwającego zatrucia i oceny ruchu przed słabym
 strzałem przy zachowaniu AP.
 
-Bieżące **`mission-report-v15`** dodaje jawną kontrolę chmur i bezpieczne
+Wersja **`mission-report-v15`** dodaje jawną kontrolę chmur i bezpieczne
 wyjście z nich oraz ograniczoną ocenę niebieskiego ruchu z zachowaniem
 podstawowego strzału. Ocenia też wsparcie lub leczenie z zachowaniem
 aktualnie legalnego ataku, respektując rzeczywiste typy i koszty AP.
 Projekcja poprawy trafienia jest heurystyką; po ruchu
 atak ponownie sprawdza gra. Analizator osobno ocenia zwycięstwo z dodatnim
 wynikiem misji. [Zakres v15 i kolejna próba](docs/tactics-v15.pl.md).
-Nowy kod wymaga kompilacji na Windows i sprawdzenia w grze.
+[Najnowszy raport v15](docs/report-2026-11-04-v15-stops.pl.md) potwierdza
+jedno przestawienie poprawiające strzał z 47% do rzeczywistych 68%, lecz
+`SabotageCC` na trudności 3 kończy się porażką w turze 18. W tej próbie
+wystąpiły trzy zatrzymania przy ponownej kontroli tego samego granatu.
+
+Bieżące **`mission-report-v16`** odrzuca taki kandydat i ponownie wybiera
+akcję, zachowując kontrolę bezpieczeństwa wybuchu. Blokuje powtarzanie
+odrzuconej zdolności w niezmienionej historii i ogranicza ponowne próby.
+Poprawia też potwierdzanie końca tury: stockowe API może zwrócić `false`
+pomimo wysłania żądania. [Przyczyny zatrzymań i zakres v16](docs/tactics-v16.pl.md).
+V16 wymaga nowej kompilacji na Windows i sprawdzenia w grze.
 
 Ocena porównawcza nadal używa profilu `wotc_legacy_observed_v2` od `~0/—`;
-reguły punktacji nie zostały zmienione przez v15. Zmieniło się kryterium
+reguły punktacji nie zostały zmienione przez v15 ani v16. Zmieniło się kryterium
 zaliczenia próby, nie sposób naliczania punktów.
 [Zasady licznika](docs/score-display-v10.pl.md).
 
@@ -210,9 +220,10 @@ potwierdziła **0 błędów i 8 ostrzeżeń SDK**, zarówno dla bazy, jak i moda
 Dotyczy to wcześniejszej kompilacji. Przechowywany ZIP ma kompletną konfigurację,
 27 nazw zdolności, obie lokalizacje i prawidłowy `.u`; jego 464 importy prowadzą
 tylko do `Core`, `Engine` i `XComGame`, a dziewięć klas moda jest obecnych.
-Najnowszy raport potwierdza uruchomienie v14 oraz trzy porażki, w tym
-GasStation w turze 9 z natywnym odczytem −15100. Zmiany taktyczne v15
-wymagają nowej kompilacji i sprawdzenia w grze. Obecne
+Najnowszy raport potwierdza uruchomienie v15, rzeczywistą poprawę jednego
+strzału po ruchu i trzy zatrzymania przed rzutem granatu; misja zakończyła
+się porażką. Poprawki zatrzymań v16 wymagają nowej kompilacji i sprawdzenia
+w grze. Obecne
 środowisko Linux pozwala uruchamiać testy Python i PowerShell, ale nie zawiera
 SDK Windows ani działającej gry.
 

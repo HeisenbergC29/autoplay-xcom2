@@ -1,4 +1,4 @@
-# Próba Legacy, AP i trucizna — v15
+# Próba Legacy i ciągłość autoplaya — v16
 
 Pierwsza misja `ChallengeAbductionGasStation` została wcześniej ukończona
 zwycięstwem na v8: Dowódca, 14 tur, dwóch poległych.
@@ -6,12 +6,18 @@ zwycięstwem na v8: Dowódca, 14 tur, dwóch poległych.
 Raport v9 obejmuje ponowną próbę GasStation: porażkę w turze 7,
 ratunek snajpera oraz natywny wynik −10000 przy maksymalnej puli 46000.
 [Raport v9](report-2026-11-03-legacy-v9.pl.md).
-Najnowszy [raport v14](report-2026-11-04-v14-poison.pl.md) obejmuje trzy
+[Raport v14](report-2026-11-04-v14-poison.pl.md) obejmuje trzy
 przegrane próby. Ostatnie GasStation kończy się w turze 9 z natywnym
 odczytem −15100. Potwierdzono stabilizację, lecz raport nie zapisuje
 geometrii chmur trucizny ani nie dowodzi istnienia lepszej trasy do strzału.
 
-Do kolejnej próby **zbuduj i zainstaluj v15**.
+Najnowszy [raport v15](report-2026-11-04-v15-stops.pl.md) potwierdza poprawę
+jednego strzału po ruchu z 47% do 68%, ale kończy się porażką SabotageCC
+w turze 18. Trzy zatrzymania przed rzutem tego samego granatu wymagają
+osobnej kontroli ciągłości działania.
+
+Do kolejnej próby **zbuduj i zainstaluj v16**.
+[Zatrzymania granatu i potwierdzanie końca tury](tactics-v16.pl.md) ·
 [AP, ruch, trucizna i kryterium sukcesu](tactics-v15.pl.md) ·
 [Konfiguracje i ustalenia v14](config-knowledge-v14.pl.md) ·
 [Zasady licznika](score-display-v10.pl.md).
@@ -41,10 +47,24 @@ to świeże `dist\AutoplayXCom2.zip`; stara paczka z `release` nie zawiera zmian
 Przy błędzie kompilacji zachowaj `.build\mod-make.log`. Po udanej instalacji
 uruchom grę ponownie. Źródła możesz później usunąć; SDK zachowaj.
 
+## Kontrola zatrzymań v16
+
+Po odrzuceniu przygotowania granatu automat powinien rozważyć inną akcję,
+a nie ponawiać tego samego rzutu w niezmienionej historii. Sprawdź
+`area_revalidation_rejected`, powód kontroli i późniejszą zaakceptowaną
+akcję. Nie powinien rzucić granatu, którego bezpieczeństwo nie zostało
+potwierdzone. Po rzeczywistej zmianie stanu liczba ponownych prób pozostaje
+ograniczona; ręczne OFF nadal zatrzymuje nowe rozkazy.
+
+Przy końcu tury sprawdź pojedyncze żądanie i późniejsze potwierdzenie przez
+historię `SkipTurn` lub zmianę gracza/tury. Sam zwrot `false` nie dowodzi
+odrzucenia. Pauza i oczekiwanie na przejście nie mogą wysłać duplikatu;
+rzeczywisty brak potwierdzenia musi dać ograniczone oczekiwanie i diagnozę.
+
 ## Przebieg porównawczy
 
 1. Uruchom wybrany zapis Legacy Operations „Blast From the Past” na nowej
-   v15. Dla kontynuacji wcześniejszego zwycięstwa oczekiwany jest
+   v16. Dla kontynuacji wcześniejszego zwycięstwa oczekiwany jest
    `ChallengeAbductionCemetery`, etap 2; próba GasStation dotyczy
    `ChallengeAbductionGasStation`, etap 1. Zapisz etap i trudność.
 2. Po uzyskaniu sterowania, przed F8, sprawdź licznik nad przyciskiem.
@@ -52,7 +72,7 @@ uruchom grę ponownie. Źródła możesz później usunąć; SDK zachowaj.
    czcionki i przepuszczać kliknięcia mapy. Maksimum nie powinno maleć po
    zabiciach; w drugim etapie licznik nie może doliczać punktów poprzedniej misji.
 3. Włącz autoplay klawiszem F8. Automat startuje wyłączony po zmianie misji.
-   W `Launch.log` sprawdź `revision=mission-report-v15`; inna rewizja oznacza
+   W `Launch.log` sprawdź `revision=mission-report-v16`; inna rewizja oznacza
    uruchomienie starszego kodu. Pozwól misji dojść do wyniku; zapisz ewentualne
    ręczne działania, ich moment i powód.
 4. Po misji, przed ponownym uruchomieniem gry, otwórz PowerShell w folderze

@@ -54,6 +54,46 @@ var private int ScanBlastBlockerChildren;
 var private bool ScanBlastBlockerSurrounding;
 var private float ScanBlastSafeRadius;
 var private float LastBlastSafeRadius;
+var private string LastEvaluationStage;
+var private string LastEvaluationReason;
+var private string PreparationReason;
+var private name PreparationAvailableCode;
+var private int PreparationUnitID;
+var private int PreparationAbilityID;
+var private int PreparationExpectedTargets;
+var private int PreparationFreshTargets;
+var private float PreparationImpactDeltaSquared;
+var private float PreparationLocationDeltaSquared;
+
+function string GetPreparationDiagnostic()
+{
+    // Never expose a newly gathered target's identity/count after a failed
+    // visibility or collateral check. Fresh counts are set only after success.
+    return "reason=" $ PreparationReason $ " unit=" $ PreparationUnitID
+        $ " ability_id=" $ PreparationAbilityID $ " available_code=" $ PreparationAvailableCode
+        $ " evaluation_stage=" $ LastEvaluationStage $ " evaluation_reason=" $ LastEvaluationReason
+        $ " impact_delta_sq=" $ PreparationImpactDeltaSquared
+        $ " location_delta_sq=" $ PreparationLocationDeltaSquared
+        $ " expected_targets=" $ PreparationExpectedTargets $ " fresh_targets=" $ PreparationFreshTargets;
+}
+
+static function bool LandingMatches(float DistanceSquared)
+{
+    // Preserve the original one-Unreal-unit positional tolerance. Negative or
+    // non-numeric distances must not accidentally approve an unknown landing.
+    return DistanceSquared >= 0.0 && DistanceSquared <= 1.0;
+}
+
+static function bool TargetCountsMatch(int ExpectedCount, int FreshCount)
+{
+    return ExpectedCount > 0 && ExpectedCount == FreshCount;
+}
+
+function bool RejectPreparation(string Reason)
+{
+    PreparationReason = Reason;
+    return false;
+}
 
 // One summary per unit/decision, not one log line per candidate center. The
 // controller attaches it to that decision's recorder session.
@@ -100,6 +140,10 @@ static function int RejectionPriority(name Stage)
 
 function RejectScan(name Stage, string Reason)
 {
+    // Keep the latest evaluation failure even outside a scan. Preparation uses
+    // these fields instead of the previous unit's frozen scan summary.
+    LastEvaluationStage = string(Stage);
+    LastEvaluationReason = Reason;
     if (!bCollectDiagnostics)
         return;
     // A later out-of-range center must not hide why a valid trajectory failed
@@ -278,7 +322,10 @@ function bool ComputeImpact(XComGameState_Unit UnitState,
         return false;
     SourceWeapon = Ability.GetSourceWeapon();
     if (SourceWeapon == none)
+    {
+        RejectScan('unsupported', "source_weapon");
         return false;
+    }
     WeaponVisualizer = XGWeapon(SourceWeapon.GetVisualizer());
     WeaponTemplate = X2WeaponTemplate(SourceWeapon.GetMyTemplate());
     if (WeaponTemplate == none)
@@ -1133,38 +1180,75 @@ function bool PrepareForActivation(XComGameState_Unit UnitState,
     local array<StateObjectReference> VisibleEnemies;
     local AvailableTarget FreshTarget;
     local StateObjectReference TargetRef;
+    local array<int> SeenTargetIDs;
     local array<vector> FreshLocations;
     local vector Impact;
     local float Score;
-    local bool bAvailable;
+    local bool bAvailable, bFoundAbility;
 
-    if (UnitState == none || Locations.Length != 1 || Action.AvailableTargets.Length != 1
-        || `PRECOMPUTEDPATH == none
-        || !`TACTICALRULES.GetGameRulesCache_Unit(UnitState.GetReference(), UnitCache))
-        return false;
+    PreparationReason = "not_validated";
+    LastEvaluationStage = "none";
+    LastEvaluationReason = "none";
+    PreparationAvailableCode = 'none';
+    PreparationUnitID = 0;
+    PreparationAbilityID = Action.AbilityObjectRef.ObjectID;
+    PreparationExpectedTargets = -1;
+    PreparationFreshTargets = -1;
+    PreparationImpactDeltaSquared = -1.0;
+    PreparationLocationDeltaSquared = -1.0;
+    if (UnitState == none)
+        return RejectPreparation("unit_unavailable");
+    PreparationUnitID = UnitState.ObjectID;
+    if (Locations.Length != 1 || Action.AvailableTargets.Length != 1)
+        return RejectPreparation("invalid_plan_shape");
+    PreparationExpectedTargets = Action.AvailableTargets[0].AdditionalTargets.Length;
+    if (`XCOMHISTORY == none || `TACTICALRULES == none)
+        return RejectPreparation("runtime_unavailable");
+    if (`PRECOMPUTEDPATH == none)
+        return RejectPreparation("activation_path_unavailable");
+    if (!`TACTICALRULES.GetGameRulesCache_Unit(UnitState.GetReference(), UnitCache))
+        return RejectPreparation("unit_cache_unavailable");
     foreach UnitCache.AvailableActions(CurrentAction)
     {
         if (CurrentAction.AbilityObjectRef.ObjectID == Action.AbilityObjectRef.ObjectID)
         {
+            bFoundAbility = true;
+            PreparationAvailableCode = CurrentAction.AvailableCode;
             bAvailable = GetSupportedGrenade(UnitState, CurrentAction, Ability, Grenade, Radius);
             break;
         }
     }
-    if (!bAvailable || !ComputeImpact(UnitState, Ability, AimLocation, `PRECOMPUTEDPATH, Impact)
-        || VSizeSq(Impact - Locations[0]) > 1.0)
-        return false;
+    if (!bFoundAbility)
+        return RejectPreparation("ability_not_in_cache");
+    if (!bAvailable)
+        return RejectPreparation("ability_unavailable_or_unsupported");
+    if (!ComputeImpact(UnitState, Ability, AimLocation, `PRECOMPUTEDPATH, Impact))
+        return RejectPreparation("impact_rejected");
+    PreparationImpactDeltaSquared = VSizeSq(Impact - Locations[0]);
+    if (!LandingMatches(PreparationImpactDeltaSquared))
+        return RejectPreparation("landing_changed");
     class'X2TacticalVisibilityHelpers'.static.GetAllVisibleEnemiesForPlayer(
         UnitState.ControllingPlayer.ObjectID, VisibleEnemies);
     if (!EvaluateImpact(UnitState, Ability, Grenade, Radius, Impact,
-        VisibleEnemies, FreshTarget, FreshLocations, Score)
-        || FreshLocations.Length != 1 || VSizeSq(FreshLocations[0] - Locations[0]) > 1.0
-        || FreshTarget.PrimaryTarget != Action.AvailableTargets[0].PrimaryTarget
-        || FreshTarget.AdditionalTargets.Length != Action.AvailableTargets[0].AdditionalTargets.Length)
-        return false;
+        VisibleEnemies, FreshTarget, FreshLocations, Score))
+        return RejectPreparation("fresh_impact_rejected");
+    PreparationFreshTargets = FreshTarget.AdditionalTargets.Length;
+    if (FreshLocations.Length != 1)
+        return RejectPreparation("location_count_changed");
+    PreparationLocationDeltaSquared = VSizeSq(FreshLocations[0] - Locations[0]);
+    if (!LandingMatches(PreparationLocationDeltaSquared))
+        return RejectPreparation("target_location_changed");
+    if (FreshTarget.PrimaryTarget != Action.AvailableTargets[0].PrimaryTarget)
+        return RejectPreparation("primary_target_changed");
+    if (!TargetCountsMatch(PreparationExpectedTargets, PreparationFreshTargets))
+        return RejectPreparation("additional_target_count_changed");
     foreach FreshTarget.AdditionalTargets(TargetRef)
     {
-        if (Action.AvailableTargets[0].AdditionalTargets.Find('ObjectID', TargetRef.ObjectID) == INDEX_NONE)
-            return false;
+        if (SeenTargetIDs.Find(TargetRef.ObjectID) != INDEX_NONE
+            || Action.AvailableTargets[0].AdditionalTargets.Find('ObjectID', TargetRef.ObjectID) == INDEX_NONE)
+            return RejectPreparation("additional_target_set_changed");
+        SeenTargetIDs.AddItem(TargetRef.ObjectID);
     }
+    PreparationReason = "ready";
     return true;
 }
