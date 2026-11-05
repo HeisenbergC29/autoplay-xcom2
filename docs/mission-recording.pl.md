@@ -24,6 +24,7 @@ automat i co rzeczywiście wydarzyło się po rozkazach.
 [Raport v15: trzy zatrzymania przed rzutem](report-2026-11-04-v15-stops.pl.md).
 [V16: odrzucenie granatu i potwierdzanie końca tury](tactics-v16.pl.md).
 [V17: ciosy Berserkera i ochrona przejętego sojusznika](tactics-v17.pl.md).
+[V18: izolowana poprawka wizualizacji MP](experiment-15-berserker-mp-visualization.pl.md).
 
 Wynik misji, punktację porównawczą i oficjalne punkty gry zapisujemy oddzielnie.
 `score` w rekordach `candidate`/`chosen` jest oceną heurystyki, a startowe
@@ -98,7 +99,7 @@ osobnym faktem. [Reguła i przykłady](tactics-v15.pl.md).
 
 ## Zbudowanie i pierwsza próba
 
-1. Pobierz aktualne źródła v17, rozpakuj je i zbuduj jak poprzednio na zachowanym
+1. Pobierz aktualne źródła v18, rozpakuj je i zbuduj jak poprzednio na zachowanym
    SDK WOTC. Bez `-BuildBase`, jeśli pakiety bazowe są już przygotowane.
 2. Zainstaluj nowy `dist\AutoplayXCom2.zip` i uruchom grę ponownie. Stara paczka
    z `release` nie zawiera rejestratora.
@@ -409,3 +410,18 @@ diagnostyczne v16; nie dodaje potwierdzenia kompilacji, przebiegu misji ani
 nowej punktacji. Pole rewizji identyfikuje uruchomiony kod. Nie dowodzi,
 że w danej misji wystąpił Berserker, efekt kontroli lub okazja do sprawdzenia
 tych zachowań. [Scenariusze v17](tactics-v17.pl.md).
+
+Rewizja `mission-report-v18` identyfikuje poprawkę wizualizacji
+`DevastatingPunchMP` z PR #16. Startupowy wpis `MP visualization patch`
+zawiera `revision=mission-report-v18`, `templates`, `matched` i `skipped`.
+`matched` liczy szablony zgodne z oczekiwaną strukturą, mające po kontroli
+obie flagi wizualizacji; obejmuje również już poprawnie ustawione flagi.
+Nie jest liczbą nowo dodanych wpisów. `status=manager_unavailable` oznacza,
+że nie wykonano kontroli szablonów. Zero `matched` lub brak wpisu nie
+potwierdza zastosowania poprawki. Do rozstrzygającej próby wymagane są
+`templates > 0`, `matched > 0` i `skipped=0`: przy pominiętych szablonach
+nie wiadomo, czy wybrana trudność otrzymała poprawkę. Wpis powstaje przy tworzeniu szablonów,
+przed rozpoczęciem rejestratora przez F8; zachowaj log od startu gry.
+F8 OFF nie cofa poprawki, która dotyczy też ręcznie wykonywanych ciosów.
+Potwierdzenie szablonu i brak redscreen nie dowodzą usunięcia późniejszej
+awarii. [Porównanie dwóch kompilacji](experiment-15-berserker-mp-visualization.pl.md).

@@ -534,3 +534,25 @@ Twardy filtr pamięci marszu z PR #11 wymaga poprawek i nie został
 zintegrowany w v17. Kompilacja Windows WOTC SDK i próba v17 w grze
 pozostają **NIEURUCHOMIONE**. To integracja źródeł, bez nowego wydania
 binarnego. [Zakres, pochodzenie i scenariusze v17](tactics-v17.pl.md).
+
+## V18 — izolowana wizualizacja DevastatingPunchMP
+
+[PR #16](https://github.com/HeisenbergC29/autoplay-xcom2/pull/16) dodaje
+do rozpoznanych hit/miss efektów szablonu MP brakujące flagi ukrywania
+`AA_HitResultFailure`, zgodnie ze zwykłym wariantem SDK. Przegląd nie
+stwierdził zmian AP, obrażeń, efektu Impairing, HUD ani punktacji.
+[Integracja #19](https://github.com/HeisenbergC29/autoplay-xcom2/pull/19)
+oznacza kod jako v18 i dodaje startupowe liczniki zastosowania poprawki.
+
+Integracja zaliczyła **518 testów Python bez pominięć** z prywatnym SDK
+i konfiguracjami; audyt referencji potwierdził **17 klas / 31 nazw
+zdolności**. Publiczne CI PR #16 zaliczyło 458 testów, pomijając 60
+kontraktów prywatnych wejść; końcowe CI integracji jest w PR #19.
+
+Późniejszy raport z rewizją v17 obejmuje dwie porażki i awarię, bez
+potwierdzenia dokładnego SHA kompilacji. Przyczyna awarii pozostaje
+nieustalona. Kompilacja Windows WOTC SDK i próba v18 w grze:
+**NIEURUCHOMIONE**. Brak redscreen nie jest dowodem usunięcia crasha;
+do oceny potrzebny jest rzeczywisty cios oraz startupowe `templates > 0`,
+`matched > 0` i `skipped=0`. Pominięte warianty trudności wymagają przeglądu.
+[Instrukcja A/B](experiment-15-berserker-mp-visualization.pl.md).
