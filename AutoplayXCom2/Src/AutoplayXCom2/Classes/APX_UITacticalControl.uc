@@ -45,6 +45,7 @@ simulated function APX_UITacticalControl InitAutoplayControl()
     CachedScoreHistory = none;
     CachedScoreHistoryIndex = -1;
     ScoreRefreshRemaining = 0.0;
+    `log("HUD score polling|revision=mission-report-v19|stable_interval_seconds=1.0|status_interval_seconds=0.25|history_invalidation=true", true, 'AutoplayXCom2');
 
     ToggleButton = Spawn(class'UIButton', self);
     ToggleButton.InitButton('APX_ToggleButton', EnableLabel, OnToggleClicked);
@@ -175,8 +176,8 @@ simulated function string GetDisplayedScoreText()
         History != CachedScoreHistory || HistoryIndex != CachedScoreHistoryIndex,
         ScoreRefreshRemaining))
     {
-        // GetText is unchanged. A history delta or one elapsed second
-        // gives an up-to-date native score even while autoplay is OFF.
+        // Refresh on this status update; a history delta bypasses the timer.
+        // Periodic reads continue even while autoplay is OFF.
         CachedScoreText = ScoreCounter.GetText();
         bScoreTextValid = true;
         CachedScoreHistory = History;
@@ -233,8 +234,8 @@ simulated event Tick(float DeltaTime)
             Collapse();
     }
 
-    // Timer runs even while the automation is OFF; a native score that
-    // changes without a history commit is refreshed after at most one second.
+    // With unchanged history, read on a status update after one elapsed second.
+    // Status/frame scheduling can add delay; this timer also runs while OFF.
     ScoreRefreshRemaining -= DeltaTime;
     RefreshRemaining -= DeltaTime;
     if (RefreshRemaining <= 0.0)
