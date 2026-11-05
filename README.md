@@ -1,5 +1,10 @@
 # Autoplay XCOM 2 — War of the Chosen
 
+[Start pomocnika i komunikacja zespołu — issue #1](https://github.com/HeisenbergC29/autoplay-xcom2/issues/1) ·
+[Organizacja zespołu i import prac pomocnika](docs/TEAM.pl.md) ·
+[Stan przekazania projektu](docs/PROJECT-STATE.pl.md) ·
+[Instrukcje agentów](AGENTS.md) · [Wnoszenie zmian i testy](CONTRIBUTING.md)
+
 Mod w UnrealScript automatyzujący działania oddziału w misji. Docelowy profil użytkownika: **aktualne XCOM 2 Collection ze Steam na Windows, uruchamiane jako War of the Chosen, z oficjalnymi dodatkami i wyłącznie tym modem**. Nie wymaga Highlandera ani innych modów. Nie jest przeznaczony dla podstawowego XCOM 2 bez WOTC ani trybu wieloosobowego. [Szczegóły zgodności](docs/COMPATIBILITY.pl.md).
 
 **Cel projektu:** jeden autoplay wszystkich misji taktycznych tego profilu,
