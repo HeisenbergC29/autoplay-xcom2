@@ -416,6 +416,7 @@ function bool IsProtectedUnit(XComGameState_Unit SourceUnit, XComGameState_Unit 
     // Also preserve recoverable friendly bodies, not just living soldiers.
     return !SourceUnit.IsEnemyUnit(OtherUnit) || OtherUnit.IsCivilian()
         || OtherUnit.GetMyTemplateName() == 'HostileVIPCivilian'
+        || class'APX_CombatPlanner'.static.IsReclaimableControlledSquadmate(SourceUnit, OtherUnit)
         || class'Helpers'.static.IsObjectiveTarget(OtherUnit.ObjectID);
 }
 

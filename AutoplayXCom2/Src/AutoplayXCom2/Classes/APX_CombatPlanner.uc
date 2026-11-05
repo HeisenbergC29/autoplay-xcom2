@@ -240,7 +240,8 @@ static function bool AdditionalTargetsAreSafe(XComGameState_Unit SourceUnit,
     foreach Target.AdditionalTargets(TargetRef)
     {
         TargetUnit = XComGameState_Unit(`XCOMHISTORY.GetGameStateForObjectID(TargetRef.ObjectID));
-        if (!IsVisibleHostile(SourceUnit, TargetUnit, VisibleEnemies))
+        if (!IsVisibleHostile(SourceUnit, TargetUnit, VisibleEnemies)
+            || IsReclaimableControlledSquadmate(SourceUnit, TargetUnit))
             return false;
     }
     return true;
@@ -357,6 +358,37 @@ static function bool WasControlledByPlayerBeforeEffect(XComGameState_Unit UnitSt
     return PreviousUnit != none && PreviousUnit.ControllingPlayer.ObjectID == PlayerID;
 }
 
+// Prevent friendly fire against temporarily hostile squadmates who can be
+// recovered by removing their active mind-control source. Only the visible
+// target's current effect links and its earlier ownership are examined; no
+// hidden source position, readiness, AI intent or resource is inspected.
+static function bool IsReclaimableControlledSquadmate(XComGameState_Unit SourceUnit,
+    XComGameState_Unit TargetUnit)
+{
+    local StateObjectReference EffectRef;
+    local XComGameState_Effect EffectState;
+    local X2Effect_Persistent EffectTemplate;
+
+    if (SourceUnit == none || TargetUnit == none
+        || SourceUnit.ControllingPlayer.ObjectID <= 0
+        || !SourceUnit.IsEnemyUnit(TargetUnit) || !TargetUnit.IsMindControlled())
+        return false;
+    foreach TargetUnit.AffectedByEffects(EffectRef)
+    {
+        EffectState = XComGameState_Effect(`XCOMHISTORY.GetGameStateForObjectID(EffectRef.ObjectID));
+        if (EffectState == none || EffectState.bRemoved
+            || EffectState.ApplyEffectParameters.TargetStateObjectRef.ObjectID != TargetUnit.ObjectID)
+            continue;
+        EffectTemplate = EffectState.GetX2Effect();
+        if (X2Effect_MindControl(EffectTemplate) != none
+            && EffectTemplate.bRemoveWhenSourceDies
+            && WasControlledByPlayerBeforeEffect(TargetUnit, EffectState,
+                SourceUnit.ControllingPlayer.ObjectID))
+            return true;
+    }
+    return false;
+}
+
 // Count actual active links on visible contacts, rather than valuing an enemy
 // merely because its character template can create zombies or mind control.
 // A death-linked zombie is not also counted as a rescued ally if both effects
@@ -443,6 +475,10 @@ static function float ScoreAttack(XComGameState_Ability Ability,
 
     if (Ability.GetMyTemplate().AbilityToHitCalc == none)
         return -10000.0;
+    SourceUnit = XComGameState_Unit(`XCOMHISTORY.GetGameStateForObjectID(Ability.OwnerStateObject.ObjectID));
+    // Prefer disabling/killing the controller and recovering this soldier.
+    if (IsReclaimableControlledSquadmate(SourceUnit, TargetUnit))
+        return -10000.0;
     HitChance = Clamp(Ability.GetShotBreakdown(Target, Breakdown), 0, 100);
     if (HitChance < default.MinimumHitChance)
         return -10000.0;
@@ -473,7 +509,6 @@ static function float ScoreAttack(XComGameState_Ability Ability,
             - KillChance) * 65.0 * FClamp(Threat, 0.6, 1.5);
         KillChance = BurstKillChance(MinHPDamage, MaxHPDamage, Health, HitChance, Shots);
     }
-    SourceUnit = XComGameState_Unit(`XCOMHISTORY.GetGameStateForObjectID(Ability.OwnerStateObject.ObjectID));
     // Multi-target actions need their own accounting so an affected linked
     // unit is not valued again as a consequence of the primary source kill.
     if (KillChance > 0.0 && Target.AdditionalTargets.Length == 0)
