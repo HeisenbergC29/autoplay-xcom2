@@ -114,15 +114,22 @@ jedno przestawienie poprawiające strzał z 47% do rzeczywistych 68%, lecz
 `SabotageCC` na trudności 3 kończy się porażką w turze 18. W tej próbie
 wystąpiły trzy zatrzymania przy ponownej kontroli tego samego granatu.
 
-Bieżące **`mission-report-v16`** odrzuca taki kandydat i ponownie wybiera
+Wersja **`mission-report-v16`** odrzuca taki kandydat i ponownie wybiera
 akcję, zachowując kontrolę bezpieczeństwa wybuchu. Blokuje powtarzanie
 odrzuconej zdolności w niezmienionej historii i ogranicza ponowne próby.
 Poprawia też potwierdzanie końca tury: stockowe API może zwrócić `false`
 pomimo wysłania żądania. [Przyczyny zatrzymań i zakres v16](docs/tactics-v16.pl.md).
-V16 wymaga nowej kompilacji na Windows i sprawdzenia w grze.
+Bieżące **`mission-report-v17`** zachowuje te poprawki, dodaje obsługę
+natywnych ciosów Berserkera sterowanego przez gracza i chroni własnego
+żołnierza przejętego rozpoznaną odwracalną kontrolą umysłu przed atakiem
+oraz granatem. To dwa porty pomocnika przyjęte po przeglądzie; filtr pamięci
+marszu z PR #11 wymaga poprawek i nie jest częścią tej rewizji.
+[Zakres v17 i próby użytkownika](docs/tactics-v17.pl.md).
+V17 wymaga nowej kompilacji na Windows i sprawdzenia w grze; opublikowane
+źródła nie oznaczają nowego wydania binarnego.
 
 Ocena porównawcza nadal używa profilu `wotc_legacy_observed_v2` od `~0/—`;
-reguły punktacji nie zostały zmienione przez v15 ani v16. Zmieniło się kryterium
+reguły punktacji nie zostały zmienione przez v15–v17. Zmieniło się kryterium
 zaliczenia próby, nie sposób naliczania punktów.
 [Zasady licznika](docs/score-display-v10.pl.md).
 
