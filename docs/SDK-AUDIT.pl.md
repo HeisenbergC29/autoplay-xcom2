@@ -508,3 +508,29 @@ budowania, kolektora raportów, 98 lokalnych odnośników w zmienionych
 dokumentach i `git diff --check`. Niezależny przegląd nie znalazł uwag
 blokujących w pamięci odrzuceń, limitach ponowień ani potwierdzaniu końca
 tury. Nie przeprowadzono kompilacji Windows ani próby v16 w grze.
+
+## V17 — przegląd dwóch portów pomocnika
+
+Przyjęto [PR #7](https://github.com/HeisenbergC29/autoplay-xcom2/pull/7)
+z natywnymi atakami Berserkera i
+[PR #9](https://github.com/HeisenbergC29/autoplay-xcom2/pull/9)
+z ochroną własnego żołnierza pod odwracalną kontrolą umysłu. SDK potwierdza
+stockowe style melee, koszty AP oraz historyczny odczyt właściciela używany
+przez usuwanie `X2Effect_MindControl`. Kontrole źródeł obejmują aktywny efekt,
+usuwanie po śmierci źródła, wcześniejszą własność i ochronę granatu.
+Zmiany zachowują pamięć odrzuconych podglądów i potwierdzanie końca tury v16.
+
+Końcowy zestaw integracji zaliczył **513 testów Python bez pominięć**
+z prywatnym SDK, konfiguracjami bazowymi i DLC gry. Audyt referencji
+potwierdził **17 klas moda i 31 skonfigurowanych nazw zdolności**. Trzy
+zestawy pomocników PowerShell — budowanie, zbieranie SDK i raportów —
+zaliczono lokalnie w PowerShell 7.6.9.
+[Publiczne CI kodu v17](https://github.com/HeisenbergC29/autoplay-xcom2/actions/runs/42021235262)
+dla `97e79e3` zaliczyło **455 testów Python, przy 58 pominiętych** z braku
+prywatnych wejść, oraz trzy zestawy PowerShell na Windows. Te testy
+PowerShell nie uruchamiają kompilatora WOTC.
+
+Twardy filtr pamięci marszu z PR #11 wymaga poprawek i nie został
+zintegrowany w v17. Kompilacja Windows WOTC SDK i próba v17 w grze
+pozostają **NIEURUCHOMIONE**. To integracja źródeł, bez nowego wydania
+binarnego. [Zakres, pochodzenie i scenariusze v17](tactics-v17.pl.md).

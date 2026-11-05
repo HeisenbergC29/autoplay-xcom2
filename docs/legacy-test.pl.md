@@ -1,4 +1,4 @@
-# Próba Legacy i ciągłość autoplaya — v16
+# Próba Legacy i ciągłość autoplaya — v17
 
 Pierwsza misja `ChallengeAbductionGasStation` została wcześniej ukończona
 zwycięstwem na v8: Dowódca, 14 tur, dwóch poległych.
@@ -16,7 +16,8 @@ jednego strzału po ruchu z 47% do 68%, ale kończy się porażką SabotageCC
 w turze 18. Trzy zatrzymania przed rzutem tego samego granatu wymagają
 osobnej kontroli ciągłości działania.
 
-Do kolejnej próby **zbuduj i zainstaluj v16**.
+Do kolejnej próby **zbuduj i zainstaluj v17**.
+[Berserker i ochrona przejętego sojusznika](tactics-v17.pl.md) ·
 [Zatrzymania granatu i potwierdzanie końca tury](tactics-v16.pl.md) ·
 [AP, ruch, trucizna i kryterium sukcesu](tactics-v15.pl.md) ·
 [Konfiguracje i ustalenia v14](config-knowledge-v14.pl.md) ·
@@ -64,7 +65,7 @@ rzeczywisty brak potwierdzenia musi dać ograniczone oczekiwanie i diagnozę.
 ## Przebieg porównawczy
 
 1. Uruchom wybrany zapis Legacy Operations „Blast From the Past” na nowej
-   v16. Dla kontynuacji wcześniejszego zwycięstwa oczekiwany jest
+   v17. Dla kontynuacji wcześniejszego zwycięstwa oczekiwany jest
    `ChallengeAbductionCemetery`, etap 2; próba GasStation dotyczy
    `ChallengeAbductionGasStation`, etap 1. Zapisz etap i trudność.
 2. Po uzyskaniu sterowania, przed F8, sprawdź licznik nad przyciskiem.
@@ -72,7 +73,7 @@ rzeczywisty brak potwierdzenia musi dać ograniczone oczekiwanie i diagnozę.
    czcionki i przepuszczać kliknięcia mapy. Maksimum nie powinno maleć po
    zabiciach; w drugim etapie licznik nie może doliczać punktów poprzedniej misji.
 3. Włącz autoplay klawiszem F8. Automat startuje wyłączony po zmianie misji.
-   W `Launch.log` sprawdź `revision=mission-report-v16`; inna rewizja oznacza
+   W `Launch.log` sprawdź `revision=mission-report-v17`; inna rewizja oznacza
    uruchomienie starszego kodu. Pozwól misji dojść do wyniku; zapisz ewentualne
    ręczne działania, ich moment i powód.
 4. Po misji, przed ponownym uruchomieniem gry, otwórz PowerShell w folderze
@@ -101,6 +102,14 @@ Zbieranie raportu działa po usunięciu pobranych źródeł moda.
 
 ## Co obserwować w następnym etapie
 
+- Cios Berserkera pod kontrolą gracza: dostępne natywne `DevastatingPunch`
+  lub `DevastatingPunchMP` powinno być rozważane z zachowaniem kosztu AP,
+  bezpieczeństwa trasy, wsparcia i ograniczenia kontry. Jeśli ta jednostka
+  nie wystąpi, oznacz scenariusz jako nieuruchomiony.
+- Własny żołnierz pod odwracalną kontrolą umysłu: nie powinien być celem
+  bezpośredniego ataku ani granatu. Zapisz aktywny efekt i wynik ewentualnego
+  zabicia widocznego źródła kontroli. V17 nie zawiera filtra pamięci marszu
+  z PR #11, który wymaga dalszych poprawek.
 - Ruch przed atakiem: słaby podstawowy strzał przy 2 AP kontra bezpieczna
   poprawa pozycji. Porównaj prognozę z rzeczywistym natywnym odczytem po ruchu.
   Dobry strzał z małą poprawą, utrata wymaganych AP snajpera, wzrost ekspozycji

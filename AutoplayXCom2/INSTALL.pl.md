@@ -59,12 +59,19 @@ zera. Zwycięstwo z wynikiem zero lub ujemnym nie zalicza próby, a niepełna
 punktacja nie potwierdza sukcesu. Oficjalny rezultat gry pozostaje osobno.
 Opis mechanik v15: `docs/tactics-v15.pl.md`.
 
-Bieżące `mission-report-v16` poprawia dwa źródła samoczynnego zatrzymania.
+Wersja `mission-report-v16` poprawia dwa źródła samoczynnego zatrzymania.
 Odrzucony podgląd granatu powoduje wybór innej akcji z ograniczonym
 ponawianiem, przy zachowaniu kontroli bezpieczeństwa. Koniec tury jest
 potwierdzany przez historię lub zmianę gracza/tury, zamiast samego wyniku
 bool funkcji silnika. Opis: `docs/tactics-v16.pl.md` oraz
 `docs/report-2026-11-04-v15-stops.pl.md`.
+
+Bieżące `mission-report-v17` zachowuje te mechanizmy i dodaje natywne ciosy
+Berserkera pod kontrolą gracza oraz ochronę własnych żołnierzy przejętych
+rozpoznaną odwracalną kontrolą umysłu przed atakiem i granatem. Opis i próby:
+`docs/tactics-v17.pl.md`. Filtr ostatnio odwiedzanych pól z PR #11 nie jest
+częścią v17. Kompilacja Windows i próba v17 w grze nie zostały potwierdzone;
+aktualizacja źródeł nie jest nową paczką binarną.
 
 Zbuduj i zainstaluj nową wersję; sama podmiana konfiguracji nie wystarczy.
 Instrukcja próby to `docs/legacy-test.pl.md`, a opis licznika to
@@ -187,7 +194,7 @@ Raport ZIP pojawi się w `<Dokumenty>\AutoplayXCom2-Reports`. Skrypt działa tak
 po usunięciu pobranego folderu źródeł. Załącz raport do zgłoszenia wraz z poziomem
 trudności, wynikiem misji i stratami. Szczegóły: `docs/mission-recording.pl.md`
 w repozytorium. To zapis diagnostyczny, nie film ani replay.
-W nowym raporcie wpis `revision=mission-report-v16` identyfikuje tę wersję.
+W nowym raporcie wpis `revision=mission-report-v17` identyfikuje tę wersję.
 Znaczniki `ambush_setup` pokazują przygotowania, a `grenade_scan` zawiera również
 liczby ocenionych okazji do granatu na pojedynczy cel i ostatni podgląd obrażeń.
 `area_target_preview` opisuje cele wybranego granatu; `move_threat_preview`
@@ -214,7 +221,7 @@ zwycięstwa v8 i działanie ratunku v9; wcześniejszy raport v12 z `SabotageCC`
 kończy się porażką. Potwierdza start punktacji porównawczej od zera.
 Najnowszy raport v15 potwierdza jedną poprawę celowania po ruchu 47→68%,
 lecz SabotageCC kończy się porażką w turze 18. Trzy zatrzymania przed rzutem
-granatu są opisane osobno od odrzuconych rozkazów silnika. Poprawki v16
+granatu są opisane osobno od odrzuconych rozkazów silnika. Bieżące źródła v17
 wymagają nowej kompilacji i próby.
 Nie potwierdzono
 pełnej obsługi każdej skryptowanej misji DLC

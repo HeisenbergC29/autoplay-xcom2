@@ -5,8 +5,10 @@ trudność 3, **FAIL** w turze 18, 80 przyjętych rozkazów i zero odrzuceń
 przez silnik. Częściowy wynik porównawczy −17500. Jedno przestawienie
 przed strzałem 47→68%: **POTWIERDZONE**; próby chmury trucizny i kombinacji
 AP: **NIEURUCHOMIONE**. Trzy zatrzymania przed rzutem granatu są osobnym
-błędem od odrzuconego rozkazu. Kompilacja Windows i próba poprawek v16:
-**NIEURUCHOMIONE**. [Zakres i scenariusze v16](tactics-v16.pl.md).
+błędem od odrzuconego rozkazu. Kompilacja Windows i próba bieżącej rewizji
+`mission-report-v17`: **NIEURUCHOMIONE**.
+[Zakres i scenariusze v17](tactics-v17.pl.md) ·
+[Zachowane scenariusze v16](tactics-v16.pl.md).
 
 Od bieżącej serii **PASS wymaga zwycięstwa oraz wyniku misji > 0**.
 Zwycięstwo przy zerze lub wyniku ujemnym daje FAIL próby; oficjalne zwycięstwo
@@ -14,7 +16,16 @@ gry pozostaje zapisane. Brak pewnego końcowego wyniku daje **NIEPOTWIERDZONY**,
 bez zaliczenia na podstawie częściowego `~wynik/—`. Dawne opisy zwycięstw
 v8 zachowują znaczenie historycznego wyniku gry.
 
-V16: sprawdź odrzucenie nieaktualnego granatu bez wyłączenia autoplaya,
+V17: sprawdź legalne `DevastatingPunch` i `DevastatingPunchMP` Berserkera
+sterowanego przez gracza oraz zachowanie ograniczeń AP, ścieżki, zagrożeń,
+wsparcia i kontry. Własny żołnierz przejęty aktywną odwracalną kontrolą
+umysłu nie może być wybrany jako cel ataku ani narażony przez wybrany granat.
+Sprawdź zachowanie przeciw zwykłemu wrogowi i powrót kontroli po zabiciu
+źródła, jeśli wystąpi taka okazja. Sam brak ataku na przejętego żołnierza
+bez rozpoznanego efektu w raporcie nie dowodzi działania nowej ochrony.
+PR #11 z filtrem pamięci marszu wymaga poprawek i nie jest objęty v17.
+
+Zachowaj scenariusze v16: odrzucenie nieaktualnego granatu bez wyłączenia autoplaya,
 wybór innej legalnej akcji, blokadę powtórzenia przy tej samej historii,
 ponowienie po zmianie stanu i limit trzech niepowodzeń danej zdolności
 w turze. Kontrola wybuchu, celów i sojuszników nadal musi działać.
@@ -51,7 +62,7 @@ Ten sam raport zawiera zwycięstwo v8 w `SabotageCC` na trudności 3.
 Wcześniejsze zwycięstwo v8 w pierwszej misji Legacy pozostaje osobną próbą;
 Cemetery nadal nie ma udokumentowanej próby autoplaya.
 V10 działało w zwykłej niepunktowanej misji. Wyświetlanie liczb Legacy
-oraz poprawki ciągłości działania v16 nadal wymagają kompilacji Windows i próby w grze.
+oraz bieżące zmiany v17 nadal wymagają kompilacji Windows i próby w grze.
 [Instrukcja Legacy](legacy-test.pl.md) · [Licznik v12](score-display-v10.pl.md).
 
 Dotychczasowy wynik zgłoszony przez użytkownika: **PASS** — mod wydaje rozkazy;

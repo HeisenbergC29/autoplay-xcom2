@@ -23,6 +23,7 @@ automat i co rzeczywiście wydarzyło się po rozkazach.
 [V15: AP, chmury i dodatni wynik misji](tactics-v15.pl.md).
 [Raport v15: trzy zatrzymania przed rzutem](report-2026-11-04-v15-stops.pl.md).
 [V16: odrzucenie granatu i potwierdzanie końca tury](tactics-v16.pl.md).
+[V17: ciosy Berserkera i ochrona przejętego sojusznika](tactics-v17.pl.md).
 
 Wynik misji, punktację porównawczą i oficjalne punkty gry zapisujemy oddzielnie.
 `score` w rekordach `candidate`/`chosen` jest oceną heurystyki, a startowe
@@ -97,7 +98,7 @@ osobnym faktem. [Reguła i przykłady](tactics-v15.pl.md).
 
 ## Zbudowanie i pierwsza próba
 
-1. Pobierz aktualne źródła v16, rozpakuj je i zbuduj jak poprzednio na zachowanym
+1. Pobierz aktualne źródła v17, rozpakuj je i zbuduj jak poprzednio na zachowanym
    SDK WOTC. Bez `-BuildBase`, jeśli pakiety bazowe są już przygotowane.
 2. Zainstaluj nowy `dist\AutoplayXCom2.zip` i uruchom grę ponownie. Stara paczka
    z `release` nie zawiera rejestratora.
@@ -400,3 +401,11 @@ przyjęcia ani odrzucenia. Żądanie, potwierdzenie i brak potwierdzenia trzeba
 oceniać razem z historią oraz zakresem misji. Po limicie oczekiwania
 zapamiętane niejasne żądanie nadal blokuje jego duplikat po OFF/ON.
 [Interpretacja zatrzymań i scenariusze](tactics-v16.pl.md).
+
+Rewizja `mission-report-v17` oznacza integrację obsługi `DevastatingPunch`
+i `DevastatingPunchMP` oraz ochrony własnego żołnierza pod rozpoznaną
+odwracalną kontrolą umysłu przed wyborem ataku i granatu. Zachowuje pola
+diagnostyczne v16; nie dodaje potwierdzenia kompilacji, przebiegu misji ani
+nowej punktacji. Pole rewizji identyfikuje uruchomiony kod. Nie dowodzi,
+że w danej misji wystąpił Berserker, efekt kontroli lub okazja do sprawdzenia
+tych zachowań. [Scenariusze v17](tactics-v17.pl.md).

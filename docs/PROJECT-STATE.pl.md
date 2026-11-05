@@ -1,21 +1,25 @@
 # Stan przekazania projektu — 5 listopada 2026
 
-To punkt startowy dla pomocnika. Bieżące issue i PR-y mogą zawierać nowsze
+To punkt startowy po pierwszym przeglądzie importu pomocnika. Bieżące issue i PR-y mogą zawierać nowsze
 ustalenia; po integracji aktualizuj ten dokument, gdy zmienia się baza lub
 poziom potwierdzenia działania.
 
 ## Baza kodu
 
-- Ostatnia opublikowana rewizja działającego kodu: `mission-report-v16`.
-- Bazowy commit v16: `9458b185e6602a07d448010c45bc5aeb74fd8d80`.
+- Bieżąca rewizja źródeł: `mission-report-v17`. Commit rewizji i testu:
+  `97e79e3b20547c2a9c75a2cd352d80900741faba`.
+- Wspólna baza po scaleniu PR #7 i #9: `84c1168`; kolejne gałęzie zaczynaj
+  od aktualnego `main`, uwzględniając końcową integrację v17 z issue #13.
+- Zachowany bazowy commit v16: `9458b185e6602a07d448010c45bc5aeb74fd8d80`.
 - Opublikowany kod v15 do porównania:
   `9832d72d14b75adb110a1d5ac74a32e290306b0e`. Dokładną bazę swojego
   repozytorium pomocnik podaje w inwentaryzacji; nie zakładamy jej bez SHA.
-- Przed integracją organizacji `main` pozostawał na `ed74176`; aktualna baza
-  trafia do `main` przez PR zachowujący historię. Historyczna gałąź
+- Przed integracją organizacji `main` pozostawał na `ed74176`; historię
+  opublikowanych prac scalono przez PR #5 (`dfd9b27`). Historyczna gałąź
   `codex/legacy-v6-threat-estimates` nie jest osobnym projektem ani nową bazą
   dla kolejnych zmian. Po opublikowaniu organizacji zaczynaj od `main`.
-- Przygotowanie współpracy i CI nie zmienia mechaniki gry ani rewizji v16.
+- Przygotowanie współpracy i CI nie zmieniło rewizji v16; v17 identyfikuje
+  późniejszą integrację zachowań z PR #7 i #9.
 
 ## Co już istnieje
 
@@ -35,16 +39,43 @@ potwierdza historią/zmianą gracza, ponieważ stockowe API może zwracać false
 także po wysłaniu żądania. Tych poprawek nie należy utracić przy imporcie.
 [Szczegóły v16](tactics-v16.pl.md).
 
+V17 dodaje do planera `DevastatingPunch` i `DevastatingPunchMP` Berserkera
+sterowanego przez gracza, używając istniejących natywnych kontroli melee.
+Chroni również odzyskiwalnego własnego żołnierza z rozpoznanym aktywnym
+efektem kontroli umysłu przed atakiem i granatem. Poprawki v16 pozostają.
+[Zakres, źródła i próby v17](tactics-v17.pl.md).
+
+## Pierwszy przegląd importu
+
+Źródło pomocnika:
+[xcom2-autoplay-alternative](https://github.com/HeisenbergC29/xcom2-autoplay-alternative),
+`main` na `c63d8d917be368dbee76b66ce3b7911b866f0f5e`.
+Historie Git są niezależne; importowany stan początkowy odpowiadał zawartości
+v15, co nie oznacza wspólnego przodka commitów.
+
+| Temat | Decyzja prowadzącego |
+| --- | --- |
+| Ataki Berserkera, PR #7 | scalone; sprawdzony HEAD `5d485ad09616c224a7c7f1a2663c6dd576982bc6` |
+| Ochrona kontrolowanego sojusznika, PR #9 | scalone; sprawdzony HEAD `89ebd569d546e3a695927aecab372a4aaa84b31d` |
+| Pamięć marszu między turami, PR #11 | wymaga poprawek; nie wchodzi do v17 |
+| Ukryta zasadzka, issue #12 | osobny temat do dalszej pracy |
+
 ## Potwierdzenie i ograniczenia
 
-| Dowód | Stan bazy v16 |
+| Dowód | Stan integracji v17 |
 | --- | --- |
-| Testy Python z prywatnym SDK i configami | 505 zaliczonych, bez pominięć |
-| Audyt referencji | 17 klas moda, 29 skonfigurowanych nazw zdolności |
-| Pomocnicy budowania i zbierania raportów | kontrole PowerShell zaliczone |
-| Publiczny zestaw bez prywatnych wejść | 450 zaliczonych, 55 pominiętych; liczby dla tej bazy |
-| Kompilacja v16 w Windows WOTC SDK | niepotwierdzona |
-| Pełna próba v16 w grze | niepotwierdzona |
+| Testy Python z prywatnym SDK i configami | 513 zaliczonych, bez pominięć |
+| Audyt referencji | 17 klas moda, 31 skonfigurowanych nazw zdolności |
+| Pomocnicy budowania, zbierania SDK i raportów | trzy zestawy PowerShell zaliczone lokalnie w PowerShell 7.6.9 |
+| Publiczny zestaw bez prywatnych wejść | 455 zaliczonych, 58 pominiętych; [CI kodu v17](https://github.com/HeisenbergC29/autoplay-xcom2/actions/runs/42021235262) |
+| Pomocnicy PowerShell na Windows | trzy zestawy zaliczone w tym samym CI; to nie kompilacja WOTC |
+| Kompilacja v17 w Windows WOTC SDK | NIEURUCHOMIONA |
+| Pełna próba v17 w grze | NIEURUCHOMIONA |
+
+Liczby historycznej bazy v16: 505 testów z prywatnymi wejściami bez pominięć,
+17 klas i 29 nazw zdolności; publicznie 450 zaliczonych i 55 pominiętych.
+Scalenie źródeł i zielone kontrole nie są potwierdzeniem kompilacji moda
+ani zaliczenia misji. [Osobna próba użytkownika #4](https://github.com/HeisenbergC29/autoplay-xcom2/issues/4).
 
 Ostatni [raport v15](report-2026-11-04-v15-stops.pl.md): SabotageCC,
 trudność 3, porażka w turze 18, częściowa ocena −17500. Trzy zatrzymania
@@ -71,4 +102,6 @@ Wynik natywny i porównawczy pozostają rozdzielone; porównanie v2 startuje od
 zera i jest oznaczane jako częściowe, gdy brakuje obserwacji. Nie zmieniaj
 tych zasad przy przenoszeniu taktyki z osobnego repozytorium.
 
-Pierwszy krok pomocnika: [inwentaryzacja i procedura importu](TEAM.pl.md#import-z-osobnego-repozytorium).
+Inwentaryzację i dalsze przekazania zapisujemy w
+[issue #1](https://github.com/HeisenbergC29/autoplay-xcom2/issues/1), zgodnie z
+[procedurą importu](TEAM.pl.md#import-z-osobnego-repozytorium).
