@@ -88,6 +88,13 @@ Integrację prowadzi LEAD w #27. #20 i badanie pilnego podejścia/leczenia #28
 są osobnymi tematami, poza tą zmianą.
 [Zakres v20](experiment-25-full-intel.pl.md).
 
+PR #30 / v21 dodaje ograniczony priorytet PlantBomb dla BerserkerMP
+w SabotageTransmitter, z poprawkami bezpieczeństwa LEAD. Nie stanowi
+deklarowanej naprawy awarii. #32 (ochrona concealment podczas marszu)
+jest następnym osobnym tematem; skoordynować go z #31 i zmianami tras,
+bez nadpisywania wspólnych plannerów.
+[Zakres v21](experiment-29-berserker-blood-killer.pl.md).
+
 ## Przekazanie i decyzja o scaleniu
 
 W PR napisz: konkretny problem i zachowanie po zmianie, źródła/commity,

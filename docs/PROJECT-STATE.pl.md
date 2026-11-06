@@ -6,10 +6,15 @@ poziom potwierdzenia działania.
 
 ## Baza kodu
 
-- Bieżąca rewizja przygotowywanych źródeł: `mission-report-v20`, pełna mapa
-  i pozycje aktywnych wrogów z PR #26, potwierdzone przez użytkownika.
-  Przegląd i integrację koordynuje LEAD w #27; dokładny wariant do kompilacji
+- Bieżąca rewizja przygotowywanych źródeł: `mission-report-v21`, ograniczony
+  priorytet PlantBomb dla BerserkerMP w SabotageTransmitter z PR #30 oraz
+  poprawki LEAD dotyczące ostatniego AP i limitu ryzyka fallbacku.
+  Zachowuje pełną mapę i pozycje wrogów v20. Dokładny wariant do kompilacji
   wskazuje w [issue #4](https://github.com/HeisenbergC29/autoplay-xcom2/issues/4).
+- Baza v20: `dc0ea3a3eecff3b85169128786bb5a51983ce76e`. [Nowy raport](report-2026-11-06-v20.pl.md)
+  potwierdza dwie sesje v20: GasStation loss z natywnym −7600 oraz Blood Killer
+  zakończony awarią bez wyniku. Brak nowego folderu crasha/dumpa jest potwierdzony
+  przez użytkownika. To nie dowód wyeliminowania wcześniejszych problemów.
 - Baza v19: `5e9d9eacbe1bfd9ea3f6c178c697065b0a7cbc0c`. Zachowuje cache
   tekstu HUD z PR #22 i integrację #24.
 - Historyczny eksperyment HUD porównywał v18
@@ -73,7 +78,19 @@ Natywne akcje, AP, RNG i punktacja pozostają rozstrzygające. Odkrycie terenu
 przez SDK nie gwarantuje ujawnienia modeli przeciwników.
 [Zakres, ograniczenia i próba v20](experiment-25-full-intel.pl.md).
 
-Najnowszy [raport GasStation v19](report-2026-11-06-v19-gasstation.pl.md):
+V21 preferuje podejście do PlantBomb tylko dla BerserkerMP w nieukończonej
+SabotageTransmitter. Zachowuje native AP/interakcje, legalne trasy, hazardy
+i wsparcie. LEAD ograniczył wyjątek ruchu do >=2 AP i domknął wspólny limit
+ryzyka prefixu oraz fallbacku. Wybór glint/markera jest heurystyką podejścia;
+nie gwarantuje dostępności właściwego punktu interakcji. Awaria pozostaje
+osobnym problemem. [Zakres i próba v21](experiment-29-berserker-blood-killer.pl.md).
+
+Nowe zadania: #31 izolowanie grup bez presji czasu i #32 wspólna ocena
+concealment (cywile/urządzenia/destrukcja). #32 nie jest częścią v21;
+obecna kontrola ukrycia obejmuje przygotowanie zasadzki i podejście po loot,
+lecz nie cały zwykły marsz.
+
+Wcześniejszy [raport GasStation v19](report-2026-11-06-v19-gasstation.pl.md):
 porażka, 40 przyjętych rozkazów, normalne zamknięcie gry. Ostatni natywny
 odczyt −20100 pozostaje częściowy: 18 klatek historii nie zostało zapisanych,
 `mission_final=False`. Ta pojedyncza próba Legacy nie weryfikuje wcześniejszego
@@ -103,11 +120,17 @@ v15, co nie oznacza wspólnego przodka commitów.
 
 ## Potwierdzenie i ograniczenia
 
+Kod v21 po poprawkach przeglądu LEAD zaliczył **547 testów z prywatnymi
+wejściami, bez pominięć**, oraz audyt **18 klas / 31 nazw zdolności PASS**.
+Końcowy SHA, publiczne CI i decyzja o scaleniu są zapisane w PR #30.
+Kompilacja Windows WOTC SDK oraz gra v21: **NIEURUCHOMIONE**.
+Źródła nie stanowią potwierdzonej naprawy awarii ani zwycięstwa.
+
 Po poprawkach przeglądu kod v20 zaliczył **539 testów z prywatnymi wejściami
 bez pominięć** oraz audyt **18 klas / 31 nazw zdolności PASS**. Kod:
 `e8aa70bef727a6a7672d400156f225896cdec1c6`. Końcowe publiczne CI i decyzja
-są zapisane w PR #26 i issue #27. Kompilacja Windows WOTC SDK i gra v20:
-**NIEURUCHOMIONE**. Zmiana pełnej wiedzy nie jest potwierdzoną naprawą awarii
+są zapisane w PR #26 i issue #27. Późniejszy raport potwierdza uruchomienie
+v20 w grze, ale nie dokładny SHA kompilacji. Zmiana pełnej wiedzy nie jest potwierdzoną naprawą awarii
 ani dowodem, że każdą misję można ukończyć.
 
 Historyczny PR #22 oraz kod integracji v19 zaliczyły **524 testy z prywatnymi

@@ -9,6 +9,8 @@ var config float PreferredCombatRangeTiles;
 var config float MinimumPositionGain;
 var config float SquadSupportDistance;
 var config float SquadSeparationTiles;
+// Only the BerserkerMP SabotageTransmitter challenge uses this policy.
+var config bool PrioritizeBerserkerSabotage;
 
 // UnrealScript cannot pass a bit-packed bool as an out parameter. Carry the
 // related result fields in one value whose structure can be passed by reference.
@@ -19,6 +21,8 @@ struct MissionGoal
     var bool bCombat;
     var bool bFound;
     var bool bImmediateThreats;
+    var bool bBerserkerSabotageGoal;
+    var string BerserkerSabotageGoalSource;
 };
 
 // A component marks an actual mission unit (VIP/captive), rather than every civilian.
@@ -457,6 +461,132 @@ static function bool ShouldPursueKnownEnemies(bool bFullIntel,
     return bFullIntel && !bFoundMissionGoal && KnownEnemyCount > 0;
 }
 
+// Mission-first policy is limited to the melee-only Berserker challenge.
+// A visible threat still participates in movement risk and legal attacks.
+// No change to other soldier templates or mission categories.
+static function bool ShouldPrioritizeBerserkerSabotage(bool bEnabled,
+    bool bBerserker, bool bSabotageMission, bool bObjectiveComplete)
+{
+    return bEnabled && bBerserker && bSabotageMission && !bObjectiveComplete;
+}
+
+// Choose a real unfinished objective-glint object closest to the native
+// mission marker. If it isn't available, fall back only to that native marker.
+// Never guess an object id or interact with an object without AvailableActions.
+static function bool FindBerserkerSabotageGoal(XComGameState_Unit UnitState,
+    XComGameState_BattleData BattleData, out TTile GoalTile,
+    out string GoalSource)
+{
+    local XComGameState_InteractiveObject ObjectState;
+    local TTile MarkerTile;
+    local float Distance, BestDistance;
+    local bool bMarkerAvailable, bObjectFound;
+    local int Considered;
+
+    GoalSource = "none";
+    if (UnitState == none || BattleData == none || `XWORLD == none)
+        return false;
+    bMarkerAvailable = VSizeSq(BattleData.MapData.ObjectiveLocation) > 1.0;
+    if (bMarkerAvailable)
+    {
+        MarkerTile = `XWORLD.GetTileCoordinatesFromPosition(
+            BattleData.MapData.ObjectiveLocation);
+        bMarkerAvailable = !`XWORLD.IsTileOutOfRange(MarkerTile);
+    }
+    BestDistance = 1000000.0;
+    foreach `XCOMHISTORY.IterateByClassType(
+        class'XComGameState_InteractiveObject', ObjectState)
+    {
+        if (ObjectState == none || !IsUnfinishedObject(ObjectState)
+            || !ObjectState.GetRequiresObjectiveGlint()
+            || `XWORLD.IsTileOutOfRange(ObjectState.TileLocation))
+            continue;
+        ++Considered;
+        if (Considered > 128)
+            break;
+        Distance = bMarkerAvailable
+            ? TileDistance(ObjectState.TileLocation, MarkerTile)
+            : TileDistance(ObjectState.TileLocation, UnitState.TileLocation);
+        if (!bObjectFound || Distance < BestDistance)
+        {
+            BestDistance = Distance;
+            GoalTile = ObjectState.TileLocation;
+            GoalSource = "objective_glint";
+            bObjectFound = true;
+        }
+    }
+    // The exact map objective marker is preferable to an unrelated glint.
+    if (bMarkerAvailable && (!bObjectFound || BestDistance > 6.0))
+    {
+        GoalTile = MarkerTile;
+        GoalSource = "mission_marker";
+        return true;
+    }
+    return bObjectFound;
+}
+
+// Shared by the objective prefix and every local fallback candidate.
+static function bool IsBerserkerObjectiveRiskAllowed(float HealthFraction,
+    float CurrentRisk, float DestinationRisk)
+{
+    local float ExtraRisk;
+
+    ExtraRisk = FMax(0.0, DestinationRisk - CurrentRisk);
+    return ExtraRisk <= 75.0 && (HealthFraction >= 0.35 || ExtraRisk <= 12.0);
+}
+
+// Larger mission progress utility lets a healthy melee squad stop retreating
+// in circles; the native path, hazards and unit cohesion remain authoritative.
+static function float ScoreBerserkerObjectiveRoute(int PathTiles,
+    float HealthFraction, float CurrentRisk, float DestinationRisk)
+{
+    local float ExtraRisk;
+
+    if (PathTiles < 2)
+        return -10000.0;
+    if (!IsBerserkerObjectiveRiskAllowed(HealthFraction, CurrentRisk, DestinationRisk))
+        return -10000.0;
+    ExtraRisk = FMax(0.0, DestinationRisk - CurrentRisk);
+    return 43.0 + FMin(14.0, float(PathTiles - 1) * 2.0)
+        - ExtraRisk * 0.25;
+}
+
+// Only the Berserker objective branch invokes this extra threat sample.
+// Ordinary movement does not duplicate the existing one-per-candidate-list
+// weapon and melee-range collection, avoiding a performance regression.
+static function float ScoreBerserkerObjectivePath(
+    XComGameState_Unit UnitState, const out array<TTile> Path,
+    const out array<StateObjectReference> VisibleEnemies, TTile GoalTile,
+    string GoalSource)
+{
+    local array<float> Reaches, Weights;
+    local float CurrentRisk, CandidateRisk, HealthFraction, Score;
+
+    if (UnitState == none || Path.Length < 2)
+        return -10000.0;
+    GetMeleeThreatReaches(UnitState, VisibleEnemies, Reaches);
+    GetThreatWeights(UnitState, VisibleEnemies, Weights);
+    CurrentRisk = ExposureRisk(UnitState, UnitState.TileLocation,
+        VisibleEnemies, Reaches, Weights);
+    CandidateRisk = ExposureRisk(UnitState, Path[Path.Length - 1],
+        VisibleEnemies, Reaches, Weights);
+    HealthFraction = UnitState.GetCurrentStat(eStat_HP)
+        / FMax(1.0, UnitState.GetMaxStat(eStat_HP));
+    Score = ScoreBerserkerObjectiveRoute(Path.Length, HealthFraction,
+        CurrentRisk, CandidateRisk);
+    `log("Berserker sabotage route|unit=" $ UnitState.ObjectID
+        $ "|source=" $ GoalSource
+        $ "|goal_x=" $ GoalTile.X $ "|goal_y=" $ GoalTile.Y
+        $ "|goal_z=" $ GoalTile.Z
+        $ "|distance_before=" $ TileDistance(UnitState.TileLocation, GoalTile)
+        $ "|distance_after=" $ TileDistance(Path[Path.Length - 1], GoalTile)
+        $ "|end_x="
+        $ Path[Path.Length - 1].X $ "|end_y=" $ Path[Path.Length - 1].Y
+        $ "|score=" $ Score $ "|current_risk=" $ CurrentRisk
+        $ "|candidate_risk=" $ CandidateRisk, true, 'AutoplayXCom2');
+    return Score;
+}
+
 static function bool FindGoal(XComGameState_Unit UnitState, out MissionGoal Goal,
     out array<StateObjectReference> VisibleEnemies)
 {
@@ -467,6 +597,10 @@ static function bool FindGoal(XComGameState_Unit UnitState, out MissionGoal Goal
     local StateObjectReference EnemyRef;
     local array<StateObjectReference> ImmediateEnemies;
     local MissionGoal EmptyGoal;
+    local TTile SabotageGoalTile;
+    local string SabotageGoalSource;
+    local int MissionObjectiveIndex;
+    local bool bStrategyObjective, bCompletedStrategyObjective;
 
     Goal = EmptyGoal;
 
@@ -479,6 +613,44 @@ static function bool FindGoal(XComGameState_Unit UnitState, out MissionGoal Goal
         Goal.Tile = EvacZone.CenterLocation;
         Goal.bFound = true;
         return true;
+    }
+
+    // A planted bomb is the win condition, not the number of enemies
+    // confronted. This is deliberately scoped to the Blood Killer-style
+    // BerserkerMP challenge, keeping all other mission policies unchanged.
+    BattleData = XComGameState_BattleData(`XCOMHISTORY.GetSingleGameStateObjectForClass(
+        class'XComGameState_BattleData', true));
+    if (BattleData != none)
+    {
+        for (MissionObjectiveIndex = 0; MissionObjectiveIndex <
+            BattleData.MapData.ActiveMission.MissionObjectives.Length;
+            ++MissionObjectiveIndex)
+        {
+            if (BattleData.MapData.ActiveMission.MissionObjectives[
+                MissionObjectiveIndex].bIsStrategyObjective)
+            {
+                bStrategyObjective = true;
+                break;
+            }
+        }
+        bCompletedStrategyObjective = bStrategyObjective
+            && BattleData.AllStrategyObjectivesCompleted();
+        if (ShouldPrioritizeBerserkerSabotage(default.PrioritizeBerserkerSabotage,
+            UnitState.GetMyTemplateName() == 'BerserkerMP',
+            string(BattleData.MapData.ActiveMission.sType) == "SabotageTransmitter",
+            bCompletedStrategyObjective)
+            && FindBerserkerSabotageGoal(UnitState, BattleData,
+                SabotageGoalTile, SabotageGoalSource)
+            && TileDistance(UnitState.TileLocation, SabotageGoalTile) > 1.5)
+        {
+            Goal.Tile = SabotageGoalTile;
+            Goal.Value = 115.0;
+            Goal.bFound = true;
+            Goal.bCombat = false;
+            Goal.bBerserkerSabotageGoal = true;
+            Goal.BerserkerSabotageGoalSource = SabotageGoalSource;
+            return true;
+        }
     }
 
     // A squadmate's actual contact can still threaten this soldier. Distant
@@ -1595,7 +1767,7 @@ static function bool ChooseMove(XComGameState_Unit UnitState,
     local array<float> ThreatWeights;
     local TTile GoalTile, Tile, ClosestTile;
     local MissionGoal Goal;
-    local bool bCombatGoal, bSafe, bRequireSupport, bRoutineRoute;
+    local bool bCombatGoal, bSafe, bRequireSupport, bRoutineRoute, bSabotageRush;
     local int Index, PathIndex, SampleIndex, SampleCount;
     local float CurrentScore, CandidateScore, BestScore, CurrentRisk, CandidateRisk, PathCost, StartSupport, BestRisk;
     local float BestAttackNow, BestAttackAfterMove, HealthFraction;
@@ -1606,12 +1778,22 @@ static function bool ChooseMove(XComGameState_Unit UnitState,
         || !FindGoal(UnitState, Goal, VisibleEnemies))
         return false;
     GoalTile = Goal.Tile;
+    bSabotageRush = Goal.bBerserkerSabotageGoal
+        && UnitState.NumActionPoints() >= 2;
+    // For this one sabotage challenge, even a nearby enemy does not turn
+    // the bomb emplacement into a combat-position destination. Threat risk
+    // is still scored; emergency/attack actions still compete independently.
     bCombatGoal = RequiresCombatMovement(Goal.bCombat, Goal.bImmediateThreats,
         ShouldEvacuate(UnitState));
+    // The last AP retains combat reposition/attack-opportunity checks. A
+    // mission approach needs another AP left for the native bomb interaction.
+    if (bSabotageRush)
+        bCombatGoal = false; // Do not score a bomb approach as a firing flank.
     bRequireSupport = !ShouldEvacuate(UnitState);
     StartSupport = NearestSupportDistance(UnitState, UnitState.TileLocation);
-    bRoutineRoute = CanUseRoutineRoute(Goal.bImmediateThreats,
-        ShouldEvacuate(UnitState), UnitState.NumActionPoints());
+    bRoutineRoute = bSabotageRush
+        || CanUseRoutineRoute(Goal.bImmediateThreats,
+            ShouldEvacuate(UnitState), UnitState.NumActionPoints());
     // A known but distant enemy does not remove the reserve-AP travel rule.
     if (!Goal.bImmediateThreats && !bRoutineRoute)
         return false;
@@ -1628,7 +1810,17 @@ static function bool ChooseMove(XComGameState_Unit UnitState,
     {
         Score = ScoreRouteAdvance(SquadPositionScore(UnitState, UnitState.TileLocation),
             SquadPositionScore(UnitState, Path[Path.Length - 1]));
-        return true;
+        if (bSabotageRush)
+        {
+            Score = ScoreBerserkerObjectivePath(UnitState, Path, VisibleEnemies,
+                GoalTile, Goal.BerserkerSabotageGoalSource);
+            if (Score <= -9999.0)
+                Path.Length = 0; // Try the existing tactical route fallback.
+            else
+                return true;
+        }
+        else
+            return true;
     }
     // Blue moves preserve an action for combat, interactions or overwatch.
     UnitVisualizer.m_kReachableTilesCache.GetAllPathableTiles(Tiles, UnitVisualizer.GetMobility());
@@ -1642,6 +1834,7 @@ static function bool ChooseMove(XComGameState_Unit UnitState,
         bCombatGoal, VisibleEnemies, MeleeThreatReaches, ThreatWeights);
     BestScore = CurrentScore + FMax(1.0, default.MinimumPositionGain);
     CurrentRisk = ExposureRisk(UnitState, UnitState.TileLocation, VisibleEnemies, MeleeThreatReaches, ThreatWeights);
+    HealthFraction = UnitState.GetCurrentStat(eStat_HP) / FMax(1.0, UnitState.GetMaxStat(eStat_HP));
     BestRisk = CurrentRisk;
 
     // Include the closest goal tile and distribute the remaining samples over
@@ -1662,6 +1855,11 @@ static function bool ChooseMove(XComGameState_Unit UnitState,
                 NearestSupportDistance(UnitState, Tile))))
             continue;
         CandidateRisk = ExposureRisk(UnitState, Tile, VisibleEnemies, MeleeThreatReaches, ThreatWeights);
+        // A rejected objective prefix must not reappear through the local
+        // fallback without the same health/risk veto.
+        if (bSabotageRush && !IsBerserkerObjectiveRiskAllowed(
+            HealthFraction, CurrentRisk, CandidateRisk))
+            continue;
         CandidateScore = PositionScore(UnitState, Tile, GoalTile, bCombatGoal,
             VisibleEnemies, MeleeThreatReaches, ThreatWeights);
         // Small travel cost breaks equivalent-position ties and reduces churn.
@@ -1702,7 +1900,6 @@ static function bool ChooseMove(XComGameState_Unit UnitState,
         return false;
     if (bCombatGoal)
     {
-        HealthFraction = UnitState.GetCurrentStat(eStat_HP) / FMax(1.0, UnitState.GetMaxStat(eStat_HP));
         Score = ScoreCombatReposition(BestScore - CurrentScore, CurrentRisk, BestRisk,
             HealthFraction, UnitState.NumActionPoints());
         GetMoveAttackOptions(UnitState, VisibleEnemies, BestAttackNow, BestAttackAfterMove);
