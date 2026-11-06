@@ -98,6 +98,43 @@ Wynik zero lub ujemny przy zwycięstwie oznacza nieudaną próbę; brak pewnego
 końcowego wyniku nie daje potwierdzenia. Oficjalne `outcome` gry pozostaje
 osobnym faktem. [Reguła i przykłady](tactics-v15.pl.md).
 
+## Czytelne podsumowanie każdej misji (analizator, bez zmian moda)
+
+`python tools/analyze-mission-log.py <raport.zip> --json <wyniki.json>`
+drukuje teraz przy **każdej** sesji osobną nazwę misji, wynik gry oraz
+wartość punktową z oznaczeniem wiarygodności:
+
+- `mission points=+N/-N (confirmed, ...)` — końcowe punkty zgodne z
+  wymaganiami rejestratora; samo potwierdzenie liczby nie oznacza
+  zwycięstwa (np. porażka z dodatnimi punktami).
+- `mission points=+N/-N (provisional, ...)` — ostatni zaobserwowany
+  wynik lub częściowe porównanie; nie wolno oznaczać próby jako PASS.
+- `mission points=unknown (not recorded)` — brak wiarygodnej wartości.
+  Nie wylicza się wyniku z `score_delta` ani z maksymalnej puli gry.
+
+W JSON pojawia się `sessions[].mission_points` z `value`,
+`confirmed`, `source` i `status`. Niezmieniony
+`attempt_verdict` nadal wymaga `win` oraz pewnych punktów > 0.
+
+Analizator odróżnia teraz `grenade_preparation.preview_rejections`
+i powody odmowy podczas `area_revalidation_rejected` od
+`rejected_actions` (rzeczywiste `chosen.accepted=false`).
+Takie odrzucenie podglądu **nie jest** wykonanym granatem.
+
+Nowe `end_turn_diagnostics` zlicza żądania, potwierdzenia,
+`end_turn_unconfirmed`, potwierdzenia po timeout i źródła dowodu.
+Natywne `native_return=False` po którym nastąpiło zgodne
+`end_turn_confirmed` traktuje jako **potwierdzone**, nie błąd.
+Timeout bez późniejszego dowodu jest nierozstrzygnięty, a nie
+równoważny dowiedzionemu odrzuceniu przez silnik.
+Powtarzające się rekordy tej samej sesji z backupów ZIP
+są deduplikowane po parze `session/seq`.
+
+Ten etap obejmuje jedynie skrypt analityczny i testy Python.
+Nie zmienia kodu UnrealScript, AI, punktacji HUD ani
+kryteriów akceptacji. Automatyczne testy źródłowe nie są
+kompilacją SDK Windows ani próbą w grze.
+
 ## Zbudowanie i pierwsza próba
 
 1. Pobierz zatwierdzone źródła v20, rozpakuj je i zbuduj jak poprzednio na zachowanym
