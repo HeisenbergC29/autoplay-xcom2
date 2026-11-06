@@ -351,8 +351,9 @@ static function bool ChooseMove(XComGameState_Unit UnitState,
         {
             if (class'APX_HazardKnowledge'.static.HasBlockingHazard(UnitState, CandidatePath[PathIndex])
                 || !class'APX_MissionPlanner'.static.IsKnownCombatTile(CandidatePath[PathIndex])
-                || !class'X2TacticalVisibilityHelpers'.static.CanSquadSeeLocation(
-                    UnitState.ControllingPlayer.ObjectID, CandidatePath[PathIndex])
+                || (!class'APX_FullIntel'.default.EnableFullIntel
+                    && !class'X2TacticalVisibilityHelpers'.static.CanSquadSeeLocation(
+                        UnitState.ControllingPlayer.ObjectID, CandidatePath[PathIndex]))
                 || !class'APX_MissionPlanner'.static.IsSupportedAdvanceStep(CurrentSupport,
                     class'APX_MissionPlanner'.static.NearestSupportDistance(UnitState, CandidatePath[PathIndex])))
             {
