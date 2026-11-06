@@ -1,5 +1,18 @@
 # Testy odbiorcze
 
+V20: odzyskiwalny sojusznik pod kontrolą umysłu musi pozostać w ocenie
+zagrożenia, chociaż nie może być celem pościgu, ataku ani granatu. Przy
+takim widocznym zagrożeniu ruch nadal wymaga oceny bojowej; ewakuacja
+zachowuje swój priorytet.
+
+Najnowszy [raport GasStation v19](report-2026-11-06-v19-gasstation.pl.md)
+kończy się porażką po 40 przyjętych rozkazach, z normalnym zamknięciem logu.
+Ostatni odczyt −20100 jest częściowy (`mission_final=False`, 18 klatek
+historii pozostało). Bieżące v20 wprowadza potwierdzoną przez użytkownika
+pełną wiedzę o mapie i pozycjach aktywnych wrogów.
+[Instrukcja v20](experiment-25-full-intel.pl.md). Kompilacja Windows i gra
+v20: **NIEURUCHOMIONE**.
+
 Raport z rewizją v17 obejmuje dwie porażki i awarię; analiza jest w
 [issue #15](https://github.com/HeisenbergC29/autoplay-xcom2/issues/15).
 Dokładny SHA kompilacji nie jest potwierdzony. Poprawka MP z v18 pozostaje
@@ -10,7 +23,7 @@ Według [analizy pomocnika #21](https://github.com/HeisenbergC29/autoplay-xcom2/
 v18 dopasowało szablon MP i wykonało dwa ciosy bez dawnego redscreen,
 lecz później nastąpiło zawieszenie w fazie wroga. Nie ma podstaw do
 utożsamienia go z wcześniejszym potwierdzonym wyjątkiem v17. Ukryty HUD
-sam nie dowodzi przyczyny. Bieżące v19 izoluje odczyty tekstu HUD.
+sam nie dowodzi przyczyny. Historyczne v19 izoluje odczyty tekstu HUD.
 [Instrukcja porównania v18/v19](experiment-17-hud-polling.pl.md).
 
 [Raport v15](report-2026-11-04-v15-stops.pl.md): `SabotageCC`,
@@ -18,8 +31,8 @@ trudność 3, **FAIL** w turze 18, 80 przyjętych rozkazów i zero odrzuceń
 przez silnik. Częściowy wynik porównawczy −17500. Jedno przestawienie
 przed strzałem 47→68%: **POTWIERDZONE**; próby chmury trucizny i kombinacji
 AP: **NIEURUCHOMIONE**. Trzy zatrzymania przed rzutem granatu są osobnym
-błędem od odrzuconego rozkazu. Kompilacja Windows i próba bieżącej rewizji
-`mission-report-v19`: **NIEURUCHOMIONE**.
+błędem od odrzuconego rozkazu. Próby bieżącej rewizji v20 pozostają osobne
+od tamtych wyników.
 [Zakres i scenariusze v17](tactics-v17.pl.md) ·
 [Zachowane scenariusze v16](tactics-v16.pl.md).
 
@@ -29,7 +42,18 @@ gry pozostaje zapisane. Brak pewnego końcowego wyniku daje **NIEPOTWIERDZONY**,
 bez zaliczenia na podstawie częściowego `~wynik/—`. Dawne opisy zwycięstw
 v8 zachowują znaczenie historycznego wyniku gry.
 
-V19: potwierdź `HUD score polling|revision=mission-report-v19`, odczyt
+V20: potwierdź `revision=mission-report-v20`, pole `full_intel_enabled`
+oraz startupowe `Full intel|...enabled=True|map_revealed=True`. Sprawdź
+odkrycie terenu, dojście do wroga poza LOS bez strzałów przez przeszkody,
+aktualizację listy po zabiciu i pojawieniu się jednostki oraz zachowanie
+pilnych celów, ratunku i ewakuacji przy znanym dalekim wrogu. Pozycja w
+pełnej wiedzy nie może sama tworzyć natywnego celu ataku. Sprawdź też
+wariant `EnableFullIntel=false` od nowego uruchomienia misji; nie wymagać
+odtworzenia mgły po jej ujawnieniu w już trwającej próbie. Widoczność modeli
+oceniaj osobno od odkrycia terenu i wiedzy planera. Zachowaj OFF/pauzę.
+
+Zachowaj scenariusz cache HUD z v19: potwierdź `HUD score polling`
+z rewizją aktualnej kompilacji, odczyt
 przy F8 ON/OFF, pierwszym pokazaniu, zmianie historii i okresowo przy
 stabilnej historii. Zmiana historii jest widoczna na następnym odświeżeniu
 statusu, około 0,25 s; stabilny tekst może pozostać przez około 1 s plus
@@ -39,7 +63,7 @@ Porównuj podsumowania `GetTotalScore - TotalScore:`, nie wszystkie wiersze
 ScoreType. Oceniaj osobno częstotliwość odczytów i zawieszenie.
 
 Zachowaj scenariusz MP z v18: sprawdź startupowe `MP visualization patch`
-z rewizją aktualnej kompilacji (v19 dla wariantu B), `templates > 0`,
+z rewizją aktualnej kompilacji, `templates > 0`,
 `matched > 0`, `skipped=0`, a potem rzeczywisty `DevastatingPunchMP`.
 Pominięte warianty trudności dają wynik nierozstrzygający.
 Bez tych danych brak redscreen
@@ -93,7 +117,7 @@ Ten sam raport zawiera zwycięstwo v8 w `SabotageCC` na trudności 3.
 Wcześniejsze zwycięstwo v8 w pierwszej misji Legacy pozostaje osobną próbą;
 Cemetery nadal nie ma udokumentowanej próby autoplaya.
 V10 działało w zwykłej niepunktowanej misji. Wyświetlanie liczb Legacy
-oraz bieżące zmiany v19 nadal wymagają kompilacji Windows i próby w grze.
+oraz bieżące zmiany v20 nadal wymagają kompilacji Windows i próby w grze.
 [Instrukcja Legacy](legacy-test.pl.md) · [Licznik v12](score-display-v10.pl.md).
 
 Dotychczasowy wynik zgłoszony przez użytkownika: **PASS** — mod wydaje rozkazy;

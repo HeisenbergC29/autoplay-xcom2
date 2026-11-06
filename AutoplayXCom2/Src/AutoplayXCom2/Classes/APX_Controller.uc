@@ -195,7 +195,8 @@ function bool RefreshContacts(int PlayerID, int CurrentTurn)
     }
     if (!bFoundSource)
         return false;
-    class'X2TacticalVisibilityHelpers'.static.GetAllVisibleEnemiesForPlayer(PlayerID, VisibleEnemies);
+    // Distant known units are navigation knowledge, not active contact search.
+    class'APX_MissionPlanner'.static.GetImmediateThreats(SourceUnit, VisibleEnemies);
     foreach VisibleEnemies(EnemyRef)
     {
         Enemy = XComGameState_Unit(`XCOMHISTORY.GetGameStateForObjectID(EnemyRef.ObjectID));
@@ -1170,7 +1171,8 @@ function MakeDecision(XComTacticalController PC)
 
     // Explore only when the whole squad lacks an objective, attack or useful
     // mission move. Sampling the player's fog never queries hidden enemies.
-    if (ExploreUnseenMap && ExplorationPlanner != none && !bCombatThreats
+    if (ExploreUnseenMap && !class'APX_FullIntel'.default.EnableFullIntel
+        && ExplorationPlanner != none && !bCombatThreats
         && (!bHavePlan || BestScore < 15.0))
     {
         foreach `XCOMHISTORY.IterateByClassType(class'XComGameState_Unit', UnitState)

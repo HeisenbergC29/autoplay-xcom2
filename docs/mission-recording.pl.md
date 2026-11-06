@@ -100,7 +100,7 @@ osobnym faktem. [Reguła i przykłady](tactics-v15.pl.md).
 
 ## Zbudowanie i pierwsza próba
 
-1. Pobierz aktualne źródła v19, rozpakuj je i zbuduj jak poprzednio na zachowanym
+1. Pobierz zatwierdzone źródła v20, rozpakuj je i zbuduj jak poprzednio na zachowanym
    SDK WOTC. Bez `-BuildBase`, jeśli pakiety bazowe są już przygotowane.
 2. Zainstaluj nowy `dist\AutoplayXCom2.zip` i uruchom grę ponownie. Stara paczka
    z `release` nie zawiera rejestratora.
@@ -443,3 +443,17 @@ licz podsumowania `GetTotalScore - TotalScore:`: pojedyncze wywołanie
 może dopisywać wiele wierszy ScoreType, więc ogólna liczba linii i stałe
 parowanie nie są miarą liczby wywołań.
 [Osobne porównanie v18/v19](experiment-17-hud-polling.pl.md).
+
+Rewizja `mission-report-v20` wprowadza pełną wiedzę o terenie i pozycjach
+aktywnych przeciwników dla lokalnego XCOM. Wpis `event=start` dodaje
+`full_intel_enabled`, dzięki czemu ustawienie można odróżnić od samej
+rewizji. Startupowe `Full intel|...enabled=True|map_revealed=True` potwierdza
+wywołanie metod odkrycia terenu; widoczność modeli pozostaje osobnym
+mechanizmem silnika. Nie jest to potwierdzenie legalności każdego ataku
+ani wygranej. Cele i AP nadal sprawdza gra.
+[Ustawienie i próba v20](experiment-25-full-intel.pl.md).
+
+Najnowszy [raport v19](report-2026-11-06-v19-gasstation.pl.md) zakończył
+GasStation porażką z `history_pending=18` i `mission_final=False`.
+−20100 to ostatni znany natywny odczyt, nie pewny wynik końcowy. Normalne
+zamknięcie logu nie uzupełnia brakujących wyników ostatnich klatek.

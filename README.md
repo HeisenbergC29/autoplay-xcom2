@@ -130,16 +130,26 @@ Rewizja **`mission-report-v18`** dodaje izolowaną poprawkę wizualizacji
 Nie zmienia taktyki, HUD ani punktacji. Raport v17 obejmuje dwie porażki i
 awarię; przyczyna awarii nadal nie jest potwierdzona.
 [Próba porównawcza v17/v18](docs/experiment-15-berserker-mp-visualization.pl.md).
-Bieżące **`mission-report-v19`** ogranicza odczyty tekstu punktów HUD przy
+Rewizja **`mission-report-v19`** ogranicza odczyty tekstu punktów HUD przy
 stabilnej historii, zachowując odświeżanie przy OFF i natywny odczyt końcowy.
 Według analizy pomocnika v18 wykonało ciosy MP bez dawnego redscreen, ale
 później nastąpiło zawieszenie; przyczyna pozostaje nieustalona.
 [Osobna próba v18/v19](docs/experiment-17-hud-polling.pl.md).
-Kompilacja Windows i próba v19 w grze pozostają nieuruchomione; opublikowane
-źródła nie oznaczają nowego wydania binarnego.
+Najnowszy [raport GasStation v19](docs/report-2026-11-06-v19-gasstation.pl.md)
+zakończył się porażką bez awarii; ostatni odczyt −20100 nie jest pewnym wynikiem
+końcowym, ponieważ pozostało 18 klatek historii. Ta misja Legacy nie sprawdza
+wcześniejszego zawieszenia Challenge ani częstości `GetTotalScore`.
+
+Bieżące **`mission-report-v20`** realizuje potwierdzoną przez użytkownika
+zmianę: domyślnie AI zna całą mapę i pozycje aktywnych przeciwników także
+poza LOS. Natywne cele ataku, koszty AP, trafienia i punktacja nadal obowiązują.
+Ujawnienie terenu nie gwarantuje wyświetlania ukrytych modeli jednostek.
+[Zakres, ustawienie i próba v20](docs/experiment-25-full-intel.pl.md).
+Kompilacja Windows i próba v20 w grze: **NIEURUCHOMIONE**. Źródła nie są
+nowym wydaniem binarnym ani potwierdzoną naprawą zawieszenia.
 
 Ocena porównawcza nadal używa profilu `wotc_legacy_observed_v2` od `~0/—`;
-reguły punktacji nie zostały zmienione przez v15–v19. Zmieniło się kryterium
+reguły punktacji nie zostały zmienione przez v15–v20. Zmieniło się kryterium
 zaliczenia próby, nie sposób naliczania punktów.
 [Zasady licznika](docs/score-display-v10.pl.md).
 

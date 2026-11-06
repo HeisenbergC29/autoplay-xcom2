@@ -576,3 +576,29 @@ jest ustalona; ukrycie HUD podczas fazy wroga samo jej nie dowodzi.
 Baza A zachowuje tę samą poprawkę MP, a B zmienia tylko harmonogram
 odczytu tekstu i identyfikację diagnostyczną.
 [Porównanie v18/v19](experiment-17-hud-polling.pl.md).
+
+## V20 — pełna mapa i pozycje aktywnych wrogów
+
+6 listopada użytkownik bezpośrednio potwierdził pełną wiedzę AI o mapie
+i lokalizacjach aktywnych przeciwników. PR #26 wprowadza `APX_FullIntel`
+i domyślne `EnableFullIntel=true` dla lokalnego XCOM. Wariant `false`
+zachowuje wiedzę opartą na widoczności. Natywne FOW API ujawniają teren;
+nie są potwierdzeniem widoczności modeli ani źródłem nowych legalnych
+celów ataku. Natywne `AvailableActions`, `AA_Success`, AP i RNG pozostają
+obowiązujące. Pełna wiedza nie pozwala odczytywać prywatnych budżetów
+akcji lub zamiarów wroga.
+
+Po poprawkach przeglądu kod `e8aa70bef727a6a7672d400156f225896cdec1c6`
+zaliczył **539 testów z prywatnymi wejściami bez pominięć** oraz audyt
+**18 klas / 31 nazw zdolności PASS**. Regresje obejmują cel misji i łup
+przy dalekim wrogu, widoczną walkę, ostatni AP oraz odzyskiwalnego sojusznika
+jako zagrożenie chronione przed własnym atakiem. Końcowe CI i decyzja
+są śledzone w PR #26 i issue #27. Kompilacja Windows WOTC SDK i próba v20 w grze:
+**NIEURUCHOMIONE**.
+
+[Najnowsza GasStation v19](report-2026-11-06-v19-gasstation.pl.md) zakończyła
+się porażką i normalnym zamknięciem logu. −20100 pozostaje częściowym
+odczytem przy 18 niezapisanych klatkach; misja nie sprawdzała natywnego
+`GetTotalScore`, ciosu MP ani żądań końca tury. V20 nie jest przez to
+potwierdzoną naprawą wcześniejszych zawieszeń.
+[Zakres i próba v20](experiment-25-full-intel.pl.md).

@@ -60,11 +60,19 @@ and [docs/PROJECT-STATE.pl.md](docs/PROJECT-STATE.pl.md) before changing this pr
 - Native mission points exclude earlier ladder missions. Keep the zero-based
   `wotc_legacy_observed_v2` comparison and its partial marker; never invent initial
   bonuses, a maximum, or scoring changes to turn a failed benchmark green.
+- The user confirmed full map and enemy-position knowledge on 6 November 2026.
+  `EnableFullIntel=true` is the default: local XCOM planning may know terrain and
+  positions of living, active hostiles outside LOS. `EnableFullIntel=false`
+  retains normal visibility-based knowledge. This narrow exception does not
+  grant native attack targets or make every distant contact an immediate threat.
+  The authorized map reveal changes visual fog; it does not authorize other
+  gameplay-state mutations.
 - No artificially granted AP/ammo outside normal legal ability effects, forced
-  hits/victory, RNG lookahead, hidden contacts, or enemy current
-  AP/ammo/cooldown/charge/private-intent inspection. Native bonus actions, free
-  reloads and AP-granting abilities remain legitimate when available. SDK template knowledge
-  and observations currently visible to the player are legitimate inputs.
+  hits/victory, RNG lookahead, or enemy current AP/ammo/cooldown/charge/private-intent
+  inspection. Native bonus actions, free reloads and AP-granting abilities remain
+  legitimate when available. SDK template knowledge and player observations
+  remain legitimate inputs. Attacks must retain native LOS/targeting, available
+  actions and AP costs, including in full-intel mode.
 - Keep runtime game-state/history reads observational. Do not move a live history
   unit temporarily to fake a shot preview. Label geometric forecasts as estimates.
 - Preserve native legality, full-route hazards, collateral/objective protection,

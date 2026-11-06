@@ -74,7 +74,7 @@ class LootActionTests(unittest.TestCase):
                          'BuildPathToTile(Tile, CandidatePath)',
                          'PreparationPathIsSafe(UnitState, CandidatePath)',
                          'IsSupportedAdvanceDestination(', 'LootRouteMakesProgress(',
-                         'GetVisibleThreats(UnitState, VisibleEnemies)',
+                         'GetImmediateThreats(UnitState, VisibleEnemies)',
                          'IsLootRouteAllowed(VisibleEnemies.Length > 0'):
             self.assertIn(contract, move)
         path = function_body((CLASSES / 'APX_SquadPlanner.uc').read_text(), 'PreparationPathIsSafe')
