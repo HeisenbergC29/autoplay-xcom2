@@ -543,6 +543,37 @@ static function float ScoreBerserkerObjectiveRoute(int PathTiles,
         - ExtraRisk * 0.25;
 }
 
+// Only the Berserker objective branch invokes this extra threat sample.
+// Ordinary movement does not duplicate the existing one-per-candidate-list
+// weapon and melee-range collection, avoiding a performance regression.
+static function float ScoreBerserkerObjectivePath(
+    XComGameState_Unit UnitState, const out array<TTile> Path,
+    const out array<StateObjectReference> VisibleEnemies, TTile GoalTile)
+{
+    local array<float> Reaches, Weights;
+    local float CurrentRisk, CandidateRisk, HealthFraction, Score;
+
+    if (UnitState == none || Path.Length < 2)
+        return -10000.0;
+    GetMeleeThreatReaches(UnitState, VisibleEnemies, Reaches);
+    GetThreatWeights(UnitState, VisibleEnemies, Weights);
+    CurrentRisk = ExposureRisk(UnitState, UnitState.TileLocation,
+        VisibleEnemies, Reaches, Weights);
+    CandidateRisk = ExposureRisk(UnitState, Path[Path.Length - 1],
+        VisibleEnemies, Reaches, Weights);
+    HealthFraction = UnitState.GetCurrentStat(eStat_HP)
+        / FMax(1.0, UnitState.GetMaxStat(eStat_HP));
+    Score = ScoreBerserkerObjectiveRoute(Path.Length, HealthFraction,
+        CurrentRisk, CandidateRisk);
+    `log("Berserker sabotage route|unit=" $ UnitState.ObjectID
+        $ "|goal_x=" $ GoalTile.X $ "|goal_y=" $ GoalTile.Y
+        $ "|goal_z=" $ GoalTile.Z $ "|end_x="
+        $ Path[Path.Length - 1].X $ "|end_y=" $ Path[Path.Length - 1].Y
+        $ "|score=" $ Score $ "|current_risk=" $ CurrentRisk
+        $ "|candidate_risk=" $ CandidateRisk, true, 'AutoplayXCom2');
+    return Score;
+}
+
 static function bool FindGoal(XComGameState_Unit UnitState, out MissionGoal Goal,
     out array<StateObjectReference> VisibleEnemies)
 {
@@ -1760,23 +1791,8 @@ static function bool ChooseMove(XComGameState_Unit UnitState,
             SquadPositionScore(UnitState, Path[Path.Length - 1]));
         if (bSabotageRush)
         {
-            // Observe risk, never ask the engine for a speculative forced attack.
-            GetMeleeThreatReaches(UnitState, VisibleEnemies, MeleeThreatReaches);
-            GetThreatWeights(UnitState, VisibleEnemies, ThreatWeights);
-            CurrentRisk = ExposureRisk(UnitState, UnitState.TileLocation,
-                VisibleEnemies, MeleeThreatReaches, ThreatWeights);
-            CandidateRisk = ExposureRisk(UnitState, Path[Path.Length - 1],
-                VisibleEnemies, MeleeThreatReaches, ThreatWeights);
-            HealthFraction = UnitState.GetCurrentStat(eStat_HP)
-                / FMax(1.0, UnitState.GetMaxStat(eStat_HP));
-            Score = ScoreBerserkerObjectiveRoute(Path.Length, HealthFraction,
-                CurrentRisk, CandidateRisk);
-            `log("Berserker sabotage route|unit=" $ UnitState.ObjectID
-                $ "|goal_x=" $ GoalTile.X $ "|goal_y=" $ GoalTile.Y
-                $ "|goal_z=" $ GoalTile.Z $ "|end_x="
-                $ Path[Path.Length - 1].X $ "|end_y=" $ Path[Path.Length - 1].Y
-                $ "|score=" $ Score $ "|current_risk=" $ CurrentRisk
-                $ "|candidate_risk=" $ CandidateRisk, true, 'AutoplayXCom2');
+            Score = ScoreBerserkerObjectivePath(UnitState, Path, VisibleEnemies,
+                GoalTile);
             if (Score <= -9999.0)
                 Path.Length = 0; // Try the existing tactical route fallback.
             else
