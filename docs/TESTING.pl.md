@@ -200,27 +200,67 @@ Wyniki zapisuj osobno: PASS / FAIL / NIEURUCHOMIONY. Kompilacja nie potwierdza d
 - Granaty Frag/Alien: skupiona grupa wrogów, sojusznik lub cywil w obszarze, VIP, obiekt celu, zbiornik paliwa na trasie i w wybuchu, piętra nad wybuchem, rzut i granatnik. Faktyczny punkt lądowania i lista trafionych obiektów muszą odpowiadać natywnej trajektorii. Brak przejęcia grafiki trajektorii gracza podczas samej oceny.
 - Eksploracja: brak widocznych wrogów, pełna kolejka pól, niedostępny cel dla jednego żołnierza, zmiana tury, zużycie wszystkich AP i przebudowa mapy. Nie może wystąpić nieskończone czekanie ani zniknięcie reszty niezeskanowanych pól po zapełnieniu kolejki.
 
-## Cele i zakończenie misji
+## Cele i zakończenie misji — macierz obsługi v21
 
-Każdy wiersz wymaga pełnego przebiegu od włączenia do prawidłowego zakończenia.
-Potwierdzono pierwszą misję Legacy, przy jednym włączeniu i zatrzymaniu dopiero
-na końcu; log nie jest pełnym audytem każdego wejścia gracza. Cała drabinka
-i pozostałe kategorie nadal wymagają prób, szczególnie późniejsze etapy skryptowane.
+**Status w tabeli dotyczy implementacji, nie zaliczenia misji.**
+`Częściowe` = istnieją ogólne legalne akcje, ale nie ma dowodu wykonania
+wszystkich etapów. `Brak dedykowanego planera` = nazwa misji/etap
+istnieje w SDK, lecz bieżący mod nie ma jawnego modelu jego całej sekwencji.
+`Niezweryfikowane` = brak kompletnego wyniku gry dla tej kategorii.
+**PASS** wymaga łącznie: wszystkich wymaganych celów, natywnego
+`outcome=win` oraz **pewnych końcowych punktów misji > 0**.
+`score` w wyborach AI ani `MaxScore` nie są punktami misji.
 
-| Rodzaj | Wymagane sprawdzenie |
-| --- | --- |
-| Eliminacja / zaopatrzenie | Zwycięstwo i ostatni niewykryty przeciwnik; eksploracja niezbadanych pól oraz wrogowie przemieszczający się na odwiedzony teren |
-| Hakowanie / odzyskanie danych | Podejście, hack, legalny wybór nagrody, animacja, zaliczenie celu, wynik misji |
-| Zniszczenie / ochrona urządzenia | Atak na wrogi obiekt oznaczony jako cel i termin; brak ataku na urządzenie do ochrony; sprawdzić metadane poszczególnych typów celów |
-| Sabotaż obiektu / Blacksite | Interakcja ładunku / fiolki, istniejąca lub wymagana nowa strefa ewakuacji, cały żywy oddział |
-| VIP: ratunek / pojmanie | Uwolnienie/przejęcie, nokaut zamiast zabicia, niesienie, ewakuacja VIP-a i żołnierzy |
-| Odwet / obrona cywilów | Ratunek i przeciwnicy; brak zapętlenia na nieaktywnych markerach |
-| Skrzynie WOTC | Oznaczanie, terminy, nieczynne i zabrane skrzynie |
-| Zasadzka na tajnej operacji | Przejście do ewakuacji i komplet ocalałych |
-| Lost and Abandoned / Legacy | Wszystkie etapy i transfer między nimi; samouczek jest obecnie wyłączony |
-| Alien Nest / Lost Towers | Przejścia pięter/etapów, boss, interakcje i zakończenie |
-| Twierdza Wybranego | Portal, komora, sarkofag, boss i zakończenie |
-| Obrona Avengera / finał | Cele na obiektach, etapy skryptowane i faktyczny wynik |
+Źródła implementacji: `APX_MissionPlanner.uc` (`ChooseInteraction`,
+`IsObjectiveAbility`, `FindGoal`, `ShouldEvacuate`, `ChooseMove`),
+`APX_EvacPlanner.uc` (`PrimaryObjectivesCompleted`,
+`ChoosePlacement`), `APX_CombatPlanner.uc` (`ScoreObjectiveAttack`,
+`ChooseAction`) i `APX_Controller.uc` (`HandleOwnedHack`,
+`MakeDecision`). Nazwy misji niżej pochodzą z dostarczonego SDK
+`X2MissionSet.uc` oraz odpowiadających modułów DLC;
+`SeqAct_DisplayMissionObjective.uc` zarządza wyświetleniem/oznaczeniem
+celów, **nie** zastępuje planowania etapów w modzie.
+Wszystkie źródła SDK są prywatne i nie są publikowane w repozytorium.
+
+| Rodzaj / natywne misje (przykłady) | Obecny zakres kodu | Zweryfikowana próba / punkty | Luka i kolejny test |
+| --- | --- | --- | --- |
+| Eliminacja, pierwsze misje Legacy / `SabotageCC` | **Częściowe**: natywne ataki, przechodzenie mapy i rozpoznane cele | v21 `SabotageCC`: **win**, HUD około **~300** (porównawcze, nie końcowe). **Niepotwierdzony PASS** | Zarejestrować końcowe wiarygodne punkty i wykonanie wszystkich celów; nie mylić `win` z dodatnim wynikiem |
+| Wyzwania TLE / `ChallengeAbductionGasStation` | **Częściowe**: akcje dystansowe, obrona i dostępne cele; brak planu izolowania grup | v21: **loss**, **−12 600** końcowych punktów natywnych | #20 grupowe zatrucie przez `PoisonSpit`, #31 izolowanie grup, #28 pilne leczenie; osobna próba po zmianie |
+| Sabotaż / `SabotageTransmitter`, `SabotageAlienFacility`, Blacksite (`AdventFacilityBLACKSITE`) | **Częściowe**: `Interact_PlantBomb`, `Interact_TakeVial`, legalne cele, ruch do znacznika; v21 specjalny ruch `BerserkerMP` do bomby | v21 Blood Killer (`SabotageTransmitter`): **loss**; **+700** jako końcowy wpis `CMPT_TotalScore` i HUD, bez potwierdzonego `game_score.mission_points` | #29: zweryfikować *właściwy* bomb emplacement i legalną interakcję; następnie ewakuację/koniec etapu; brak ręcznego wymuszania celu |
+| Hack / dane: `HackWorkstation`, `RecoverItemADV`, `RecoverItemTrain` | **Częściowe**: `Hack_Workstation`, `Hack_ObjectiveChest`, `Hack_Scan`; rozpoznaje własny ekran hakowania i dostępne nagrody | **Niezweryfikowane**; punkty **brak danych** | Przejść hack → animacja → `MissionObjectiveMarkedCompleted` → prawidłowe zakończenie; zarejestrować natywne punkty |
+| Zniszcz/obroń obiekt: `DestroyRelay`, `ProtectDevice` | **Częściowe**: ocena ataku na obiekt misyjny, ochrona sojuszników/obiektów w planie granatu | **Niezweryfikowane**; punkty **brak danych** | Dowieść, że atak niszczy tylko właściwy cel, obrona nie niszczy chronionego urządzenia, działa timer i wynik |
+| VIP/ewakuacja: `ExtractVIP`, `RescueVIP`, `NeutralizeTarget`, `CovertEscape` | **Częściowe**: rozpoznanie `ObjectiveInfo`, ratunek, przenoszenie, `ShouldEvacuate`, `ChoosePlacement` | **Niezweryfikowane**; punkty **brak danych** | Cała sekwencja porwania lub ratunku, stan niesionego VIP-a, ewakuacja wszystkich wymaganych jednostek, natywne `win` |
+| Odwet/cywile: `Terror`, `ChosenRetaliation`, `GatherSurvivors` | **Częściowe**: ogólny ratunek i walka, możliwe interakcje/cel `ObjectiveInfo` | **Niezweryfikowane**; punkty **brak danych** | Limit cywilów, ratunek i neutralizacja przeciwników; nie zapętlać się na nieaktywnym markerze |
+| Skrzynie: `SupplyExtraction`, napad na zaopatrzenie | **Częściowe**: `Interact_MarkSupplyCrate`, trasowanie do celu, legalne akcje | **Niezweryfikowane**; punkty **brak danych** | Termin, liczba skrzyń, oznaczanie przed ewakuacją oraz prawdziwe przejęcie i punkty |
+| Etapy fabularne `LostAndAbandonedA/B/C`, pierwsze wydarzenia Legacy | **Brak dedykowanego modelu przejść**: ogólne akcje i cel; samouczek nie jest obsługiwanym wariantem | Jedna historyczna pierwsza misja Legacy v8 wygrana; nie świadczy o całej kampanii. Punktów tej próby nie potwierdzono według obecnego kryterium | Przetestować przejście A→B→C, eskortę/carry, zmiany jednostek i stan zwycięstwa każdej części |
+| Alien Nest (`DLC_2/X2MissionSet_DLC_Day60.uc`) | **Brak dedykowanego planera misji**; dostępna ogólna walka/nawigacja | **Niezweryfikowane**; punkty **brak danych** | Sekwencja fabularna, silne jednostki, wymagane przejścia/zdarzenia i prawidłowy finał |
+| Lost Towers / Shen: `LastGift`, `LastGiftB`, `LastGiftC` (`DLC_3`) | **Brak dedykowanego planera trzech etapów**; ogólne interakcje i ataki | **Niezweryfikowane**; punkty **brak danych** | Przejście poziomów, przełączniki, specjalne zdolności/sojusznik, boss i trzykrotna kontrola celu |
+| Twierdza Wybranego: `ChosenStrongholdShort/Long`, `ChosenShowdown_*` | **Częściowe**: `Interact_ActivateAscensionGate` i możliwe ataki na cel, bez kompletnego scenariusza portal–sarkofag–boss | **Niezweryfikowane**; punkty **brak danych** | Weryfikacja portalu, urządzenia/sarkofagu, nawrotów bossa i końcowego warunku zwycięstwa |
+| Obrona Avengera: `AvengerDefense`, `ChosenAvengerDefense` | **Częściowe**: ogólne ataki na obiekty/oddziały i cele ewakuacyjne | **Niezweryfikowane**; punkty **brak danych** | Rozpoznanie właściwego urządzenia, ochrona Avengera, warunki odwrotu, przejścia skryptu i końcowy wynik |
+| Finał: `AssaultFortressLeadup`, `DestroyAvatarProject` | **Brak dedykowanego modelu pełnej sekwencji**; obecne tylko działania ogólne | **Niezweryfikowane**; punkty **brak danych** | Awatary, przejścia i skryptowane etapy, zachowanie krytycznych celów, potwierdzenie finału |
+
+### Priorytety wynikające z braków
+
+1. **P0 — ukończenie objective i dokładne punkty:** Blood Killer/#29,
+   a także nieznany końcowy score zwycięskiego `SabotageCC`. Połączyć
+   log celu z natywnie dostępną interakcją, **bez fikcyjnego zaliczenia**.
+2. **P0 — stabilność i straty:** niezakończone dochodzenie #15/#21/#29;
+   w GasStation eliminować skupienie pod AoE (#20) i pilnie dostępne
+   leczenie (#28), chroniąc wynik przed karą −5000 za zgon.
+3. **P1 — świadoma sekwencja grup i ukrycia:** #31 oraz #12/#32.
+   Nie spowalniać misji, w których rzeczywisty timer albo punkty
+   `CMPT_CompletedObjective` maleją z turą. `HasActiveMissionDeadline`
+   rozpoznaje `XComGameState_UITimer`, ale nie wszystkie reguły punktowe.
+4. **P1 — VIP/carry/evac i przejścia etapów:** dołożyć próby źródłowych
+   etapów `LostAndAbandonedA/B/C` i `LastGift/B/C`; dopiero po logach
+   wystawiać osobne, małe issue dotyczące rzeczywiście brakujących akcji.
+5. **P2 — pozostałe fabularne misje:** Alien Nest, Twierdza Wybranego,
+   AvengerDefense i finał; nie ogłaszać wsparcia na podstawie samej
+   listy `IsObjectiveAbility`.
+
+Żadna kategoria nie jest na dziś potwierdzona jako spełniająca
+projektowy warunek „wszystkie cele + natywne zwycięstwo + znany
+wynik punktowy > 0” na rewizji v21. Raporty prywatne pozostają poza repo.
 
 ## Punktacja każdej symulacji
 
