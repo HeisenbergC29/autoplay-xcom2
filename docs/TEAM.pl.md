@@ -95,6 +95,12 @@ jest następnym osobnym tematem; skoordynować go z #31 i zmianami tras,
 bez nadpisywania wspólnych plannerów.
 [Zakres v21](experiment-29-berserker-blood-killer.pl.md).
 
+PR #35/#36 porządkują analizator i macierz misji bez zmiany runtime.
+V22 / #20 dodaje wyłącznie miękką ocenę skupienia pod wspólny obszar AoE.
+HELPER kontynuuje #32 z nowej bazy, zachowując ten składnik w formacji;
+#29 (legalny obiekt PlantBomb) i #28 (pilne leczenie) pozostają osobne.
+[Zakres v22](experiment-20-area-formation.pl.md).
+
 ## Przekazanie i decyzja o scaleniu
 
 W PR napisz: konkretny problem i zachowanie po zmianie, źródła/commity,

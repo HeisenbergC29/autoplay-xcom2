@@ -91,11 +91,11 @@ class FullIntelContracts(unittest.TestCase):
                       "GetAllVisibleEnemiesForPlayer("):
             self.assertIn(token,chooser)
 
-    def test_runtime_records_distinct_v20_revision(self):
+    def test_runtime_records_current_revision(self):
         recorder=(CLASSES/'APX_MissionRecorder.uc').read_text()
         dlc=(CLASSES/'X2DownloadableContentInfo_AutoplayXCom2.uc').read_text()
         for source in (recorder,dlc,self.hud):
-            self.assertIn('mission-report-v21',source)
+            self.assertIn('mission-report-v22',source)
 
 
 class FullIntelPolicyScenarios(unittest.TestCase):

@@ -1,4 +1,4 @@
-# Stan przekazania projektu — 6 listopada 2026
+# Stan przekazania projektu — 7 listopada 2026
 
 To punkt startowy po pierwszym przeglądzie importu pomocnika. Bieżące issue i PR-y mogą zawierać nowsze
 ustalenia; po integracji aktualizuj ten dokument, gdy zmienia się baza lub
@@ -6,15 +6,20 @@ poziom potwierdzenia działania.
 
 ## Baza kodu
 
-- Bieżąca rewizja przygotowywanych źródeł: `mission-report-v21`, ograniczony
-  priorytet PlantBomb dla BerserkerMP w SabotageTransmitter z PR #30 oraz
-  poprawki LEAD dotyczące ostatniego AP i limitu ryzyka fallbacku.
-  Zachowuje pełną mapę i pozycje wrogów v20. Dokładny wariant do kompilacji
+- Bieżąca rewizja przygotowywanych źródeł: `mission-report-v22`, miękka ocena
+  skupienia żołnierzy w próbkowanym obszarze AoE (#20). Zachowuje politykę
+  PlantBomb, ostatni AP i limity ryzyka v21 oraz pełne rozpoznanie v20.
+  Dokładny wariant do kompilacji
   wskazuje LEAD w [issue #4](https://github.com/HeisenbergC29/autoplay-xcom2/issues/4).
+- Baza integracji narzędzi v21: `e81ae2969ed122549be3188ef5c7b2cc9149ac24`.
+  PR #35 i #36 dodają pewność punktów/diagnostykę analizatora oraz macierz
+  misji; nie zmieniają rozgrywki. Baza runtime v21 po poprawce kompilacji:
+  `d84a849b13743e5a66718709c2610d14b35a985a`.
 - Próba kompilacji v21 ujawniła jeden błąd: zbędne `string(sType)` w
   APX_MissionPlanner.uc. Poprawka #33 usuwa rzutowanie pola, które już ma
-  typ string, bez zmiany taktyki i rewizji v21. Po poprawce wymagana jest
-  ponowna kompilacja użytkownika; log nie potwierdza gotowej paczki.
+  typ string, bez zmiany taktyki i rewizji v21. [Nowszy raport v21](report-2026-11-07-v21.pl.md)
+  potwierdza trzy uruchomione, zakończone misje i brak reprodukcji awarii;
+  nie zapisuje dokładnego SHA kompilacji.
 - Baza v20: `dc0ea3a3eecff3b85169128786bb5a51983ce76e`. [Nowy raport](report-2026-11-06-v20.pl.md)
   potwierdza dwie sesje v20: GasStation loss z natywnym −7600 oraz Blood Killer
   zakończony awarią bez wyniku. Brak nowego folderu crasha/dumpa jest potwierdzony
@@ -89,6 +94,12 @@ ryzyka prefixu oraz fallbacku. Wybór glint/markera jest heurystyką podejścia;
 nie gwarantuje dostępności właściwego punktu interakcji. Awaria pozostaje
 osobnym problemem. [Zakres i próba v21](experiment-29-berserker-blood-killer.pl.md).
 
+V22 nakłada dodatkowe, ograniczone koszty wspólnego obszaru: para −6,
+trójka −18, czwórka −36, maksymalnie −48. Sprawdza środki między żołnierzami,
+uwzględnia żywych nieprzytomnych jako możliwe ofiary, nie używa ich do wsparcia.
+Brak twardego zakazu ruchu. Promień 3 jest heurystyką, nie natywną gwarancją
+trafienia. [Zakres i próba v22](experiment-20-area-formation.pl.md).
+
 Nowe zadania: #31 izolowanie grup bez presji czasu i #32 wspólna ocena
 concealment (cywile/urządzenia/destrukcja). #32 nie jest częścią v21;
 obecna kontrola ukrycia obejmuje przygotowanie zasadzki i podejście po loot,
@@ -124,12 +135,23 @@ v15, co nie oznacza wspólnego przodka commitów.
 
 ## Potwierdzenie i ograniczenia
 
+Końcowy SHA v22, wyniki kontroli i przegląd są zapisane w PR dotyczącym #20.
+Kod v22 zaliczył **566 testów z prywatnymi wejściami, bez pominięć**,
+oraz audyt **18 klas / 31 nazw zdolności PASS**. Geometria i zgodność
+źródłowa nie zastępują natywnej kompilacji i listy faktycznych trafień.
+Kompilacja Windows WOTC SDK i rozgrywka v22: **NIEURUCHOMIONE**.
+Najnowszy raport dotyczy v21: SabotageCC win, ale końcowe punkty nieznane;
+GasStation loss z pewnym −12600; Blood Killer loss z obserwowanym +700,
+bez potwierdzonego końcowego wyniku misji. Żadna z tych prób nie potwierdza
+pełnego kryterium projektu. Trzy zakończenia i normalne wyjście wspierają
+obserwację braku awarii, bez dowodu usunięcia jej dawnej przyczyny.
+
 Kod v21 po poprawkach przeglądu LEAD zaliczył **547 testów z prywatnymi
 wejściami, bez pominięć**, oraz audyt **18 klas / 31 nazw zdolności PASS**.
 Końcowy SHA, publiczne CI i decyzja o scaleniu są zapisane w PR #30.
 Pierwsza kompilacja Windows WOTC SDK v21: **FAILED**, jeden błąd
-zbędnego rzutowania typu string; poprawka #33. Kompilacja poprawionego
-wariantu i gra v21: **NIEURUCHOMIONE**.
+zbędnego rzutowania typu string; poprawka #33. Nowszy raport potwierdza
+grę v21, bez logu i dokładnego SHA kompilacji.
 Źródła nie stanowią potwierdzonej naprawy awarii ani zwycięstwa.
 
 Po poprawkach przeglądu kod v20 zaliczył **539 testów z prywatnymi wejściami
