@@ -70,6 +70,7 @@ class BerserkerSabotageContracts(unittest.TestCase):
         self.assertIn('string(BattleData.MapData.ActiveMission.sType) == "SabotageTransmitter"',goal)
         self.assertIn('bCompletedStrategyObjective', goal)
         self.assertIn('Goal.bBerserkerSabotageGoal = true;', goal)
+        self.assertIn('Goal.BerserkerSabotageGoalSource = SabotageGoalSource;',goal)
         self.assertLess(goal.index('Goal.bBerserkerSabotageGoal = true;'),
                         goal.index('foreach ImmediateEnemies(EnemyRef)'))
         # Evacuation must outrank any new objective pursuit.
@@ -96,6 +97,9 @@ class BerserkerSabotageContracts(unittest.TestCase):
         self.assertIn('ScoreBerserkerObjectiveRoute(Path.Length, HealthFraction,', scored)
         self.assertIn('GetMeleeThreatReaches(UnitState, VisibleEnemies, Reaches)', scored)
         self.assertIn('GetThreatWeights(UnitState, VisibleEnemies, Weights)', scored)
+        self.assertIn('"|source=" $ GoalSource', scored)
+        self.assertIn('distance_before=', scored)
+        self.assertIn('distance_after=', scored)
         self.assertIn('bCombatGoal = !Goal.bBerserkerSabotageGoal', choose)
         self.assertIn('ScoreBerserkerObjectivePath(UnitState, Path, VisibleEnemies,', choose)
         prefix = function_body(self.source, 'ChooseRoutePrefix')
