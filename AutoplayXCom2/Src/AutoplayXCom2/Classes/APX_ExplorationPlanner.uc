@@ -359,7 +359,8 @@ function bool AssignNextGoal(XComGameState_Unit UnitState, int GoalIndex)
 }
 
 function bool BuildSafeBluePrefix(XComGameState_Unit UnitState,
-    TTile GoalTile, out array<TTile> Path)
+    TTile GoalTile, out array<TTile> Path,
+    optional const out array<TTile> RecentTiles)
 {
     local XGUnit UnitVisualizer;
     local array<TTile> FullPath, CandidatePath;
@@ -380,7 +381,8 @@ function bool BuildSafeBluePrefix(XComGameState_Unit UnitState,
         return false;
     for (Index = FullPath.Length - 1; Index > 0; --Index)
     {
-        if (!UnitVisualizer.m_kReachableTilesCache.IsTileReachable(FullPath[Index]))
+        if (class'APX_MissionPlanner'.static.IsRecentRouteTile(FullPath[Index], RecentTiles)
+            || !UnitVisualizer.m_kReachableTilesCache.IsTileReachable(FullPath[Index]))
             continue;
         Cost = UnitVisualizer.m_kReachableTilesCache.GetPathCostToTile(FullPath[Index]);
         if (Cost < 0.0 || Cost > UnitVisualizer.GetMobility())
@@ -420,7 +422,8 @@ function bool BuildSafeBluePrefix(XComGameState_Unit UnitState,
 }
 
 function bool ChooseMove(XComGameState_Unit UnitState,
-    out array<TTile> Path, out float Score)
+    out array<TTile> Path, out float Score,
+    optional const out array<TTile> RecentTiles)
 {
     local int GoalIndex, Attempt;
 
@@ -445,7 +448,7 @@ function bool ChooseMove(XComGameState_Unit UnitState,
     {
         if (!Goals[GoalIndex].bActive && !AssignNextGoal(UnitState, GoalIndex))
             return false;
-        if (BuildSafeBluePrefix(UnitState, Goals[GoalIndex].Tile, Path))
+        if (BuildSafeBluePrefix(UnitState, Goals[GoalIndex].Tile, Path, RecentTiles))
         {
             Score = ScoreExplorationMove(
                 class'APX_MissionPlanner'.static.SquadPositionScore(UnitState, UnitState.TileLocation),

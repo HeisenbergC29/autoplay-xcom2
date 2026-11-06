@@ -62,6 +62,15 @@ var private int AreaRejectionTurn;
 var private int AreaRejectionLastHistory;
 var private bool bAreaRejectionSaturated;
 
+// A recent endpoint from a routine march is remembered across player turns.
+// Do not use it to block combat reposition, extraction, hazard escape or rescue.
+struct RecentRoutePosition
+{
+    var int UnitID;
+    var TTile Tile;
+    var int PlayerTurn;
+};
+
 // Positions are copied only while the contact is visible. Never refresh a
 // lost contact from its live (hidden) unit state.
 struct RecentContact
@@ -89,6 +98,7 @@ var private int EndTurnHistoryCursor;
 var private float EndTurnWaitSeconds;
 var private array<ActionUse> ActionUses;
 var private array<VisitedPosition> VisitedPositions;
+var private array<RecentRoutePosition> RecentRoutePositions;
 var private string Status;
 var private name LastWaitReason;
 var private string LastWaitDetails;
@@ -168,6 +178,80 @@ function RememberRejectedAreaPlan(XComGameState_Unit UnitState, AvailableAction 
     Entry.HistoryIndex = `XCOMHISTORY.GetCurrentHistoryIndex();
     Entry.Attempts = 1;
     RejectedAreaPlans.AddItem(Entry);
+}
+
+// Bounded route memory expires naturally; legitimate backtracking is possible
+// again after the destination has been inactive for several XCOM turns.
+static function bool IsRecentRouteTurn(int CurrentTurn, int SeenTurn, int MemoryTurns)
+{
+    return CurrentTurn >= SeenTurn && CurrentTurn - SeenTurn <= MemoryTurns;
+}
+
+function PruneRecentRoutePositions(int CurrentTurn)
+{
+    local int Index;
+    for (Index = RecentRoutePositions.Length - 1; Index >= 0; --Index)
+    {
+        if (!IsRecentRouteTurn(CurrentTurn, RecentRoutePositions[Index].PlayerTurn, 6))
+            RecentRoutePositions.Remove(Index, 1);
+    }
+}
+
+// The planner receives only endpoints visited by this specific friendly unit,
+// not a global ban that could make other soldiers unable to take good positions.
+function GetRecentRouteTiles(int UnitID, int CurrentTurn, out array<TTile> RecentTiles)
+{
+    local int Index, TileIndex;
+    local bool bFound;
+
+    RecentTiles.Length = 0;
+    for (Index = 0; Index < RecentRoutePositions.Length; ++Index)
+    {
+        if (RecentRoutePositions[Index].UnitID != UnitID
+            || !IsRecentRouteTurn(CurrentTurn, RecentRoutePositions[Index].PlayerTurn, 6))
+            continue;
+        bFound = false;
+        for (TileIndex = 0; TileIndex < RecentTiles.Length; ++TileIndex)
+        {
+            if (RecentTiles[TileIndex] == RecentRoutePositions[Index].Tile)
+            {
+                bFound = true;
+                break;
+            }
+        }
+        if (!bFound)
+            RecentTiles.AddItem(RecentRoutePositions[Index].Tile);
+    }
+}
+
+function RememberRouteTile(int UnitID, TTile Tile)
+{
+    local RecentRoutePosition Entry;
+    local int Index;
+
+    for (Index = 0; Index < RecentRoutePositions.Length; ++Index)
+    {
+        if (RecentRoutePositions[Index].UnitID == UnitID
+            && RecentRoutePositions[Index].Tile == Tile)
+        {
+            RecentRoutePositions[Index].PlayerTurn = LastTurn;
+            return;
+        }
+    }
+    if (RecentRoutePositions.Length >= 128)
+        RecentRoutePositions.Remove(0, 1);
+    Entry.UnitID = UnitID;
+    Entry.Tile = Tile;
+    Entry.PlayerTurn = LastTurn;
+    RecentRoutePositions.AddItem(Entry);
+}
+
+function RememberRoutineRouteMove(XComGameState_Unit UnitState, const out array<TTile> Path)
+{
+    if (UnitState == none || Path.Length < 2)
+        return;
+    RememberRouteTile(UnitState.ObjectID, Path[0]);
+    RememberRouteTile(UnitState.ObjectID, Path[Path.Length - 1]);
 }
 
 static function bool IsContactFresh(int CurrentTurn, int SeenTurn, int MemoryTurns)
@@ -948,7 +1032,7 @@ function MakeDecision(XComTacticalController PC)
     local XComGameStateContext_Ability SubmittedContext;
     local StateObjectReference PlayerRef;
     local AvailableAction Candidate, BestAction, AmbushAction;
-    local array<TTile> CandidatePath, BestPath, AmbushPath;
+    local array<TTile> CandidatePath, BestPath, AmbushPath, RecentRouteTiles;
     local array<vector> CandidateLocations, BestLocations;
     local vector CandidateAim, BestAim;
     local int TargetIndex, BestTargetIndex, ChosenTargetID, AmbushTargetIndex, RescuePatientID;
@@ -969,6 +1053,7 @@ function MakeDecision(XComTacticalController PC)
         MeaningfulActionsThisTurn = 0;
         ActionUses.Length = 0;
         VisitedPositions.Length = 0;
+        PruneRecentRoutePositions(PlayerState.PlayerTurnCount);
         // Toggle may reset LastTurn midway through the same pending/confirmed
         // turn. Keep that ticket so OFF/ON cannot submit SkipTurn twice.
         if (!EndTurnTicketIsCurrent() || EndTurnPlayerID != PlayerRef.ObjectID
@@ -993,6 +1078,10 @@ function MakeDecision(XComTacticalController PC)
     PruneObservedDefeats(PlayerRef.ObjectID);
     bContactSearch = !bVisibleThreats && RecentContacts.Length > 0;
     bCombatThreats = bVisibleThreats || bContactSearch;
+    // Discard idle-travel memory when a known hostile or recent contact
+    // changes the tactical situation. Never constrain combat recovery.
+    if (bCombatThreats)
+        RecentRoutePositions.Length = 0;
     if (bContactSearch && MissionRecorder != none)
         MissionRecorder.Marker("recent_contacts", "count=" $ RecentContacts.Length);
 
@@ -1009,6 +1098,9 @@ function MakeDecision(XComTacticalController PC)
             || class'APX_MissionPlanner'.static.HasCombatThreats(UnitState);
         if (!UnitState.IsAbleToAct())
             continue;
+        RecentRouteTiles.Length = 0;
+        if (!bCombatThreats)
+            GetRecentRouteTiles(UnitState.ObjectID, PlayerState.PlayerTurnCount, RecentRouteTiles);
         if (class'APX_CombatPlanner'.static.ChooseAction(UnitState, Candidate, TargetIndex, Score, bContactSearch)
             && TraceCandidateAction(UnitState, "combat", Candidate, TargetIndex, Score)
             && Score > BestScore && CanUseAction(UnitState, Candidate, TargetIndex))
@@ -1121,7 +1213,7 @@ function MakeDecision(XComTacticalController PC)
         if (bContactSearch && !class'APX_MissionPlanner'.static.ShouldEvacuate(UnitState))
             bCandidateMove = ChooseContactSearchMove(UnitState, CandidatePath, Score);
         else
-            bCandidateMove = class'APX_MissionPlanner'.static.ChooseMove(UnitState, CandidatePath, Score);
+            bCandidateMove = class'APX_MissionPlanner'.static.ChooseMove(UnitState, CandidatePath, Score, RecentRouteTiles);
         if (bCandidateMove
             && TraceCandidateMove(UnitState, CandidatePath, Score)
             && Score > BestScore && CanUseMove(UnitState, CandidatePath))
@@ -1182,7 +1274,9 @@ function MakeDecision(XComTacticalController PC)
                 continue;
             bCanExplore = true;
             CandidatePath.Length = 0;
-            if (ExplorationPlanner.ChooseMove(UnitState, CandidatePath, Score)
+            RecentRouteTiles.Length = 0;
+            GetRecentRouteTiles(UnitState.ObjectID, PlayerState.PlayerTurnCount, RecentRouteTiles);
+            if (ExplorationPlanner.ChooseMove(UnitState, CandidatePath, Score, RecentRouteTiles)
                 && TraceCandidateMove(UnitState, CandidatePath, Score)
                 && Score > BestScore && CanUseMove(UnitState, CandidatePath))
             {
@@ -1331,7 +1425,13 @@ function MakeDecision(XComTacticalController PC)
         return;
     }
     if (bMove)
+    {
         RecordMove(BestUnit, BestPath);
+        // Recording a routine move does not make emergency escape or evacuation
+        // illegal: those planners are invoked without a recent-tile filter.
+        if (!bCombatThreats)
+            RememberRoutineRouteMove(BestUnit, BestPath);
+    }
     ++ActionsThisTurn;
     if (BestScore > 2.0)
         ++MeaningfulActionsThisTurn;
