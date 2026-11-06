@@ -1,4 +1,4 @@
-# Stan przekazania projektu — 5 listopada 2026
+# Stan przekazania projektu — 6 listopada 2026
 
 To punkt startowy po pierwszym przeglądzie importu pomocnika. Bieżące issue i PR-y mogą zawierać nowsze
 ustalenia; po integracji aktualizuj ten dokument, gdy zmienia się baza lub
@@ -6,14 +6,18 @@ poziom potwierdzenia działania.
 
 ## Baza kodu
 
-- Bieżąca rewizja źródeł: `mission-report-v19`, osobny cache tekstu HUD
-  z PR #22; integrację i diagnostykę koordynuje LEAD w issue #23.
-- Dokładna baza A eksperymentu HUD: v18
-  `e30bf6a18ac6a35a4644e7b09a91157d85c0f518`. Wariant B wskazuje LEAD
-  w [issue #4](https://github.com/HeisenbergC29/autoplay-xcom2/issues/4).
+- Bieżąca rewizja przygotowywanych źródeł: `mission-report-v20`, pełna mapa
+  i pozycje aktywnych wrogów z PR #26, potwierdzone przez użytkownika.
+  Przegląd i integrację koordynuje LEAD w #27; dokładny wariant do kompilacji
+  wskazuje w [issue #4](https://github.com/HeisenbergC29/autoplay-xcom2/issues/4).
+- Baza v19: `5e9d9eacbe1bfd9ea3f6c178c697065b0a7cbc0c`. Zachowuje cache
+  tekstu HUD z PR #22 i integrację #24.
+- Historyczny eksperyment HUD porównywał v18
+  `e30bf6a18ac6a35a4644e7b09a91157d85c0f518` z v19
+  `5e9d9eacbe1bfd9ea3f6c178c697065b0a7cbc0c`. V20 jest osobnym etapem.
 - Baza porównawcza v17: `ba4550a8495c5c7d504eca681a6465b2c433ae37`.
   PR #16 scalono jako `42b36d4`; kolejne gałęzie zaczynaj od aktualnego
-  `main`, uwzględniając późniejsze integracje, obecnie v19 z issue #23.
+  `main`, uwzględniając późniejsze integracje.
 - Zachowany bazowy commit v16: `9458b185e6602a07d448010c45bc5aeb74fd8d80`.
 - Opublikowany kod v15 do porównania:
   `9832d72d14b75adb110a1d5ac74a32e290306b0e`. Dokładną bazę swojego
@@ -61,6 +65,20 @@ przy stabilnej historii, także przy OFF. Końcowy odczyt natywny pozostaje
 niezbuforowany. Nie obejmuje nowych zmian taktyki ani punktacji.
 [Zakres i porównanie v18/v19](experiment-17-hud-polling.pl.md).
 
+V20 domyślnie włącza `EnableFullIntel=true`: lokalny XCOM może znać teren
+i pozycje żywych, aktywnych wrogów poza LOS. To potwierdzona 6 listopada
+zmiana zasad. Wiedza o dalekim celu pomaga planować, ale nie nadaje mu
+automatycznie priorytetu lokalnej walki ani legalnego celu ataku.
+Natywne akcje, AP, RNG i punktacja pozostają rozstrzygające. Odkrycie terenu
+przez SDK nie gwarantuje ujawnienia modeli przeciwników.
+[Zakres, ograniczenia i próba v20](experiment-25-full-intel.pl.md).
+
+Najnowszy [raport GasStation v19](report-2026-11-06-v19-gasstation.pl.md):
+porażka, 40 przyjętych rozkazów, normalne zamknięcie gry. Ostatni natywny
+odczyt −20100 pozostaje częściowy: 18 klatek historii nie zostało zapisanych,
+`mission_final=False`. Ta pojedyncza próba Legacy nie weryfikuje wcześniejszego
+zawieszenia Challenge, odczytów `GetTotalScore` ani wizualizacji ciosu MP.
+
 Według analizy HELPER w [#21](https://github.com/HeisenbergC29/autoplay-xcom2/issues/21)
 v18 zastosowało poprawkę MP i wykonało dwa ciosy bez dawnego redscreen,
 ale później nastąpiło zawieszenie. Nie ustalono przyczyny ani nowego
@@ -85,12 +103,20 @@ v15, co nie oznacza wspólnego przodka commitów.
 
 ## Potwierdzenie i ograniczenia
 
-PR #22 oraz kod integracji v19 zaliczyły **524 testy z prywatnymi
+Po poprawkach przeglądu kod v20 zaliczył **539 testów z prywatnymi wejściami
+bez pominięć** oraz audyt **18 klas / 31 nazw zdolności PASS**. Kod:
+`e8aa70bef727a6a7672d400156f225896cdec1c6`. Końcowe publiczne CI i decyzja
+są zapisane w PR #26 i issue #27. Kompilacja Windows WOTC SDK i gra v20:
+**NIEURUCHOMIONE**. Zmiana pełnej wiedzy nie jest potwierdzoną naprawą awarii
+ani dowodem, że każdą misję można ukończyć.
+
+Historyczny PR #22 oraz kod integracji v19 zaliczyły **524 testy z prywatnymi
 wejściami bez pominięć** i audyt **17 klas / 31 nazw zdolności PASS**.
 Publiczne CI PR #22: 464 PASS / 60 SKIP oraz trzy zestawy PowerShell PASS.
 Końcowe CI v19 jest śledzone w [PR #24](https://github.com/HeisenbergC29/autoplay-xcom2/pull/24).
-Kompilacja Windows WOTC SDK i gra v19:
-**NIEURUCHOMIONE**. Samo scalenie nie potwierdza naprawy zawieszenia.
+Nowy raport potwierdza uruchomienie rewizji v19, ale nie dokładny SHA
+kompilacji ani zaliczenie wersji. Samo scalenie nie potwierdza naprawy
+zawieszenia; najnowsza porażka nie jest dowodem niemożności GasStation.
 
 Historyczna integracja v18: 518 testów z prywatnymi wejściami bez pominięć,
 audyt 17 klas / 31 zdolności; publiczne CI śledzone w PR #19. Raporty

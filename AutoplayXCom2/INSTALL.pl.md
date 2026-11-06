@@ -77,13 +77,20 @@ Rewizja `mission-report-v18` dodaje wyłącznie poprawkę wizualizacji
 `DevastatingPunchMP` i diagnostykę jej zastosowania przy starcie.
 Nie jest potwierdzoną naprawą awarii. Próba porównawcza:
 `docs/experiment-15-berserker-mp-visualization.pl.md`.
-Bieżące `mission-report-v19` dodaje cache samego tekstu punktów HUD.
+Rewizja `mission-report-v19` dodaje cache samego tekstu punktów HUD.
 Status nadal odświeża się co około 0,25 s, wynik przy zmianie historii na
 następnym odświeżeniu, a przy stabilnej historii co około 1 s. Odczyt
 końcowy nie korzysta z tego cache. Działa również przy F8 OFF.
 Instrukcja osobnego porównania: `docs/experiment-17-hud-polling.pl.md`.
-Kompilacja Windows i gra v19 pozostają nieuruchomione; aktualizacja
-źródeł nie jest nową paczką binarną ani potwierdzoną naprawą zawieszenia.
+Bieżące `mission-report-v20` domyślnie włącza pełną wiedzę o terenie i
+pozycjach aktywnych wrogów dla lokalnego XCOM, zgodnie z decyzją użytkownika.
+Akcje nadal wymagają natywnej legalności, celów i AP. Odkrycie FOW nie
+gwarantuje wyświetlenia modeli ukrytych jednostek. Ustawienie
+`[AutoplayXCom2.APX_FullIntel] EnableFullIntel=false` zachowuje zwykłą wiedzę
+opartą na widoczności; porównuj je od nowego uruchomienia misji, bo już
+ujawniony teren może pozostać odkryty. Opis: `docs/experiment-25-full-intel.pl.md`.
+Kompilacja Windows i gra v20: **NIEURUCHOMIONE**. Źródła nie są nową paczką
+binarną ani potwierdzoną naprawą zawieszenia.
 
 Zbuduj i zainstaluj nową wersję; sama podmiana konfiguracji nie wystarczy.
 Instrukcja próby to `docs/legacy-test.pl.md`, a opis licznika to
@@ -206,7 +213,9 @@ Raport ZIP pojawi się w `<Dokumenty>\AutoplayXCom2-Reports`. Skrypt działa tak
 po usunięciu pobranego folderu źródeł. Załącz raport do zgłoszenia wraz z poziomem
 trudności, wynikiem misji i stratami. Szczegóły: `docs/mission-recording.pl.md`
 w repozytorium. To zapis diagnostyczny, nie film ani replay.
-W nowym raporcie wpis `revision=mission-report-v19` identyfikuje tę wersję.
+W nowym raporcie wpis `revision=mission-report-v20` identyfikuje tę wersję;
+`full_intel_enabled` zapisuje ustawienie pełnej wiedzy. Sprawdź również
+`Full intel|...enabled=True|map_revealed=True` oraz faktyczne odkrycie mapy.
 Startupowy `HUD score polling` podaje rewizję, interwały 1,0/0,25 s
 i aktywną invalidację przy zmianie historii. F8 OFF nie wyłącza cache HUD.
 Przy starcie sprawdź również `MP visualization patch`: `templates > 0`,
@@ -238,7 +247,7 @@ zwycięstwa v8 i działanie ratunku v9; wcześniejszy raport v12 z `SabotageCC`
 kończy się porażką. Potwierdza start punktacji porównawczej od zera.
 Najnowszy raport v15 potwierdza jedną poprawę celowania po ruchu 47→68%,
 lecz SabotageCC kończy się porażką w turze 18. Trzy zatrzymania przed rzutem
-granatu są opisane osobno od odrzuconych rozkazów silnika. Bieżące źródła v19
+granatu są opisane osobno od odrzuconych rozkazów silnika. Bieżące źródła v20
 wymagają nowej kompilacji i próby.
 Nie potwierdzono
 pełnej obsługi każdej skryptowanej misji DLC

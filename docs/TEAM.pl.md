@@ -7,7 +7,7 @@ Ustalenia właściciela projektu z 5 listopada 2026, po korekcie oznaczeń
 Punkt wejścia i inwentaryzacja importu: [issue #1](https://github.com/HeisenbergC29/autoplay-xcom2/issues/1).
 Gotowe zadania niezależne: [diagnostyka raportów #2](https://github.com/HeisenbergC29/autoplay-xcom2/issues/2)
 i [macierz misji #3](https://github.com/HeisenbergC29/autoplay-xcom2/issues/3).
-Osobny dowód kompilacji/gry użytkownika: [próby v19 #4](https://github.com/HeisenbergC29/autoplay-xcom2/issues/4).
+Osobny dowód kompilacji/gry użytkownika: [próby bieżącej wersji #4](https://github.com/HeisenbergC29/autoplay-xcom2/issues/4).
 
 ## Podział odpowiedzialności
 
@@ -78,6 +78,15 @@ przez LEAD w issue #23. Baza porównania to dokładne v18, z zachowaną
 poprawką MP. Zawieszenie z #21 pozostaje nieustalone, a zmiany taktyczne
 #20 i poprawki PR #11 są poza tym eksperymentem.
 [Próba v18/v19](experiment-17-hud-polling.pl.md).
+
+6 listopada użytkownik potwierdził pełną wiedzę o mapie i pozycjach
+aktywnych wrogów poza LOS. V20 z PR #26 wprowadza ten wąski wyjątek od
+dawnego ograniczenia do widocznych kontaktów; pozostałe reguły legalności,
+AP, RNG, ochrony sojuszników i punktacji pozostają. `EnableFullIntel=true`
+jest domyślne; wariant `false` zachowuje normalną wiedzę opartą na widoczności.
+Integrację prowadzi LEAD w #27. #20 i badanie pilnego podejścia/leczenia #28
+są osobnymi tematami, poza tą zmianą.
+[Zakres v20](experiment-25-full-intel.pl.md).
 
 ## Przekazanie i decyzja o scaleniu
 
