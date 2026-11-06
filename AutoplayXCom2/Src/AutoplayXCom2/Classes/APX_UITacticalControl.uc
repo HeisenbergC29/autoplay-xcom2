@@ -40,12 +40,15 @@ simulated function APX_UITacticalControl InitAutoplayControl()
     DisableNavigation();
 
     Controller = class'APX_Controller'.static.GetOrCreate();
+    // Reveal the map for the local squad without waiting for F8/autoplay.
+    if (class'APX_FullIntel'.static.RevealMapForPlayer())
+        `log("Full intel|revision=mission-report-v20|enabled=True|map_revealed=True", true, 'AutoplayXCom2');
     ScoreCounter = new(self) class'APX_MissionScore';
     bScoreTextValid = false;
     CachedScoreHistory = none;
     CachedScoreHistoryIndex = -1;
     ScoreRefreshRemaining = 0.0;
-    `log("HUD score polling|revision=mission-report-v19|stable_interval_seconds=1.0|status_interval_seconds=0.25|history_invalidation=true", true, 'AutoplayXCom2');
+    `log("HUD score polling|revision=mission-report-v20|stable_interval_seconds=1.0|status_interval_seconds=0.25|history_invalidation=true", true, 'AutoplayXCom2');
 
     ToggleButton = Spawn(class'UIButton', self);
     ToggleButton.InitButton('APX_ToggleButton', EnableLabel, OnToggleClicked);
@@ -226,6 +229,10 @@ simulated event Tick(float DeltaTime)
 {
     if (bIsRemoved)
         return;
+    // A tactical reload may reenable stock FOW; restore the user's choice.
+    if (class'APX_FullIntel'.default.EnableFullIntel
+        && `XWORLD != none && `XWORLD.bEnableFOW)
+        class'APX_FullIntel'.static.RevealMapForPlayer();
 
     if (bPendingCollapse)
     {
