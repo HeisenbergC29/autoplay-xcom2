@@ -10,7 +10,11 @@ poziom potwierdzenia działania.
   priorytet PlantBomb dla BerserkerMP w SabotageTransmitter z PR #30 oraz
   poprawki LEAD dotyczące ostatniego AP i limitu ryzyka fallbacku.
   Zachowuje pełną mapę i pozycje wrogów v20. Dokładny wariant do kompilacji
-  wskazuje w [issue #4](https://github.com/HeisenbergC29/autoplay-xcom2/issues/4).
+  wskazuje LEAD w [issue #4](https://github.com/HeisenbergC29/autoplay-xcom2/issues/4).
+- Próba kompilacji v21 ujawniła jeden błąd: zbędne `string(sType)` w
+  APX_MissionPlanner.uc. Poprawka #33 usuwa rzutowanie pola, które już ma
+  typ string, bez zmiany taktyki i rewizji v21. Po poprawce wymagana jest
+  ponowna kompilacja użytkownika; log nie potwierdza gotowej paczki.
 - Baza v20: `dc0ea3a3eecff3b85169128786bb5a51983ce76e`. [Nowy raport](report-2026-11-06-v20.pl.md)
   potwierdza dwie sesje v20: GasStation loss z natywnym −7600 oraz Blood Killer
   zakończony awarią bez wyniku. Brak nowego folderu crasha/dumpa jest potwierdzony
@@ -123,7 +127,9 @@ v15, co nie oznacza wspólnego przodka commitów.
 Kod v21 po poprawkach przeglądu LEAD zaliczył **547 testów z prywatnymi
 wejściami, bez pominięć**, oraz audyt **18 klas / 31 nazw zdolności PASS**.
 Końcowy SHA, publiczne CI i decyzja o scaleniu są zapisane w PR #30.
-Kompilacja Windows WOTC SDK oraz gra v21: **NIEURUCHOMIONE**.
+Pierwsza kompilacja Windows WOTC SDK v21: **FAILED**, jeden błąd
+zbędnego rzutowania typu string; poprawka #33. Kompilacja poprawionego
+wariantu i gra v21: **NIEURUCHOMIONE**.
 Źródła nie stanowią potwierdzonej naprawy awarii ani zwycięstwa.
 
 Po poprawkach przeglądu kod v20 zaliczył **539 testów z prywatnymi wejściami
