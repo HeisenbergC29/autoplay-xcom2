@@ -40,6 +40,98 @@ class MissionLogTests(unittest.TestCase):
                          {'outside_weapon_range': 1, 'protected_unit_near_blast': 1})
         self.assertIn('range=5', LOG.human_summary(report))
 
+    def test_preflight_grenade_rejection_does_not_invent_a_dispatched_grenade(self):
+        lines = [
+            record(1, 'start', 'mission=Gatecrasher|difficulty=2'),
+            record(2, 'marker', 'kind=area_revalidation_rejected|details=unit=1 reason=landing_changed evaluation_reason=none'),
+            record(3, 'marker', 'kind=area_revalidation_rejected|details=unit=1 reason=fresh_impact_rejected evaluation_reason=protected_unit'),
+            record(4, 'chosen', 'kind=action|unit=1|ability=Overwatch|accepted=true'),
+            record(5, 'end', 'outcome=loss'),
+        ]
+        report = LOG.analyze_logs([('backup.log', '\n'.join(lines)),
+                                   ('Launch.log', '\n'.join(lines))])
+        session = report['sessions'][0]
+        self.assertEqual(report['duplicate_records'], len(lines))
+        self.assertEqual(session['grenade_preparation'], {
+            'preview_rejections': 2,
+            'reasons': {'fresh_impact_rejected': 1, 'landing_changed': 1},
+        })
+        self.assertEqual(session['accepted_actions'], 1)
+        self.assertEqual(session['rejected_actions'], 0)
+        self.assertNotIn('grenade', session['abilities'])
+        self.assertIn('rejected before dispatch=2', LOG.human_summary(report))
+
+    def test_native_false_followed_by_matching_turn_confirmation_is_not_failure(self):
+        report = LOG.analyze_logs([('Launch.log', '\n'.join([
+            record(1, 'start'),
+            record(2, 'marker', 'kind=end_turn_requested|details=player=2 turn=3 history=50 native_return=False'),
+            record(3, 'marker', 'kind=end_turn_confirmed|details=player=2 turn=3 history=51 evidence=skip_turn_history'),
+            record(4, 'end', 'outcome=win'),
+        ]))])
+        turn = report['sessions'][0]['end_turn_diagnostics']
+        self.assertEqual(turn['requested'], 1)
+        self.assertEqual(turn['confirmed'], 1)
+        self.assertEqual(turn['native_false_confirmed'], 1)
+        self.assertEqual(turn['unresolved_after_timeout'], 0)
+        self.assertEqual(turn['pending_without_confirmation'], 0)
+        self.assertEqual(turn['evidence'], {'skip_turn_history': 1})
+        self.assertFalse(any('timed out' in warning for warning in report['sessions'][0]['warnings']))
+        self.assertIn('native false but confirmed=1', LOG.human_summary(report))
+
+    def test_timeout_then_late_confirmation_is_recorded_as_recovered_ticket(self):
+        session = LOG.analyze_logs([('Launch.log', '\n'.join([
+            record(1, 'start'),
+            record(2, 'marker', 'kind=end_turn_requested|details=player=2 turn=8 history=54 native_return=False'),
+            record(3, 'marker', 'kind=end_turn_unconfirmed|details=player=2 turn=8 history=54 request_history=54'),
+            record(4, 'marker', 'kind=end_turn_confirmed|details=player=2 turn=8 history=55 evidence=turn_transition'),
+            record(5, 'end', 'outcome=loss'),
+        ]))])['sessions'][0]
+        turn = session['end_turn_diagnostics']
+        self.assertEqual(turn['unconfirmed_markers'], 1)
+        self.assertEqual(turn['confirmed_after_timeout'], 1)
+        self.assertEqual(turn['native_false_confirmed'], 1)
+        self.assertEqual(turn['unresolved_after_timeout'], 0)
+        self.assertFalse(any('timed out without later' in w for w in session['warnings']))
+
+    def test_expired_turn_without_confirmation_remains_unresolved_not_native_rejected(self):
+        session = LOG.analyze_logs([('Launch.log', '\n'.join([
+            record(1, 'start'),
+            record(2, 'marker', 'kind=end_turn_requested|details=player=2 turn=4 history=97 native_return=False'),
+            record(3, 'marker', 'kind=end_turn_unconfirmed|details=player=2 turn=4 history=97 request_history=97'),
+            record(4, 'end', 'outcome=unknown'),
+        ]))])['sessions'][0]
+        turn = session['end_turn_diagnostics']
+        self.assertEqual(turn['requested'], 1)
+        self.assertEqual(turn['unresolved_after_timeout'], 1)
+        self.assertEqual(turn['confirmed'], 0)
+        self.assertEqual(turn['native_false_confirmed'], 0)
+        self.assertTrue(any('not proof of a native rejection' in w for w in session['warnings']))
+
+    def test_points_are_always_explicitly_labeled_by_certainty_per_mission(self):
+        first = '\n'.join([
+            record(1, 'start', 'mission=GasStation|difficulty=2|history=1'),
+            record(2, 'game_score', 'source=legacy_runtime|ladder_index=1|ladder_rung=1|mission_points_known=true|mission_final=true|mission_points=-12600|phase=finish|history=20'),
+            record(3, 'end', 'outcome=loss|history=20|history_pending=0'),
+        ])
+        second = '\n'.join([
+            record(1, 'start', 'mission=BloodKiller|difficulty=2', session='s2'),
+            record(2, 'hud_score', 'display=700/32950', session='s2'),
+            record(3, 'score_delta', 'scoring_type=CMPT_TotalScore|added_points=700', session='s2'),
+            record(4, 'end', 'outcome=loss', session='s2'),
+        ])
+        report = LOG.analyze_logs([('Launch.log', first + '\n' + second)])
+        by_mission = {s['mission']: s for s in report['sessions']}
+        self.assertEqual(by_mission['GasStation']['mission_points'],
+                         {'value': -12600, 'confirmed': True, 'source': 'native_mission_points',
+                          'status': 'final_native_observation'})
+        self.assertEqual(by_mission['BloodKiller']['mission_points']['value'], 700)
+        self.assertFalse(by_mission['BloodKiller']['mission_points']['confirmed'])
+        self.assertIn('mission=GasStation, difficulty=2, outcome=loss, mission points=-12600 (confirmed',
+                      LOG.human_summary(report))
+        self.assertIn('mission=BloodKiller, difficulty=2, outcome=loss, mission points=+700 (provisional',
+                      LOG.human_summary(report))
+        self.assertEqual(by_mission['BloodKiller']['attempt_verdict']['status'], 'fail')
+
     def test_result_health_proves_elimination_without_a_dead_visibility_snapshot(self):
         report = LOG.analyze_logs([('Launch.log', '\n'.join([
             record(1, 'start'),
