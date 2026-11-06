@@ -1774,9 +1774,10 @@ static function bool ChooseMove(XComGameState_Unit UnitState,
     // For this one sabotage challenge, even a nearby enemy does not turn
     // the bomb emplacement into a combat-position destination. Threat risk
     // is still scored; emergency/attack actions still compete independently.
-    bCombatGoal = !Goal.bBerserkerSabotageGoal
-        && RequiresCombatMovement(Goal.bCombat, Goal.bImmediateThreats,
-            ShouldEvacuate(UnitState));
+    bCombatGoal = RequiresCombatMovement(Goal.bCombat, Goal.bImmediateThreats,
+        ShouldEvacuate(UnitState));
+    if (Goal.bBerserkerSabotageGoal)
+        bCombatGoal = false; // Do not score a bomb approach as a firing flank.
     bRequireSupport = !ShouldEvacuate(UnitState);
     StartSupport = NearestSupportDistance(UnitState, UnitState.TileLocation);
     bSabotageRush = Goal.bBerserkerSabotageGoal
