@@ -96,6 +96,8 @@ class BerserkerSabotageContracts(unittest.TestCase):
         self.assertIn('ScoreBerserkerObjectiveRoute(Path.Length, HealthFraction,', scored)
         self.assertIn('GetMeleeThreatReaches(UnitState, VisibleEnemies, Reaches)', scored)
         self.assertIn('GetThreatWeights(UnitState, VisibleEnemies, Weights)', scored)
+        self.assertIn('bCombatGoal = !Goal.bBerserkerSabotageGoal', choose)
+        self.assertIn('ScoreBerserkerObjectivePath(UnitState, Path, VisibleEnemies,', choose)
         prefix = function_body(self.source, 'ChooseRoutePrefix')
         self.assertIn('m_kReachableTilesCache.IsTileReachable(', prefix)
         self.assertIn('HasBlockingHazard(', prefix)
