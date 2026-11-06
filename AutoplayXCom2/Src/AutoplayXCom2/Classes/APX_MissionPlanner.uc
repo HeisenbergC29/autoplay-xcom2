@@ -637,7 +637,7 @@ static function bool FindGoal(XComGameState_Unit UnitState, out MissionGoal Goal
             && BattleData.AllStrategyObjectivesCompleted();
         if (ShouldPrioritizeBerserkerSabotage(default.PrioritizeBerserkerSabotage,
             UnitState.GetMyTemplateName() == 'BerserkerMP',
-            string(BattleData.MapData.ActiveMission.sType) == "SabotageTransmitter",
+            BattleData.MapData.ActiveMission.sType == "SabotageTransmitter",
             bCompletedStrategyObjective)
             && FindBerserkerSabotageGoal(UnitState, BattleData,
                 SabotageGoalTile, SabotageGoalSource)

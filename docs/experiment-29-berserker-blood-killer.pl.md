@@ -6,6 +6,16 @@ ukończenie misji ani usunięcie crasha.
 Baza: `dc0ea3a3eecff3b85169128786bb5a51983ce76e` (v20).
 Powiązanie: issue #29. Nowy rejestrator: `mission-report-v21`.
 
+## Poprawka kompilacji #33
+
+Próba użytkownika zakończyła się jednym błędem WOTC:
+`No need to cast 'StrProperty' to itself` w APX_MissionPlanner.uc:640.
+`MissionDefinition.sType` jest już typu string (SDK XGGameData.uc), więc
+poprawka usuwa zbędne rzutowanie `string(...)`. Osiem ostrzeżeń logu
+dotyczy SDK/DLC. Zachowano rewizję v21 i tę samą taktykę. Poprawiony
+wariant wymaga ponownej kompilacji użytkownika; analiza zakończonej błędem
+próby nie potwierdza kompilacji pozostałego kodu ani działania w grze.
+
 ## Obserwacje z raportu użytkownika
 
 - Wyświetlana nazwa wyzwania: Blood Killer; nazwa silnika

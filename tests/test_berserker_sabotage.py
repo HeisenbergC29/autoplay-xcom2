@@ -96,7 +96,9 @@ class BerserkerSabotageContracts(unittest.TestCase):
     def test_goal_precedes_contact_rush_only_for_this_mission(self):
         goal = function_body(self.source, 'FindGoal')
         self.assertIn("UnitState.GetMyTemplateName() == 'BerserkerMP'", goal)
-        self.assertIn('string(BattleData.MapData.ActiveMission.sType) == "SabotageTransmitter"',goal)
+        # MissionDefinition.sType is already string; WOTC rejects a redundant
+        # string(...) cast with "No need to cast 'StrProperty' to itself".
+        self.assertIn('BattleData.MapData.ActiveMission.sType == "SabotageTransmitter"', goal)
         self.assertIn('bCompletedStrategyObjective', goal)
         self.assertIn('Goal.bBerserkerSabotageGoal = true;', goal)
         self.assertIn('Goal.BerserkerSabotageGoalSource = SabotageGoalSource;',goal)
