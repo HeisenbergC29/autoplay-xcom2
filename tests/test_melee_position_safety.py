@@ -36,10 +36,20 @@ class MeleePositionSafetyTests(unittest.TestCase):
         move = function_body(MOVEMENT.read_text(encoding='utf-8-sig'), 'ChooseMove')
         for guard in ('IsKnownCombatTile(', 'IsSupportedCombatDestination(',
                       'IsSupportedAdvanceDestination(', 'IsSupportedAdvanceStep(',
-                      'CanSquadSeeLocation(', 'HasBlockingHazard('):
+                      'HasBlockingHazard('):
             with self.subTest(guard=guard):
                 self.assertIn(guard, melee)
                 self.assertIn(guard, move)
+        # Melee still uses native current visibility. Ordinary movement may
+        # plan through the revealed map, with native visibility as its OFF fallback.
+        self.assertIn('CanSquadSeeLocation(', melee)
+        self.assertIn("class'APX_FullIntel'.static.CanPlanAtTile(", move)
+        plan = function_body((CLASSES / 'APX_FullIntel.uc').read_text(encoding='utf-8-sig'),
+                             'CanPlanAtTile')
+        self.assertIn('if (default.EnableFullIntel)', plan)
+        self.assertIn('CanSquadSeeLocation(', plan)
+        self.assertLess(plan.index('if (default.EnableFullIntel)'),
+                        plan.index('CanSquadSeeLocation('))
         # Check the actual native attack destination, rather than the target's
         # occupied tile or an independently selected movement destination.
         self.assertIn('SelectAttackTile(', melee)

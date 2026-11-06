@@ -35,10 +35,10 @@ static function GetKnownEnemies(XComGameState_Unit SourceUnit,
             || Enemy.GetMyTemplate() == none || Enemy.GetMyTemplate().bIsCosmetic
             || Enemy.GetMyTemplateName() == 'HostileVIPCivilian'
             || !SourceUnit.IsEnemyUnit(Enemy)
-            || `XWORLD.IsTileOutOfRange(Enemy.TileLocation)
-            || class'APX_CombatPlanner'.static.IsReclaimableControlledSquadmate(
-                SourceUnit, Enemy))
+            || `XWORLD.IsTileOutOfRange(Enemy.TileLocation))
             continue;
+        // A recoverable controlled squadmate can still harm us. Keep its
+        // position for defensive risk; pursuit and attacks protect it separately.
         Enemies.AddItem(Enemy.GetReference());
     }
 }

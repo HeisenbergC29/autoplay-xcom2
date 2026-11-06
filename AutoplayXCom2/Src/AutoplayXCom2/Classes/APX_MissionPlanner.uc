@@ -18,6 +18,7 @@ struct MissionGoal
     var float Value;
     var bool bCombat;
     var bool bFound;
+    var bool bImmediateThreats;
 };
 
 // A component marks an actual mission unit (VIP/captive), rather than every civilian.
@@ -237,6 +238,12 @@ static function bool LootRouteMakesProgress(bool bHasMissionGoal,
     return !bHasMissionGoal || DestinationGoalDistance <= CurrentGoalDistance;
 }
 
+// Distant enemy pursuit is not a mission objective that can veto a safe pickup.
+static function bool IsMissionTravelGoal(bool bFound, bool bCombat)
+{
+    return bFound && !bCombat;
+}
+
 static function float ScoreLootMove(float PathCost, int ExpirationTurns,
     bool bHasMissionGoal)
 {
@@ -267,7 +274,7 @@ static function bool ChooseLootMove(XComGameState_Unit UnitState,
     local vector LootLocation, CandidateLocation;
     local int TargetIndex, StandardAP, Sample, SampleCount, TileIndex, NeighborIndex, Drops;
     local float LootRange, InteractionScore, StartGoalDistance, Cost, Value, StartSupport;
-    local bool bReadyObjective;
+    local bool bReadyObjective, bHasMissionGoal;
 
     Path.Length = 0;
     Score = 0.0;
@@ -276,13 +283,12 @@ static function bool ChooseLootMove(XComGameState_Unit UnitState,
         return false;
     StandardAP = UnitState.NumActionPoints(class'X2CharacterTemplateManager'.default.StandardActionPoint);
     bReadyObjective = ChooseInteraction(UnitState, Interaction, TargetIndex, InteractionScore);
-    GetVisibleThreats(UnitState, VisibleEnemies);
+    GetImmediateThreats(UnitState, VisibleEnemies);
     if (!IsLootRouteAllowed(VisibleEnemies.Length > 0, HasBleedingSquadmate(UnitState),
         ShouldEvacuate(UnitState), bReadyObjective, HasActiveMissionDeadline(), StandardAP))
         return false;
     FindGoal(UnitState, Goal, VisibleEnemies);
-    if (Goal.bCombat)
-        return false;
+    bHasMissionGoal = IsMissionTravelGoal(Goal.bFound, Goal.bCombat);
     StartGoalDistance = TileDistance(UnitState.TileLocation, Goal.Tile);
     StartSupport = NearestSupportDistance(UnitState, UnitState.TileLocation);
     Visualizer = XGUnit(UnitState.GetVisualizer());
@@ -326,7 +332,7 @@ static function bool ChooseLootMove(XComGameState_Unit UnitState,
             }
             Cost = Visualizer.m_kReachableTilesCache.GetPathCostToTile(Tile);
             if (Tile == UnitState.TileLocation || Cost < 0.0 || Cost > Visualizer.GetMobility()
-                || !LootRouteMakesProgress(Goal.bFound, StartGoalDistance, TileDistance(Tile, Goal.Tile))
+                || !LootRouteMakesProgress(bHasMissionGoal, StartGoalDistance, TileDistance(Tile, Goal.Tile))
                 || !IsSupportedAdvanceDestination(StartSupport, NearestSupportDistance(UnitState, Tile)))
                 continue;
             CandidateLocation = `XWORLD.GetPositionFromTileCoordinates(Tile);
@@ -334,7 +340,7 @@ static function bool ChooseLootMove(XComGameState_Unit UnitState,
             if (VSizeSq(CandidateLocation - LootLocation) >= Square(LootRange)
                 || !`XWORLD.CanSeeTileToTile(Tile, LootTile, Visibility))
                 continue;
-            Value = ScoreLootMove(Cost, Drop.LootExpirationTurnsRemaining, Goal.bFound);
+            Value = ScoreLootMove(Cost, Drop.LootExpirationTurnsRemaining, bHasMissionGoal);
             if (Value <= Score)
                 continue;
             CandidatePath.Length = 0;
@@ -445,6 +451,12 @@ static function ConsiderGoal(XComGameState_Unit UnitState, TTile CandidateTile,
     }
 }
 
+static function bool ShouldPursueKnownEnemies(bool bFullIntel,
+    bool bFoundMissionGoal, int KnownEnemyCount)
+{
+    return bFullIntel && !bFoundMissionGoal && KnownEnemyCount > 0;
+}
+
 static function bool FindGoal(XComGameState_Unit UnitState, out MissionGoal Goal,
     out array<StateObjectReference> VisibleEnemies)
 {
@@ -453,11 +465,14 @@ static function bool FindGoal(XComGameState_Unit UnitState, out MissionGoal Goal
     local XComGameState_EvacZone EvacZone;
     local XComGameState_BattleData BattleData;
     local StateObjectReference EnemyRef;
+    local array<StateObjectReference> ImmediateEnemies;
     local MissionGoal EmptyGoal;
 
     Goal = EmptyGoal;
 
     GetVisibleThreats(UnitState, VisibleEnemies);
+    GetImmediateThreats(UnitState, ImmediateEnemies);
+    Goal.bImmediateThreats = ImmediateEnemies.Length > 0;
     EvacZone = class'XComGameState_EvacZone'.static.GetEvacZone(eTeam_XCom);
     if (EvacZone != none && ShouldEvacuate(UnitState))
     {
@@ -466,12 +481,14 @@ static function bool FindGoal(XComGameState_Unit UnitState, out MissionGoal Goal
         return true;
     }
 
-    // A squadmate's contact still threatens this soldier. Deal with known
-    // enemies before walking toward the much higher-scored mission marker.
+    // A squadmate's actual contact can still threaten this soldier. Distant
+    // full-intel positions do not activate this combat-priority shortcut.
     // Evacuation above remains an explicit exception.
-    foreach VisibleEnemies(EnemyRef)
+    foreach ImmediateEnemies(EnemyRef)
     {
         OtherUnit = XComGameState_Unit(`XCOMHISTORY.GetGameStateForObjectID(EnemyRef.ObjectID));
+        if (class'APX_CombatPlanner'.static.IsReclaimableControlledSquadmate(UnitState, OtherUnit))
+            continue;
         ConsiderGoal(UnitState, OtherUnit.TileLocation, 40, true, Goal);
     }
     if (Goal.bFound)
@@ -514,25 +531,57 @@ static function bool FindGoal(XComGameState_Unit UnitState, out MissionGoal Goal
             Goal.bFound = TileDistance(UnitState.TileLocation, Goal.Tile) > 3;
         }
     }
+    // Full knowledge supplies a pursuit fallback, not a universal override of
+    // timed objectives, VIPs, evacuation or the mission's own destination.
+    if (ShouldPursueKnownEnemies(class'APX_FullIntel'.default.EnableFullIntel,
+        Goal.bFound, VisibleEnemies.Length))
+    {
+        foreach VisibleEnemies(EnemyRef)
+        {
+            OtherUnit = XComGameState_Unit(`XCOMHISTORY.GetGameStateForObjectID(EnemyRef.ObjectID));
+            if (class'APX_CombatPlanner'.static.IsReclaimableControlledSquadmate(UnitState, OtherUnit))
+                continue;
+            ConsiderGoal(UnitState, OtherUnit.TileLocation, 40, true, Goal);
+        }
+    }
     return Goal.bFound;
 }
 
-// Full-intel mode deliberately provides all active hostile positions.
-// Native ability target lists retain LOS/range legality and cannot be bypassed.
+// Retain the historical API name for risk consumers. In full-intel mode this
+// list includes distant known enemies; policy gates use GetImmediateThreats.
 static function GetVisibleThreats(XComGameState_Unit UnitState,
+    out array<StateObjectReference> VisibleEnemies)
+{
+    class'APX_FullIntel'.static.GetKnownEnemies(UnitState, VisibleEnemies);
+    FilterLiveThreats(UnitState, VisibleEnemies);
+}
+
+// Policy gates use actual squad-visible threats. A unit known elsewhere on the
+// map must not universally suppress objective travel or safe loot approaches.
+static function GetImmediateThreats(XComGameState_Unit UnitState,
+    out array<StateObjectReference> VisibleEnemies)
+{
+    VisibleEnemies.Length = 0;
+    if (UnitState == none || `XCOMHISTORY == none)
+        return;
+    class'X2TacticalVisibilityHelpers'.static.GetAllVisibleEnemiesForPlayer(
+        UnitState.ControllingPlayer.ObjectID, VisibleEnemies);
+    FilterLiveThreats(UnitState, VisibleEnemies);
+}
+
+static function FilterLiveThreats(XComGameState_Unit UnitState,
     out array<StateObjectReference> VisibleEnemies)
 {
     local int Index;
     local XComGameState_Unit Enemy;
 
-    VisibleEnemies.Length = 0;
-    class'APX_FullIntel'.static.GetKnownEnemies(UnitState, VisibleEnemies);
     for (Index = VisibleEnemies.Length - 1; Index >= 0; --Index)
     {
         Enemy = XComGameState_Unit(`XCOMHISTORY.GetGameStateForObjectID(VisibleEnemies[Index].ObjectID));
         if (Enemy == none || !Enemy.IsAlive() || Enemy.IsIncapacitated()
             || Enemy.bRemovedFromPlay || Enemy.IsCivilian()
-            || Enemy.GetMyTemplate().bIsCosmetic || !UnitState.IsEnemyUnit(Enemy)
+            || Enemy.GetMyTemplate() == none || Enemy.GetMyTemplate().bIsCosmetic
+            || !UnitState.IsEnemyUnit(Enemy)
             || Enemy.GetMyTemplateName() == 'HostileVIPCivilian')
             VisibleEnemies.Remove(Index, 1);
     }
@@ -541,7 +590,7 @@ static function GetVisibleThreats(XComGameState_Unit UnitState,
 static function bool HasCombatThreats(XComGameState_Unit UnitState)
 {
     local array<StateObjectReference> VisibleEnemies;
-    GetVisibleThreats(UnitState, VisibleEnemies);
+    GetImmediateThreats(UnitState, VisibleEnemies);
     return VisibleEnemies.Length > 0;
 }
 
@@ -1370,7 +1419,8 @@ static function bool HasLegalMove(XComGameState_Unit UnitState)
 // move away from its goal. Use the game's unrestricted A* only for planning,
 // then rebuild a blue-range prefix from the actual reachable cache for dispatch.
 static function bool ChooseRoutePrefix(XComGameState_Unit UnitState,
-    XGUnit UnitVisualizer, TTile GoalTile, out array<TTile> Path)
+    XGUnit UnitVisualizer, TTile GoalTile, out array<TTile> Path,
+    optional bool bCombatRoute)
 {
     local array<TTile> FullPath, CandidatePath;
     local int Index, PathIndex;
@@ -1387,6 +1437,7 @@ static function bool ChooseRoutePrefix(XComGameState_Unit UnitState,
     for (Index = FullPath.Length - 1; Index > 0; --Index)
     {
         if (TileDistance(FullPath[Index], UnitState.TileLocation) < 1
+            || (bCombatRoute && !IsSupportedCombatDestination(UnitState, FullPath[Index]))
             || !UnitVisualizer.m_kReachableTilesCache.IsTileReachable(FullPath[Index]))
             continue;
         PathCost = UnitVisualizer.m_kReachableTilesCache.GetPathCostToTile(FullPath[Index]);
@@ -1518,6 +1569,22 @@ static function bool ChoosePoisonEscape(XComGameState_Unit UnitState,
     return Path.Length > 1;
 }
 
+// Routine travel is never a substitute for combat risk/opportunity scoring.
+// Preserve one action while pursuing a remote enemy, except during evacuation.
+static function bool CanUseRoutineRoute(bool bImmediateThreats,
+    bool bEvacuating, int StandardAP)
+{
+    return !bImmediateThreats && (bEvacuating || StandardAP >= 2);
+}
+
+// A protected hostile still makes movement dangerous even when it was not
+// selected as a combat goal. Keep evacuation's existing movement exception.
+static function bool RequiresCombatMovement(bool bCombatGoal,
+    bool bImmediateThreats, bool bEvacuating)
+{
+    return bCombatGoal || (bImmediateThreats && !bEvacuating);
+}
+
 static function bool ChooseMove(XComGameState_Unit UnitState,
     out array<TTile> Path, out float Score)
 {
@@ -1528,7 +1595,7 @@ static function bool ChooseMove(XComGameState_Unit UnitState,
     local array<float> ThreatWeights;
     local TTile GoalTile, Tile, ClosestTile;
     local MissionGoal Goal;
-    local bool bCombatGoal, bSafe, bRequireSupport;
+    local bool bCombatGoal, bSafe, bRequireSupport, bRoutineRoute;
     local int Index, PathIndex, SampleIndex, SampleCount;
     local float CurrentScore, CandidateScore, BestScore, CurrentRisk, CandidateRisk, PathCost, StartSupport, BestRisk;
     local float BestAttackNow, BestAttackAfterMove, HealthFraction;
@@ -1539,13 +1606,14 @@ static function bool ChooseMove(XComGameState_Unit UnitState,
         || !FindGoal(UnitState, Goal, VisibleEnemies))
         return false;
     GoalTile = Goal.Tile;
-    bCombatGoal = Goal.bCombat;
+    bCombatGoal = RequiresCombatMovement(Goal.bCombat, Goal.bImmediateThreats,
+        ShouldEvacuate(UnitState));
     bRequireSupport = !ShouldEvacuate(UnitState);
     StartSupport = NearestSupportDistance(UnitState, UnitState.TileLocation);
-    // Preserve the last action for overwatch while advancing into fog. Valid
-    // evacuation is allowed because it may be this soldier's final chance.
-    if (!bCombatGoal && VisibleEnemies.Length == 0 && UnitState.NumActionPoints() < 2
-        && !ShouldEvacuate(UnitState))
+    bRoutineRoute = CanUseRoutineRoute(Goal.bImmediateThreats,
+        ShouldEvacuate(UnitState), UnitState.NumActionPoints());
+    // A known but distant enemy does not remove the reserve-AP travel rule.
+    if (!Goal.bImmediateThreats && !bRoutineRoute)
         return false;
     UnitVisualizer = XGUnit(UnitState.GetVisualizer());
     if (UnitVisualizer == none || UnitVisualizer.m_kReachableTilesCache == none)
@@ -1555,11 +1623,8 @@ static function bool ChooseMove(XComGameState_Unit UnitState,
     // Prefer the same native route on successive objective moves. A fallback
     // only after greedy failure would oscillate back toward a wall on the next
     // action whenever the necessary detour initially increases direct distance.
-    if ((!bCombatGoal && VisibleEnemies.Length == 0
-            || (bCombatGoal && class'APX_FullIntel'.default.EnableFullIntel
-                && !class'X2TacticalVisibilityHelpers'.static.CanSquadSeeLocation(
-                    UnitState.ControllingPlayer.ObjectID, GoalTile)))
-        && ChooseRoutePrefix(UnitState, UnitVisualizer, GoalTile, Path))
+    if (bRoutineRoute && (!bCombatGoal || class'APX_FullIntel'.default.EnableFullIntel)
+        && ChooseRoutePrefix(UnitState, UnitVisualizer, GoalTile, Path, bCombatGoal))
     {
         Score = ScoreRouteAdvance(SquadPositionScore(UnitState, UnitState.TileLocation),
             SquadPositionScore(UnitState, Path[Path.Length - 1]));

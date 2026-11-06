@@ -92,7 +92,7 @@ function Start(int PlayerID)
     bStarted = true;
     Emit("start", "|player=" $ PlayerID $ "|mission=" $ Safe(Mission)
         $ "|difficulty=" $ `TacticalDifficultySetting $ "|history=" $ HistoryCursor
-        $ "|revision=mission-report-v20");
+        $ "|revision=mission-report-v20|full_intel_enabled=" $ class'APX_FullIntel'.default.EnableFullIntel);
     // F8 starts observation, not the mission. Even turn one may already have
     // processed damage, objectives or native starting allowances.
     Emit("scoring_coverage", "|complete=false|reason=recording_begins_at_f8"

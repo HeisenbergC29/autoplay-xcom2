@@ -7,6 +7,7 @@ import os
 from pathlib import Path
 import unittest
 from test_ui_gating import CHECKS, function_body
+from uc_math import load_uc_function
 
 ROOT=Path(__file__).resolve().parents[1]
 CLASSES=ROOT/'AutoplayXCom2/Src/AutoplayXCom2/Classes'
@@ -37,7 +38,7 @@ class FullIntelContracts(unittest.TestCase):
             'Enemy.bRemovedFromPlay', 'Enemy.IsCivilian()',
             'Enemy.GetMyTemplate().bIsCosmetic', 'SourceUnit.IsEnemyUnit(Enemy)',
             'IsTileOutOfRange(Enemy.TileLocation)',
-            'IsReclaimableControlledSquadmate(', 'Enemies.AddItem(Enemy.GetReference())',
+            'Enemies.AddItem(Enemy.GetReference())',
         ):
             with self.subTest(token=token):
                 self.assertIn(token, body)
@@ -59,7 +60,8 @@ class FullIntelContracts(unittest.TestCase):
 
     def test_controller_uses_full_contacts_and_no_fog_frontier(self):
         contacts=function_body(self.controller,'RefreshContacts')
-        self.assertIn('GetKnownEnemies(SourceUnit, VisibleEnemies)',contacts)
+        self.assertIn('GetImmediateThreats(SourceUnit, VisibleEnemies)',contacts)
+        self.assertNotIn('GetKnownEnemies(',contacts)
         decision=function_body(self.controller,'MakeDecision')
         self.assertIn("!class'APX_FullIntel'.default.EnableFullIntel",decision)
         self.assertIn('EndTurnTicketIsCurrent()',decision)
@@ -72,8 +74,8 @@ class FullIntelContracts(unittest.TestCase):
         self.assertIn("class'APX_FullIntel'.default.EnableFullIntel",known)
         self.assertIn('GetTileFOWValue(',known)
         chooser=function_body(self.mission,'ChooseMove')
-        for token in ('ChooseRoutePrefix(UnitState, UnitVisualizer, GoalTile, Path)',
-                      'CanSquadSeeLocation(', 'BuildPathToTile(Tile, CandidatePath)',
+        for token in ('ChooseRoutePrefix(UnitState, UnitVisualizer, GoalTile, Path, bCombatGoal)',
+                      'CanUseRoutineRoute(Goal.bImmediateThreats,', 'BuildPathToTile(Tile, CandidatePath)',
                       'HasBlockingHazard(', 'IsSupportedAdvanceStep(', 'CanPlanAtTile('):
             with self.subTest(token=token):
                 self.assertIn(token,chooser)
@@ -94,6 +96,85 @@ class FullIntelContracts(unittest.TestCase):
         dlc=(CLASSES/'X2DownloadableContentInfo_AutoplayXCom2.uc').read_text()
         for source in (recorder,dlc,self.hud):
             self.assertIn('mission-report-v20',source)
+
+
+class FullIntelPolicyScenarios(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.mission = CLASSES / 'APX_MissionPlanner.uc'
+        cls.pursue = staticmethod(load_uc_function(cls.mission, 'ShouldPursueKnownEnemies'))
+        cls.routine = staticmethod(load_uc_function(cls.mission, 'CanUseRoutineRoute'))
+        cls.combat_movement = staticmethod(load_uc_function(cls.mission, 'RequiresCombatMovement'))
+        cls.mission_goal = staticmethod(load_uc_function(cls.mission, 'IsMissionTravelGoal'))
+        cls.loot = staticmethod(load_uc_function(cls.mission, 'IsLootRouteAllowed'))
+        cls.loot_progress = staticmethod(load_uc_function(cls.mission, 'LootRouteMakesProgress'))
+        cls.source = cls.mission.read_text(encoding='utf-8-sig')
+
+    def test_remote_enemy_does_not_replace_an_urgent_mission_goal(self):
+        self.assertFalse(self.pursue(True, True, 1))
+        self.assertTrue(self.pursue(True, False, 1))
+        self.assertFalse(self.pursue(True, False, 0))
+        self.assertFalse(self.pursue(False, False, 1))
+        goal = function_body(self.source, 'FindGoal')
+        self.assertLess(goal.index('foreach ImmediateEnemies('),
+                        goal.index("IterateByClassType(class'XComGameState_InteractiveObject'"))
+        self.assertLess(goal.index('BattleData.MapData.ObjectiveLocation'),
+                        goal.index('ShouldPursueKnownEnemies('))
+
+    def test_remote_only_enemy_does_not_veto_safe_nearby_loot(self):
+        # No immediate contact, bleeding, evacuation, ready objective or timer.
+        self.assertTrue(self.loot(False, False, False, False, False, 2))
+        # A distant combat-pursuit goal cannot forbid a short loot detour.
+        self.assertFalse(self.mission_goal(True, True))
+        self.assertTrue(self.loot_progress(self.mission_goal(True, True), 5, 7))
+        self.assertFalse(self.loot(True, False, False, False, False, 2))
+        self.assertFalse(self.loot(False, True, False, False, False, 2))
+        loot = function_body(self.source, 'ChooseLootMove')
+        self.assertIn('GetImmediateThreats(UnitState, VisibleEnemies)', loot)
+        self.assertIn('bHasMissionGoal = IsMissionTravelGoal(Goal.bFound, Goal.bCombat)', loot)
+
+    def test_hidden_nearer_enemy_cannot_bypass_visible_fight_scoring(self):
+        # The immediate shooter still sets this flag even if a hidden enemy
+        # would be closer. Known-enemy distance is not an input to this gate.
+        self.assertFalse(self.routine(True, False, 2))
+        self.assertFalse(self.routine(True, False, 1))
+        immediate = function_body(self.source, 'GetImmediateThreats')
+        self.assertIn('GetAllVisibleEnemiesForPlayer(', immediate)
+        self.assertNotIn('GetKnownEnemies(', immediate)
+        move = function_body(self.source, 'ChooseMove')
+        self.assertIn('if (bRoutineRoute &&', move)
+        for guard in ('IsUsefulReposition(', 'ScoreCombatReposition(',
+                      'MoveOpportunityPenalty(', 'IsSupportedCombatDestination('):
+            self.assertIn(guard, move)
+
+    def test_last_ap_is_reserved_on_a_distant_pursuit(self):
+        self.assertTrue(self.routine(False, False, 2))
+        self.assertFalse(self.routine(False, False, 1))
+        self.assertFalse(self.routine(False, False, 0))
+        self.assertTrue(self.routine(False, True, 1))
+        move = function_body(self.source, 'ChooseMove')
+        self.assertIn('if (!Goal.bImmediateThreats && !bRoutineRoute)', move)
+        prefix = function_body(self.source, 'ChooseRoutePrefix')
+        self.assertIn('bCombatRoute && !IsSupportedCombatDestination(', prefix)
+        self.assertIn('HasBlockingHazard(', prefix)
+        self.assertIn('IsSupportedAdvanceStep(', prefix)
+
+    def test_controlled_squadmate_is_known_danger_but_not_a_pursuit_target(self):
+        intel = function_body((CLASSES / 'APX_FullIntel.uc').read_text(), 'GetKnownEnemies')
+        self.assertNotIn('IsReclaimableControlledSquadmate(', intel)
+        goal = function_body(self.source, 'FindGoal')
+        self.assertEqual(goal.count('IsReclaimableControlledSquadmate(UnitState, OtherUnit)'), 2)
+        native = function_body(self.source, 'GetImmediateThreats')
+        self.assertIn('GetAllVisibleEnemiesForPlayer(', native)
+        # The existing attack/grenade protection is verified in its dedicated tests.
+
+    def test_protected_visible_hostile_still_requires_combat_movement(self):
+        self.assertTrue(self.combat_movement(False, True, False))
+        self.assertTrue(self.combat_movement(True, True, False))
+        self.assertFalse(self.combat_movement(False, False, False))
+        self.assertFalse(self.combat_movement(False, True, True))
+        move = function_body(self.source, 'ChooseMove')
+        self.assertIn('bCombatGoal = RequiresCombatMovement(Goal.bCombat, Goal.bImmediateThreats,', move)
 
 
 @unittest.skipUnless(os.environ.get('APX_SDK_SOURCE_ROOT'),

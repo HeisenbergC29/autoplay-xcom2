@@ -195,7 +195,8 @@ function bool RefreshContacts(int PlayerID, int CurrentTurn)
     }
     if (!bFoundSource)
         return false;
-    class'APX_FullIntel'.static.GetKnownEnemies(SourceUnit, VisibleEnemies);
+    // Distant known units are navigation knowledge, not active contact search.
+    class'APX_MissionPlanner'.static.GetImmediateThreats(SourceUnit, VisibleEnemies);
     foreach VisibleEnemies(EnemyRef)
     {
         Enemy = XComGameState_Unit(`XCOMHISTORY.GetGameStateForObjectID(EnemyRef.ObjectID));
