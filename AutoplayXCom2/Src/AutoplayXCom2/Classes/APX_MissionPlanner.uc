@@ -517,8 +517,8 @@ static function bool FindGoal(XComGameState_Unit UnitState, out MissionGoal Goal
     return Goal.bFound;
 }
 
-// Only the player's known contacts participate, never hidden unit positions.
-// The same contact list is shared by movement, attacks and exploration guards.
+// Full-intel mode deliberately provides all active hostile positions.
+// Native ability target lists retain LOS/range legality and cannot be bypassed.
 static function GetVisibleThreats(XComGameState_Unit UnitState,
     out array<StateObjectReference> VisibleEnemies)
 {
@@ -526,8 +526,7 @@ static function GetVisibleThreats(XComGameState_Unit UnitState,
     local XComGameState_Unit Enemy;
 
     VisibleEnemies.Length = 0;
-    class'X2TacticalVisibilityHelpers'.static.GetAllVisibleEnemiesForPlayer(
-        UnitState.ControllingPlayer.ObjectID, VisibleEnemies);
+    class'APX_FullIntel'.static.GetKnownEnemies(UnitState, VisibleEnemies);
     for (Index = VisibleEnemies.Length - 1; Index >= 0; --Index)
     {
         Enemy = XComGameState_Unit(`XCOMHISTORY.GetGameStateForObjectID(VisibleEnemies[Index].ObjectID));
@@ -940,6 +939,8 @@ static function bool IsKnownCombatTile(TTile Tile)
 
     if (`XWORLD.IsTileOutOfRange(Tile))
         return false;
+    if (class'APX_FullIntel'.default.EnableFullIntel)
+        return true;
     CoverData = `XWORLD.GetCachedCoverAndPeekData(Tile);
     VisibilityTile = Tile;
     if (CoverData.bDefaultTileValid != 0)
@@ -963,8 +964,7 @@ static function bool IsSupportedCombatDestination(XComGameState_Unit UnitState, 
     local XComGameState_Unit Friendly;
     local bool bVisible, bElevatedSupport;
 
-    bVisible = class'X2TacticalVisibilityHelpers'.static.CanSquadSeeLocation(
-        UnitState.ControllingPlayer.ObjectID, Tile);
+    bVisible = class'APX_FullIntel'.static.CanPlanAtTile(UnitState, Tile);
     if (Tile.Z > UnitState.TileLocation.Z + 1)
     {
         foreach `XCOMHISTORY.IterateByClassType(class'XComGameState_Unit', Friendly)
@@ -1555,7 +1555,10 @@ static function bool ChooseMove(XComGameState_Unit UnitState,
     // Prefer the same native route on successive objective moves. A fallback
     // only after greedy failure would oscillate back toward a wall on the next
     // action whenever the necessary detour initially increases direct distance.
-    if (!bCombatGoal && VisibleEnemies.Length == 0
+    if ((!bCombatGoal && VisibleEnemies.Length == 0
+            || (bCombatGoal && class'APX_FullIntel'.default.EnableFullIntel
+                && !class'X2TacticalVisibilityHelpers'.static.CanSquadSeeLocation(
+                    UnitState.ControllingPlayer.ObjectID, GoalTile)))
         && ChooseRoutePrefix(UnitState, UnitVisualizer, GoalTile, Path))
     {
         Score = ScoreRouteAdvance(SquadPositionScore(UnitState, UnitState.TileLocation),
@@ -1614,8 +1617,8 @@ static function bool ChooseMove(XComGameState_Unit UnitState,
         {
             if (class'APX_HazardKnowledge'.static.HasBlockingHazard(UnitState, CandidatePath[PathIndex])
                 || (bCombatGoal && !IsKnownCombatTile(CandidatePath[PathIndex]))
-                || (bCombatGoal && !class'X2TacticalVisibilityHelpers'.static.CanSquadSeeLocation(
-                    UnitState.ControllingPlayer.ObjectID, CandidatePath[PathIndex]))
+                || (bCombatGoal && !class'APX_FullIntel'.static.CanPlanAtTile(
+                    UnitState, CandidatePath[PathIndex]))
                 || (bRequireSupport && !IsSupportedAdvanceStep(StartSupport,
                     NearestSupportDistance(UnitState, CandidatePath[PathIndex]))))
             {
