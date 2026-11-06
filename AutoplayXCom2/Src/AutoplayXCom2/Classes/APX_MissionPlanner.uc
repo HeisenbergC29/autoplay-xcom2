@@ -525,6 +525,16 @@ static function bool FindBerserkerSabotageGoal(XComGameState_Unit UnitState,
     return bObjectFound;
 }
 
+// Shared by the objective prefix and every local fallback candidate.
+static function bool IsBerserkerObjectiveRiskAllowed(float HealthFraction,
+    float CurrentRisk, float DestinationRisk)
+{
+    local float ExtraRisk;
+
+    ExtraRisk = FMax(0.0, DestinationRisk - CurrentRisk);
+    return ExtraRisk <= 75.0 && (HealthFraction >= 0.35 || ExtraRisk <= 12.0);
+}
+
 // Larger mission progress utility lets a healthy melee squad stop retreating
 // in circles; the native path, hazards and unit cohesion remain authoritative.
 static function float ScoreBerserkerObjectiveRoute(int PathTiles,
@@ -534,12 +544,9 @@ static function float ScoreBerserkerObjectiveRoute(int PathTiles,
 
     if (PathTiles < 2)
         return -10000.0;
+    if (!IsBerserkerObjectiveRiskAllowed(HealthFraction, CurrentRisk, DestinationRisk))
+        return -10000.0;
     ExtraRisk = FMax(0.0, DestinationRisk - CurrentRisk);
-    // Never force a severely wounded Berserker into a catastrophic new risk.
-    if (HealthFraction < 0.35 && ExtraRisk > 12.0)
-        return -10000.0;
-    if (ExtraRisk > 75.0)
-        return -10000.0;
     return 43.0 + FMin(14.0, float(PathTiles - 1) * 2.0)
         - ExtraRisk * 0.25;
 }
@@ -1771,17 +1778,19 @@ static function bool ChooseMove(XComGameState_Unit UnitState,
         || !FindGoal(UnitState, Goal, VisibleEnemies))
         return false;
     GoalTile = Goal.Tile;
+    bSabotageRush = Goal.bBerserkerSabotageGoal
+        && UnitState.NumActionPoints() >= 2;
     // For this one sabotage challenge, even a nearby enemy does not turn
     // the bomb emplacement into a combat-position destination. Threat risk
     // is still scored; emergency/attack actions still compete independently.
     bCombatGoal = RequiresCombatMovement(Goal.bCombat, Goal.bImmediateThreats,
         ShouldEvacuate(UnitState));
-    if (Goal.bBerserkerSabotageGoal)
+    // The last AP retains combat reposition/attack-opportunity checks. A
+    // mission approach needs another AP left for the native bomb interaction.
+    if (bSabotageRush)
         bCombatGoal = false; // Do not score a bomb approach as a firing flank.
     bRequireSupport = !ShouldEvacuate(UnitState);
     StartSupport = NearestSupportDistance(UnitState, UnitState.TileLocation);
-    bSabotageRush = Goal.bBerserkerSabotageGoal
-        && UnitState.NumActionPoints() >= 2;
     bRoutineRoute = bSabotageRush
         || CanUseRoutineRoute(Goal.bImmediateThreats,
             ShouldEvacuate(UnitState), UnitState.NumActionPoints());
@@ -1825,6 +1834,7 @@ static function bool ChooseMove(XComGameState_Unit UnitState,
         bCombatGoal, VisibleEnemies, MeleeThreatReaches, ThreatWeights);
     BestScore = CurrentScore + FMax(1.0, default.MinimumPositionGain);
     CurrentRisk = ExposureRisk(UnitState, UnitState.TileLocation, VisibleEnemies, MeleeThreatReaches, ThreatWeights);
+    HealthFraction = UnitState.GetCurrentStat(eStat_HP) / FMax(1.0, UnitState.GetMaxStat(eStat_HP));
     BestRisk = CurrentRisk;
 
     // Include the closest goal tile and distribute the remaining samples over
@@ -1845,6 +1855,11 @@ static function bool ChooseMove(XComGameState_Unit UnitState,
                 NearestSupportDistance(UnitState, Tile))))
             continue;
         CandidateRisk = ExposureRisk(UnitState, Tile, VisibleEnemies, MeleeThreatReaches, ThreatWeights);
+        // A rejected objective prefix must not reappear through the local
+        // fallback without the same health/risk veto.
+        if (bSabotageRush && !IsBerserkerObjectiveRiskAllowed(
+            HealthFraction, CurrentRisk, CandidateRisk))
+            continue;
         CandidateScore = PositionScore(UnitState, Tile, GoalTile, bCombatGoal,
             VisibleEnemies, MeleeThreatReaches, ThreatWeights);
         // Small travel cost breaks equivalent-position ties and reduces churn.
@@ -1885,7 +1900,6 @@ static function bool ChooseMove(XComGameState_Unit UnitState,
         return false;
     if (bCombatGoal)
     {
-        HealthFraction = UnitState.GetCurrentStat(eStat_HP) / FMax(1.0, UnitState.GetMaxStat(eStat_HP));
         Score = ScoreCombatReposition(BestScore - CurrentScore, CurrentRisk, BestRisk,
             HealthFraction, UnitState.NumActionPoints());
         GetMoveAttackOptions(UnitState, VisibleEnemies, BestAttackNow, BestAttackAfterMove);

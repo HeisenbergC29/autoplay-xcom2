@@ -22,6 +22,8 @@ class BerserkerSabotageContracts(unittest.TestCase):
             MISSION, 'ShouldPrioritizeBerserkerSabotage'))
         cls.route = staticmethod(load_uc_function(
             MISSION, 'ScoreBerserkerObjectiveRoute'))
+        cls.risk_allowed = staticmethod(load_uc_function(
+            MISSION, 'IsBerserkerObjectiveRiskAllowed'))
 
     def test_only_enabled_berserker_mp_with_unfinished_sabotage_objective(self):
         self.assertTrue(self.policy(True, True, True, False))
@@ -43,6 +45,33 @@ class BerserkerSabotageContracts(unittest.TestCase):
         self.assertEqual(self.route(1, 1.0, 20.0, 20.0), -10000.0)
         self.assertEqual(self.route(5, 0.2, 20.0, 40.0), -10000.0)
         self.assertEqual(self.route(5, 1.0, 20.0, 96.0), -10000.0)
+
+    def test_wounded_route_veto_cannot_be_evaded_by_local_fallback(self):
+        # This previously rejected prefix could still win the fallback's
+        # ordinary distance utility (7 tiles closer, exposure 20 -> 33).
+        self.assertFalse(self.risk_allowed(0.2, 20.0, 33.0))
+        self.assertEqual(self.route(8, 0.2, 20.0, 33.0), -10000.0)
+        self.assertTrue(self.risk_allowed(0.2, 20.0, 32.0))
+        self.assertTrue(self.risk_allowed(0.35, 20.0, 33.0))
+        self.assertFalse(self.risk_allowed(1.0, 20.0, 96.0))
+        self.assertTrue(self.risk_allowed(0.2, 40.0, 20.0))
+        choose = function_body(self.source, 'ChooseMove')
+        risk_guard = 'if (bSabotageRush && !IsBerserkerObjectiveRiskAllowed('
+        self.assertIn(risk_guard, choose)
+        self.assertLess(choose.index(risk_guard),
+                        choose.index('CandidateScore = PositionScore('))
+
+    def test_last_ap_keeps_normal_combat_movement_and_attack_checks(self):
+        choose = function_body(self.source, 'ChooseMove')
+        rush = 'bSabotageRush = Goal.bBerserkerSabotageGoal'
+        override = 'if (bSabotageRush)'
+        self.assertLess(choose.index(rush), choose.index(override))
+        self.assertIn('UnitState.NumActionPoints() >= 2;', choose)
+        self.assertNotIn('if (Goal.bBerserkerSabotageGoal)', choose)
+        self.assertIn('RequiresCombatMovement(Goal.bCombat, Goal.bImmediateThreats,', choose)
+        self.assertIn('bCombatGoal && !IsUsefulReposition(', choose)
+        self.assertIn('MoveOpportunityPenalty(BestAttackNow, BestAttackAfterMove,', choose)
+        self.assertIn('if (!Goal.bImmediateThreats && !bRoutineRoute)', choose)
 
     def test_only_valid_native_goal_objects_or_objective_marker(self):
         find = function_body(self.source, 'FindBerserkerSabotageGoal')
@@ -100,7 +129,7 @@ class BerserkerSabotageContracts(unittest.TestCase):
         self.assertIn('"|source=" $ GoalSource', scored)
         self.assertIn('distance_before=', scored)
         self.assertIn('distance_after=', scored)
-        self.assertIn('if (Goal.bBerserkerSabotageGoal)', choose)
+        self.assertIn('if (bSabotageRush)', choose)
         self.assertIn('bCombatGoal = false;', choose)
         self.assertIn('ScoreBerserkerObjectivePath(UnitState, Path, VisibleEnemies,', choose)
         prefix = function_body(self.source, 'ChooseRoutePrefix')

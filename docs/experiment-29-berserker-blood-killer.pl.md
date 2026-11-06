@@ -1,6 +1,6 @@
 # Blood Killer (SabotageTransmitter): pierwsza polityka BerserkerMP — v21
 
-**Status:** wariant testowy HELPER do przeglądu LEAD, nie potwierdzone
+**Status:** wariant testowy HELPER z poprawkami integracyjnymi LEAD, nie potwierdzone
 ukończenie misji ani usunięcie crasha.
 
 Baza: `dc0ea3a3eecff3b85169128786bb5a51983ce76e` (v20).
@@ -19,11 +19,12 @@ Powiązanie: issue #29. Nowy rejestrator: `mission-report-v21`.
 - `Kismet: X : Used object was not the bomb emplacement` przy
   czasie gry 557.90. Komunikat nie ustala, kto użył obiektu
   ani czy obiekt wskazywany przez UI jest poprawny.
-- `[0862.18] Crash Detected` podczas fazy obcych. Dump w
-  lokalnym katalogu crasha nie był częścią archiwum, więc
+- `[0862.18] Crash Detected` podczas fazy obcych. Użytkownik
+  potwierdził brak nowego folderu crasha i dumpa. Sam log nie dowodzi,
+  że zapowiadany przez silnik zapis dumpa rzeczywiście powstał, więc
   nie ma podstaw przypisywać awarii tej poprawce, HUD, FOW
   ani konkretnemu atakowi.
-- `Launch(3).log` z 30 października 2026 **nie jest**
+- Osobny log z 30 października 2026 **nie jest**
   tożsamy z najnowszym `Logs\\Launch.log` z raportu i
   nie dokumentuje tej awarii.
 
@@ -47,6 +48,11 @@ odcinek. Nowa ocena nie pozwala, by zwykły ruch w celu
 osłony do tyłu o wartości około 20–30 punktów zawsze
 wygrywał z postępem zadania. Przy dużym nowym ryzyku
 lub krytycznie niskim HP wraca do dawnej logiki.
+Oba warianty poszukiwania trasy stosują ten sam limit wzrostu ryzyka;
+lokalny fallback nie omija odrzucenia niebezpiecznego podejścia.
+Przy ostatnim AP i lokalnych zagrożeniach nadal działają zwykłe kontrole
+poprawy pozycji bojowej oraz kosztu utraconego ataku. Bez lokalnej walki
+podejście wymaga co najmniej 2 AP, aby pozostał AP na podłożenie bomby.
 Brak dodatkowych AP, przestawiania jednostek w historii,
 wymuszonych interakcji ani podglądu przyszłego RNG.
 
@@ -57,6 +63,14 @@ niewłaściwy obiekt lub brak natywnego interaktywnego targetu.
 Nadawanie większego priorytetu nie naprawia błędnych
 definicji obiektu lub mechaniki wyzwania — wymaga to
 osobnego badania SDK i próby.
+
+Definicja gry `DefaultMissionDefs.ini`, sekcja SabotageTransmitter,
+potwierdza strategiczny cel `PlantBomb` i osobny cel taktyczny `Sweep`.
+SDK `AddPlantBombAbility` / `AddInteractAbility` wymaga co najmniej 1 AP,
+choć interakcja go nie zużywa. `X2Condition_Interactive` sprawdza faktyczne
+punkty interakcji oraz `InteractionAbilityTemplateName`; glint ani dystans
+1,5 pola nie gwarantują spełnienia tych warunków. Obecny wybór obiektu jest
+heurystyką podejścia, co należy sprawdzić w grze.
 
 ## Kontrole i odbiór
 
@@ -79,8 +93,9 @@ Po przeglądzie LEAD i kompilacji użytkownika:
 4. Sprawdzić również brak zacięcia na urządzeniu,
    bezpieczne ścieżki, legalne ataki, końce tur, moment
    wykonania sabotażu i rzeczywisty wynik > 0 wraz z victory.
-5. Po powtórzeniu crasha zachować folder `...-Crash`
-   z nowym `Minidump.dmp` (nie publikować w GitHub).
+5. Awarię oceniać osobno. Dla tej próby nie ma nowego folderu/dumpa;
+   nie ponawiać prośby o nieistniejący plik. Jeżeli kolejna awaria pozostawi
+   raport Windows lub dump, zachować go prywatnie do niezależnej diagnozy.
 
 ## Wycofanie
 
