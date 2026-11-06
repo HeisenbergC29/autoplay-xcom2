@@ -22,6 +22,7 @@ struct MissionGoal
     var bool bFound;
     var bool bImmediateThreats;
     var bool bBerserkerSabotageGoal;
+    var string BerserkerSabotageGoalSource;
 };
 
 // A component marks an actual mission unit (VIP/captive), rather than every civilian.
@@ -548,7 +549,8 @@ static function float ScoreBerserkerObjectiveRoute(int PathTiles,
 // weapon and melee-range collection, avoiding a performance regression.
 static function float ScoreBerserkerObjectivePath(
     XComGameState_Unit UnitState, const out array<TTile> Path,
-    const out array<StateObjectReference> VisibleEnemies, TTile GoalTile)
+    const out array<StateObjectReference> VisibleEnemies, TTile GoalTile,
+    string GoalSource)
 {
     local array<float> Reaches, Weights;
     local float CurrentRisk, CandidateRisk, HealthFraction, Score;
@@ -566,8 +568,12 @@ static function float ScoreBerserkerObjectivePath(
     Score = ScoreBerserkerObjectiveRoute(Path.Length, HealthFraction,
         CurrentRisk, CandidateRisk);
     `log("Berserker sabotage route|unit=" $ UnitState.ObjectID
+        $ "|source=" $ GoalSource
         $ "|goal_x=" $ GoalTile.X $ "|goal_y=" $ GoalTile.Y
-        $ "|goal_z=" $ GoalTile.Z $ "|end_x="
+        $ "|goal_z=" $ GoalTile.Z
+        $ "|distance_before=" $ TileDistance(UnitState.TileLocation, GoalTile)
+        $ "|distance_after=" $ TileDistance(Path[Path.Length - 1], GoalTile)
+        $ "|end_x="
         $ Path[Path.Length - 1].X $ "|end_y=" $ Path[Path.Length - 1].Y
         $ "|score=" $ Score $ "|current_risk=" $ CurrentRisk
         $ "|candidate_risk=" $ CandidateRisk, true, 'AutoplayXCom2');
@@ -635,6 +641,7 @@ static function bool FindGoal(XComGameState_Unit UnitState, out MissionGoal Goal
             Goal.bFound = true;
             Goal.bCombat = false;
             Goal.bBerserkerSabotageGoal = true;
+            Goal.BerserkerSabotageGoalSource = SabotageGoalSource;
             return true;
         }
     }
@@ -1796,7 +1803,7 @@ static function bool ChooseMove(XComGameState_Unit UnitState,
         if (bSabotageRush)
         {
             Score = ScoreBerserkerObjectivePath(UnitState, Path, VisibleEnemies,
-                GoalTile);
+                GoalTile, Goal.BerserkerSabotageGoalSource);
             if (Score <= -9999.0)
                 Path.Length = 0; // Try the existing tactical route fallback.
             else
