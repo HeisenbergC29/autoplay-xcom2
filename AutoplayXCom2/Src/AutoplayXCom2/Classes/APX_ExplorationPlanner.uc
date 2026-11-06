@@ -160,7 +160,9 @@ function bool IsUnexploredFloor(TTile Tile)
     local CachedCoverAndPeekData CoverData;
     local TTile VisibilityTile;
 
-    if (`XWORLD.IsTileOutOfRange(Tile)
+    // A revealed map has no fog frontier to search.
+    if (class'APX_FullIntel'.default.EnableFullIntel
+        || `XWORLD.IsTileOutOfRange(Tile)
         || !`XWORLD.IsFloorTileAndValidDestination(Tile))
         return false;
     // Match the stock pawn's visibility check height instead of assuming that
