@@ -9,6 +9,9 @@ var config float PreferredCombatRangeTiles;
 var config float MinimumPositionGain;
 var config float SquadSupportDistance;
 var config float SquadSeparationTiles;
+// Sampled formation risk, not the exact radius/legality of an enemy ability.
+var config float SquadAreaRiskRadiusTiles;
+var config float SquadAreaRiskWeight;
 // Only the BerserkerMP SabotageTransmitter challenge uses this policy.
 var config bool PrioritizeBerserkerSabotage;
 
@@ -1041,11 +1044,106 @@ static function float ExposureRisk(XComGameState_Unit UnitState, TTile Tile,
         / FMax(1.0, UnitState.GetMaxStat(eStat_HP)));
 }
 
-// Smooth support and blast-spacing preferences, not tile reservations. The
+static function bool AreaRiskPointInside(float DX, float DY, float DZ,
+    float RadiusTiles)
+{
+    return RadiusTiles > 0.0
+        && DX * DX + DY * DY + DZ * DZ <= RadiusTiles * RadiusTiles;
+}
+
+static function float ScoreSharedAreaTargets(int TargetCount, float Weight)
+{
+    local int ExtraTargets;
+
+    if (TargetCount < 2 || Weight <= 0.0)
+        return 0.0;
+    ExtraTargets = Min(4, TargetCount - 1);
+    return FMin(48.0, Weight * float(ExtraTargets * (ExtraTargets + 1)) * 0.5);
+}
+
+static function vector AreaRiskLocation(TTile Tile)
+{
+    local vector Position;
+
+    Position.X = Tile.X;
+    Position.Y = Tile.Y;
+    Position.Z = Tile.Z * 0.5; // Same vertical estimate as TileDistance.
+    return Position;
+}
+
+// Only shared areas containing the moving unit contribute to its position.
+// A distant stationary cluster must not penalize every unrelated move.
+static function int CountSharedAreaTargets(vector Candidate, vector Center,
+    const out array<vector> Positions, float RadiusTiles)
+{
+    local vector Delta, Position;
+    local int Count;
+
+    Delta = Candidate - Center;
+    if (!AreaRiskPointInside(Delta.X, Delta.Y, Delta.Z, RadiusTiles))
+        return 0;
+    foreach Positions(Position)
+    {
+        Delta = Position - Center;
+        if (AreaRiskPointInside(Delta.X, Delta.Y, Delta.Z, RadiusTiles))
+            ++Count;
+    }
+    return Count;
+}
+
+// Bounded geometry only: no ability activation, hidden enemy intent or native
+// previews. Midpoints catch blasts aimed between units; centroids catch compact
+// triangles. This samples possible areas rather than proving native hit lists.
+static function int WorstSharedAreaTargets(TTile Tile,
+    const out array<TTile> FriendlyTiles, float RadiusTiles)
+{
+    local array<vector> Positions;
+    local vector Candidate, Position, Delta, Center;
+    local TTile FriendlyTile;
+    local int Index, OtherIndex, Worst;
+
+    if (RadiusTiles <= 0.0 || FriendlyTiles.Length == 0)
+        return 1;
+    Candidate = AreaRiskLocation(Tile);
+    Positions.AddItem(Candidate);
+    foreach FriendlyTiles(FriendlyTile)
+    {
+        Position = AreaRiskLocation(FriendlyTile);
+        Delta = Position - Candidate;
+        // Beyond the diameter a friend cannot share this estimated area.
+        if (!AreaRiskPointInside(Delta.X, Delta.Y, Delta.Z, RadiusTiles * 2.0))
+            continue;
+        Positions.AddItem(Position);
+        if (Positions.Length >= 13) // Candidate plus at most 12 nearby friends.
+            break;
+    }
+    Worst = CountSharedAreaTargets(Candidate, Candidate, Positions, RadiusTiles);
+    for (Index = 1; Index < Positions.Length; ++Index)
+    {
+        Worst = Max(Worst, CountSharedAreaTargets(Candidate, Positions[Index],
+            Positions, RadiusTiles));
+        Center = (Candidate + Positions[Index]) * 0.5;
+        Worst = Max(Worst, CountSharedAreaTargets(Candidate, Center,
+            Positions, RadiusTiles));
+        for (OtherIndex = Index + 1; OtherIndex < Positions.Length; ++OtherIndex)
+        {
+            Center = (Positions[Index] + Positions[OtherIndex]) * 0.5;
+            Worst = Max(Worst, CountSharedAreaTargets(Candidate, Center,
+                Positions, RadiusTiles));
+            Center = (Candidate + Positions[Index] + Positions[OtherIndex]) / 3.0;
+            Worst = Max(Worst, CountSharedAreaTargets(Candidate, Center,
+                Positions, RadiusTiles));
+        }
+    }
+    return Worst;
+}
+
+// Soft support and blast-spacing preferences, not tile reservations. The
 // controller submits one action and recomputes from the resulting live state.
 static function float SquadPositionScore(XComGameState_Unit UnitState, TTile Tile)
 {
     local XComGameState_Unit Friend;
+    local array<TTile> AreaFriends;
     local float Distance, NearestDistance, Result;
     local bool bHasSupport;
 
@@ -1053,18 +1151,29 @@ static function float SquadPositionScore(XComGameState_Unit UnitState, TTile Til
     foreach `XCOMHISTORY.IterateByClassType(class'XComGameState_Unit', Friend)
     {
         if (Friend.ObjectID == UnitState.ObjectID || !Friend.IsAlive()
-            || Friend.IsIncapacitated() || Friend.bRemovedFromPlay || Friend.IsCivilian()
+            || Friend.bRemovedFromPlay || Friend.IsCivilian()
             || Friend.GetMyTemplate().bIsCosmetic
             || Friend.GetAssociatedPlayerID() != UnitState.GetAssociatedPlayerID()
             || !UnitState.IsFriendlyUnit(Friend))
             continue;
         Distance = TileDistance(Tile, Friend.TileLocation);
+        // Living downed soldiers remain potential blast victims, but cannot
+        // anchor the support envelope or provide combat cohesion.
+        if (default.SquadAreaRiskWeight > 0.0 && default.SquadAreaRiskRadiusTiles > 0.0
+            && Distance <= default.SquadAreaRiskRadiusTiles * 2.0
+            && AreaFriends.Length < 12)
+            AreaFriends.AddItem(Friend.TileLocation);
+        if (Friend.IsIncapacitated())
+            continue;
         NearestDistance = FMin(NearestDistance, Distance);
         Result -= FMax(0.0, default.SquadSeparationTiles - Distance) * 5.0;
         bHasSupport = true;
     }
     if (bHasSupport)
         Result -= FMin(30.0, FMax(0.0, NearestDistance - default.SquadSupportDistance) * 4.0);
+    if (default.SquadAreaRiskWeight > 0.0)
+        Result -= ScoreSharedAreaTargets(WorstSharedAreaTargets(Tile, AreaFriends,
+            default.SquadAreaRiskRadiusTiles), default.SquadAreaRiskWeight);
     return Result;
 }
 
