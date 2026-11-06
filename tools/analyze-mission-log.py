@@ -120,6 +120,83 @@ def action_family(ability: str) -> str:
     return 'other'
 
 
+def marker_details(record: dict) -> dict[str, str]:
+    """Read a marker's inline key/value diagnostics; never treat as a dispatch."""
+    return dict(re.findall(r'\b([a-z_]+)=([^\s]+)', str(record.get('details', ''))))
+
+
+def summarize_grenade_preparation(records: list[dict]) -> dict:
+    """A rejected *preview* is not a chosen/engine-rejected grenade."""
+    rejected = [r for r in records
+                if (r['event'] == 'marker'
+                    and r.get('kind') == 'area_revalidation_rejected')]
+    reasons = Counter()
+    for record in rejected:
+        details = marker_details(record)
+        reasons[details.get('reason') or details.get('evaluation_reason') or 'unspecified'] += 1
+    return {'preview_rejections': len(rejected),
+            'reasons': dict(sorted(reasons.items()))}
+
+
+def summarize_end_turn(records: list[dict]) -> dict:
+    """Match real turn tickets; a native false with later evidence is success.
+
+    An unconfirmed marker represents an expired wait, not proof of a native
+    rejection. The same ticket may be confirmed later, so do not count both
+    as separate failed end-turn submissions.
+    """
+    relevant = {'end_turn_requested', 'end_turn_confirmed', 'end_turn_unconfirmed'}
+    requests = {}
+    totals = Counter()
+    evidence = Counter()
+    for record in records:
+        if record['event'] != 'marker' or record.get('kind') not in relevant:
+            continue
+        kind = record['kind']
+        totals[kind] += 1
+        details = marker_details(record)
+        key = (details.get('player'), details.get('turn'))
+        if not all(k is not None and k.lstrip('-').isdigit() for k in key):
+            totals['missing_ticket_identity'] += 1
+            continue
+        if kind == 'end_turn_requested':
+            if key in requests and not requests[key]['confirmed']:
+                totals['repeat_requests'] += 1
+            requests[key] = {'confirmed': False, 'unconfirmed': False,
+                             'native_false': details.get('native_return', '').casefold() == 'false'}
+        elif key not in requests:
+            totals['orphan_' + kind.removeprefix('end_turn_')] += 1
+        elif kind == 'end_turn_unconfirmed':
+            requests[key]['unconfirmed'] = True
+        else:
+            if not requests[key]['confirmed']:
+                requests[key]['confirmed'] = True
+                if requests[key]['native_false']:
+                    totals['native_false_confirmed'] += 1
+                if requests[key]['unconfirmed']:
+                    totals['confirmed_after_timeout'] += 1
+                evidence[details.get('evidence') or 'unspecified'] += 1
+
+    totals['unresolved_after_timeout'] = sum(
+        ticket['unconfirmed'] and not ticket['confirmed'] for ticket in requests.values())
+    totals['pending_without_confirmation'] = sum(
+        not ticket['confirmed'] for ticket in requests.values())
+    return {
+        'requested': totals['end_turn_requested'],
+        'confirmed': totals['end_turn_confirmed'],
+        'unconfirmed_markers': totals['end_turn_unconfirmed'],
+        'native_false_confirmed': totals['native_false_confirmed'],
+        'confirmed_after_timeout': totals['confirmed_after_timeout'],
+        'unresolved_after_timeout': totals['unresolved_after_timeout'],
+        'pending_without_confirmation': totals['pending_without_confirmation'],
+        'repeat_requests': totals['repeat_requests'],
+        'orphan_confirmed': totals['orphan_confirmed'],
+        'orphan_unconfirmed': totals['orphan_unconfirmed'],
+        'missing_ticket_identity': totals['missing_ticket_identity'],
+        'evidence': dict(sorted(evidence.items())),
+    }
+
+
 def summarize_session(session: str, records: list[dict]) -> dict:
     records.sort(key=lambda item: item['seq'])
     events = Counter(record['event'] for record in records)
@@ -216,7 +293,15 @@ def summarize_session(session: str, records: list[dict]) -> dict:
             reason = fields.get(key)
             if reason and reason != 'none':
                 grenade_reasons[reason] += 1
+    grenade_preparation = summarize_grenade_preparation(records)
+    end_turn = summarize_end_turn(records)
     warnings = []
+    if end_turn['unresolved_after_timeout']:
+        warnings.append(
+            f"{end_turn['unresolved_after_timeout']} end-turn request(s) timed out without later confirmation; "
+            "this is not proof of a native rejection.")
+    if end_turn['orphan_confirmed'] or end_turn['orphan_unconfirmed']:
+        warnings.append('End-turn evidence without a matching recorded request; report may be incomplete.')
     if not start:
         warnings.append('Recording starts mid-session; the start record is missing.')
     if not ends:
@@ -257,6 +342,8 @@ def summarize_session(session: str, records: list[dict]) -> dict:
         'unsupported_abilities': dict(sorted(unsupported.items())),
         'grenade_diagnostics': {'scans': len(grenade_scans), 'totals': dict(sorted(grenade_totals.items())),
                                 'reason_observations': dict(sorted(grenade_reasons.items()))},
+        'grenade_preparation': grenade_preparation,
+        'end_turn_diagnostics': end_turn,
         'warnings': warnings,
         'records': records,
     }
@@ -302,6 +389,14 @@ def analyze_logs(logs: list[tuple[str, str]]) -> dict:
             records, SCORING.native_rules_for_session(records, native_profiles), comparison_profile)
         summary['attempt_verdict'] = SCORING.assess_attempt(
             records, summary['outcome'], summary['game_scoring'], name in conflicting_sessions)
+        # Point value is always present per mission, but the status says
+        # whether that value is a final score or only a provisional reading.
+        verdict = summary['attempt_verdict']
+        value = verdict['score'] if verdict['score'] is not None else verdict['observed_score']
+        summary['mission_points'] = {
+            'value': value, 'confirmed': verdict['score'] is not None,
+            'source': verdict['score_source'], 'status': verdict['score_status'],
+        }
         summaries.append(summary)
     return {
         'format_version': 1,
@@ -329,8 +424,16 @@ def analyze_logs(logs: list[tuple[str, str]]) -> dict:
 def human_summary(report: dict) -> str:
     lines = [f"APXREC records: {report['record_count']}; sessions: {len(report['sessions'])}"]
     for session in report['sessions']:
+        points = session['mission_points']
+        if points['value'] is None:
+            points_label = 'unknown (not recorded)'
+        elif points['confirmed']:
+            points_label = f"{points['value']:+d} (confirmed, {points['source']})"
+        else:
+            points_label = f"{points['value']:+d} (provisional, {points['status']}, {points['source']})"
         lines.append(f"Session {session['session']}: mission={session['mission']}, "
-                     f"difficulty={session['difficulty']}, outcome={session['outcome']}")
+                     f"difficulty={session['difficulty']}, outcome={session['outcome']}, "
+                     f"mission points={points_label}")
         lines.append(f"  Accepted actions={session['accepted_actions']}, moves={session['moves']}, "
                      f"recorded misses={session['recorded_misses']}")
         if session['recorded_misses_by_source']:
@@ -345,6 +448,17 @@ def human_summary(report: dict) -> str:
             totals = session['grenade_diagnostics']['totals']
             lines.append('  Grenade scan checks: ' + ', '.join(
                 f'{key}={totals.get(key, 0)}' for key in ('supported', 'evaluated', 'accepted', 'range', 'trajectory', 'blast')))
+        preparation = session['grenade_preparation']
+        if preparation['preview_rejections']:
+            lines.append(f"  Grenade preparation rejected before dispatch={preparation['preview_rejections']}; "
+                         "reasons=" + ', '.join(f"{reason}:{count}" for reason, count in preparation['reasons'].items()))
+        turns = session['end_turn_diagnostics']
+        if turns['requested'] or turns['confirmed'] or turns['unconfirmed_markers']:
+            lines.append(f"  End turns: requested={turns['requested']}, confirmed={turns['confirmed']}, "
+                         f"timeout markers={turns['unconfirmed_markers']}, "
+                         f"late confirmations={turns['confirmed_after_timeout']}, "
+                         f"unresolved={turns['unresolved_after_timeout']}, "
+                         f"native false but confirmed={turns['native_false_confirmed']}.")
         scoring = session['game_scoring']
         official = scoring['official']
         if official['status'] == 'observed_native':
