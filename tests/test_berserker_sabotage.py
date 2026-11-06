@@ -84,7 +84,7 @@ class BerserkerSabotageContracts(unittest.TestCase):
             'ChooseRoutePrefix(UnitState, UnitVisualizer, GoalTile, Path, bCombatGoal)',
             'HasBlockingHazard(UnitState, CandidatePath[PathIndex])',
             'IsSupportedAdvanceStep(StartSupport,',
-            'ScoreBerserkerObjectiveRoute(Path.Length, HealthFraction,',
+            'ScoreBerserkerObjectivePath(UnitState, Path, VisibleEnemies,',
             'if (Score <= -9999.0)',
             'Path.Length = 0;',
             'GetAllPathableTiles(Tiles, UnitVisualizer.GetMobility())',
@@ -92,6 +92,10 @@ class BerserkerSabotageContracts(unittest.TestCase):
             with self.subTest(required=required):
                 self.assertIn(required, choose)
         # Previously implemented controls are NOT traded away for a challenge.
+        scored = function_body(self.source, 'ScoreBerserkerObjectivePath')
+        self.assertIn('ScoreBerserkerObjectiveRoute(Path.Length, HealthFraction,', scored)
+        self.assertIn('GetMeleeThreatReaches(UnitState, VisibleEnemies, Reaches)', scored)
+        self.assertIn('GetThreatWeights(UnitState, VisibleEnemies, Weights)', scored)
         prefix = function_body(self.source, 'ChooseRoutePrefix')
         self.assertIn('m_kReachableTilesCache.IsTileReachable(', prefix)
         self.assertIn('HasBlockingHazard(', prefix)
