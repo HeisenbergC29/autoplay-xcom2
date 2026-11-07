@@ -1879,7 +1879,7 @@ static function bool ChooseMove(XComGameState_Unit UnitState,
     local bool bCombatGoal, bSafe, bRequireSupport, bRoutineRoute, bSabotageRush;
     local bool bConcealmentUrgent;
     local string ConcealmentRiskReason;
-    local int Index, PathIndex, SampleIndex, SampleCount;
+    local int Index, PathIndex, SampleIndex, SampleCount, ConcealmentChecks;
     local float CurrentScore, CandidateScore, BestScore, CurrentRisk, CandidateRisk, PathCost, StartSupport, BestRisk;
     local float BestAttackNow, BestAttackAfterMove, HealthFraction;
 
@@ -2017,11 +2017,17 @@ static function bool ChooseMove(XComGameState_Unit UnitState,
         {
             if (!bConcealmentUrgent)
             {
-                CandidateScore -= class'APX_ConcealmentPlanner'.static.RouteConcealmentPenalty(
-                    UnitState.IsConcealed(),
-                    class'APX_ConcealmentPlanner'.static.PathRisksRevealing(
-                        UnitState, CandidatePath, ConcealmentRiskReason),
-                    false, class'APX_ConcealmentPlanner'.default.ConcealmentRiskPenalty);
+                // Native LOS sampling is expensive: inspect at most six
+                // top-improving paths, then apply a small uncertainty cost.
+                if (++ConcealmentChecks <= 6)
+                    CandidateScore -= class'APX_ConcealmentPlanner'.static.RouteConcealmentPenalty(
+                        UnitState.IsConcealed(),
+                        class'APX_ConcealmentPlanner'.static.PathRisksRevealing(
+                            UnitState, CandidatePath, ConcealmentRiskReason),
+                        false, class'APX_ConcealmentPlanner'.default.ConcealmentRiskPenalty);
+                else if (UnitState.IsConcealed())
+                    CandidateScore -= FMin(8.0,
+                        class'APX_ConcealmentPlanner'.default.ConcealmentRiskPenalty);
                 if (CandidateScore <= BestScore)
                     continue;
             }
