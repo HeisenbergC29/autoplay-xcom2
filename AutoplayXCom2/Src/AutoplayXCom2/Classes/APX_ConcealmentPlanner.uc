@@ -195,15 +195,23 @@ static function bool IsDetectingUnit(XComGameState_Unit Soldier,
     out GameRulesCache_VisibilityInfo Visibility)
 {
     local float SightRadius, DetectRadius;
+    local vector TilePosition, DetectorPosition;
 
     if (!Detector.IsAlive() || Detector.bRemovedFromPlay
         || Detector.GetMyTemplate() == none
         || Detector.GetMyTemplate().bIsCosmetic
-        || !Soldier.UnitBreaksConcealment(Detector)
+        || !Soldier.UnitBreaksConcealment(Detector))
+        return false;
+
+    // Cheap distance cull before the expensive native voxel LOS query.
+    // The two-tile buffer keeps this estimate conservative around peek tiles.
+    SightRadius = `METERSTOUNITS(Detector.GetVisibilityRadius());
+    TilePosition = `XWORLD.GetPositionFromTileCoordinates(Tile);
+    DetectorPosition = `XWORLD.GetPositionFromTileCoordinates(Detector.TileLocation);
+    if (VSizeSq(TilePosition - DetectorPosition) > Square(SightRadius + 200.0)
         || !`XWORLD.CanSeeTileToTile(Detector.TileLocation, Tile, Visibility))
         return false;
 
-    SightRadius = `METERSTOUNITS(Detector.GetVisibilityRadius());
     DetectRadius = Soldier.GetConcealmentDetectionDistance(Detector);
     return DetectedOnTile(true,
         Visibility.DefaultTargetDist, SightRadius, DetectRadius,
