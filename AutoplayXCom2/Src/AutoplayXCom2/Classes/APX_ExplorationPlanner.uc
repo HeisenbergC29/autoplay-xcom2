@@ -365,7 +365,7 @@ function bool BuildSafeBluePrefix(XComGameState_Unit UnitState,
 {
     local XGUnit UnitVisualizer;
     local array<TTile> FullPath, CandidatePath;
-    local int Index, PathIndex;
+    local int Index, PathIndex, ConcealmentChecks;
     local float Cost, StartSupport, CandidateValue, BestValue;
     local bool bSafe;
     local string ConcealmentReason;
@@ -414,11 +414,14 @@ function bool BuildSafeBluePrefix(XComGameState_Unit UnitState,
             CandidateValue += class'APX_MissionPlanner'.static.SquadPositionScore(UnitState, FullPath[Index]);
             // Prefer safer exploration endpoints without forbidding the only
             // legal way through a detector zone.
-            CandidateValue -= class'APX_ConcealmentPlanner'.static.RouteConcealmentPenalty(
-                UnitState.IsConcealed(),
-                class'APX_ConcealmentPlanner'.static.PathRisksRevealing(
-                    UnitState, CandidatePath, ConcealmentReason),
-                false, class'APX_ConcealmentPlanner'.default.ConcealmentRiskPenalty);
+            if (UnitState.IsConcealed() && ++ConcealmentChecks <= 6)
+                CandidateValue -= class'APX_ConcealmentPlanner'.static.RouteConcealmentPenalty(
+                    true, class'APX_ConcealmentPlanner'.static.PathRisksRevealing(
+                        UnitState, CandidatePath, ConcealmentReason),
+                    false, class'APX_ConcealmentPlanner'.default.ConcealmentRiskPenalty);
+            else if (UnitState.IsConcealed())
+                CandidateValue -= FMin(8.0,
+                    class'APX_ConcealmentPlanner'.default.ConcealmentRiskPenalty);
             if (CandidateValue > BestValue)
             {
                 BestValue = CandidateValue;
