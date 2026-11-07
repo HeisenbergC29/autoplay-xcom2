@@ -22,6 +22,23 @@ static function float RouteConcealmentPenalty(bool bConcealed,
         : FMax(0.0, ConfiguredPenalty);
 }
 
+static function bool IsDestructiveTraversal(name TraversalName)
+{
+    return TraversalName == 'eTraversal_BreakWindow'
+        || TraversalName == 'eTraversal_KickDoor'
+        || TraversalName == 'eTraversal_BreakWall'
+        || TraversalName == 'eTraversal_Phasing';
+}
+
+static function bool DetectedOnTile(bool bClearLOS, float DistanceSquared,
+    float SightRadius, float DetectionRadius, bool bIgnoresDetectionDistance)
+{
+    if (!bClearLOS || DistanceSquared > SightRadius * SightRadius)
+        return false;
+    return bIgnoresDetectionDistance
+        || DistanceSquared <= DetectionRadius * DetectionRadius;
+}
+
 static function bool CanIgnoreInteractiveDetectors(XComGameState_Unit Soldier)
 {
     local name RetainName;
@@ -86,8 +103,7 @@ static function bool PathRisksRevealing(XComGameState_Unit Soldier,
         foreach Points(Point)
         {
             if (DestructiveTraversalBreaksConcealment(bChallenge, true,
-                class'APX_SquadPlanner'.static.IsDestructiveTraversal(
-                    name(string(Point.Traversal)))))
+                IsDestructiveTraversal(name(string(Point.Traversal)))))
             {
                 Reason = "destructive_traversal";
                 return true;
@@ -181,7 +197,7 @@ static function bool IsDetectingUnit(XComGameState_Unit Soldier,
 
     SightRadius = `METERSTOUNITS(Detector.GetVisibilityRadius());
     DetectRadius = Soldier.GetConcealmentDetectionDistance(Detector);
-    return class'APX_SquadPlanner'.static.DetectedOnTile(true,
+    return DetectedOnTile(true,
         Visibility.DefaultTargetDist, SightRadius, DetectRadius,
         Detector.DoesUnitBreaksConcealmentIgnoringDistance());
 }
