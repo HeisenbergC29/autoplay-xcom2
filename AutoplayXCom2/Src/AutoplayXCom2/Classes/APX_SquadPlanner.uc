@@ -208,7 +208,9 @@ static function bool PreparationPathIsSafe(XComGameState_Unit Soldier,
     {
         Tile = Path[Index];
         if (!class'APX_MissionPlanner'.static.IsKnownCombatTile(Tile)
-            || !class'X2TacticalVisibilityHelpers'.static.CanSquadSeeLocation(Soldier.GetAssociatedPlayerID(), Tile)
+            || (!class'APX_FullIntel'.default.EnableFullIntel
+                && !class'X2TacticalVisibilityHelpers'.static.CanSquadSeeLocation(
+                    Soldier.GetAssociatedPlayerID(), Tile))
             || class'APX_HazardKnowledge'.static.HasBlockingHazard(Soldier, Tile)
             || Tile.Z > Soldier.TileLocation.Z + 1
             || !class'APX_MissionPlanner'.static.IsSupportedAdvanceStep(StartSupport,
