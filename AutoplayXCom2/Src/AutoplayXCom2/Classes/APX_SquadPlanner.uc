@@ -180,10 +180,13 @@ static function bool PreparationPathIsSafe(XComGameState_Unit Soldier,
     local int Index;
     local float DetectionDistance, SightDistance, StartSupport;
     local string ConcealmentReason;
+    local bool bIgnoreInteractiveDetectors;
 
     if (Soldier == none || Path.Length < 2)
         return false;
     StartSupport = class'APX_MissionPlanner'.static.NearestSupportDistance(Soldier, Soldier.TileLocation);
+    bIgnoreInteractiveDetectors =
+        class'APX_ConcealmentPlanner'.static.CanIgnoreInteractiveDetectors(Soldier);
     class'X2PathSolver'.static.GetPathPointsFromPath(Soldier, Path, Points);
     if (Points.Length < 2)
         return false;
@@ -214,7 +217,8 @@ static function bool PreparationPathIsSafe(XComGameState_Unit Soldier,
         foreach VisibleObjects(DetectorRef)
         {
             DetectionObject = XComGameState_InteractiveObject(`XCOMHISTORY.GetGameStateForObjectID(DetectorRef.ObjectID));
-            if (DetectionObject != none && !DetectionObject.bRemovedFromPlay
+            if (!bIgnoreInteractiveDetectors && DetectionObject != none
+                && !DetectionObject.bRemovedFromPlay
                 && !DetectionObject.bHasBeenHacked && DetectionObject.DetectionRange > 0.0)
             {
                 TilePosition = `XWORLD.GetPositionFromTileCoordinates(Tile);
