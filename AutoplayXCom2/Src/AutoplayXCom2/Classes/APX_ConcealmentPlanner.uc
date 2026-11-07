@@ -70,7 +70,7 @@ static function bool PathRisksRevealing(XComGameState_Unit Soldier,
     local vector TilePosition, DetectorPosition;
     local float SightRadius, DetectRadius;
     local int Step, Index, Checks, Limit, PathLimit;
-    local bool bChallenge, bIgnoreInteractives;
+    local bool bChallenge, bIgnoreInteractives, bSampleClipped;
 
     Reason = "none";
     if (Soldier == none || !Soldier.IsConcealed() || Path.Length < 2)
@@ -116,6 +116,8 @@ static function bool PathRisksRevealing(XComGameState_Unit Soldier,
     // The user chose omniscient enemy positions. Geometry may be queried
     // for route planning, but native target lists are unaffected.
     class'APX_FullIntel'.static.GetKnownEnemies(Soldier, KnownEnemies);
+    bSampleClipped = VisibleObjects.Length > Limit
+        || KnownEnemies.Length > Limit;
 
     for (Step = 1; Step < Path.Length; ++Step)
     {
@@ -126,7 +128,7 @@ static function bool PathRisksRevealing(XComGameState_Unit Soldier,
             return true;
         }
         TilePosition = `XWORLD.GetPositionFromTileCoordinates(Tile);
-        for (Index = 0; Index < VisibleObjects.Length; ++Index)
+        for (Index = 0; Index < Min(VisibleObjects.Length, Limit); ++Index)
         {
             if (++Checks > Limit * PathLimit)
             {
@@ -161,7 +163,7 @@ static function bool PathRisksRevealing(XComGameState_Unit Soldier,
         }
         if (class'APX_FullIntel'.default.EnableFullIntel)
         {
-            for (Index = 0; Index < KnownEnemies.Length; ++Index)
+            for (Index = 0; Index < Min(KnownEnemies.Length, Limit); ++Index)
             {
                 if (++Checks > Limit * PathLimit)
                 {
@@ -178,6 +180,11 @@ static function bool PathRisksRevealing(XComGameState_Unit Soldier,
                 }
             }
         }
+    }
+    if (bSampleClipped)
+    {
+        Reason = "detector_sample_limit";
+        return true; // Conservative estimate; move is penalized, not blocked.
     }
     return false;
 }
