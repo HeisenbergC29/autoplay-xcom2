@@ -18,8 +18,9 @@ static function float RouteConcealmentPenalty(bool bConcealed,
 {
     if (!bConcealed || !bAtRisk)
         return 0.0;
-    return bUrgent ? FMin(4.0, FMax(0.0, ConfiguredPenalty))
-        : FMax(0.0, ConfiguredPenalty);
+    if (bUrgent)
+        return FMin(4.0, FMax(0.0, ConfiguredPenalty));
+    return FMax(0.0, ConfiguredPenalty);
 }
 
 static function bool IsDestructiveTraversal(name TraversalName)
