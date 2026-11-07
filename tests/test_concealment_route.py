@@ -76,6 +76,8 @@ class ConcealmentRouteContracts(unittest.TestCase):
         self.assertIn('Soldier.HasSoldierAbility(', suppress)
         unit = function_body(self.source, 'IsDetectingUnit')
         self.assertIn('Soldier.UnitBreaksConcealment(Detector)', unit)
+        self.assertLess(unit.index('VSizeSq(TilePosition - DetectorPosition)'),
+                        unit.index('CanSeeTileToTile('))
         self.assertIn('Detector.GetVisibilityRadius()', unit)
         self.assertIn('Soldier.GetConcealmentDetectionDistance(Detector)', unit)
         self.assertIn('DoesUnitBreaksConcealmentIgnoringDistance()', unit)
