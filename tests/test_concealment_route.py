@@ -103,7 +103,7 @@ class ConcealmentRouteContracts(unittest.TestCase):
             self.assertIn(t,e)
         # Keep the new AoE-formation feature added by LEAD in v22.
         formation=function_body(mission,'SquadPositionScore')
-        self.assertIn('FormationArea',formation)
+        self.assertIn('SquadAreaRiskRadiusTiles',formation)
 
     def test_config_budgets_are_bounded(self):
         ini=(ROOT/'AutoplayXCom2/Config/XComAutoplayXCom2.ini').read_text()
