@@ -179,8 +179,9 @@ static function bool PreparationPathIsSafe(XComGameState_Unit Soldier,
     local vector TilePosition, DetectorPosition;
     local int Index;
     local float DetectionDistance, SightDistance, StartSupport;
+    local string ConcealmentReason;
 
-    if (Path.Length < 2)
+    if (Soldier == none || Path.Length < 2)
         return false;
     StartSupport = class'APX_MissionPlanner'.static.NearestSupportDistance(Soldier, Soldier.TileLocation);
     class'X2PathSolver'.static.GetPathPointsFromPath(Soldier, Path, Points);
@@ -188,14 +189,18 @@ static function bool PreparationPathIsSafe(XComGameState_Unit Soldier,
         return false;
     foreach Points(Point)
     {
-        if (IsDestructiveTraversal(name(string(Point.Traversal))))
+        if (Soldier.IsConcealed()
+            && `XCOMHISTORY.GetSingleGameStateObjectForClass(
+                class'XComGameState_ChallengeData', true) == none
+            && IsDestructiveTraversal(name(string(Point.Traversal))))
             return false;
     }
     // Only currently visible objects can contribute detection positions. This
     // also includes visible civilians and security devices which can reveal a
     // concealed soldier. Do not enumerate hidden objects to get their ranges.
-    class'X2TacticalVisibilityHelpers'.static.GetAllVisibleObjectsForPlayer(
-        Soldier.GetAssociatedPlayerID(), VisibleObjects, , -1, true);
+    if (Soldier.IsConcealed())
+        class'X2TacticalVisibilityHelpers'.static.GetAllVisibleObjectsForPlayer(
+            Soldier.GetAssociatedPlayerID(), VisibleObjects, , -1, true);
     for (Index = 1; Index < Path.Length; ++Index)
     {
         Tile = Path[Index];
@@ -232,6 +237,13 @@ static function bool PreparationPathIsSafe(XComGameState_Unit Soldier,
                 return false;
         }
     }
+    // Shared estimator adds full-intel hostile positions and SDK exceptions
+    // (e.g. Infiltration vs interactive detectors). This is an ambush/loot
+    // preparation guard, not a force-reveal or history manipulation.
+    if (Soldier.IsConcealed()
+        && class'APX_ConcealmentPlanner'.static.PathRisksRevealing(
+            Soldier, Path, ConcealmentReason))
+        return false;
     return true;
 }
 
