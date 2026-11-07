@@ -1870,14 +1870,16 @@ static function bool ChooseMove(XComGameState_Unit UnitState,
     out array<TTile> Path, out float Score)
 {
     local XGUnit UnitVisualizer;
-    local array<TTile> Tiles, CandidatePath;
+    local array<TTile> Tiles, CandidatePath, RiskyRoute;
     local array<StateObjectReference> VisibleEnemies;
     local array<float> MeleeThreatReaches;
     local array<float> ThreatWeights;
     local TTile GoalTile, Tile, ClosestTile;
     local MissionGoal Goal;
     local bool bCombatGoal, bSafe, bRequireSupport, bRoutineRoute, bSabotageRush;
-    local int Index, PathIndex, SampleIndex, SampleCount;
+    local bool bConcealmentUrgent;
+    local string ConcealmentRiskReason;
+    local int Index, PathIndex, SampleIndex, SampleCount, ConcealmentChecks;
     local float CurrentScore, CandidateScore, BestScore, CurrentRisk, CandidateRisk, PathCost, StartSupport, BestRisk;
     local float BestAttackNow, BestAttackAfterMove, HealthFraction;
 
@@ -1899,6 +1901,10 @@ static function bool ChooseMove(XComGameState_Unit UnitState,
     if (bSabotageRush)
         bCombatGoal = false; // Do not score a bomb approach as a firing flank.
     bRequireSupport = !ShouldEvacuate(UnitState);
+    // Keep rescue, danger, timers and bomb objective ahead of optional stealth.
+    bConcealmentUrgent = !UnitState.IsConcealed() || !bRequireSupport
+        || Goal.bImmediateThreats || Goal.bBerserkerSabotageGoal
+        || HasActiveMissionDeadline() || HasBleedingSquadmate(UnitState);
     StartSupport = NearestSupportDistance(UnitState, UnitState.TileLocation);
     bRoutineRoute = bSabotageRush
         || CanUseRoutineRoute(Goal.bImmediateThreats,
@@ -1927,6 +1933,15 @@ static function bool ChooseMove(XComGameState_Unit UnitState,
                 Path.Length = 0; // Try the existing tactical route fallback.
             else
                 return true;
+        }
+        else if (!bConcealmentUrgent
+            && class'APX_ConcealmentPlanner'.static.PathRisksRevealing(
+                UnitState, Path, ConcealmentRiskReason))
+        {
+            // Search for a safer native blue path first, but retain this legal
+            // route as a bounded fallback; no infinite wait at the fog edge.
+            RiskyRoute = Path;
+            Path.Length = 0;
         }
         else
             return true;
@@ -2000,10 +2015,34 @@ static function bool ChooseMove(XComGameState_Unit UnitState,
         }
         if (bSafe)
         {
+            if (!bConcealmentUrgent)
+            {
+                // Native LOS sampling is expensive: inspect at most six
+                // top-improving paths, then apply a small uncertainty cost.
+                if (++ConcealmentChecks <= 6)
+                    CandidateScore -= class'APX_ConcealmentPlanner'.static.RouteConcealmentPenalty(
+                        UnitState.IsConcealed(),
+                        class'APX_ConcealmentPlanner'.static.PathRisksRevealing(
+                            UnitState, CandidatePath, ConcealmentRiskReason),
+                        false, class'APX_ConcealmentPlanner'.default.ConcealmentRiskPenalty);
+                else if (UnitState.IsConcealed())
+                    CandidateScore -= FMin(8.0,
+                        class'APX_ConcealmentPlanner'.default.ConcealmentRiskPenalty);
+                if (CandidateScore <= BestScore)
+                    continue;
+            }
             BestScore = CandidateScore;
             BestRisk = CandidateRisk;
             Path = CandidatePath;
         }
+    }
+    if (Path.Length < 2 && RiskyRoute.Length > 1)
+    {
+        Path = RiskyRoute;
+        // An unavoidable reveal is not a reason to remain indefinitely idle.
+        Score = ScoreRouteAdvance(SquadPositionScore(UnitState, UnitState.TileLocation),
+            SquadPositionScore(UnitState, Path[Path.Length - 1])) - 4.0;
+        return true;
     }
     if (Path.Length < 2)
         return false;

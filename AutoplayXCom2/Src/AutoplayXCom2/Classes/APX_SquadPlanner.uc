@@ -179,28 +179,38 @@ static function bool PreparationPathIsSafe(XComGameState_Unit Soldier,
     local vector TilePosition, DetectorPosition;
     local int Index;
     local float DetectionDistance, SightDistance, StartSupport;
+    local string ConcealmentReason;
+    local bool bIgnoreInteractiveDetectors;
 
-    if (Path.Length < 2)
+    if (Soldier == none || Path.Length < 2)
         return false;
     StartSupport = class'APX_MissionPlanner'.static.NearestSupportDistance(Soldier, Soldier.TileLocation);
+    bIgnoreInteractiveDetectors =
+        class'APX_ConcealmentPlanner'.static.CanIgnoreInteractiveDetectors(Soldier);
     class'X2PathSolver'.static.GetPathPointsFromPath(Soldier, Path, Points);
     if (Points.Length < 2)
         return false;
     foreach Points(Point)
     {
-        if (IsDestructiveTraversal(name(string(Point.Traversal))))
+        if (Soldier.IsConcealed()
+            && `XCOMHISTORY.GetSingleGameStateObjectForClass(
+                class'XComGameState_ChallengeData', true) == none
+            && IsDestructiveTraversal(name(string(Point.Traversal))))
             return false;
     }
     // Only currently visible objects can contribute detection positions. This
     // also includes visible civilians and security devices which can reveal a
     // concealed soldier. Do not enumerate hidden objects to get their ranges.
-    class'X2TacticalVisibilityHelpers'.static.GetAllVisibleObjectsForPlayer(
-        Soldier.GetAssociatedPlayerID(), VisibleObjects, , -1, true);
+    if (Soldier.IsConcealed())
+        class'X2TacticalVisibilityHelpers'.static.GetAllVisibleObjectsForPlayer(
+            Soldier.GetAssociatedPlayerID(), VisibleObjects, , -1, true);
     for (Index = 1; Index < Path.Length; ++Index)
     {
         Tile = Path[Index];
         if (!class'APX_MissionPlanner'.static.IsKnownCombatTile(Tile)
-            || !class'X2TacticalVisibilityHelpers'.static.CanSquadSeeLocation(Soldier.GetAssociatedPlayerID(), Tile)
+            || (!class'APX_FullIntel'.default.EnableFullIntel
+                && !class'X2TacticalVisibilityHelpers'.static.CanSquadSeeLocation(
+                    Soldier.GetAssociatedPlayerID(), Tile))
             || class'APX_HazardKnowledge'.static.HasBlockingHazard(Soldier, Tile)
             || Tile.Z > Soldier.TileLocation.Z + 1
             || !class'APX_MissionPlanner'.static.IsSupportedAdvanceStep(StartSupport,
@@ -209,7 +219,8 @@ static function bool PreparationPathIsSafe(XComGameState_Unit Soldier,
         foreach VisibleObjects(DetectorRef)
         {
             DetectionObject = XComGameState_InteractiveObject(`XCOMHISTORY.GetGameStateForObjectID(DetectorRef.ObjectID));
-            if (DetectionObject != none && !DetectionObject.bRemovedFromPlay
+            if (!bIgnoreInteractiveDetectors && DetectionObject != none
+                && !DetectionObject.bRemovedFromPlay
                 && !DetectionObject.bHasBeenHacked && DetectionObject.DetectionRange > 0.0)
             {
                 TilePosition = `XWORLD.GetPositionFromTileCoordinates(Tile);
@@ -232,6 +243,13 @@ static function bool PreparationPathIsSafe(XComGameState_Unit Soldier,
                 return false;
         }
     }
+    // Shared estimator adds full-intel hostile positions and SDK exceptions
+    // (e.g. Infiltration vs interactive detectors). This is an ambush/loot
+    // preparation guard, not a force-reveal or history manipulation.
+    if (Soldier.IsConcealed()
+        && class'APX_ConcealmentPlanner'.static.PathRisksRevealing(
+            Soldier, Path, ConcealmentReason))
+        return false;
     return true;
 }
 
