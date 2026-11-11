@@ -180,6 +180,9 @@ class MissionRecorderContracts(unittest.TestCase):
 
     def test_native_end_waits_for_committed_winner_before_finalizing(self):
         finish = function_body(SOURCE, 'Finish')
+        # A stale observer now closes without an end record. This contract is
+        # about finalizing the live mission after its winner is committed.
+        finish = finish[finish.index('if (`XCOMHISTORY != none)'):]
         pending = finish.index('Reason == "tactical_game_ended"')
         observe_finish = finish.index('Observe("finish")')
         self.assertIn('BattleData.VictoriousPlayer.ObjectID == 0', finish[pending:observe_finish])

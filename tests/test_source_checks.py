@@ -14,6 +14,47 @@ CHECKS = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(CHECKS)
 
 
+class EscapedMacroPrefixTests(unittest.TestCase):
+    def test_rejects_backslashes_from_relay_diagnostic_code(self):
+        source = (
+            'function RecordSabotageRelayCandidates(int Turn)\n'
+            '{\n'
+            '    if (RecordedMissionType != "SabotageTransmitter" || \\`TACTICALRULES == none)\n'
+            '        return;\n'
+            "    foreach \\`XCOMHISTORY.IterateByClassType(class'XComGameState_Unit', Soldier)\n"
+            '    {\n'
+            '        Ability = XComGameState_Ability(\\`XCOMHISTORY.GetGameStateForObjectID(Ref.ObjectID));\n'
+            '    }\n'
+            '}\n'
+        )
+        self.assertEqual(CHECKS.escaped_macro_prefixes(source), [3, 5, 7])
+
+    def test_ignores_escaped_examples_in_comments_and_literals(self):
+        source = (
+            '// Example: \\`XCOMHISTORY\n'
+            '/* A multiline example:\n \\`TACTICALRULES */\n'
+            'var string Example = "\\`XWORLD";\n'
+            "var name ExampleName = '\\`XCOMHISTORY';\n"
+            'var string Quoted = "\\\"escaped quote\\\" then \\`XWORLD";\n'
+            'if (\\`TACTICALRULES == none) return;\n'
+        )
+        self.assertEqual(CHECKS.escaped_macro_prefixes(source), [7])
+
+    def test_accepts_real_macros_and_normal_string_backslashes(self):
+        source = (
+            '`log("C:\\\\Logs\\\\Launch.log", true, \'AutoplayXCom2\');\n'
+            'if (`XCOMHISTORY != none && `TACTICALRULES != none)\n'
+            '    Tile = `XWORLD.GetTileCoordinatesFromPosition(Position);\n'
+        )
+        self.assertEqual(CHECKS.escaped_macro_prefixes(source), [])
+
+    def test_current_mod_has_no_escaped_macro_prefixes(self):
+        # Runs in public CI without private SDK/config inputs.
+        for file in (ROOT / 'AutoplayXCom2/Src').rglob('*.uc'):
+            with self.subTest(file=file.name):
+                self.assertEqual(CHECKS.escaped_macro_prefixes(file.read_text()), [])
+
+
 class OutBooleanRestrictionTests(unittest.TestCase):
     def test_rejects_original_mission_parameter_shapes(self):
         original = (

@@ -157,6 +157,32 @@ class RecorderScoringContracts(unittest.TestCase):
         self.assertLess(finish.index('UnregisterScoreObservers()'),
                         finish.index('bFinished = true;'))
 
+    def test_native_failed_objective_is_observed_once_and_never_changes_rules(self):
+        source = RECORDER.read_text()
+        listener = function_body(source, 'OnObjectiveFailed')
+        for token in (
+            'SeqAct_DisplayMissionObjective(EventSource)',
+            'XComGameState_ObjectivesList(EventData)',
+            'Info.MissionType == RecordedMissionType',
+            'Info.TextPoolIndex == DisplayAction.TextPoolIndex',
+            'Info.LineIndex == DisplayAction.LineIndex',
+            'Info.GroupID == DisplayAction.GroupID',
+            'FailedObjectiveIDs.Find(ObjectiveID)',
+            'FailedObjectiveIDs.AddItem(ObjectiveID)',
+            'Emit("objective_failed"',
+            '"|source=mission_ui_event|critical=false|criticality=unknown|objective_id="',
+            'TurnAtHistory(HistoryIndex)',
+        ):
+            with self.subTest(token=token):
+                self.assertIn(token, listener)
+        for forbidden in ('ModifyStateObject(', 'SubmitGameState(',
+                          'CreateNewGameState(', 'FailBattle(', 'AddMissionObjectiveComplete('):
+            self.assertNotIn(forbidden, listener)
+        register = function_body(source, 'RegisterScoreObservers')
+        unregister = function_body(source, 'UnregisterScoreObservers')
+        self.assertIn("RegisterForEvent(Listener, 'MissionObjectiveMarkedFailed'", register)
+        self.assertIn("UnRegisterFromEvent(Listener, 'MissionObjectiveMarkedFailed'", unregister)
+
     def test_civilian_rescue_checks_own_rescuer_and_redacts_unknown_identity(self):
         rescue = function_body(RECORDER.read_text(), 'OnCivilianRescued')
         self.assertIn('Rescuer = XComGameState_Unit(EventData)', rescue)
@@ -217,6 +243,20 @@ class RecorderScoringSDKContracts(unittest.TestCase):
     def test_native_event_payloads_and_registration_signatures_match(self):
         objective = (self.classes / 'SeqAct_DisplayMissionObjective.uc').read_text(encoding='utf-8-sig')
         self.assertIn("TriggerEvent('MissionObjectiveMarkedCompleted', ObjectiveList, self, NewGameState)", objective)
+        self.assertIn("TriggerEvent('MissionObjectiveMarkedFailed', ObjectiveList, self, NewGameState)", objective)
+        # UI ShowFailed is a display status. The native battle failure event
+        # has its own handler, which interrupts later listeners.
+        tactical = (self.classes / 'X2TacticalGameRuleset.uc').read_text(encoding='utf-8-sig')
+        failed = function_body(tactical, 'OnChallengeObjectiveFailed')
+        self.assertIn('FailBattle();', failed)
+        self.assertIn('ELR_InterruptEventAndListeners', failed)
+        aid = (self.classes / 'X2Effect_AidProtocol.uc').read_text(encoding='utf-8-sig')
+        self.assertIn('(Priority 49, so this happens after the regular ItemRecalled)', aid)
+        core = self.classes.parents[1] / 'Core/Classes/Object.uc'
+        source = core.read_text(encoding='utf-8-sig')
+        self.assertRegex(source, r'var\(\)\s+native\s+const\s+editconst\s+Object\s+ObjectArchetype;')
+        self.assertIn('native static final function string PathName(Object CheckObject);', source)
+
         ai = (self.classes / 'X2AIBTDefaultActions.uc').read_text(encoding='utf-8-sig')
         self.assertIn("TriggerEvent('CivilianRescued', NewRescuerUnit, UnitState, NewGameState2)", ai)
         manager = (self.classes / 'X2EventManager.uc').read_text(encoding='utf-8-sig')
