@@ -58,14 +58,25 @@ class MissionLogTests(unittest.TestCase):
         self.assertNotIn('ui:1', critical_line)
 
     def test_conflicting_failure_records_cannot_certify_a_critical_verdict(self):
-        lines = '\n'.join([
-            record(1, 'start'),
-            record(2, 'objective_failed', 'objective_id=x|critical=true'),
-            record(2, 'objective_failed', 'objective_id=x|critical=false'),
-        ])
-        session = LOG.analyze_logs([('Launch.log', lines)])['sessions'][0]
-        self.assertEqual(session['attempt_verdict']['status'], 'unknown')
-        self.assertEqual(session['attempt_verdict']['reason'], 'conflicting_records')
+        for markers in (('true', 'false'), ('false', 'true')):
+            with self.subTest(markers=markers):
+                lines = '\n'.join([
+                    record(1, 'start'),
+                    *(record(2, 'objective_failed', 'objective_id=x|critical=' + value)
+                      for value in markers),
+                ])
+                report = LOG.analyze_logs([('Launch.log', lines)])
+                session = report['sessions'][0]
+                self.assertEqual(session['attempt_verdict']['status'], 'unknown')
+                self.assertEqual(session['attempt_verdict']['reason'], 'conflicting_records')
+                self.assertIsNone(session['critical_objective_failed'])
+                self.assertIsNone(session['attempt_verdict']['critical_objective_failed'])
+                self.assertEqual(session['failed_objective_ids'], ['x'])
+                text = LOG.human_summary(report)
+                self.assertIn('Objective failure evidence is unverified', text)
+                self.assertNotIn('CRITICAL OBJECTIVE FAILURE', text)
+                self.assertFalse(any('verified native critical objective failed' in warning
+                                     for warning in session['warnings']))
 
     def test_failed_objective_is_critical_even_with_positive_native_score(self):
         session = LOG.analyze_logs([('Launch.log', '\n'.join([

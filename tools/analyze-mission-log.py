@@ -197,7 +197,7 @@ def summarize_end_turn(records: list[dict]) -> dict:
     }
 
 
-def summarize_session(session: str, records: list[dict]) -> dict:
+def summarize_session(session: str, records: list[dict], conflicting_records: bool = False) -> dict:
     records.sort(key=lambda item: item['seq'])
     events = Counter(record['event'] for record in records)
     chosen = [record for record in records if record['event'] == 'chosen']
@@ -304,9 +304,11 @@ def summarize_session(session: str, records: list[dict]) -> dict:
             "this is not proof of a native rejection.")
     if end_turn['orphan_confirmed'] or end_turn['orphan_unconfirmed']:
         warnings.append('End-turn evidence without a matching recorded request; report may be incomplete.')
-    if critical_failures:
+    if conflicting_records:
+        warnings.append('Objective failure observations cannot be verified because recording records conflict.')
+    elif critical_failures:
         warnings.append('A verified native critical objective failed, regardless of mission points.')
-    if failure_evidence['unclassified_failed_objective_ids']:
+    if not conflicting_records and failure_evidence['unclassified_failed_objective_ids']:
         warnings.append('A failed objective was observed, but its criticality is unverified.')
     if not start:
         warnings.append('Recording starts mid-session; the start record is missing.')
@@ -325,7 +327,8 @@ def summarize_session(session: str, records: list[dict]) -> dict:
         'mission': start.get('mission', 'unknown'),
         'difficulty': start.get('difficulty', 'unknown'),
         'outcome': outcome,
-        'critical_objective_failed': bool(critical_failures),
+        'critical_objective_failed': None if conflicting_records else bool(critical_failures),
+        'objective_failure_evidence_status': 'conflicting_records' if conflicting_records else 'recorded',
         **failure_evidence,
         'events': dict(sorted(events.items())),
         'accepted_actions': len(accepted),
@@ -392,7 +395,7 @@ def analyze_logs(logs: list[tuple[str, str]]) -> dict:
     comparison_profile = SCORING.load_profile()
     summaries = []
     for name, records in sorted(sessions.items()):
-        summary = summarize_session(name, records)
+        summary = summarize_session(name, records, name in conflicting_sessions)
         summary['game_scoring'] = SCORING.score_session(
             records, SCORING.native_rules_for_session(records, native_profiles), comparison_profile)
         summary['attempt_verdict'] = SCORING.assess_attempt(
@@ -442,11 +445,14 @@ def human_summary(report: dict) -> str:
         lines.append(f"Session {session['session']}: mission={session['mission']}, "
                      f"difficulty={session['difficulty']}, outcome={session['outcome']}, "
                      f"mission points={points_label}")
-        if session['critical_objective_failed']:
+        if session['objective_failure_evidence_status'] == 'conflicting_records':
+            lines.append('  Objective failure evidence is unverified because recording records conflict.')
+        elif session['critical_objective_failed']:
             lines.append('  CRITICAL OBJECTIVE FAILURE: '
                          + ', '.join(session['critical_failed_objective_ids'])
                          + '; any positive or provisional points cannot pass.')
-        if session['unclassified_failed_objective_ids']:
+        if (session['objective_failure_evidence_status'] != 'conflicting_records'
+                and session['unclassified_failed_objective_ids']):
             lines.append('  Objective failure observed (criticality unverified): '
                          + ', '.join(session['unclassified_failed_objective_ids']))
         lines.append(f"  Accepted actions={session['accepted_actions']}, moves={session['moves']}, "

@@ -490,7 +490,8 @@ def assess_attempt(records: list[dict], outcome: str, scoring: dict,
               'mission_outcome': outcome, 'score': score, 'observed_score': observed_score,
               'score_source': source, 'score_status': score_status,
               'score_complete': complete, 'score_profile': profile,
-              'critical_objective_failed': bool(critical_failures),
+              'critical_objective_failed': None if conflicting_records else bool(critical_failures),
+              'objective_failure_evidence_status': 'conflicting_records' if conflicting_records else 'recorded',
               'failed_objectives': failure_evidence['failed_objective_ids'],
               'critical_failed_objectives': critical_failures}
     normalized = str(outcome).casefold()
