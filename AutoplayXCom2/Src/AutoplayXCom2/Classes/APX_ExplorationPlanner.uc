@@ -361,13 +361,15 @@ function bool AssignNextGoal(XComGameState_Unit UnitState, int GoalIndex)
 }
 
 function bool BuildSafeBluePrefix(XComGameState_Unit UnitState,
-    TTile GoalTile, out array<TTile> Path)
+    TTile GoalTile, out array<TTile> Path,
+    optional out int RemainingConcealmentChecks)
 {
     local XGUnit UnitVisualizer;
     local array<TTile> FullPath, CandidatePath;
     local int Index, PathIndex;
     local float Cost, StartSupport, CandidateValue, BestValue;
     local bool bSafe;
+    local string ConcealmentReason;
 
     Path.Length = 0;
     StartSupport = class'APX_MissionPlanner'.static.NearestSupportDistance(UnitState, UnitState.TileLocation);
@@ -411,6 +413,14 @@ function bool BuildSafeBluePrefix(XComGameState_Unit UnitState,
             CandidateValue = class'APX_MissionPlanner'.static.AdvanceEndpointScore(float(Index),
                 class'APX_MissionPlanner'.static.AdvanceCoverLevel(UnitState, FullPath[Index], GoalTile));
             CandidateValue += class'APX_MissionPlanner'.static.SquadPositionScore(UnitState, FullPath[Index]);
+            // Prefer safer exploration endpoints without forbidding the only
+            // legal way through a detector zone.
+            if (UnitState.IsConcealed())
+                CandidateValue -= class'APX_ConcealmentPlanner'.static.RouteConcealmentPenalty(
+                    true, class'APX_ConcealmentPlanner'.static.InspectPathRisk(
+                        UnitState, CandidatePath, ConcealmentReason,
+                        RemainingConcealmentChecks),
+                    false, class'APX_ConcealmentPlanner'.default.ConcealmentRiskPenalty);
             if (CandidateValue > BestValue)
             {
                 BestValue = CandidateValue;
@@ -422,7 +432,8 @@ function bool BuildSafeBluePrefix(XComGameState_Unit UnitState,
 }
 
 function bool ChooseMove(XComGameState_Unit UnitState,
-    out array<TTile> Path, out float Score)
+    out array<TTile> Path, out float Score,
+    optional out int RemainingConcealmentChecks)
 {
     local int GoalIndex, Attempt;
 
@@ -447,7 +458,8 @@ function bool ChooseMove(XComGameState_Unit UnitState,
     {
         if (!Goals[GoalIndex].bActive && !AssignNextGoal(UnitState, GoalIndex))
             return false;
-        if (BuildSafeBluePrefix(UnitState, Goals[GoalIndex].Tile, Path))
+        if (BuildSafeBluePrefix(UnitState, Goals[GoalIndex].Tile, Path,
+            RemainingConcealmentChecks))
         {
             Score = ScoreExplorationMove(
                 class'APX_MissionPlanner'.static.SquadPositionScore(UnitState, UnitState.TileLocation),
