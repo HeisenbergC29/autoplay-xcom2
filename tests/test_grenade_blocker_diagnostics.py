@@ -37,14 +37,25 @@ class GrenadeBlockerDiagnosticsTests(unittest.TestCase):
             self.assertIn(reset, choose)
         self.assertIn('ScanBlastSafeRadius = LastBlastSafeRadius;', function_body(source, 'RejectBlast'))
 
-    def test_missing_geometry_and_actual_proximity_are_distinguishable_without_relaxation(self):
+    def test_missing_geometry_uses_verified_native_extent_or_fails_closed(self):
         source = SOURCE.read_text()
         footprint = function_body(source, 'FootprintNearImpact')
-        for label in ('no_interface', 'empty_footprint', 'near_footprint', 'clear_footprint'):
-            self.assertIn('LastFootprintGeometry = "' + label + '";', footprint)
-        self.assertIn('if (VisibleObject == none)\n        return true;', footprint)
-        self.assertIn('if (Tiles.Length == 0)\n        return true;', footprint)
+        for label in ('no_interface', 'empty_footprint', 'near_footprint',
+                      'clear_footprint', 'empty_unit_footprint',
+                      'near_unit_occupied_tiles', 'clear_unit_occupied_tiles',
+                      'unknown_objective_bounds', 'near_objective_bounds',
+                      'clear_objective_bounds', 'invalid_footprint_tile'):
+            self.assertIn('"' + label + '"', footprint)
+        self.assertIn('if (KnownState == none || KnownState.bRemoved', footprint)
+        self.assertIn('GetVisibilityForLocation(UnitState.TileLocation, Tiles)', footprint)
+        self.assertIn('IsTileOutOfRange(Tile)', footprint)
+        self.assertIn('TryGetObjectiveGeometry(', footprint)
+        self.assertNotIn('Tiles.AddItem(',footprint)
+        self.assertIn('return true;', footprint)
         blast = function_body(source, 'BlastIsSafe')
+        self.assertIn('SafeRadius, ObjectiveOwner)', blast)
+        self.assertIn('SafeRadius, OtherUnit)', blast)
+        self.assertIn('SafeRadius, Interactive)', blast)
         self.assertIn('"objective", LastFootprintGeometry)', blast)
         self.assertIn('"protected_unit", LastFootprintGeometry)', blast)
 
