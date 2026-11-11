@@ -1893,7 +1893,7 @@ static function bool ChooseMove(XComGameState_Unit UnitState,
     local TTile GoalTile, Tile, ClosestTile;
     local MissionGoal Goal;
     local bool bCombatGoal, bSafe, bRequireSupport, bRoutineRoute, bSabotageRush;
-    local bool bConcealmentUrgent, bUsedLocalFallback;
+    local bool bConcealmentUrgent, bCoverUrgent, bUsedLocalFallback;
     local string ConcealmentRiskReason;
     local int Index, PathIndex, SampleIndex, SampleCount, CoverChecks;
     local float CoverRisk, RiskyRouteCoverRisk, LocalFallbackCoverRisk;
@@ -1923,6 +1923,8 @@ static function bool ChooseMove(XComGameState_Unit UnitState,
     bConcealmentUrgent = class'APX_ConcealmentPlanner'.static.ConcealmentIsUrgent(
         UnitState.IsConcealed(), !bRequireSupport, HasActiveMissionDeadline(),
         HasBleedingSquadmate(UnitState), Goal.bBerserkerSabotageGoal);
+    bCoverUrgent = ShouldEvacuate(UnitState) || HasBleedingSquadmate(UnitState)
+        || HasActiveMissionDeadline() || Goal.bBerserkerSabotageGoal;
     StartSupport = NearestSupportDistance(UnitState, UnitState.TileLocation);
     bRoutineRoute = bSabotageRush
         || CanUseRoutineRoute(Goal.bImmediateThreats,
@@ -1974,7 +1976,7 @@ static function bool ChooseMove(XComGameState_Unit UnitState,
             else
             {
                 CoverRisk = 0.0;
-                if (!bConcealmentUrgent && UnitState.GetMyTemplate().bCanTakeCover)
+                if (!bCoverUrgent && UnitState.GetMyTemplate().bCanTakeCover)
                     CoverRisk = class'APX_ExplosiveCoverKnowledge'.static.RiskAtTile(
                         UnitState, Path[Path.Length - 1], VisibleEnemies);
                 if (CoverRisk > 0.0)
@@ -2085,21 +2087,22 @@ static function bool ChooseMove(XComGameState_Unit UnitState,
                         UnitState, CandidatePath, ConcealmentRiskReason,
                         RemainingConcealmentChecks),
                     false, class'APX_ConcealmentPlanner'.default.ConcealmentRiskPenalty);
-                if (UnitState.GetMyTemplate().bCanTakeCover)
-                {
-                    // Never query world destructibles for every reachable tile.
-                    // Inspect at most six promising native endpoints.
-                    if (++CoverChecks <= 6)
-                        CoverRisk = class'APX_ExplosiveCoverKnowledge'.static.RiskAtTile(
-                            UnitState, Tile, VisibleEnemies);
-                    else
-                        CoverRisk = 8.0; // Unknown cover, not a guaranteed explosion.
-                    CandidateScore -= CoverRisk;
-                    if (CandidateScore <= BestScore)
-                        continue;
-                    if (CandidateScore > LocalFallbackScore)
-                        LocalFallbackCoverRisk = CoverRisk;
-                }
+                if (CandidateScore <= BestScore)
+                    continue;
+            }
+            // Explosive scenery remains dangerous AFTER concealment is lost.
+            // Rescue, deadlines and Berserker sabotage remain exceptions.
+            if (!bCoverUrgent && UnitState.GetMyTemplate().bCanTakeCover)
+            {
+                if (++CoverChecks <= 6)
+                    CoverRisk = class'APX_ExplosiveCoverKnowledge'.static.RiskAtTile(
+                        UnitState, Tile, VisibleEnemies);
+                else
+                    CoverRisk = 8.0; // Incomplete sample, not a certain hit.
+                if (LocalFallbackPath.Length > 1
+                    && LocalFallbackPath[LocalFallbackPath.Length - 1] == Tile)
+                    LocalFallbackCoverRisk = CoverRisk;
+                CandidateScore -= CoverRisk;
                 if (CandidateScore <= BestScore)
                     continue;
             }
