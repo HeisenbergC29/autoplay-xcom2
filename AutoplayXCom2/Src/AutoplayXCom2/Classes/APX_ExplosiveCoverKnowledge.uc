@@ -31,7 +31,9 @@ static function bool HasRelevantRangedThreat(
             continue;
         // The native equipped weapon template is a potential capability, not
         // a promise that the enemy can attack this cover this turn.
-        if (class'APX_EnemyKnowledge'.static.PrimaryWeaponMeanDamage(Enemy) > 0.0
+        if ((class'APX_EnemyKnowledge'.static.PrimaryWeaponMeanDamage(Enemy) > 0.0
+                || (class'APX_EnemyKnowledge'.static.CapabilityFlags(Enemy)
+                    & 2) != 0)
             && Abs(Enemy.TileLocation.X - Position.X) <= 22
             && Abs(Enemy.TileLocation.Y - Position.Y) <= 22
             && Abs(Enemy.TileLocation.Z - Position.Z) <= 2)
@@ -44,6 +46,7 @@ static function float RiskAtTile(XComGameState_Unit UnitState, TTile Tile,
     const out array<StateObjectReference> VisibleEnemies)
 {
     local array<Actor> Actors;
+    local array<StateObjectReference> ThreatRefs;
     local array<XComDestructibleActor> Seen;
     local array<TTile> BlastTiles;
     local XComDestructibleActor Destructible;
@@ -52,8 +55,12 @@ static function float RiskAtTile(XComGameState_Unit UnitState, TTile Tile,
     local int Probe, Index, Sampled;
     local float Damage, HealthFraction;
 
-    if (UnitState == none || `XWORLD == none || `XCOMHISTORY == none
-        || !HasRelevantRangedThreat(UnitState, Tile, VisibleEnemies))
+    if (UnitState == none || `XWORLD == none || `XCOMHISTORY == none)
+        return 0.0;
+    ThreatRefs = VisibleEnemies;
+    if (class'APX_FullIntel'.default.EnableFullIntel)
+        class'APX_FullIntel'.static.GetKnownEnemies(UnitState, ThreatRefs);
+    if (!HasRelevantRangedThreat(UnitState, Tile, ThreatRefs))
         return 0.0;
 
     HealthFraction = UnitState.GetCurrentStat(eStat_HP)
