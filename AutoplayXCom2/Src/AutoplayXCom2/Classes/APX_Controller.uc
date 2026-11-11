@@ -1413,7 +1413,20 @@ simulated event Destroyed()
 
 function bool CanUseAction(XComGameState_Unit UnitState, AvailableAction Action, int TargetIndex)
 {
+    local XComGameState_Ability Ability;
     local int TargetID, Index;
+
+    // Defensive ownership gate: an entry is usable only by its real owner.
+    // Native rules-cache entries normally satisfy this already. Do not infer
+    // an ability from class/template names or grant it to another soldier.
+    if (UnitState == none || `XCOMHISTORY == none
+        || Action.AvailableCode != 'AA_Success')
+        return false;
+    Ability = XComGameState_Ability(`XCOMHISTORY.GetGameStateForObjectID(
+        Action.AbilityObjectRef.ObjectID));
+    if (Ability == none || Ability.OwnerStateObject.ObjectID != UnitState.ObjectID)
+        return false;
+
     if (TargetIndex != INDEX_NONE)
     {
         if (TargetIndex < 0 || TargetIndex >= Action.AvailableTargets.Length)
