@@ -24,6 +24,7 @@ class CriticalObjectiveRelayContracts(unittest.TestCase):
         self.assertIn("'MissionObjectiveMarkedFailed'", cleanup)
         self.assertIn('XComGameState_ObjectivesList(EventData)',failed)
         self.assertIn('SeqAct_DisplayMissionObjective(EventSource)',failed)
+        self.assertIn('Info.ShowFailed && !Info.HideInTactical',failed)
         self.assertIn('FailedObjectiveIDs.Find(ObjectiveID)',failed)
         self.assertIn('FailedObjectiveIDs.AddItem(ObjectiveID)',failed)
         self.assertIn('Emit("objective_failed"',failed)
