@@ -15,6 +15,9 @@ var config bool UseExplosiveGrenades;
 var config bool EnableMissionRecording;
 var config bool RecordCandidateScores;
 var config float RecordingInterval;
+// Bounded, read-only diagnostic when a gameplay wait lasts too long.
+var config float WaitHeartbeatFirstSeconds;
+var config float WaitHeartbeatRepeatSeconds;
 var config int ContactMemoryTurns;
 var config float ContactSearchDistance;
 var config bool CoordinateConcealedAmbush;
@@ -92,6 +95,11 @@ var private array<VisitedPosition> VisitedPositions;
 var private string Status;
 var private name LastWaitReason;
 var private string LastWaitDetails;
+var private float WaitElapsedSeconds;
+var private float NextWaitHeartbeatSeconds;
+var private XComGameStateHistory WaitHeartbeatHistory;
+var private int WaitHeartbeatStartState;
+var private int WaitHeartbeatLastHistory;
 var private int OwnedAbilityID;
 var private int OwnedSourceID;
 var private XComGameStateContext_Ability OwnedActionContext;
@@ -371,6 +379,7 @@ simulated event PostBeginPlay()
     super.PostBeginPlay();
     LastTurn = INDEX_NONE;
     Status = StatusOff;
+    ResetWaitHeartbeat();
 }
 
 function bool IsEnabled()
@@ -398,6 +407,7 @@ function StopAutoplay(string Reason, optional bool bPreservePendingHack = false)
     UntilDecision = 0.0;
     LastWaitReason = '';
     LastWaitDetails = "";
+    ResetWaitHeartbeat();
     // A user pause may happen before the hack UI has even appeared. Keep only
     // the exact submitted context, so resuming cannot claim a later manual hack
     // that happens to reuse the same soldier and ability IDs.
@@ -439,6 +449,7 @@ function Toggle()
     bEnabled = true;
     LastWaitReason = '';
     LastWaitDetails = "";
+    ResetWaitHeartbeat();
     UntilDecision = FMax(0.25, DecisionInterval);
     Status = StatusActive;
     // Enabling midway through a turn should not count earlier player actions.
@@ -559,11 +570,122 @@ function string DescribeUIStack(XComTacticalController PC)
     return Result;
 }
 
+// Pure scheduling contracts; a single long frame never prints a burst.
+static function bool IsWaitHeartbeatDue(float ElapsedSeconds, float NextDueSeconds)
+{
+    return NextDueSeconds > 0.0 && ElapsedSeconds >= NextDueSeconds;
+}
+
+static function float ScheduleNextWaitHeartbeat(float ElapsedSeconds, float RepeatSeconds)
+{
+    return ElapsedSeconds + FClamp(RepeatSeconds, 15.0, 180.0);
+}
+
+function ResetWaitHeartbeat()
+{
+    WaitElapsedSeconds = 0.0;
+    NextWaitHeartbeatSeconds = FClamp(WaitHeartbeatFirstSeconds, 10.0, 120.0);
+    WaitHeartbeatHistory = none;
+    WaitHeartbeatStartState = INDEX_NONE;
+    WaitHeartbeatLastHistory = INDEX_NONE;
+}
+
+function BeginWaitHeartbeat()
+{
+    ResetWaitHeartbeat();
+    WaitHeartbeatHistory = `XCOMHISTORY;
+    if (WaitHeartbeatHistory != none)
+    {
+        WaitHeartbeatStartState = WaitHeartbeatHistory.FindStartStateIndex();
+        WaitHeartbeatLastHistory = WaitHeartbeatHistory.GetCurrentHistoryIndex();
+    }
+}
+
+// Called only while autoplay runs and the game is not paused. Expensive
+// inspection happens at most once after the initial delay and then at the
+// bounded repeat interval; neither the rule engine nor visualization is edited.
+function MaybeRecordWaitHeartbeat(float DeltaTime, XComTacticalController PC)
+{
+    local XComGameStateHistory History;
+    local XComGameStateVisualizationMgr Visualizer;
+    local XComPresentationLayer Presentation;
+    local UITacticalHUD HUD;
+    local int CurrentHistory, StartHistory, LastVisualized, CurrentVisualFrame;
+    local int HistoryDelta;
+    local bool bHUDVisible;
+    local string Fields;
+
+    if (!bEnabled || LastWaitReason == '' || PC == none)
+        return;
+
+    WaitElapsedSeconds += FMax(0.0, DeltaTime);
+    if (!IsWaitHeartbeatDue(WaitElapsedSeconds, NextWaitHeartbeatSeconds))
+        return;
+
+    History = `XCOMHISTORY;
+    if (History == none)
+    {
+        ResetWaitHeartbeat();
+        return;
+    }
+    CurrentHistory = History.GetCurrentHistoryIndex();
+    StartHistory = History.FindStartStateIndex();
+    // A new tactical history, a new mission, or a rewind must not inherit
+    // elapsed time or progress counters from the previous mission.
+    if (History != WaitHeartbeatHistory
+        || StartHistory != WaitHeartbeatStartState
+        || CurrentHistory < WaitHeartbeatLastHistory)
+    {
+        BeginWaitHeartbeat();
+        return;
+    }
+
+    HistoryDelta = CurrentHistory - WaitHeartbeatLastHistory;
+    WaitHeartbeatLastHistory = CurrentHistory;
+    NextWaitHeartbeatSeconds = ScheduleNextWaitHeartbeat(
+        WaitElapsedSeconds, WaitHeartbeatRepeatSeconds);
+
+    LastVisualized = INDEX_NONE;
+    CurrentVisualFrame = INDEX_NONE;
+    Visualizer = `XCOMVISUALIZATIONMGR;
+    if (Visualizer != none)
+    {
+        LastVisualized = Visualizer.LastStateHistoryVisualized;
+        CurrentVisualFrame = Visualizer.GetCurrenHistoryFrame();
+    }
+    Presentation = XComPresentationLayer(PC.Pres);
+    if (Presentation != none)
+        HUD = Presentation.GetTacticalHUD();
+    bHUDVisible = HUD != none && HUD.bIsVisible && !HUD.bIsRemoved;
+
+    Fields = "age_s=" $ WaitElapsedSeconds
+        $ "|reason=" $ string(LastWaitReason)
+        $ "|enabled=" $ string(bEnabled)
+        $ "|history=" $ CurrentHistory
+        $ "|history_delta=" $ HistoryDelta
+        $ "|start_history=" $ StartHistory
+        $ "|visualized_history=" $ LastVisualized
+        $ "|visualizer_frame=" $ CurrentVisualFrame
+        $ "|hud_visible=" $ string(bHUDVisible);
+    if (`TACTICALRULES != none)
+    {
+        Fields $= "|rules_state=" $ string(`TACTICALRULES.GetStateName())
+            $ "|team=" $ string(`TACTICALRULES.GetUnitActionTeam())
+            $ "|waiting_states=" $ string(`TACTICALRULES.IsWaitingForNewStates())
+            $ "|waiting_visualizer=" $ string(`TACTICALRULES.WaitingForVisualizer());
+    }
+    if (MissionRecorder != none)
+        MissionRecorder.Marker("wait_heartbeat", Fields);
+    `log("Wait heartbeat|" $ Fields, , 'AutoplayXCom2');
+}
+
 function SetWaitStatus(name Reason, string DisplayStatus, optional string Details)
 {
     local XComTacticalController PC;
 
     Status = DisplayStatus;
+    if (Reason != LastWaitReason)
+        BeginWaitHeartbeat();
     // Log transitions rather than every Tick. Keep internal class names in
     // Launch.log; the player sees the localized, readable status above.
     if (Reason == LastWaitReason && Details == LastWaitDetails)
@@ -808,6 +930,10 @@ simulated event Tick(float DeltaTime)
         return;
     }
 
+    // Observe long waits before any early-returning UI/rules/end-turn gate.
+    // Pauses and manual OFF never accumulate diagnostic wait time.
+    MaybeRecordWaitHeartbeat(DeltaTime, PC);
+
     // Confirm a pending submission even while the HUD hides for the turn
     // transition. Never send a duplicate request while it is being observed.
     if (PollEndTurnRequest(DeltaTime))
@@ -861,6 +987,7 @@ simulated event Tick(float DeltaTime)
 
     if (LastWaitReason != '')
     {
+        ResetWaitHeartbeat();
         `log("Ready: tactical HUD and game rules allow orders", , 'AutoplayXCom2');
         LastWaitReason = '';
         LastWaitDetails = "";
