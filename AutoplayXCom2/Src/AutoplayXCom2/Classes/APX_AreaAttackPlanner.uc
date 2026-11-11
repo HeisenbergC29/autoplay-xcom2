@@ -420,35 +420,71 @@ function bool IsProtectedUnit(XComGameState_Unit SourceUnit, XComGameState_Unit 
         || class'Helpers'.static.IsObjectiveTarget(OtherUnit.ObjectID);
 }
 
+// When a known state lacks the visual footprint (e.g. a mission prop not
+// currently rendered), its authoritative native TileLocation is still usable
+// for a conservative exclusion test. Do not treat a wholly unknown location
+// as safe; the extra two tiles account for larger-than-tile objective props.
+static function float ConservativeFallbackRadius(float BlastRadius, float TileSize)
+{
+    return FMax(0.0, BlastRadius) + FMax(0.0, TileSize) * 2.0;
+}
+
 function bool FootprintNearImpact(X2GameRulesetVisibilityInterface VisibleObject,
-    vector Impact, float SafeRadius)
+    vector Impact, float SafeRadius, optional XComGameState_BaseObject KnownState)
 {
     local array<TTile> Tiles;
     local TTile Tile;
     local vector Delta;
+    local XComGameState_Destructible DestructibleState;
+    local XComGameState_Unit UnitState;
+    local bool bFallback;
+    local float TestedRadius;
 
-    // If a protected mission object has no spatial interface, no safe blast can
-    // be established for this candidate. Tactical map objectives normally do.
     LastFootprintGeometry = "no_interface";
-    if (VisibleObject == none)
-        return true;
-    VisibleObject.GetVisibilityLocation(Tiles);
-    LastFootprintGeometry = "empty_footprint";
+    if (VisibleObject != none)
+    {
+        VisibleObject.GetVisibilityLocation(Tiles);
+        LastFootprintGeometry = "empty_footprint";
+    }
     if (Tiles.Length == 0)
-        return true;
+    {
+        if (KnownState == none || KnownState.bRemoved || `XWORLD == none)
+            return true;
+        DestructibleState = XComGameState_Destructible(KnownState);
+        UnitState = XComGameState_Unit(KnownState);
+        if (DestructibleState != none)
+            Tile = DestructibleState.TileLocation;
+        else if (UnitState != none)
+            Tile = UnitState.TileLocation;
+        else
+            return true;
+        if (`XWORLD.IsTileOutOfRange(Tile))
+            return true;
+        // This is a location from a real live game state, not a guessed
+        // objective marker. A padded point remains conservative for large
+        // interactives whose mesh footprint is temporarily unavailable.
+        Tiles.AddItem(Tile);
+        bFallback = true;
+    }
+
+    TestedRadius = SafeRadius;
+    if (bFallback)
+    {
+        TestedRadius = ConservativeFallbackRadius(SafeRadius, `TILESTOUNITS(1.0));
+        LastFootprintGeometry = "known_state_tile_fallback";
+    }
     foreach Tiles(Tile)
     {
         Delta = `XWORLD.GetPositionFromTileCoordinates(Tile) - Impact;
-        // Protect vertical columns too: destroying a floor can injure a unit
-        // above the visible blast, even when it is excluded from direct targets.
+        // Protect vertical columns too: a floor can be destroyed below a unit.
         Delta.Z = 0.0;
-        if (VSizeSq(Delta) <= Square(SafeRadius))
+        if (VSizeSq(Delta) <= Square(TestedRadius))
         {
-            LastFootprintGeometry = "near_footprint";
+            LastFootprintGeometry = bFallback ? "near_state_tile" : "near_footprint";
             return true;
         }
     }
-    LastFootprintGeometry = "clear_footprint";
+    LastFootprintGeometry = bFallback ? "clear_state_tile" : "clear_footprint";
     return false;
 }
 
@@ -593,7 +629,7 @@ function bool BlastIsSafe(XComGameState_Unit UnitState,
     foreach `XCOMHISTORY.IterateByClassType(class'XComGameState_Unit', OtherUnit)
     {
         if (IsProtectedUnit(UnitState, OtherUnit)
-            && FootprintNearImpact(X2GameRulesetVisibilityInterface(OtherUnit), Impact, SafeRadius))
+            && FootprintNearImpact(X2GameRulesetVisibilityInterface(OtherUnit), Impact, SafeRadius, OtherUnit))
             return RejectBlast("protected_unit_near_blast", UnitState, OtherUnit, none, "protected_unit", LastFootprintGeometry);
     }
     foreach `XCOMHISTORY.IterateByClassType(class'XComGameState_ObjectiveInfo', Objective)
@@ -607,14 +643,14 @@ function bool BlastIsSafe(XComGameState_Unit UnitState,
         Interactive = XComGameState_InteractiveObject(ObjectiveOwner);
         if (Interactive != none && (Interactive.bRemovedFromPlay || Interactive.bBroken))
             continue;
-        if (FootprintNearImpact(X2GameRulesetVisibilityInterface(ObjectiveOwner), Impact, SafeRadius))
+        if (FootprintNearImpact(X2GameRulesetVisibilityInterface(ObjectiveOwner), Impact, SafeRadius, ObjectiveOwner))
             return RejectBlast("objective_near_blast", UnitState, ObjectiveOwner, none, "objective", LastFootprintGeometry);
     }
     foreach `XCOMHISTORY.IterateByClassType(class'XComGameState_InteractiveObject', Interactive)
     {
         if (Interactive.IsEnabled && !Interactive.bRemovedFromPlay && !Interactive.bBroken
             && Interactive.GetRequiresObjectiveGlint()
-            && FootprintNearImpact(X2GameRulesetVisibilityInterface(Interactive), Impact, SafeRadius))
+            && FootprintNearImpact(X2GameRulesetVisibilityInterface(Interactive), Impact, SafeRadius, Interactive))
             return RejectBlast("interactive_objective_near_blast", UnitState, Interactive, none, "interactive_objective", LastFootprintGeometry);
     }
 
