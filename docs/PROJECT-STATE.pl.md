@@ -1,4 +1,4 @@
-# Stan przekazania projektu — 7 listopada 2026
+# Stan przekazania projektu — 11 listopada 2026
 
 To punkt startowy po pierwszym przeglądzie importu pomocnika. Bieżące issue i PR-y mogą zawierać nowsze
 ustalenia; po integracji aktualizuj ten dokument, gdy zmienia się baza lub
@@ -6,11 +6,18 @@ poziom potwierdzenia działania.
 
 ## Baza kodu
 
-- Bieżąca rewizja przygotowywanych źródeł: `mission-report-v22`, miękka ocena
-  skupienia żołnierzy w próbkowanym obszarze AoE (#20). Zachowuje politykę
-  PlantBomb, ostatni AP i limity ryzyka v21 oraz pełne rozpoznanie v20.
+- Bieżąca rewizja przygotowywanych źródeł: `mission-report-v23`, wspólna
+  ocena ryzyka utraty concealment (#32 / PR #39), z poprawkami LEAD
+  pilności, budżetu inspekcji i legalnego fallbacku. Zachowuje formację
+  AoE v22, politykę PlantBomb, ostatni AP i limity ryzyka v21 oraz pełne
+  rozpoznanie v20.
   Dokładny wariant do kompilacji
   wskazuje LEAD w [issue #4](https://github.com/HeisenbergC29/autoplay-xcom2/issues/4).
+- Baza v22: `75a83365dc9f862080dc3e8bab22399c1f875a29`. [Nowy raport](report-2026-11-07-v22.pl.md)
+  potwierdza v22 i parametry formacji w trzech sesjach: SabotageCC loss,
+  GasStation loss z −10600 finalnymi punktami oraz potwierdzone przez
+  użytkownika zawieszenie Blood Killer bez końcowego wyniku. Osobny log
+  jest identyczny z najnowszym w ZIP-ie; backupów nie doliczać do v22.
 - Baza integracji narzędzi v21: `e81ae2969ed122549be3188ef5c7b2cc9149ac24`.
   PR #35 i #36 dodają pewność punktów/diagnostykę analizatora oraz macierz
   misji; nie zmieniają rozgrywki. Baza runtime v21 po poprawce kompilacji:
@@ -100,10 +107,16 @@ uwzględnia żywych nieprzytomnych jako możliwe ofiary, nie używa ich do wspar
 Brak twardego zakazu ruchu. Promień 3 jest heurystyką, nie natywną gwarancją
 trafienia. [Zakres i próba v22](experiment-20-area-formation.pl.md).
 
-Nowe zadania: #31 izolowanie grup bez presji czasu i #32 wspólna ocena
-concealment (cywile/urządzenia/destrukcja). #32 nie jest częścią v21;
-obecna kontrola ukrycia obejmuje przygotowanie zasadzki i podejście po loot,
-lecz nie cały zwykły marsz.
+V23 wydziela wspólny obserwacyjny assessor concealment, z natywną detekcją
+cywilów/jednostek, widocznymi urządzeniami i wyjątkami Challenge/Infiltration.
+LEAD poprawił priorytet podejścia przy ukrytym oddziale, współdzielony
+budżet inspekcji przez całą decyzję oraz fallback lokalnych legalnych ruchów.
+Kara za ukrycie nie nadaje nowej nielegalności ścieżce. [Zakres v23](experiment-32-concealment-route.pl.md).
+
+Otwarte osobne zadania: #40 obserwacyjna diagnostyka potwierdzonego
+zawieszenia, #29 prawdziwe pole/obiekt PlantBomb, #28 pilne leczenie,
+#31 izolowanie grup i #38 pozostałe ofensywne AoE. V23 nie naprawia
+zawieszenia ani nie potwierdza wykonania PlantBomb.
 
 Wcześniejszy [raport GasStation v19](report-2026-11-06-v19-gasstation.pl.md):
 porażka, 40 przyjętych rozkazów, normalne zamknięcie gry. Ostatni natywny
@@ -135,16 +148,22 @@ v15, co nie oznacza wspólnego przodka commitów.
 
 ## Potwierdzenie i ograniczenia
 
-Końcowy SHA v22, wyniki kontroli i przegląd są zapisane w PR dotyczącym #20.
+Końcowy SHA v23, kontrole i decyzja są zapisane w PR #39. Kompilacja Windows
+WOTC SDK i rozgrywka v23: **NIEURUCHOMIONE**.
+
+Historyczne kontrole v22 są zapisane w PR #37 dotyczącym #20.
 Kod v22 zaliczył **566 testów z prywatnymi wejściami, bez pominięć**,
 oraz audyt **18 klas / 31 nazw zdolności PASS**. Geometria i zgodność
 źródłowa nie zastępują natywnej kompilacji i listy faktycznych trafień.
-Kompilacja Windows WOTC SDK i rozgrywka v22: **NIEURUCHOMIONE**.
-Najnowszy raport dotyczy v21: SabotageCC win, ale końcowe punkty nieznane;
-GasStation loss z pewnym −12600; Blood Killer loss z obserwowanym +700,
-bez potwierdzonego końcowego wyniku misji. Żadna z tych prób nie potwierdza
-pełnego kryterium projektu. Trzy zakończenia i normalne wyjście wspierają
-obserwację braku awarii, bez dowodu usunięcia jej dawnej przyczyny.
+Nowszy raport potwierdza uruchomienie v22, bez dokładnego SHA kompilacji.
+GasStation −10600 pozostaje porażką. SabotageCC ma częściowy HUD około
+−12100 i osobną częściową rekonstrukcję −18100; końcowy wynik nieznany.
+Blood Killer ma +700 częściowo i HANG potwierdzony przez użytkownika,
+bez Crash Detected. Żadna z trzech prób nie jest PASS projektu.
+PoisonSpit trafia tylko jedną zapisaną własną jednostkę w v22, lecz po
+wcześniejszych zgonach dwóch i utracie przytomności trzeciej; nie stanowi
+to dowodu skuteczności rozstawienia. Własny granat w SabotageCC trafia
+dwóch wrogów za łączne 6 obrażeń zgodnie z podglądem.
 
 Kod v21 po poprawkach przeglądu LEAD zaliczył **547 testów z prywatnymi
 wejściami, bez pominięć**, oraz audyt **18 klas / 31 nazw zdolności PASS**.

@@ -113,11 +113,14 @@ class AmbushPolicyTests(unittest.TestCase):
         self.assertIn("Candidate.AvailableCode != 'AA_Success'", overwatch)
         self.assertIn('APCost.GetPointCost(Ability, Soldier)', overwatch)
         path = function_body(source, 'PreparationPathIsSafe')
-        self.assertIn('GetAllVisibleObjectsForPlayer(', path)
-        self.assertIn('foreach VisibleObjects(DetectorRef)', path)
+        self.assertIn('InspectPathRisk(', path)
+        self.assertNotIn('foreach VisibleObjects(', path)
         self.assertNotIn('IterateByClassType', path)
-        self.assertIn('GetPathPointsFromPath(', path)
         self.assertIn('HasBlockingHazard(', path)
+        inspector = function_body((CLASSES / 'APX_ConcealmentPlanner.uc').read_text(),
+                                  'PathRisksRevealing')
+        self.assertIn('GetAllVisibleObjectsForPlayer(', inspector)
+        self.assertIn('GetPathPointsFromPath(', inspector)
 
     def test_coordinator_runs_before_dispatch_and_never_transfers_to_enemy_ai(self):
         source = (CLASSES / 'APX_Controller.uc').read_text()

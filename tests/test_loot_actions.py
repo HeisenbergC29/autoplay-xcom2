@@ -72,16 +72,20 @@ class LootActionTests(unittest.TestCase):
         move = function_body(self.source, 'ChooseLootMove')
         for contract in ('UnitState.NumActionPoints(', 'Cost > Visualizer.GetMobility()',
                          'BuildPathToTile(Tile, CandidatePath)',
-                         'PreparationPathIsSafe(UnitState, CandidatePath)',
                          'IsSupportedAdvanceDestination(', 'LootRouteMakesProgress(',
                          'GetImmediateThreats(UnitState, VisibleEnemies)',
                          'IsLootRouteAllowed(VisibleEnemies.Length > 0'):
             self.assertIn(contract, move)
+        self.assertRegex(move, r'PreparationPathIsSafe\(\s*UnitState,\s*CandidatePath,\s*'
+                              r'RemainingConcealmentChecks\)')
         path = function_body((CLASSES / 'APX_SquadPlanner.uc').read_text(), 'PreparationPathIsSafe')
         for contract in ('IsKnownCombatTile(Tile)', 'CanSquadSeeLocation(',
                          'HasBlockingHazard(Soldier, Tile)',
-                         'IsSupportedAdvanceStep(', 'IsDestructiveTraversal('):
+                         'IsSupportedAdvanceStep(', 'InspectPathRisk('):
             self.assertIn(contract, path)
+        inspector = function_body((CLASSES / 'APX_ConcealmentPlanner.uc').read_text(),
+                                  'PathRisksRevealing')
+        self.assertIn('IsDestructiveTraversal(', inspector)
 
     def test_only_visible_unexpired_eligible_drops_and_actual_deadlines_are_read(self):
         move = function_body(self.source, 'ChooseLootMove')

@@ -5,7 +5,54 @@ class APX_ConcealmentPlanner extends Object config(AutoplayXCom2)
 
 var config int MaxPathTilesToInspect;
 var config int MaxDetectorsToInspect;
+var config int MaxNativeLOSChecksPerInspection;
 var config float ConcealmentRiskPenalty;
+
+// Visibility alone does not make a concealed approach urgent: an unengaged
+// pod can be seen by a squadmate while this soldier still needs a safe route.
+static function bool ConcealmentIsUrgent(bool bConcealed, bool bEvacuating,
+    bool bDeadline, bool bBleeding, bool bBerserkerObjective)
+{
+    return !bConcealed || bEvacuating || bDeadline || bBleeding || bBerserkerObjective;
+}
+
+static function bool ShouldInspectConcealmentPath(bool bConcealed,
+    int PathLength, int RemainingChecks)
+{
+    return bConcealed && PathLength >= 2 && RemainingChecks > 0;
+}
+
+static function int RemainingConcealmentBudget(int RemainingChecks)
+{
+    return Max(0, RemainingChecks - 1);
+}
+
+// One caller-owned budget is threaded through the whole controller decision.
+// Exhaustion means uncertain, not safe. Never reset it per unit/search or keep
+// mutable CDO/history state just to enforce this observational work limit.
+static function bool InspectPathRisk(XComGameState_Unit Soldier,
+    const out array<TTile> Path, out string Reason, out int RemainingChecks)
+{
+    local bool bRisk;
+
+    Reason = "none";
+    if (Soldier == none || !Soldier.IsConcealed() || Path.Length < 2)
+        return false;
+    if (!ShouldInspectConcealmentPath(true, Path.Length, RemainingChecks))
+    {
+        Reason = "decision_budget";
+        return true;
+    }
+    RemainingChecks = RemainingConcealmentBudget(RemainingChecks);
+    bRisk = PathRisksRevealing(Soldier, Path, Reason);
+    // Only real inspections are logged; exhausted-budget proposals do not
+    // produce one line per candidate. These are estimates, not chosen moves.
+    `log("Concealment inspection|unit=" $ Soldier.ObjectID
+        $ "|path_tiles=" $ Path.Length $ "|risk=" $ bRisk
+        $ "|reason=" $ Reason $ "|remaining=" $ RemainingChecks,
+        true, 'AutoplayXCom2');
+    return bRisk;
+}
 
 static function bool DestructiveTraversalBreaksConcealment(bool bIsChallenge,
     bool bConcealed, bool bDestructive)
@@ -70,7 +117,7 @@ static function bool PathRisksRevealing(XComGameState_Unit Soldier,
     local TTile Tile;
     local vector TilePosition, DetectorPosition;
     local float SightRadius, DetectRadius;
-    local int Step, Index, Checks, Limit, PathLimit;
+    local int Step, Index, Checks, Limit, PathLimit, NativeLOSRemaining;
     local bool bChallenge, bIgnoreInteractives, bSampleClipped;
 
     Reason = "none";
@@ -83,6 +130,7 @@ static function bool PathRisksRevealing(XComGameState_Unit Soldier,
     }
     PathLimit = Clamp(default.MaxPathTilesToInspect, 2, 256);
     Limit = Clamp(default.MaxDetectorsToInspect, 1, 256);
+    NativeLOSRemaining = Clamp(default.MaxNativeLOSChecksPerInspection, 1, 512);
     if (Path.Length > PathLimit)
     {
         Reason = "path_sample_limit";
@@ -156,9 +204,15 @@ static function bool PathRisksRevealing(XComGameState_Unit Soldier,
             }
             Detector = XComGameState_Unit(
                 `XCOMHISTORY.GetGameStateForObjectID(Ref.ObjectID));
-            if (Detector != none && IsDetectingUnit(Soldier, Detector, Tile, Visibility))
+            if (Detector != none
+                && IsDetectingUnit(Soldier, Detector, Tile, Visibility, NativeLOSRemaining))
             {
                 Reason = Detector.IsCivilian() ? "visible_civilian" : "visible_unit";
+                return true;
+            }
+            if (NativeLOSRemaining <= 0)
+            {
+                Reason = "native_los_budget";
                 return true;
             }
         }
@@ -174,9 +228,14 @@ static function bool PathRisksRevealing(XComGameState_Unit Soldier,
                 Detector = XComGameState_Unit(
                     `XCOMHISTORY.GetGameStateForObjectID(KnownEnemies[Index].ObjectID));
                 if (Detector != none
-                    && IsDetectingUnit(Soldier, Detector, Tile, Visibility))
+                    && IsDetectingUnit(Soldier, Detector, Tile, Visibility, NativeLOSRemaining))
                 {
                     Reason = "known_enemy";
+                    return true;
+                }
+                if (NativeLOSRemaining <= 0)
+                {
+                    Reason = "native_los_budget";
                     return true;
                 }
             }
@@ -192,7 +251,7 @@ static function bool PathRisksRevealing(XComGameState_Unit Soldier,
 
 static function bool IsDetectingUnit(XComGameState_Unit Soldier,
     XComGameState_Unit Detector, TTile Tile,
-    out GameRulesCache_VisibilityInfo Visibility)
+    out GameRulesCache_VisibilityInfo Visibility, out int NativeLOSRemaining)
 {
     local float SightRadius, DetectRadius;
     local vector TilePosition, DetectorPosition;
@@ -208,8 +267,12 @@ static function bool IsDetectingUnit(XComGameState_Unit Soldier,
     SightRadius = `METERSTOUNITS(Detector.GetVisibilityRadius());
     TilePosition = `XWORLD.GetPositionFromTileCoordinates(Tile);
     DetectorPosition = `XWORLD.GetPositionFromTileCoordinates(Detector.TileLocation);
-    if (VSizeSq(TilePosition - DetectorPosition) > Square(SightRadius + 200.0)
-        || !`XWORLD.CanSeeTileToTile(Detector.TileLocation, Tile, Visibility))
+    if (VSizeSq(TilePosition - DetectorPosition) > Square(SightRadius + 200.0))
+        return false;
+    if (NativeLOSRemaining <= 0)
+        return false;
+    --NativeLOSRemaining;
+    if (!`XWORLD.CanSeeTileToTile(Detector.TileLocation, Tile, Visibility))
         return false;
 
     DetectRadius = Soldier.GetConcealmentDetectionDistance(Detector);

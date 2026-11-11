@@ -166,44 +166,20 @@ static function bool IsDestructiveTraversal(name TraversalName)
 }
 
 static function bool PreparationPathIsSafe(XComGameState_Unit Soldier,
-    const out array<TTile> Path)
+    const out array<TTile> Path, optional out int RemainingConcealmentChecks)
 {
     local array<PathPoint> Points;
-    local PathPoint Point;
-    local array<StateObjectReference> VisibleObjects;
-    local StateObjectReference DetectorRef;
-    local XComGameState_Unit Detector;
-    local XComGameState_InteractiveObject DetectionObject;
-    local GameRulesCache_VisibilityInfo Visibility;
-    local TTile Tile, DetectorTile;
-    local vector TilePosition, DetectorPosition;
+    local TTile Tile;
     local int Index;
-    local float DetectionDistance, SightDistance, StartSupport;
+    local float StartSupport;
     local string ConcealmentReason;
-    local bool bIgnoreInteractiveDetectors;
 
     if (Soldier == none || Path.Length < 2)
         return false;
     StartSupport = class'APX_MissionPlanner'.static.NearestSupportDistance(Soldier, Soldier.TileLocation);
-    bIgnoreInteractiveDetectors =
-        class'APX_ConcealmentPlanner'.static.CanIgnoreInteractiveDetectors(Soldier);
     class'X2PathSolver'.static.GetPathPointsFromPath(Soldier, Path, Points);
     if (Points.Length < 2)
         return false;
-    foreach Points(Point)
-    {
-        if (Soldier.IsConcealed()
-            && `XCOMHISTORY.GetSingleGameStateObjectForClass(
-                class'XComGameState_ChallengeData', true) == none
-            && IsDestructiveTraversal(name(string(Point.Traversal))))
-            return false;
-    }
-    // Only currently visible objects can contribute detection positions. This
-    // also includes visible civilians and security devices which can reveal a
-    // concealed soldier. Do not enumerate hidden objects to get their ranges.
-    if (Soldier.IsConcealed())
-        class'X2TacticalVisibilityHelpers'.static.GetAllVisibleObjectsForPlayer(
-            Soldier.GetAssociatedPlayerID(), VisibleObjects, , -1, true);
     for (Index = 1; Index < Path.Length; ++Index)
     {
         Tile = Path[Index];
@@ -216,39 +192,13 @@ static function bool PreparationPathIsSafe(XComGameState_Unit Soldier,
             || !class'APX_MissionPlanner'.static.IsSupportedAdvanceStep(StartSupport,
                 class'APX_MissionPlanner'.static.NearestSupportDistance(Soldier, Tile)))
             return false;
-        foreach VisibleObjects(DetectorRef)
-        {
-            DetectionObject = XComGameState_InteractiveObject(`XCOMHISTORY.GetGameStateForObjectID(DetectorRef.ObjectID));
-            if (!bIgnoreInteractiveDetectors && DetectionObject != none
-                && !DetectionObject.bRemovedFromPlay
-                && !DetectionObject.bHasBeenHacked && DetectionObject.DetectionRange > 0.0)
-            {
-                TilePosition = `XWORLD.GetPositionFromTileCoordinates(Tile);
-                DetectorTile = DetectionObject.TileLocation;
-                DetectorPosition = `XWORLD.GetPositionFromTileCoordinates(DetectorTile);
-                if (VSizeSq(TilePosition - DetectorPosition) <= Square(DetectionObject.DetectionRange))
-                    return false;
-            }
-            Detector = XComGameState_Unit(`XCOMHISTORY.GetGameStateForObjectID(DetectorRef.ObjectID));
-            if (Detector == none || !Detector.IsAlive() || Detector.GetMyTemplate().bIsCosmetic
-                || !Soldier.UnitBreaksConcealment(Detector))
-                continue;
-            DetectorTile = Detector.TileLocation;
-            if (!`XWORLD.CanSeeTileToTile(DetectorTile, Tile, Visibility))
-                continue;
-            SightDistance = `METERSTOUNITS(Detector.GetVisibilityRadius());
-            DetectionDistance = Soldier.GetConcealmentDetectionDistance(Detector);
-            if (DetectedOnTile(true, Visibility.DefaultTargetDist, SightDistance,
-                DetectionDistance, Detector.DoesUnitBreaksConcealmentIgnoringDistance()))
-                return false;
-        }
     }
-    // Shared estimator adds full-intel hostile positions and SDK exceptions
-    // (e.g. Infiltration vs interactive detectors). This is an ambush/loot
-    // preparation guard, not a force-reveal or history manipulation.
+    // A preparation route must be assessed rather than assumed safe. The
+    // common estimator alone handles detectors/traversal and SDK exceptions;
+    // it uses the same controller-owned work budget as ordinary movement.
     if (Soldier.IsConcealed()
-        && class'APX_ConcealmentPlanner'.static.PathRisksRevealing(
-            Soldier, Path, ConcealmentReason))
+        && class'APX_ConcealmentPlanner'.static.InspectPathRisk(
+            Soldier, Path, ConcealmentReason, RemainingConcealmentChecks))
         return false;
     return true;
 }
@@ -285,7 +235,8 @@ static function bool PreparationRiskAllowed(float CurrentRisk, float CandidateRi
 }
 
 static function bool ChoosePreparationMove(XComGameState_Unit Soldier, XComGameState_Unit Opener,
-    const out array<StateObjectReference> VisibleEnemies, out array<TTile> Path)
+    const out array<StateObjectReference> VisibleEnemies, out array<TTile> Path,
+    optional out int RemainingConcealmentChecks)
 {
     local XGUnit Visualizer;
     local array<TTile> Tiles, CandidatePath, RoutePath;
@@ -351,7 +302,7 @@ static function bool ChoosePreparationMove(XComGameState_Unit Soldier, XComGameS
             continue;
         CandidatePath.Length = 0;
         if (!Visualizer.m_kReachableTilesCache.BuildPathToTile(Tile, CandidatePath)
-            || !PreparationPathIsSafe(Soldier, CandidatePath))
+            || !PreparationPathIsSafe(Soldier, CandidatePath, RemainingConcealmentChecks))
             continue;
         BestValue = Value;
         bBestFiringLane = bFiringLane;
@@ -365,7 +316,8 @@ static function bool ChoosePreparationMove(XComGameState_Unit Soldier, XComGameS
 // a DependsOn edge to another mod class just to parse a local declaration.
 static function bool ChoosePreparation(int PlayerID, XComGameState_Unit Opener,
     out XComGameState_Unit PreparedUnit, out AvailableAction PreparedAction,
-    out int PreparedTargetIndex, out array<TTile> PreparedPath, out float PreparedScore)
+    out int PreparedTargetIndex, out array<TTile> PreparedPath, out float PreparedScore,
+    optional out int RemainingConcealmentChecks)
 {
     local XComGameState_Unit Soldier;
     local array<StateObjectReference> VisibleEnemies;
@@ -400,7 +352,8 @@ static function bool ChoosePreparation(int PlayerID, XComGameState_Unit Opener,
         Candidate.UnitState = Soldier;
         bUsefulShot = HasUsefulShot(Soldier);
         if (CanStageMove(Soldier.NumActionPoints(), PointCost, bUsefulShot)
-            && ChoosePreparationMove(Soldier, Opener, VisibleEnemies, PreparationPath))
+            && ChoosePreparationMove(Soldier, Opener, VisibleEnemies, PreparationPath,
+                RemainingConcealmentChecks))
         {
             Candidate.Path = PreparationPath;
             Candidate.bMove = true;

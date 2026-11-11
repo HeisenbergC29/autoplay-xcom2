@@ -28,9 +28,13 @@ Normalny `ChooseMove` sprawdza preferowaną trasę do celu. Jeśli trasa zdradza
 ukrycie i zadanie nie jest pilne, szuka bezpiecznego niebieskiego alternatywnego
 kroku. Oryginalną legalną trasę zatrzymuje jako **fallback**, jeśli nie znajdzie
 bezpiecznej — nie zamienia ryzyka w nieskończony stan oczekiwania.
+Jeśli nie udało się wyznaczyć prefiksu do dokładnego celu, zachowuje również
+najlepszy konstruktywny lokalny ruch sprzed kary za utratę ukrycia. Ten ruch
+nadal musi przejść wszystkie kontrole AP, ryzyka, hazardów, wsparcia i kosztu
+utraconego ataku. Kara za concealment sama nie powoduje globalnego NoPlan/OFF.
 Przy alternatywach nakłada miękką, konfigurowalną karę; ratunek, ewakuacja,
-bezpośrednie zagrożenie, deadline i specjalny sabotaż Blood Killer nadal mają
-wyższy priorytet.
+deadline i specjalny sabotaż Blood Killer mają wyższy priorytet. Sama widoczność
+wroga przez ukryty oddział nie wyłącza kontroli — może to być niezaangażowany pod.
 
 `APX_ExplorationPlanner` stosuje tę samą miękką ocenę na proponowanych
 ścieżkach. `APX_SquadPlanner.PreparationPathIsSafe` używa wspólnego estymatora
@@ -41,11 +45,26 @@ zamiast bezwarunkowo żądać natywnej widoczności każdego pola.
 
 ## Koszt i ograniczenia
 
-Domyślne limity: 48 pól/trasa, do 96 widocznych/znanych detektorów; drogą
-ocenę LOS wykonuje się najwyżej sześć razy w każdym wyszukiwaniu ruchu.
-Jeśli inspekcja jest niepełna, zwraca powód `*_sample_limit` i tylko karę
-punktową, a nie pewność ujawnienia. Warianty mogą wymagać dodatkowego
-profilowania wydajności w grze; żadna pozytywna ocena nie gwarantuje stealth.
+Domyślne limity jednej inspekcji: 48 pól/trasa, do 96 widocznych/znanych
+detektorów oraz 128 nowych natywnych zapytań LOS
+(`MaxNativeLOSChecksPerInspection`, twardy zakres 1–512). Tani filtr odległości
+poprzedza LOS. Kontroler inicjuje jeden budżet sześciu inspekcji na całą
+decyzję, wspólny dla wszystkich jednostek, prefiksu i lokalnego ruchu,
+eksploracji, łupu oraz przygotowania zasadzki. To domyślnie najwyżej 768
+nowych zapytań LOS tej oceny na decyzję; nie jest to limit istniejących
+zapytań innych plannerów. Nie ma dodatkowego resetu per jednostka ani
+podwójnego starego skanu detektorów w przygotowaniu.
+
+Niepełna inspekcja zwraca `*_sample_limit`, `native_los_budget` albo
+`decision_budget`: nie jest pewnością wykrycia ani bezpieczeństwa. Nieznana
+trasa dostaje tę samą skończoną karę co oszacowane ryzyko, bez premii za brak
+sprawdzenia. Opcjonalne przygotowanie zasadzki wymaga sprawdzonej trasy;
+zwykły marsz zachowuje legalny fallback.
+
+Log `Concealment inspection` podaje jednostkę, długość, oszacowanie i przyczynę
+tylko dla faktycznych inspekcji, maksymalnie sześciu w decyzji. To kandydaci,
+nie dowód wykonania ruchu. Początek APXREC zawiera ustawioną karę i limit LOS.
+Wariant może wymagać profilowania w grze; żadna ocena nie gwarantuje stealth.
 Rzeczywista ścieżka, koszty AP, status ukrycia i interakcje nadal należą do
 silnika.
 
@@ -65,6 +84,11 @@ Porównać na tym samym zapisie bazę v22 i wariant v23:
 5. GasStation i Blood Killer: każdorazowo zanotować cel, wynik natywny
    i **punkty misji** (finalne, częściowe albo nieznane), zawieszenie,
    użycie grup i utratę concealment.
+
+Ta zmiana nie jest naprawą potwierdzonego zawieszenia Blood Killer v22.
+Obserwacyjne śledzenie długiego oczekiwania jest osobnym zadaniem #40;
+właściwy obiekt i pole PlantBomb pozostają w #29. Nie trzeba odtwarzać
+zawieszenia, aby sprawdzić sam cywil/detektor/szybę w innej misji.
 
 Testy Python i czytanie prywatnych definicji SDK nie są potwierdzeniem
 kompilacji WOTC ani wygrania misji. LEAD weryfikuje i scala; użytkownik

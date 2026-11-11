@@ -101,6 +101,12 @@ HELPER kontynuuje #32 z nowej bazy, zachowując ten składnik w formacji;
 #29 (legalny obiekt PlantBomb) i #28 (pilne leczenie) pozostają osobne.
 [Zakres v22](experiment-20-area-formation.pl.md).
 
+V23 / PR #39 przenosi ocenę concealment do wspólnego assessora z budżetem
+pojedynczej decyzji i zachowaniem konstruktywnego legalnego fallbacku.
+Nie jest poprawką potwierdzonego zawieszenia v22: obserwacyjny heartbeat
+jest osobnym priorytetem #40, a właściwy obiekt PlantBomb nadal bada #29.
+[Zakres v23](experiment-32-concealment-route.pl.md).
+
 ## Przekazanie i decyzja o scaleniu
 
 W PR napisz: konkretny problem i zachowanie po zmianie, źródła/commity,

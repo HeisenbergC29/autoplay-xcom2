@@ -953,10 +953,13 @@ function MakeDecision(XComTacticalController PC)
     local array<vector> CandidateLocations, BestLocations;
     local vector CandidateAim, BestAim;
     local int TargetIndex, BestTargetIndex, ChosenTargetID, AmbushTargetIndex, RescuePatientID;
+    local int RemainingConcealmentChecks;
     local float Score, BestScore, AmbushScore;
     local bool bMove, bArea, bHavePlan, bSuccess, bCanExplore, bCombatThreats;
     local bool bVisibleThreats, bContactSearch, bCandidateMove, bGrenadeCandidate;
 
+    // Shared by every unit and every movement/preparation/loot search below.
+    RemainingConcealmentChecks = 6;
     PlayerRef = `TACTICALRULES.GetCachedUnitActionPlayerRef();
     PlayerState = XComGameState_Player(`XCOMHISTORY.GetGameStateForObjectID(PlayerRef.ObjectID));
     if (PlayerState == none || PC.m_XGPlayer == none
@@ -1122,7 +1125,8 @@ function MakeDecision(XComTacticalController PC)
         if (bContactSearch && !class'APX_MissionPlanner'.static.ShouldEvacuate(UnitState))
             bCandidateMove = ChooseContactSearchMove(UnitState, CandidatePath, Score);
         else
-            bCandidateMove = class'APX_MissionPlanner'.static.ChooseMove(UnitState, CandidatePath, Score);
+            bCandidateMove = class'APX_MissionPlanner'.static.ChooseMove(
+                UnitState, CandidatePath, Score, RemainingConcealmentChecks);
         if (bCandidateMove
             && TraceCandidateMove(UnitState, CandidatePath, Score)
             && Score > BestScore && CanUseMove(UnitState, CandidatePath))
@@ -1153,7 +1157,8 @@ function MakeDecision(XComTacticalController PC)
         }
         CandidatePath.Length = 0;
         if (!bCombatThreats
-            && class'APX_MissionPlanner'.static.ChooseLootMove(UnitState, CandidatePath, Score)
+            && class'APX_MissionPlanner'.static.ChooseLootMove(
+                UnitState, CandidatePath, Score, RemainingConcealmentChecks)
             && TraceCandidateMove(UnitState, CandidatePath, Score)
             && Score > BestScore && CanUseMove(UnitState, CandidatePath))
         {
@@ -1184,7 +1189,8 @@ function MakeDecision(XComTacticalController PC)
                 continue;
             bCanExplore = true;
             CandidatePath.Length = 0;
-            if (ExplorationPlanner.ChooseMove(UnitState, CandidatePath, Score)
+            if (ExplorationPlanner.ChooseMove(
+                UnitState, CandidatePath, Score, RemainingConcealmentChecks)
                 && TraceCandidateMove(UnitState, CandidatePath, Score)
                 && Score > BestScore && CanUseMove(UnitState, CandidatePath))
             {
@@ -1217,7 +1223,8 @@ function MakeDecision(XComTacticalController PC)
                 AmbushPreparationActions, Clamp(class'APX_SquadPlanner'.default.MaxPreparationActionsPerTurn, 0, 12)))
         {
             if (class'APX_SquadPlanner'.static.ChoosePreparation(PlayerRef.ObjectID, BestUnit,
-                AmbushUnit, AmbushAction, AmbushTargetIndex, AmbushPath, AmbushScore)
+                AmbushUnit, AmbushAction, AmbushTargetIndex, AmbushPath, AmbushScore,
+                RemainingConcealmentChecks)
                 && ((AmbushPath.Length > 1 && CanUseMove(AmbushUnit, AmbushPath))
                     || (AmbushPath.Length == 0 && CanUseAction(AmbushUnit, AmbushAction, AmbushTargetIndex))))
             {
