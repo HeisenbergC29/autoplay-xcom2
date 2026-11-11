@@ -52,6 +52,53 @@ compile / test w grze tego PR jeszcze **NOT RUN**.
    zdolności cudzych żołnierzy; jest to dodatkowy filtr
    zapobiegawczy, nie naprawa udokumentowanego wyjątku.
 
+## Rozszerzenie: zdolności wrogów i wybuchowe osłony
+
+W raportach GasStation ocena ruchu powinna znać nie tylko statyczne
+obrażenia podstawowej broni wroga, ale również jego ujawnione z szablonów
+zdolności ofensywne. `GetThreatWeights` korzysta teraz z
+`APX_EnemyKnowledge.TargetThreat` — zawiera bounded wskaźniki
+`Capability_Area`, `Capability_Control` i `Capability_Support`.
+Zagrożenia są pobierane **raz na listę kontaktów** w danym wyszukiwaniu
+ruchu, nie ponownie na każdym polu. Nie czytamy ukrytego AP, czasu
+odnowienia ani decyzji przeciwnika.
+
+Nowy `APX_ExplosiveCoverKnowledge` bierze pod uwagę faktycznie
+istniejące `XComDestructibleActor` z `HasRadialDamage()` i
+`GetDestroyedDamagePreview() > 0`. Ocenia pięć pól wokół wybranego
+miejsca i sprawdza, czy pole żołnierza należy do natywnej listy
+`GetRadialDamageTiles`. Wymaga znanego wroga z możliwym atakiem
+dystansowym/obszarowym; przy włączonym pełnym rozpoznaniu może również
+brać pod uwagę jego obecnie znaną pozycję przed aktywacją podu.
+**Nie oznacza to**, że przeciwnik wykona taki atak w następnej turze,
+ani że obiekt da się zniszczyć jednym trafieniem. Punktacja jest tylko
+miękką, ograniczoną karą: maksymalnie 42 jednostki score.
+
+Dla natywnego A* ryzyko samochodu prowokuje poszukanie innej legalnej
+pozycji, a oryginalną ścieżkę zachowuje jako awaryjną. W lokalnym
+wyszukiwaniu tylko pierwsze sześć obiecujących endpointów otrzymuje
+kosztowną ocenę otoczenia — reszta ma małą karę niepewności. Dotyczy
+**również oddziału, który utracił concealment**, np. GasStation.
+Aktywne terminy, ratunek, ewakuacja i specjalny sabotaż BerserkerMP
+nie mogą zostać zablokowane przez tę preferencję.
+
+**Zastrzeżenie produkcyjne:** odczyt `GetRadialDamageTiles` jest native,
+a nowe źródło `APX_ExplosiveCoverKnowledge.uc` wymaga osobnej kompilacji
+Windows WOTC SDK. Zielony test Python gwarantuje tylko kontrakty
+źródłowe i matematykę. W pierwszej próbie A/B sprawdzić koszt sprawdzania
+samochodów, zapętlenia w pobliżu osłon i to, czy osłona uznana za
+wybuchową rzeczywiście ma wtórne obrażenia. Jeżeli nie, wyregulować
+karę na podstawie dowodów, nie na domysłach.
+
+**Odrębna gałąź #38** odpowiada na ofensywny granatnik.
+GasStation v23 miała `LaunchGrenade` `AA_Success` dla unit 63486,
+lecz wszystkie 355 sprawdzonych centrów nie przeszły filtrów
+(`range=262`, `blast=91`). Wśród blokad było
+`objective_near_blast / empty_footprint`. Bezpieczny fallback na
+`XComGameState_Destructible.TileLocation` jest rozwijany oddzielnie,
+bez pozwalania na niezweryfikowane eksplozje łańcuchowe. Tego kodu
+**nie ma w tym PR**.
+
 ## Czego to NIE rozwiązuje
 
 - **#31b** — pełna sekwencja `XComGameState_AIGroup`
