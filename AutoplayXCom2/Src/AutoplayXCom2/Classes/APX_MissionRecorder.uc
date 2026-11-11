@@ -122,6 +122,10 @@ function RegisterScoreObservers()
         OnObjectiveCompleted, ELD_OnStateSubmitted);
     EventManager.RegisterForEvent(Listener, 'MissionObjectiveMarkedFailed',
         OnObjectiveFailed, ELD_OnStateSubmitted);
+    // Stock X2TacticalGameRuleset.OnChallengeObjectiveFailed invokes
+    // FailBattle for this event. Observe it even when no UI checkbox exists.
+    EventManager.RegisterForEvent(Listener, 'ChallengeObjectiveFailed',
+        OnChallengeObjectiveFailed, ELD_OnStateSubmitted);
     EventManager.RegisterForEvent(Listener, 'CivilianRescued',
         OnCivilianRescued, ELD_OnStateSubmitted);
 }
@@ -142,6 +146,7 @@ function UnregisterScoreObservers()
     Listener = self;
     EventManager.UnRegisterFromEvent(Listener, 'MissionObjectiveMarkedCompleted');
     EventManager.UnRegisterFromEvent(Listener, 'MissionObjectiveMarkedFailed');
+    EventManager.UnRegisterFromEvent(Listener, 'ChallengeObjectiveFailed');
     EventManager.UnRegisterFromEvent(Listener, 'CivilianRescued');
 }
 
@@ -253,6 +258,29 @@ function EventListenerReturn OnObjectiveFailed(Object EventData, Object EventSou
     Emit("objective_failed", "|source=mission_ui_event|critical=true|objective_id=" $ Safe(ObjectiveID)
         $ "|objective_name=" $ Safe(ObjectiveName)
         $ "|turn=" $ TurnAtHistory(HistoryIndex) $ "|history=" $ HistoryIndex);
+    return ELR_NoInterrupt;
+}
+
+// Challenge failure may have no public display checkbox. Native
+// X2TacticalGameRuleset.OnChallengeObjectiveFailed handles the true fail;
+// we only capture that same event, never call FailBattle ourselves.
+function EventListenerReturn OnChallengeObjectiveFailed(Object EventData,
+    Object EventSource, XComGameState GameState, Name Event, Object CallbackData)
+{
+    local int HistoryIndex;
+    local string ObjectiveID;
+
+    if (!IsRecordingMission())
+        return ELR_NoInterrupt;
+    ObjectiveID = RecordedMissionType $ ":challenge_objective";
+    if (FailedObjectiveIDs.Find(ObjectiveID) != INDEX_NONE)
+        return ELR_NoInterrupt;
+    FailedObjectiveIDs.AddItem(ObjectiveID);
+    HistoryIndex = `XCOMHISTORY.GetCurrentHistoryIndex();
+    Emit("objective_failed", "|source=challenge_native_event|critical=true"
+        $ "|objective_id=" $ Safe(ObjectiveID)
+        $ "|turn=" $ TurnAtHistory(HistoryIndex)
+        $ "|history=" $ HistoryIndex);
     return ELR_NoInterrupt;
 }
 
