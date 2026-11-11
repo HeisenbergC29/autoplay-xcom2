@@ -69,6 +69,13 @@ dodatkowych tur, dojście do właściwego miejsca X4 i
 native outcome, wynik punktowy z pewnością źródła,
 wykonanie wszystkich celów.
 
-**Nowy prywatny ZIP z 11.11.2026:** dostęp do kontenerowego
-odczytu w tej sesji zgłasza błąd narzędzia. Nie raportować
-z niego zmyślonych wyników ani nie publikować logów.
+**Raport v24 z 11.11.2026 sprawdzony po odzyskaniu dostępu do ZIP:**
+SabotageCC: native win, 2 ukończone cele, HUD ~+6800 tylko
+porównawczo; brak pewnego końcowego mission_points. GasStation:
+native loss, **−10700 końcowe natywne**. Blood Killer: przerwana
+ręcznie D34, 28 moves, 3 DevastatingPunchMP, 0 PlantBomb;
+HUD **0/32950 tylko na początku**, końcowe punkty nieznane.
+Po ręcznym OFF silnik zapisał **`Mission timer expired`** — w
+projekcie to krytyczne nieukończenie obowiązkowego objective.
+Nowy listener ma to wykrywać z natywnych eventów, nie z tekstu logu.
+Prywatnych danych nie publikowano.
