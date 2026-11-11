@@ -125,8 +125,9 @@ static function float OpeningSupportPenalty(int ReadySupport, bool bConcealed,
 {
     if (!bConcealed || bUrgent)
         return 0.0;
-    return float(Max(0, 2 - ReadySupport)) * 18.0
-        + (bOpenerExposed ? 10.0 : 0.0);
+    if (bOpenerExposed)
+        return float(Max(0, 2 - ReadySupport)) * 18.0 + 10.0;
+    return float(Max(0, 2 - ReadySupport)) * 18.0;
 }
 
 // Uses only living friendly state, current legal overwatch and native geometry.
