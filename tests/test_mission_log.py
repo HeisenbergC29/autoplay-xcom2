@@ -22,6 +22,50 @@ def record(seq, event, fields='', session='s1'):
 
 
 class MissionLogTests(unittest.TestCase):
+    def test_failed_objective_is_critical_even_with_positive_native_score(self):
+        session = LOG.analyze_logs([('Launch.log', '\n'.join([
+            record(1, 'start', 'mission=SabotageTransmitter|difficulty=2'),
+            record(2, 'objective_failed',
+                   'source=mission_ui_event|critical=true|objective_id=SabotageTransmitter:3:1:0|objective_name=PlantBomb|turn=4'),
+            record(3, 'game_score',
+                   'source=legacy_runtime|ladder_index=1|ladder_rung=1|mission_points_known=true|mission_final=true|mission_points=700|phase=finish|history=20'),
+            record(4, 'end', 'outcome=win|history=20|history_pending=0'),
+        ]))])['sessions'][0]
+        self.assertEqual(session['outcome'], 'win')
+        self.assertTrue(session['critical_objective_failed'])
+        self.assertEqual(len(session['failed_objective_ids']), 1)
+        self.assertEqual(session['mission_points']['value'], 700)
+        self.assertTrue(session['mission_points']['confirmed'])
+        self.assertEqual(session['attempt_verdict']['status'], 'fail')
+        self.assertEqual(session['attempt_verdict']['reason'], 'critical_objective_failed')
+        report = LOG.analyze_logs([('Launch.log', '\n'.join([
+            record(1, 'start', 'mission=SabotageTransmitter'),
+            record(2, 'objective_failed', 'critical=true|objective_id=Transmitter:1'),
+        ]))])
+        self.assertIn('CRITICAL OBJECTIVE FAILURE', LOG.human_summary(report))
+
+    def test_failed_objective_without_terminal_record_is_already_critical(self):
+        session = LOG.analyze_logs([('Launch.log', '\n'.join([
+            record(1, 'start', 'mission=SabotageTransmitter'),
+            record(2, 'objective_failed', 'critical=true|objective_id=Transmitter:1'),
+            record(3, 'hud_score', 'display=500/32950'),
+        ]))])['sessions'][0]
+        self.assertEqual(session['outcome'], 'unknown')
+        self.assertTrue(session['critical_objective_failed'])
+        self.assertEqual(session['attempt_verdict']['status'], 'fail')
+        self.assertEqual(session['attempt_verdict']['reason'], 'critical_objective_failed')
+        self.assertFalse(session['mission_points']['confirmed'])
+
+    def test_no_failed_objective_does_not_falsely_make_a_loss_or_unknown(self):
+        session = LOG.analyze_logs([('Launch.log', '\n'.join([
+            record(1, 'start', 'mission=SabotageTransmitter'),
+            record(2, 'objective_completed', 'objective_id=Transmitter:1'),
+            record(3, 'end', 'outcome=unknown'),
+        ]))])['sessions'][0]
+        self.assertFalse(session['critical_objective_failed'])
+        self.assertEqual(session['failed_objective_ids'], [])
+        self.assertEqual(session['attempt_verdict']['status'], 'unknown')
+
     def test_grenade_scan_diagnostics_distinguish_range_from_blast_rejections(self):
         report = LOG.analyze_logs([('Launch.log', '\n'.join([
             record(1, 'start'),
