@@ -179,6 +179,7 @@ static function float SecondaryGroupEngagementPenalty(XComGameState_Unit Attacke
     local XComGameState_Unit Target;
     local XComGameState_AIGroup Group, Other;
     local int Scanned;
+    local bool bTargetEngaged;
 
     if (Attacker == none || `XCOMHISTORY == none
         || class'APX_MissionPlanner'.static.HasActiveMissionDeadline()
@@ -189,14 +190,18 @@ static function float SecondaryGroupEngagementPenalty(XComGameState_Unit Attacke
     if (Target == none || !Target.IsAlive() || !Attacker.IsEnemyUnit(Target))
         return 0.0;
     Group = Target.GetGroupMembership();
-    if (Group == none || Group.IsEngaged())
+    if (Group == none)
+        return 0.0;
+    bTargetEngaged = Group.IsEngaged();
+    if (bTargetEngaged)
         return 0.0;
 
     foreach `XCOMHISTORY.IterateByClassType(class'XComGameState_AIGroup', Other)
     {
         if (++Scanned > 32)
             break;
-        if (Other != none && Other.ObjectID != Group.ObjectID && Other.IsEngaged())
+        if (Other != none && Other.ObjectID != Group.ObjectID
+            && IsSecondaryGroupOpening(true, bTargetEngaged, Other.IsEngaged(), false))
             return 35.0;
     }
     return 0.0;
