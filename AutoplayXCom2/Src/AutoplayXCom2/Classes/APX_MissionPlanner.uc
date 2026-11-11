@@ -1890,7 +1890,7 @@ static function bool ChooseMove(XComGameState_Unit UnitState,
     local TTile GoalTile, Tile, ClosestTile;
     local MissionGoal Goal;
     local bool bCombatGoal, bSafe, bRequireSupport, bRoutineRoute, bSabotageRush;
-    local bool bConcealmentUrgent, bUsedLocalFallback, bThreatSamplesReady;
+    local bool bConcealmentUrgent, bUsedLocalFallback;
     local string ConcealmentRiskReason;
     local int Index, PathIndex, SampleIndex, SampleCount;
     local float CurrentScore, CandidateScore, BestScore, CurrentRisk, CandidateRisk, PathCost, StartSupport, BestRisk;
@@ -1931,6 +1931,10 @@ static function bool ChooseMove(XComGameState_Unit UnitState,
         return false;
 
     UnitVisualizer.m_kReachableTilesCache.UpdateTileCacheIfNeeded();
+    // One movement-search snapshot for the early A* endpoint and later local
+    // fallback. No re-scan per candidate tile.
+    GetMeleeThreatReaches(UnitState, VisibleEnemies, MeleeThreatReaches);
+    GetThreatWeights(UnitState, VisibleEnemies, ThreatWeights);
     // Prefer the same native route on successive objective moves. A fallback
     // only after greedy failure would oscillate back toward a wall on the next
     // action whenever the necessary detour initially increases direct distance.
@@ -1952,9 +1956,6 @@ static function bool ChooseMove(XComGameState_Unit UnitState,
         {
             // Unlike the native A* endpoint path, the local candidates below
             // already pay ExposureRisk. Apply the same threat estimate here.
-            GetMeleeThreatReaches(UnitState, VisibleEnemies, MeleeThreatReaches);
-            GetThreatWeights(UnitState, VisibleEnemies, ThreatWeights);
-            bThreatSamplesReady = true;
             CurrentRisk = ExposureRisk(UnitState, UnitState.TileLocation,
                 VisibleEnemies, MeleeThreatReaches, ThreatWeights);
             CandidateRisk = ExposureRisk(UnitState, Path[Path.Length - 1],
@@ -1987,11 +1988,6 @@ static function bool ChooseMove(XComGameState_Unit UnitState,
     // Make sure the closest destination participates even with bounded sampling.
     Tiles.InsertItem(0, ClosestTile);
     SampleCount = Min(Tiles.Length, Clamp(default.MaxCandidateTiles, 1, 512));
-    if (!bThreatSamplesReady)
-    {
-        GetMeleeThreatReaches(UnitState, VisibleEnemies, MeleeThreatReaches);
-        GetThreatWeights(UnitState, VisibleEnemies, ThreatWeights);
-    }
     CurrentScore = PositionScore(UnitState, UnitState.TileLocation, GoalTile,
         bCombatGoal, VisibleEnemies, MeleeThreatReaches, ThreatWeights);
     BestScore = CurrentScore + FMax(1.0, default.MinimumPositionGain);
