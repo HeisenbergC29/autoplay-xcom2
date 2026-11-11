@@ -91,6 +91,7 @@ function Start(int PlayerID)
     if (BattleData != none)
         Mission = BattleData.MapData.ActiveMission.sType;
     RecordedMissionType = Mission;
+    LastRelayScanTurn = -1; // include turn zero on a late F8/start.
     bStarted = true;
     Emit("start", "|player=" $ PlayerID $ "|mission=" $ Safe(Mission)
         $ "|difficulty=" $ `TacticalDifficultySetting $ "|history=" $ HistoryCursor
