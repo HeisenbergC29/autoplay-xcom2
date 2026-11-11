@@ -164,6 +164,44 @@ static function int CountRangedOpeningSupport(XComGameState_Unit Opener,
     return Count;
 }
 
+// Penalize a speculative shot at a previously unengaged pod while XCOM
+// is already occupied with another pod. Only observed native group/alert
+// state is used, never enemy future moves, charges, RNG or hidden intentions.
+static function bool IsSecondaryGroupOpening(bool bHasGroup,
+    bool bTargetEngaged, bool bOtherGroupEngaged, bool bUrgent)
+{
+    return bHasGroup && !bTargetEngaged && bOtherGroupEngaged && !bUrgent;
+}
+
+static function float SecondaryGroupEngagementPenalty(XComGameState_Unit Attacker,
+    AvailableAction Candidate, int TargetIndex)
+{
+    local XComGameState_Unit Target;
+    local XComGameState_AIGroup Group, Other;
+    local int Scanned;
+
+    if (Attacker == none || `XCOMHISTORY == none
+        || class'APX_MissionPlanner'.static.HasActiveMissionDeadline()
+        || TargetIndex < 0 || TargetIndex >= Candidate.AvailableTargets.Length)
+        return 0.0;
+    Target = XComGameState_Unit(`XCOMHISTORY.GetGameStateForObjectID(
+        Candidate.AvailableTargets[TargetIndex].PrimaryTarget.ObjectID));
+    if (Target == none || !Target.IsAlive() || !Attacker.IsEnemyUnit(Target))
+        return 0.0;
+    Group = Target.GetGroupMembership();
+    if (Group == none || Group.IsEngaged())
+        return 0.0;
+
+    foreach `XCOMHISTORY.IterateByClassType(class'XComGameState_AIGroup', Other)
+    {
+        if (++Scanned > 32)
+            break;
+        if (Other != none && Other.ObjectID != Group.ObjectID && Other.IsEngaged())
+            return 35.0;
+    }
+    return 0.0;
+}
+
 // Only ordinary legal ranged openers. Do not apply this to the Berserker
 // melee objective, healing, mission interactions, or already revealed squads.
 static function float UnsupportedOpeningPenaltyForAction(
