@@ -117,6 +117,89 @@ static function bool HasUsefulShot(XComGameState_Unit Soldier)
     return false;
 }
 
+// A concealed first shot is not a coordinated ambush when the other soldiers
+// cannot cover the same pod. Keep this as a soft score penalty, never a new
+// gameplay action or a hard ban on legal attacks.
+static function float OpeningSupportPenalty(int ReadySupport, bool bConcealed,
+    bool bUrgent, bool bOpenerExposed)
+{
+    if (!bConcealed || bUrgent)
+        return 0.0;
+    return float(Max(0, 2 - ReadySupport)) * 18.0
+        + (bOpenerExposed ? 10.0 : 0.0);
+}
+
+// Uses only living friendly state, current legal overwatch and native geometry.
+// A possible reaction lane does not prove that activation scamper will trigger.
+static function int CountRangedOpeningSupport(XComGameState_Unit Opener,
+    XComGameState_Unit Enemy)
+{
+    local XComGameState_Unit Friend;
+    local AvailableAction OverwatchAction;
+    local GameRulesCache_VisibilityInfo Visibility;
+    local int TargetIndex, PointCost, Count;
+    local float SightDistance;
+
+    if (Opener == none || Enemy == none || `XWORLD == none)
+        return 0;
+    foreach `XCOMHISTORY.IterateByClassType(class'XComGameState_Unit', Friend)
+    {
+        if (Friend == none || Friend.ObjectID == Opener.ObjectID
+            || !IsLocalSoldier(Friend, Opener.GetAssociatedPlayerID())
+            || !Friend.IsAbleToAct()
+            || (Friend.NumActionPoints() <= 0 && Friend.NumAllReserveActionPoints() <= 0))
+            continue;
+        SightDistance = `METERSTOUNITS(Friend.GetVisibilityRadius());
+        if (!`XWORLD.CanSeeTileToTile(Friend.TileLocation,
+            Enemy.TileLocation, Visibility)
+            || Visibility.DefaultTargetDist > Square(SightDistance))
+            continue;
+        if (Friend.NumAllReserveActionPoints() > 0
+            || FindOverwatch(Friend, OverwatchAction, TargetIndex, PointCost))
+            ++Count;
+        if (Count >= 2)
+            break;
+    }
+    return Count;
+}
+
+// Only ordinary legal ranged openers. Do not apply this to the Berserker
+// melee objective, healing, mission interactions, or already revealed squads.
+static function float UnsupportedOpeningPenaltyForAction(
+    XComGameState_Unit Opener, AvailableAction Candidate, int TargetIndex)
+{
+    local XComGameState_Ability Ability;
+    local XComGameState_Unit Enemy;
+    local vector EnemyPosition, OpenerPosition;
+    local float Angle;
+    local ECoverType Cover;
+    local name AbilityName;
+
+    if (Opener == none || !Opener.IsConcealed()
+        || !SquadIsConcealed(Opener.GetAssociatedPlayerID())
+        || class'APX_MissionPlanner'.static.HasActiveMissionDeadline()
+        || TargetIndex < 0 || TargetIndex >= Candidate.AvailableTargets.Length
+        || Candidate.AvailableCode != 'AA_Success')
+        return 0.0;
+    Ability = XComGameState_Ability(`XCOMHISTORY.GetGameStateForObjectID(
+        Candidate.AbilityObjectRef.ObjectID));
+    if (Ability == none || Ability.OwnerStateObject.ObjectID != Opener.ObjectID)
+        return 0.0;
+    AbilityName = Ability.GetMyTemplateName();
+    if (AbilityName != 'StandardShot' && AbilityName != 'PistolStandardShot'
+        && AbilityName != 'SniperStandardFire')
+        return 0.0;
+    Enemy = XComGameState_Unit(`XCOMHISTORY.GetGameStateForObjectID(
+        Candidate.AvailableTargets[TargetIndex].PrimaryTarget.ObjectID));
+    if (Enemy == none || !Opener.IsEnemyUnit(Enemy))
+        return 0.0;
+    EnemyPosition = `XWORLD.GetPositionFromTileCoordinates(Enemy.TileLocation);
+    OpenerPosition = `XWORLD.GetPositionFromTileCoordinates(Opener.TileLocation);
+    Cover = `XWORLD.GetCoverTypeForTarget(EnemyPosition, OpenerPosition, Angle);
+    return OpeningSupportPenalty(CountRangedOpeningSupport(Opener, Enemy),
+        true, false, Cover == CT_None);
+}
+
 static function bool FindOverwatch(XComGameState_Unit Soldier,
     out AvailableAction Action, out int TargetIndex, out int PointCost)
 {
