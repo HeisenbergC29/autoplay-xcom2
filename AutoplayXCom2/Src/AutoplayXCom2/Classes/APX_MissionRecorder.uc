@@ -39,6 +39,7 @@ var private bool bHasLadderScore;
 var private array<string> RecordedScoreKeys;
 var private array<string> RecordedScoreRules;
 var private array<string> CompletedObjectiveIDs;
+var private array<string> FailedObjectiveIDs;
 var private array<int> RescuedCivilianIDs;
 var private APX_MissionScore NativeScoreProbe;
 
@@ -118,6 +119,8 @@ function RegisterScoreObservers()
     Listener = self;
     EventManager.RegisterForEvent(Listener, 'MissionObjectiveMarkedCompleted',
         OnObjectiveCompleted, ELD_OnStateSubmitted);
+    EventManager.RegisterForEvent(Listener, 'MissionObjectiveMarkedFailed',
+        OnObjectiveFailed, ELD_OnStateSubmitted);
     EventManager.RegisterForEvent(Listener, 'CivilianRescued',
         OnCivilianRescued, ELD_OnStateSubmitted);
 }
@@ -137,6 +140,7 @@ function UnregisterScoreObservers()
         return;
     Listener = self;
     EventManager.UnRegisterFromEvent(Listener, 'MissionObjectiveMarkedCompleted');
+    EventManager.UnRegisterFromEvent(Listener, 'MissionObjectiveMarkedFailed');
     EventManager.UnRegisterFromEvent(Listener, 'CivilianRescued');
 }
 
@@ -201,6 +205,53 @@ function EventListenerReturn OnObjectiveCompleted(Object EventData, Object Event
     Emit("objective_completed", "|source=mission_ui_event|objective_id=" $ Safe(ObjectiveID)
         $ "|objective_name=" $ Safe(ObjectiveName) $ "|turn=" $ TurnAtHistory(HistoryIndex)
         $ "|completion_turn=" $ TurnAtHistory(HistoryIndex) $ "|history=" $ HistoryIndex);
+    return ELR_NoInterrupt;
+}
+
+// A native failed objective is a critical failure of autoplay's required
+// objective criterion, even if the HUD still shows positive partial points.
+// Observe the same UI event payload as completion, without changing Kismet,
+// failure handling or native scoring.
+function EventListenerReturn OnObjectiveFailed(Object EventData, Object EventSource,
+    XComGameState GameState, Name Event, Object CallbackData)
+{
+    local SeqAct_DisplayMissionObjective DisplayAction;
+    local XComGameState_ObjectivesList ObjectiveList;
+    local ObjectiveDisplayInfo Info;
+    local string ObjectiveID, ObjectiveName;
+    local int HistoryIndex;
+    local bool bFound;
+
+    if (!IsRecordingMission() || GameState == none)
+        return ELR_NoInterrupt;
+    DisplayAction = SeqAct_DisplayMissionObjective(EventSource);
+    ObjectiveList = XComGameState_ObjectivesList(EventData);
+    if (DisplayAction == none || ObjectiveList == none)
+        return ELR_NoInterrupt;
+    foreach ObjectiveList.ObjectiveDisplayInfos(Info)
+    {
+        if (Info.MissionType == RecordedMissionType
+            && Info.TextPoolIndex == DisplayAction.TextPoolIndex
+            && Info.LineIndex == DisplayAction.LineIndex
+            && Info.GroupID == DisplayAction.GroupID
+            && !Info.HideInTactical)
+        {
+            ObjectiveName = Info.DisplayLabel;
+            bFound = true;
+            break;
+        }
+    }
+    if (!bFound)
+        return ELR_NoInterrupt;
+    ObjectiveID = RecordedMissionType $ ":" $ DisplayAction.TextPoolIndex $ ":"
+        $ DisplayAction.LineIndex $ ":" $ DisplayAction.GroupID;
+    if (FailedObjectiveIDs.Find(ObjectiveID) != INDEX_NONE)
+        return ELR_NoInterrupt;
+    FailedObjectiveIDs.AddItem(ObjectiveID);
+    HistoryIndex = GameState.HistoryIndex;
+    Emit("objective_failed", "|source=mission_ui_event|critical=true|objective_id=" $ Safe(ObjectiveID)
+        $ "|objective_name=" $ Safe(ObjectiveName)
+        $ "|turn=" $ TurnAtHistory(HistoryIndex) $ "|history=" $ HistoryIndex);
     return ELR_NoInterrupt;
 }
 
