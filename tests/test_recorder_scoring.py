@@ -157,6 +157,32 @@ class RecorderScoringContracts(unittest.TestCase):
         self.assertLess(finish.index('UnregisterScoreObservers()'),
                         finish.index('bFinished = true;'))
 
+    def test_native_failed_objective_is_observed_once_and_never_changes_rules(self):
+        source = RECORDER.read_text()
+        listener = function_body(source, 'OnObjectiveFailed')
+        for token in (
+            'SeqAct_DisplayMissionObjective(EventSource)',
+            'XComGameState_ObjectivesList(EventData)',
+            'Info.MissionType == RecordedMissionType',
+            'Info.TextPoolIndex == DisplayAction.TextPoolIndex',
+            'Info.LineIndex == DisplayAction.LineIndex',
+            'Info.GroupID == DisplayAction.GroupID',
+            'FailedObjectiveIDs.Find(ObjectiveID)',
+            'FailedObjectiveIDs.AddItem(ObjectiveID)',
+            'Emit("objective_failed"',
+            '"|source=mission_ui_event|critical=true|objective_id="',
+            'TurnAtHistory(HistoryIndex)',
+        ):
+            with self.subTest(token=token):
+                self.assertIn(token, listener)
+        for forbidden in ('ModifyStateObject(', 'SubmitGameState(',
+                          'CreateNewGameState(', 'FailBattle(', 'AddMissionObjectiveComplete('):
+            self.assertNotIn(forbidden, listener)
+        register = function_body(source, 'RegisterScoreObservers')
+        unregister = function_body(source, 'UnregisterScoreObservers')
+        self.assertIn("RegisterForEvent(Listener, 'MissionObjectiveMarkedFailed'", register)
+        self.assertIn("UnRegisterFromEvent(Listener, 'MissionObjectiveMarkedFailed'", unregister)
+
     def test_civilian_rescue_checks_own_rescuer_and_redacts_unknown_identity(self):
         rescue = function_body(RECORDER.read_text(), 'OnCivilianRescued')
         self.assertIn('Rescuer = XComGameState_Unit(EventData)', rescue)
