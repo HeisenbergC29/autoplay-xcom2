@@ -22,6 +22,51 @@ def record(seq, event, fields='', session='s1'):
 
 
 class MissionLogTests(unittest.TestCase):
+    def test_unclassified_ui_failure_does_not_override_final_native_victory(self):
+        for marker in ('', '|critical=false', '|critical=unknown', '|critical=1'):
+            with self.subTest(marker=marker):
+                report = LOG.analyze_logs([('Launch.log', '\n'.join([
+                    record(1, 'start', 'mission=SabotageCC'),
+                    record(2, 'objective_failed',
+                           'source=mission_ui_event|objective_id=ui:1' + marker),
+                    record(3, 'game_score', 'source=challenge_runtime|mission_points_known=true'
+                           '|mission_final=true|mission_points=700|phase=finish|history=20'),
+                    record(4, 'end', 'outcome=win|history=20|history_pending=0'),
+                ]))])
+                session = report['sessions'][0]
+                self.assertFalse(session['critical_objective_failed'])
+                self.assertEqual(session['failed_objective_ids'], ['ui:1'])
+                self.assertEqual(session['unclassified_failed_objective_ids'], ['ui:1'])
+                self.assertEqual(session['attempt_verdict']['status'], 'pass')
+                self.assertIn('criticality unverified', LOG.human_summary(report))
+                self.assertNotIn('CRITICAL OBJECTIVE FAILURE', LOG.human_summary(report))
+
+    def test_mixed_failures_separate_proven_critical_from_unclassified_ids(self):
+        report = LOG.analyze_logs([('Launch.log', '\n'.join([
+            record(1, 'start'),
+            record(2, 'objective_failed', 'objective_id=ui:1|critical=false'),
+            record(3, 'objective_failed', 'objective_id=required:2|critical=true'),
+            record(4, 'objective_failed', 'objective_id=required:2|critical=true'),
+        ]))])
+        session = report['sessions'][0]
+        self.assertEqual(session['failed_objective_ids'], ['required:2', 'ui:1'])
+        self.assertEqual(session['critical_failed_objective_ids'], ['required:2'])
+        self.assertEqual(session['unclassified_failed_objective_ids'], ['ui:1'])
+        self.assertEqual(session['attempt_verdict']['status'], 'fail')
+        critical_line = next(line for line in LOG.human_summary(report).splitlines()
+                             if 'CRITICAL OBJECTIVE FAILURE' in line)
+        self.assertNotIn('ui:1', critical_line)
+
+    def test_conflicting_failure_records_cannot_certify_a_critical_verdict(self):
+        lines = '\n'.join([
+            record(1, 'start'),
+            record(2, 'objective_failed', 'objective_id=x|critical=true'),
+            record(2, 'objective_failed', 'objective_id=x|critical=false'),
+        ])
+        session = LOG.analyze_logs([('Launch.log', lines)])['sessions'][0]
+        self.assertEqual(session['attempt_verdict']['status'], 'unknown')
+        self.assertEqual(session['attempt_verdict']['reason'], 'conflicting_records')
+
     def test_failed_objective_is_critical_even_with_positive_native_score(self):
         session = LOG.analyze_logs([('Launch.log', '\n'.join([
             record(1, 'start', 'mission=SabotageTransmitter|difficulty=2'),

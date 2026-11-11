@@ -1,81 +1,78 @@
-# Eksperyment #46 — krytyczny fail objective i diagnostyka przekaźników
+# Eksperyment #46 — obserwacja nieudanych celów i diagnostyka przekaźników
 
-Baza: v24, commit \`defdcee43945a0755de6d069d7690cd215c83c63\`.
-Wariant diagnostyczny: \`mission-report-v25\`. Status: do przeglądu LEAD,
-bez kompilacji Windows WOTC ani odbioru rozgrywki.
+Pierwotna baza: v24 `defdcee43945a0755de6d069d7690cd215c83c63`.
+Wariant integracji: `mission-report-v25`, razem z obserwacyjnym heartbeat
+z PR #50. Kompilacja Windows WOTC SDK i gra v25: **NOT RUN**.
+Dokładny końcowy SHA do kompilacji wskazuje LEAD w issue #4.
 
-## Krytyczna porażka
+## Co jest dowodem krytycznej porażki
 
-Własne kryterium PASS jest koniunkcją trzech faktów: wykonano **wszystkie**
-obowiązkowe cele, natywna gra zgłosiła \`win\`, a końcowe
-\`mission_points > 0\` są potwierdzone. Porażka któregoś celu jest
-**krytyczna**, nawet gdy HUD lub końcowy score są dodatnie.
+Natywne zwycięstwo i znany końcowy wynik >0 pozostają kryterium projektu.
+Pewna porażka wymaganego celu uniemożliwia zaliczenie, także przy dodatnich
+punktach albo brakującym końcowym rekordzie. Sam czerwony checkbox nie
+identyfikuje jednak, czy cel był wymagany.
 
-Nowy, tylko odczytujący \`OnObjectiveFailed\` odbiera stock
-\`MissionObjectiveMarkedFailed\`, sprawdza źródłowy
-\`SeqAct_DisplayMissionObjective\`, obecną misję i zgodność indeksów
-puli tekstów, po czym zapisuje pojedyncze
-\`APXREC|event=objective_failed|critical=true|objective_id=...\`.
-Nie zmienia Kismet, licznika czasu ani natywnego wyniku. Jest to
-obserwacja po uruchomieniu F8; jeżeli event wystąpił wcześniej,
-recorder może go nie widzieć — brak zapisu NIE dowodzi sukcesu.
+Po poprawkach LEAD recorder rozdziela dwa zdarzenia:
 
-\`tools/game_scoring.py\` klasyfikuje taką sesję jako
-\`status=fail,reason=critical_objective_failed\`, niezależnie od
-\`win\`, \`loss\`, \`unknown\` lub dodatniego wyniku.
-\`tools/analyze-mission-log.py\` wyświetla identyfikatory failed
-objectives i ostrzeżenie CRITICAL. Dane nadal zawierają osobno
-punkty z oznaczeniem \`confirmed/provisional/unknown\`.
+- `MissionObjectiveMarkedFailed`: zgodny z bieżącą misją, widoczny
+  `ShowFailed` + `ShowCheckBox` zapisuje `objective_failed` z
+  `critical=false|criticality=unknown`. UI nie dostarcza flagi
+  wymagany/poboczny, więc tej obserwacji nie klasyfikujemy automatycznie
+  jako krytycznej. Nie oznacza to udowodnionej opcjonalności celu.
+- `ChallengeObjectiveFailed`: stockowy handler wywołuje `FailBattle`.
+  Ten sygnał zapisujemy z `critical=true`. Obserwator działa natychmiast,
+  z priorytetem 1000, ponieważ natywny handler przerywa późniejszych
+  słuchaczy; zawsze zwraca `ELR_NoInterrupt` i nie wymaga niepustego
+  GameState. Faktyczne dostarczenie eventu musi potwierdzić próba gry.
 
-## Przekaźniki czasu SabotageTransmitter
+Obserwatorzy są związani z oryginalną historią, początkiem misji i battle
+ID; nie przejmują zdarzeń po zmianie świata lub zaobserwowanym cofnięciu
+historii. Deduplikują identyfikatory i wyrejestrowują się po zakończeniu.
+Nie zmieniają Kismet, AP, timera, punktów ani natywnego wyniku.
+Rejestracja zaczyna się przy F8: brak wcześniejszego eventu nie dowodzi,
+że cel nie zawiódł.
 
-Oficjalny podręcznik WOTC potwierdza, że zniszczenie przekaźników
-wydłuża czas na podłożenie X4.
-\`APX_CombatPlanner.ScoreObjectiveAttack\` dotąd wymagał
-\`Helpers.IsObjectiveTarget\`, co **może** odrzucać pomocnicze
-urządzenia przedłużające czas. Samo 2 HP nie identyfikuje
-przekaźnika i nie uprawnia do ataku w zwykłą osłonę.
+Analizator rozdziela wszystkie zaobserwowane failed IDs i zweryfikowane
+critical IDs. Wyłącznie jawne `critical=true` wymusza FAIL; pola brakujące,
+nieznane lub false pozostają ostrzeżeniem. Sprzeczne rekordy nadal
+uniemożliwiają pewny werdykt. Punkty i natywny wynik zachowują osobne pola
+oraz oznaczenia pewności. Nie tworzymy końcowych punktów z częściowego HUD.
 
-Nowa funkcja \`RecordSabotageRelayCandidates\` jest **diagnostyczna**:
-raz na turę XCOM w SabotageTransmitter odczytuje
-\`XComGameState_Destructible\` z historii i natywne
-\`AvailableActions\` żołnierzy. Ograniczenia: maks. 256
-skontrolowanych obiektów/20 opisanych, 8 żołnierzy, 128 akcji,
-192 referencje celów na turę. W logu zapisuje obiekt, zdrowie,
-rzeczywiste TileLocation/wizualizer, flagę \`IsObjectiveTarget\`,
-a dla dostępnych akcji: źródłowego żołnierza, szablon zdolności,
-\`AA_*\`, ID celu i prawdziwą flagę wrogiego celu.
-Wszystkie podejrzane obiekty są oznaczone jako
-\`unverified_destructible\`: **nie są automatycznie przekaźnikami**.
-Bez działania na silnik, bez dodawania AP ani nowych celów.
+## Diagnostyka przekaźników czasu SabotageTransmitter
 
-Na podstawie logu z tej gałęzi i lokalnego SDK należy ustalić
-konkretny archetyp przekaźnika i potwierdzić natywną legalność
-ataku dla BerserkerMP. Dopiero następny osobny PR powinien
-nadawać premię za rzeczywisty zysk na timerze lub planować
-dojście do dostępnego przekaźnika. Jeżeli Berserker nie ma
-własnej zdolności, która pozwala go uszkodzić, nie wolno
-udawać takiej zdolności ani zmuszać go do nielegalnego ataku.
+Oficjalny podręcznik opisuje przekaźniki przedłużające czas na X4.
+Samo 2 HP albo flaga głównego celu nie identyfikują takiego urządzenia.
+`RecordSabotageRelayCandidates` raz na turę zapisuje ograniczony wyciąg:
 
-## Odbiór
+- do 256 przejrzanych destrukcyjnych stanów, najwyżej 20 opisanych;
+- do 256 przejrzanych stanów jednostek i 8 kwalifikujących się własnych;
+- do 128 akcji i 192 referencji celów z rzeczywistego cache silnika.
 
-Testy źródłowe: \`test_critical_objective_relay.py\`,
-\`test_recorder_scoring.py\`, \`test_mission_log.py\`.
-Kompilację musi wykonać Windows SDK. W Blood Killer po uruchomieniu
-zatwierdzonego commita v25 sprawdzić: natywne przekaźniki,
-\`AA_Success\` (albo jego brak), rzeczywistą liczbę
-dodatkowych tur, dojście do właściwego miejsca X4 i
-\`objective_failed\` w raportowaniu. Przekazać trzy dane:
-native outcome, wynik punktowy z pewnością źródła,
-wykonanie wszystkich celów.
+Usunięte obiekty/jednostki są pomijane. Dla zgodnego wizualizera
+rejestrowane są klasa i rzeczywisty `ObjectArchetype`, a przy braku
+wiarygodnego wizualizera dane pozostają unknown. Instancja aktora sama
+nie zastępuje archetypu. `relay_action_target` zapisuje kod dostępności
+oraz `native_available`; obecność w cache nie jest sama w sobie dowodem
+`AA_Success`.
 
-**Raport v24 z 11.11.2026 sprawdzony po odzyskaniu dostępu do ZIP:**
-SabotageCC: native win, 2 ukończone cele, HUD ~+6800 tylko
-porównawczo; brak pewnego końcowego mission_points. GasStation:
-native loss, **−10700 końcowe natywne**. Blood Killer: przerwana
-ręcznie D34, 28 moves, 3 DevastatingPunchMP, 0 PlantBomb;
-HUD **0/32950 tylko na początku**, końcowe punkty nieznane.
-Po ręcznym OFF silnik zapisał **`Mission timer expired`** — w
-projekcie to krytyczne nieukończenie obowiązkowego objective.
-Nowy listener ma to wykrywać z natywnych eventów, nie z tekstu logu.
-Prywatnych danych nie publikowano.
+Wszystkie obiekty są `unverified_destructible`. Ten wariant **nie wybiera
+przekaźników do ataku**, nie dodaje zdolności i nie zapewnia dodatkowych
+tur. Następna implementacja wymaga identyfikacji archetypu, rzeczywistych
+natywnych warunków ataku dla BerserkerMP i korzyści timera. Również
+właściwe pole interakcji PlantBomb pozostaje zadaniem #29.
+
+## Raport v24 i próba odbioru
+
+[Wyciąg raportu v24](report-2026-11-11-v24.pl.md): SabotageCC wygrało,
+lecz HUD +6800 i rekonstrukcja +11800 są częściowe. GasStation przegrało
+z końcowymi natywnymi −10700. Blood Killer ma ręczny OFF przy D34, brak
+PlantBomb i końcowego wyniku; `Mission timer expired` następuje 18,28 s
+po OFF. Bez powiązania z krytycznym celem sam ten tekst nie potwierdza
+fatalnego eventu ani natywnej porażki. Wcześniejszy wniosek HELPER-a
+CRITICAL FAIL był zbyt mocny względem dostępnego dowodu.
+
+Po kompilacji końcowego SHA zebrać rzeczywiste archetypy i kody akcji,
+sprawdzić dostarczenie failed eventów, natywny wynik, końcowe punkty
+z pewnością źródła i wykonanie celów. Nowa telemetria nie jest naprawą
+PlantBomb, przekaźników ani zawieszenia. Testy Python i audyt SDK nie
+zastępują kompilacji UnrealScript i próby gry. Surowe SDK/logi są prywatne.

@@ -18,6 +18,18 @@ def without_comments(source: str) -> str:
     return token.sub(lambda match: "" if match[0].startswith(("//", "/*")) else match[0], source)
 
 
+def escaped_macro_prefixes(source: str) -> list[int]:
+    """Find backslashes accidentally copied before UC macro backticks.
+
+    Markdown escaping is not UnrealScript syntax. Ignore examples in comments
+    and literals while retaining source positions for useful line diagnostics.
+    """
+    tokens = re.compile(r'//[^\n]*|/\*.*?\*/|"(?:\\.|[^"\\])*"|\x27[^\x27\n]*\x27', re.S)
+    masked = tokens.sub(lambda match: re.sub(r'[^\n]', ' ', match[0]), source)
+    return [masked.count("\n", 0, match.start()) + 1
+            for match in re.finditer(r'\\`', masked)]
+
+
 def forbidden_out_booleans(source: str) -> list[int]:
     """Return lines containing the compiler-prohibited direct out bool type.
 
@@ -174,6 +186,8 @@ def audit(sdk_root: Path, repo_root: Path) -> list[str]:
     failures = []
     for file in mod_files:
         raw_source = file.read_text(encoding="utf-8-sig")
+        for line in escaped_macro_prefixes(raw_source):
+            failures.append(f"{file.name}:{line}: backslash before an UnrealScript macro is invalid code; use a bare backtick.")
         for line in forbidden_out_booleans(raw_source):
             failures.append(f"{file.name}:{line}: UnrealScript forbids direct out bool parameters; use a result struct.")
         for line in forbidden_bare_stop_calls(raw_source):
@@ -224,7 +238,7 @@ def audit(sdk_root: Path, repo_root: Path) -> list[str]:
         if name.casefold() not in classes:
             failures.append(f"WOTC source marker missing: {name}")
     if not failures:
-        print(f"PASS: {len(mod_files)} mod classes, SDK class references, {ability_count} configured ability names, WOTC markers and known parameter/Stop/config restrictions.")
+        print(f"PASS: {len(mod_files)} mod classes, SDK class references, {ability_count} configured ability names, WOTC markers and known macro/parameter/Stop/config restrictions.")
         print("Not checked by this tool: member signatures, compilation, native behavior or in-game mission completion.")
     return failures
 

@@ -170,7 +170,7 @@ class RecorderScoringContracts(unittest.TestCase):
             'FailedObjectiveIDs.Find(ObjectiveID)',
             'FailedObjectiveIDs.AddItem(ObjectiveID)',
             'Emit("objective_failed"',
-            '"|source=mission_ui_event|critical=true|objective_id="',
+            '"|source=mission_ui_event|critical=false|criticality=unknown|objective_id="',
             'TurnAtHistory(HistoryIndex)',
         ):
             with self.subTest(token=token):
@@ -243,6 +243,20 @@ class RecorderScoringSDKContracts(unittest.TestCase):
     def test_native_event_payloads_and_registration_signatures_match(self):
         objective = (self.classes / 'SeqAct_DisplayMissionObjective.uc').read_text(encoding='utf-8-sig')
         self.assertIn("TriggerEvent('MissionObjectiveMarkedCompleted', ObjectiveList, self, NewGameState)", objective)
+        self.assertIn("TriggerEvent('MissionObjectiveMarkedFailed', ObjectiveList, self, NewGameState)", objective)
+        # UI ShowFailed is a display status. The native battle failure event
+        # has its own handler, which interrupts later listeners.
+        tactical = (self.classes / 'X2TacticalGameRuleset.uc').read_text(encoding='utf-8-sig')
+        failed = function_body(tactical, 'OnChallengeObjectiveFailed')
+        self.assertIn('FailBattle();', failed)
+        self.assertIn('ELR_InterruptEventAndListeners', failed)
+        aid = (self.classes / 'X2Effect_AidProtocol.uc').read_text(encoding='utf-8-sig')
+        self.assertIn('(Priority 49, so this happens after the regular ItemRecalled)', aid)
+        core = self.classes.parents[1] / 'Core/Classes/Object.uc'
+        source = core.read_text(encoding='utf-8-sig')
+        self.assertRegex(source, r'var\(\)\s+native\s+const\s+editconst\s+Object\s+ObjectArchetype;')
+        self.assertIn('native static final function string PathName(Object CheckObject);', source)
+
         ai = (self.classes / 'X2AIBTDefaultActions.uc').read_text(encoding='utf-8-sig')
         self.assertIn("TriggerEvent('CivilianRescued', NewRescuerUnit, UnitState, NewGameState2)", ai)
         manager = (self.classes / 'X2EventManager.uc').read_text(encoding='utf-8-sig')

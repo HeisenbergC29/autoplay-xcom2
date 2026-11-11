@@ -407,6 +407,21 @@ def score_session(records: list[dict], native_rules: dict | None = None,
 ATTEMPT_CRITERION = 'victory_and_positive_mission_score_v1'
 
 
+def objective_failure_evidence(records: list[dict]) -> dict:
+    """A failed UI checkbox does not identify a mandatory mission objective.
+
+    Only an explicit boolean critical marker carries the recorder's verified
+    native failure contract. Missing/unknown/false markers remain observations.
+    """
+    failures = [record for record in records if record['event'] == 'objective_failed']
+    all_ids = {str(record.get('objective_id', 'unknown')) for record in failures}
+    critical_ids = {str(record.get('objective_id', 'unknown')) for record in failures
+                    if record.get('critical') is True}
+    return {'failed_objective_ids': sorted(all_ids),
+            'critical_failed_objective_ids': sorted(critical_ids),
+            'unclassified_failed_objective_ids': sorted(all_ids - critical_ids)}
+
+
 def assess_attempt(records: list[dict], outcome: str, scoring: dict,
                    conflicting_records: bool = False) -> dict:
     """Keep the native winner separate from the project's acceptance criterion.
@@ -469,25 +484,24 @@ def assess_attempt(records: list[dict], outcome: str, scoring: dict,
         if complete:
             score = comparison['total']
 
-    failed_objectives = sorted({
-        str(record.get('objective_id', 'unknown'))
-        for record in records if record['event'] == 'objective_failed'
-    })
+    failure_evidence = objective_failure_evidence(records)
+    critical_failures = failure_evidence['critical_failed_objective_ids']
     result = {'criterion': ATTEMPT_CRITERION, 'status': 'unknown',
               'mission_outcome': outcome, 'score': score, 'observed_score': observed_score,
               'score_source': source, 'score_status': score_status,
               'score_complete': complete, 'score_profile': profile,
-              'critical_objective_failed': bool(failed_objectives),
-              'failed_objectives': failed_objectives}
+              'critical_objective_failed': bool(critical_failures),
+              'failed_objectives': failure_evidence['failed_objective_ids'],
+              'critical_failed_objectives': critical_failures}
     normalized = str(outcome).casefold()
-    if failed_objectives:
+    if conflicting_records:
+        result.update(score=None, score_complete=False, reason='conflicting_records',
+                      explanation='Conflicting recording observations prevent a reliable acceptance verdict.')
+    elif critical_failures:
         # A required mission objective failed. Neither a later positive HUD
         # observation nor a missing terminal event can make this a PASS.
         result.update(status='fail', reason='critical_objective_failed',
                       explanation='A native mission objective failed; the attempt is a critical failure regardless of score.')
-    elif conflicting_records:
-        result.update(score=None, score_complete=False, reason='conflicting_records',
-                      explanation='Conflicting recording observations prevent a reliable acceptance verdict.')
     elif normalized == 'loss':
         result.update(status='fail', reason='mission_lost',
                       explanation='The game recorded a defeat; positive points alone cannot pass the attempt.')
