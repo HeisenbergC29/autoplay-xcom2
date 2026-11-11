@@ -116,7 +116,6 @@ static function bool PathRisksRevealing(XComGameState_Unit Soldier,
     local GameRulesCache_VisibilityInfo Visibility;
     local TTile Tile;
     local vector TilePosition, DetectorPosition;
-    local float SightRadius, DetectRadius;
     local int Step, Index, Checks, Limit, PathLimit, NativeLOSRemaining;
     local bool bChallenge, bIgnoreInteractives, bSampleClipped;
 
