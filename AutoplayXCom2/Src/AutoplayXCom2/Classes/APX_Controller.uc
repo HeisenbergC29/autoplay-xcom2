@@ -1021,6 +1021,8 @@ function MakeDecision(XComTacticalController PC)
             // before revealing an otherwise concealed squad.
             Score -= class'APX_SquadPlanner'.static.UnsupportedOpeningPenaltyForAction(
                 UnitState, Candidate, TargetIndex);
+            Score -= class'APX_SquadPlanner'.static.SecondaryGroupEngagementPenalty(
+                UnitState, Candidate, TargetIndex);
             if (TraceCandidateAction(UnitState, "combat", Candidate, TargetIndex, Score)
                 && Score > BestScore && CanUseAction(UnitState, Candidate, TargetIndex))
             {
