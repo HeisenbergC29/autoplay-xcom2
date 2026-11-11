@@ -1013,18 +1013,26 @@ function MakeDecision(XComTacticalController PC)
             || class'APX_MissionPlanner'.static.HasCombatThreats(UnitState);
         if (!UnitState.IsAbleToAct())
             continue;
-        if (class'APX_CombatPlanner'.static.ChooseAction(UnitState, Candidate, TargetIndex, Score, bContactSearch)
-            && TraceCandidateAction(UnitState, "combat", Candidate, TargetIndex, Score)
-            && Score > BestScore && CanUseAction(UnitState, Candidate, TargetIndex))
+        if (class'APX_CombatPlanner'.static.ChooseAction(UnitState, Candidate,
+            TargetIndex, Score, bContactSearch))
         {
-            BestAction = Candidate;
-            BestTargetIndex = TargetIndex;
-            BestScore = Score;
-            BestUnit = UnitState;
-            bMove = false;
-            bArea = false;
-            BestLocations.Length = 0;
-            bHavePlan = true;
+            // A distant, unsupported opening shot was previously selected
+            // solely by damage value. Allow safe moves/overwatch to compete
+            // before revealing an otherwise concealed squad.
+            Score -= class'APX_SquadPlanner'.static.UnsupportedOpeningPenaltyForAction(
+                UnitState, Candidate, TargetIndex);
+            if (TraceCandidateAction(UnitState, "combat", Candidate, TargetIndex, Score)
+                && Score > BestScore && CanUseAction(UnitState, Candidate, TargetIndex))
+            {
+                BestAction = Candidate;
+                BestTargetIndex = TargetIndex;
+                BestScore = Score;
+                BestUnit = UnitState;
+                bMove = false;
+                bArea = false;
+                BestLocations.Length = 0;
+                bHavePlan = true;
+            }
         }
         if (class'APX_MissionPlanner'.static.ChooseInteraction(UnitState, Candidate, TargetIndex, Score)
             && TraceCandidateAction(UnitState, "interaction", Candidate, TargetIndex, Score)
