@@ -35,6 +35,7 @@ var private string LastGameScore;
 var private string LastHUDScore;
 var private int RecordedLadderIndex;
 var private int RecordedLadderRung;
+var private int LastPatrolObservationTurn;
 var private bool bHasLadderScore;
 var private array<string> RecordedScoreKeys;
 var private array<string> RecordedScoreRules;
@@ -89,6 +90,7 @@ function Start(int PlayerID)
     if (BattleData != none)
         Mission = BattleData.MapData.ActiveMission.sType;
     RecordedMissionType = Mission;
+    LastPatrolObservationTurn = -1;
     bStarted = true;
     Emit("start", "|player=" $ PlayerID $ "|mission=" $ Safe(Mission)
         $ "|difficulty=" $ `TacticalDifficultySetting $ "|history=" $ HistoryCursor
@@ -608,6 +610,47 @@ function string AbilityHandler(XComGameState_Unit UnitState, name AbilityName)
     return "unhandled";
 }
 
+// Sample the CURRENT green-alert AIGroup waypoint once per turn.
+// This is a read-only history observation, not a prediction of a future
+// random corner/AI decision and not a new order given to the enemy.
+function RecordCurrentPatrolWaypoints(int Turn)
+{
+    local XComGameState_AIGroup Group;
+    local TTile TargetTile;
+    local vector Midpoint;
+    local int Seen, Waypoints;
+
+    if (`XCOMHISTORY == none || `XWORLD == none)
+        return;
+    foreach `XCOMHISTORY.IterateByClassType(class'XComGameState_AIGroup', Group)
+    {
+        if (Seen >= Clamp(class'APX_PatrolKnowledge'.default.MaxGroupsPerObservation, 1, 48))
+            break;
+        ++Seen;
+        if (!class'APX_PatrolKnowledge'.static.GetCurrentPatrolWaypoint(
+            Group, TargetTile))
+            continue;
+        Midpoint = Group.GetGroupMidpoint();
+        ++Waypoints;
+        Emit("patrol_group", "|turn=" $ Turn
+            $ "|group=" $ Group.ObjectID
+            $ "|encounter=" $ Safe(string(Group.EncounterID))
+            $ "|members=" $ Group.m_arrMembers.Length
+            $ "|target_x=" $ TargetTile.X
+            $ "|target_y=" $ TargetTile.Y
+            $ "|target_z=" $ TargetTile.Z
+            $ "|mid_x=" $ Midpoint.X
+            $ "|mid_y=" $ Midpoint.Y
+            $ "|mid_z=" $ Midpoint.Z
+            $ "|last_destination_turn=" $ Group.TurnCountForLastDestination
+            $ "|is_current_waypoint=true|next_waypoint_unknown=true");
+    }
+    Emit("patrol_scan", "|turn=" $ Turn
+        $ "|groups_checked=" $ Seen
+        $ "|current_waypoints=" $ Waypoints
+        $ "|future_route=unknown");
+}
+
 function Observe(string Phase)
 {
     local XComGameState_Unit UnitState;
@@ -624,7 +667,14 @@ function Observe(string Phase)
     PlayerState = XComGameState_Player(`XCOMHISTORY.GetGameStateForObjectID(OwnerPlayerID));
     PhaseState = "|phase=" $ Safe(Phase);
     if (PlayerState != none)
+    {
         PhaseState $= "|turn=" $ PlayerState.PlayerTurnCount;
+        if (PlayerState.PlayerTurnCount != LastPatrolObservationTurn)
+        {
+            LastPatrolObservationTurn = PlayerState.PlayerTurnCount;
+            RecordCurrentPatrolWaypoints(LastPatrolObservationTurn);
+        }
+    }
     if (`TACTICALRULES != none)
         PhaseState $= "|active_team=" $ string(`TACTICALRULES.GetUnitActionTeam());
     if (PhaseState != LastPhase)
