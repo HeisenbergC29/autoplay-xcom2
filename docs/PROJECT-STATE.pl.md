@@ -9,13 +9,17 @@ poziom potwierdzenia działania.
 - Bieżąca rewizja przygotowywanych źródeł: `mission-report-v25`, obserwacyjny
   heartbeat długiego oczekiwania (#40 / PR #50), rozróżnienie krytycznych
   zdarzeń porażki od checkboxów UI oraz diagnostyka obiektów przekaźników
-  (#46 / PR #47). Nie zmienia taktyki i nie naprawia zawieszenia/PlantBomb.
+  (#46 / PR #47) oraz zatwierdzony przez użytkownika odczyt bieżącego
+  zapisanego celu patrolu (#48 / PR #49, tylko przy pełnym rozpoznaniu).
+  Nie dodaje jeszcze planu zasadzki i nie naprawia zawieszenia/PlantBomb.
   [Heartbeat](experiment-40-wait-heartbeat.pl.md),
   [nieudane cele i przekaźniki](experiment-46-critical-objective-relays.pl.md).
+  [Aktualny punkt grupy](experiment-48-patrol-waypoint.pl.md).
   Windows/game v25: **NOT RUN**. Dokładny SHA wskazuje LEAD w
   [issue #4](https://github.com/HeisenbergC29/autoplay-xcom2/issues/4).
-  PR #43 pozostaje poza integracją; PR #49 ma odrębny przegląd zakresu
-  wiedzy i poprawności obserwacji patroli.
+  PR #43 zamknięto bez scalenia. Zgoda na aktualny punkt z 11 XI nie
+  obejmuje prywatnej wiedzy IsEngaged/HasAbsoluteKnowledge; te odczyty
+  usunięto. Punkt ma nieznane przyszłe użycie i nie jest całą trasą.
 - Baza v24: `defdcee43945a0755de6d069d7690cd215c83c63`, kontrola
   ekspozycji wczesnej trasy, miękka kara samotnego otwarcia walki,
   wiedza o zdolnościach w wagach zagrożeń i ograniczona ocena wybuchowych

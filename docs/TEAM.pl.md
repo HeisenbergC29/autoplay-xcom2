@@ -111,7 +111,7 @@ jest osobnym priorytetem #40, a właściwy obiekt PlantBomb nadal bada #29.
 V24 / PR #44 obejmuje ekspozycję wczesnej trasy, gotowość zwykłego
 otwarcia z ukrycia, wagi zdolności wrogów i ograniczone ryzyko wybuchowych
 osłon. LEAD zachowuje legalne konstruktywne trasy awaryjne i jeden budżet
-inspekcji na decyzję. PR #43 pozostaje w draft: wyjątek ostatniego AP
+inspekcji na decyzję. PR #43 zamknięto bez scalenia: wyjątek ostatniego AP
 omijał zabezpieczenia ruchu. PR #45 uzupełnia v24 o rzeczywistą geometrię
 granatu przy pustym obrysie; kompilować dopiero końcowy SHA wskazany
 w #4. Diagnostyka #40 pozostaje priorytetem niezależnym od tych zmian.
@@ -121,10 +121,13 @@ V25 łączy obserwacyjny heartbeat #40 / PR #50 i diagnostykę nieudanych
 celów oraz przekaźników #46 / PR #47. LEAD poprawił błędy składni UC,
 klasyfikację krytyczności, cykl obserwacji i granice skanów; kompilacja
 Windows i gra pozostają osobnym dowodem. UI ShowFailed ani sam napis
-timera nie oznaczają automatycznie porażki wymaganego celu. PR #49
-pozostaje osobnym przeglądem: bieżący cel patrolu wykracza poza pozycje,
-a IsEngaged czyta także prywatną wiedzę AI. Nie rozszerzać tej polityki
-bez potwierdzonej decyzji właściciela. #29 pozostaje następną pracą
+timera nie oznaczają automatycznie porażki wymaganego celu. Użytkownik
+11 XI zatwierdził także odczyt aktualnego celu patrolu. PR #49 dostarcza
+ten punkt z ograniczoną walidacją aktywnych wrogów, tylko w pełnym
+rozpoznaniu. Usunięto IsEngaged i pozostałe prywatne filtry AI. To dane
+do oceny, jeszcze nie gotowa sekwencja zasadzki ani cała przyszła trasa.
+Zgoda nie obejmuje AP, cooldownów, RNG i innych ukrytych zamiarów.
+#29 pozostaje następną pracą
 nad rzeczywistym obiektem i polem interakcji PlantBomb.
 
 ## Przekazanie i decyzja o scaleniu

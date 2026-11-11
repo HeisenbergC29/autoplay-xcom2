@@ -84,7 +84,9 @@ ponieważ PR #47 i #49 edytują go równolegle. Przy integracji LEAD ustalił
 wspólny marker `mission-report-v25` w rejestratorze, HUD i podsumowaniu
 wizualizacji MP oraz dopasował testy rewizji. Kod diagnostyki heartbeat
 pozostaje bez zmian. PR #47 będzie następnie scalony z tego samego wariantu;
-PR #49 wymaga osobnej decyzji o zakresie wiedzy.
+PR #49 następnie uzupełnia ten sam wariant o aktualny zapisany punkt
+grupy, po potwierdzonej decyzji użytkownika z 11 XI. Nie zmienia mechaniki
+heartbeat ani nie dodaje gotowego planu zasadzki.
 
 Dokładny końcowy SHA do budowania wskazuje LEAD w issue #4.
 Kompilacja Windows WOTC SDK oraz gra v25 pozostają **NOT RUN**.
