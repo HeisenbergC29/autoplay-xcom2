@@ -65,7 +65,13 @@ Nie ma PASS bez wszystkich celów, \`win\` i potwierdzonego
 końcowego wyniku > 0. Jeżeli wystąpi \`objective_failed\`,
 zgodnie z decyzją użytkownika jest to krytyczne FAIL.
 
-Nowy prywatny ZIP użytkownika z 11 listopada 2026 jest
-udostępniony, lecz jego analiza jest chwilowo blokowana
-błędem narzędzia kontenerowego. Nie przenosić do GitHuba
-surowych logów, SDK ani zapisów.
+**Ostatni ZIP v24 z 11 XI 2026 odczytano po odzyskaniu narzędzia:**
+SabotageCC native win, ostatni HUD ~+6800 (częściowy, brak final
+mission_points), jedno ambush_setup i jedno ambush_opening;
+GasStation native loss, **−10700 końcowe natywne**, zero
+ambush_setup/ambush_opening; Blood Killer ręcznie przerwana
+po D34 i `Mission timer expired` po wyłączeniu autoplaya,
+0 objective, końcowe punkty nieznane (tylko początkowe 0).
+W starym recorderze v24 nie było wpisów patrol_group,
+więc nowy odczyt jest niezweryfikowany w grze.
+Nie przenosić do GitHuba surowych logów, SDK ani zapisów.
