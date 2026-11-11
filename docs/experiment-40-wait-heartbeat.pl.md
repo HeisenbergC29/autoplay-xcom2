@@ -2,6 +2,8 @@
 
 Baza źródeł: `main` v24, `defdcee43945a0755de6d069d7690cd215c83c63`.
 Gałąź HELPER: `helper/40-observational-wait-heartbeat`.
+Wariant integracji LEAD: `mission-report-v25`. Kompilacja Windows WOTC SDK
+i rozgrywka tego wariantu: **NOT RUN**.
 NIE jest to naprawa wcześniejszego zawieszenia Blood Killer.
 
 ## Problem z raportu v22
@@ -77,8 +79,12 @@ do repozytorium.
 
 ## Integracja
 
-Nie zmieniono `APX_MissionRecorder.uc`: PR #47 i #49 edytują go równolegle.
-Gałąź nie rezerwuje nowego numeru `mission-report-vXX`:
-LEAD ma wspólnie ustalić marker na integrowanym commicie i zsynchronizować
-testy rewizji. Dopiero końcowy commit z prawidłowym numerem rewizji
-powinien być wskazany użytkownikowi do budowania.
+Pierwotna gałąź HELPER nie zmieniała `APX_MissionRecorder.uc`,
+ponieważ PR #47 i #49 edytują go równolegle. Przy integracji LEAD ustalił
+wspólny marker `mission-report-v25` w rejestratorze, HUD i podsumowaniu
+wizualizacji MP oraz dopasował testy rewizji. Kod diagnostyki heartbeat
+pozostaje bez zmian. PR #47 będzie następnie scalony z tego samego wariantu;
+PR #49 wymaga osobnej decyzji o zakresie wiedzy.
+
+Dokładny końcowy SHA do budowania wskazuje LEAD w issue #4.
+Kompilacja Windows WOTC SDK oraz gra v25 pozostają **NOT RUN**.
