@@ -37,18 +37,20 @@ class GrenadeBlockerDiagnosticsTests(unittest.TestCase):
             self.assertIn(reset, choose)
         self.assertIn('ScanBlastSafeRadius = LastBlastSafeRadius;', function_body(source, 'RejectBlast'))
 
-    def test_missing_geometry_uses_known_state_tile_with_padding_or_fails_closed(self):
+    def test_missing_geometry_uses_verified_native_extent_or_fails_closed(self):
         source = SOURCE.read_text()
         footprint = function_body(source, 'FootprintNearImpact')
         for label in ('no_interface', 'empty_footprint', 'near_footprint',
-                      'clear_footprint', 'known_state_tile_fallback',
-                      'near_state_tile', 'clear_state_tile'):
+                      'clear_footprint', 'empty_unit_footprint',
+                      'near_unit_occupied_tiles', 'clear_unit_occupied_tiles',
+                      'unknown_objective_bounds', 'near_objective_bounds',
+                      'clear_objective_bounds', 'invalid_footprint_tile'):
             self.assertIn('"' + label + '"', footprint)
         self.assertIn('if (KnownState == none || KnownState.bRemoved', footprint)
-        self.assertIn('DestructibleState.TileLocation', footprint)
-        self.assertIn('UnitState.TileLocation', footprint)
+        self.assertIn('GetVisibilityForLocation(UnitState.TileLocation, Tiles)', footprint)
         self.assertIn('IsTileOutOfRange(Tile)', footprint)
-        self.assertIn('ConservativeFallbackRadius(SafeRadius', footprint)
+        self.assertIn('TryGetObjectiveGeometry(', footprint)
+        self.assertNotIn('Tiles.AddItem(',footprint)
         self.assertIn('return true;', footprint)
         blast = function_body(source, 'BlastIsSafe')
         self.assertIn('SafeRadius, ObjectiveOwner)', blast)

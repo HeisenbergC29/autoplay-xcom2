@@ -420,13 +420,127 @@ function bool IsProtectedUnit(XComGameState_Unit SourceUnit, XComGameState_Unit 
         || class'Helpers'.static.IsObjectiveTarget(OtherUnit.ObjectID);
 }
 
-// When a known state lacks the visual footprint (e.g. a mission prop not
-// currently rendered), its authoritative native TileLocation is still usable
-// for a conservative exclusion test. Do not treat a wholly unknown location
-// as safe; the extra two tiles account for larger-than-tile objective props.
-static function float ConservativeFallbackRadius(float BlastRadius, float TileSize)
+// Bounds are observational, not forced into a refreshed state. Invalid/stale
+// geometry remains a blocker; a point plus arbitrary padding cannot enclose a
+// large or offset objective prop.
+static function bool FiniteGeometryCoordinate(float Value)
 {
-    return FMax(0.0, BlastRadius) + FMax(0.0, TileSize) * 2.0;
+    // Comparisons also reject NaN/infinity; this bound exceeds tactical worlds.
+    return Value >= -100000000.0 && Value <= 100000000.0;
+}
+
+static function bool RectangleNearImpact(float ImpactX, float ImpactY,
+    float MinX, float MinY, float MaxX, float MaxY, float SafeRadius,
+    bool bBoundsKnown)
+{
+    local float DeltaX, DeltaY;
+    if (!bBoundsKnown || MinX > MaxX || MinY > MaxY || SafeRadius < 0.0)
+        return true;
+    if (!FiniteGeometryCoordinate(ImpactX) || !FiniteGeometryCoordinate(ImpactY))
+        return true;
+    if (!FiniteGeometryCoordinate(MinX) || !FiniteGeometryCoordinate(MinY))
+        return true;
+    if (!FiniteGeometryCoordinate(MaxX) || !FiniteGeometryCoordinate(MaxY))
+        return true;
+    if (!FiniteGeometryCoordinate(SafeRadius))
+        return true;
+    DeltaX = FMax(0.0, FMax(MinX - ImpactX, ImpactX - MaxX));
+    DeltaY = FMax(0.0, FMax(MinY - ImpactY, ImpactY - MaxY));
+    // No Z test: also protect units/props in the same vertical column.
+    return DeltaX * DeltaX + DeltaY * DeltaY <= SafeRadius * SafeRadius;
+}
+
+static function bool UsableGeometryBox(box Bounds)
+{
+    return Bounds.IsValid != 0
+        && FiniteGeometryCoordinate(Bounds.Min.X) && FiniteGeometryCoordinate(Bounds.Min.Y)
+        && FiniteGeometryCoordinate(Bounds.Min.Z) && FiniteGeometryCoordinate(Bounds.Max.X)
+        && FiniteGeometryCoordinate(Bounds.Max.Y) && FiniteGeometryCoordinate(Bounds.Max.Z)
+        && Bounds.Min.X <= Bounds.Max.X && Bounds.Min.Y <= Bounds.Max.Y
+        && Bounds.Min.Z <= Bounds.Max.Z && VSizeSq(Bounds.Max - Bounds.Min) > 0.0;
+}
+
+function bool TryGetObjectiveGeometry(XComGameState_Destructible KnownState, out box GeometryBounds)
+{
+    local XComDestructibleActor Visualizer;
+    local XComInteractiveLevelActor Interactive;
+    local PrimitiveComponent Component;
+    local StaticMeshComponent StaticMesh;
+    local SkeletalMeshComponent SkeletalMesh;
+    local array<PrimitiveComponent> CheckedComponents;
+    local box ComponentBounds;
+    local int NumComponents;
+
+    GeometryBounds.IsValid = 0;
+    if (KnownState == none || KnownState.bRemoved || KnownState.ObjectID <= 0)
+        return false;
+    Visualizer = XComDestructibleActor(KnownState.GetVisualizer());
+    if (Visualizer == none || Visualizer.bDeleteMe || Visualizer.ObjectID != KnownState.ObjectID)
+        return false;
+
+    // Stock GetComponentsBoundingBox only includes colliding components. Union
+    // all attached gameplay meshes as well, including noncolliding door panels.
+    Visualizer.GetComponentsBoundingBox(GeometryBounds);
+    if (!UsableGeometryBox(GeometryBounds))
+        GeometryBounds.IsValid = 0;
+    foreach Visualizer.AllOwnedComponents(class'PrimitiveComponent', Component)
+    {
+        if (++NumComponents > 64)
+            return false;
+        StaticMesh = StaticMeshComponent(Component);
+        SkeletalMesh = SkeletalMeshComponent(Component);
+        if (StaticMesh != none && StaticMesh.StaticMesh == none)
+            continue;
+        if (SkeletalMesh != none && SkeletalMesh.SkeletalMesh == none)
+            continue;
+        if (MeshComponent(Component) == none && !Component.CollideActors)
+            continue;
+        // Unknown mesh types have no verified asset/extent contract here.
+        if (MeshComponent(Component) != none && StaticMesh == none && SkeletalMesh == none)
+            return false;
+        if (Component.Owner != Visualizer || !Component.bAttached
+            || Component.bNeedsReattach || Component.bNeedsUpdateTransform)
+            return false;
+        ComponentBounds.Min = Component.Bounds.Origin - Component.Bounds.BoxExtent;
+        ComponentBounds.Max = Component.Bounds.Origin + Component.Bounds.BoxExtent;
+        ComponentBounds.IsValid = 1;
+        if (!UsableGeometryBox(ComponentBounds))
+            return false;
+        CheckedComponents.AddItem(Component);
+        if (GeometryBounds.IsValid == 0)
+            GeometryBounds = ComponentBounds;
+        else
+        {
+            GeometryBounds.Min.X = FMin(GeometryBounds.Min.X, ComponentBounds.Min.X);
+            GeometryBounds.Min.Y = FMin(GeometryBounds.Min.Y, ComponentBounds.Min.Y);
+            GeometryBounds.Min.Z = FMin(GeometryBounds.Min.Z, ComponentBounds.Min.Z);
+            GeometryBounds.Max.X = FMax(GeometryBounds.Max.X, ComponentBounds.Max.X);
+            GeometryBounds.Max.Y = FMax(GeometryBounds.Max.Y, ComponentBounds.Max.Y);
+            GeometryBounds.Max.Z = FMax(GeometryBounds.Max.Z, ComponentBounds.Max.Z);
+        }
+    }
+    // Explicit references must have been seen by the native recursive iterator;
+    // otherwise a missing detached panel would silently shrink the footprint.
+    if (Visualizer.StaticMeshComponent != none && Visualizer.StaticMeshComponent.StaticMesh != none
+        && CheckedComponents.Find(Visualizer.StaticMeshComponent) == INDEX_NONE)
+        return false;
+    if (Visualizer.SkeletalMeshComponent != none && Visualizer.SkeletalMeshComponent.SkeletalMesh != none
+        && CheckedComponents.Find(Visualizer.SkeletalMeshComponent) == INDEX_NONE)
+        return false;
+    Interactive = XComInteractiveLevelActor(Visualizer);
+    if (Interactive != none)
+    {
+        if (Interactive.Mesh != none && Interactive.Mesh.StaticMesh != none
+            && CheckedComponents.Find(Interactive.Mesh) == INDEX_NONE)
+            return false;
+        if (Interactive.AttachedMesh1 != none && Interactive.AttachedMesh1.StaticMesh != none
+            && CheckedComponents.Find(Interactive.AttachedMesh1) == INDEX_NONE)
+            return false;
+        if (Interactive.AttachedMesh2 != none && Interactive.AttachedMesh2.StaticMesh != none
+            && CheckedComponents.Find(Interactive.AttachedMesh2) == INDEX_NONE)
+            return false;
+    }
+    return CheckedComponents.Length > 0 && UsableGeometryBox(GeometryBounds);
 }
 
 function bool FootprintNearImpact(X2GameRulesetVisibilityInterface VisibleObject,
@@ -435,12 +549,13 @@ function bool FootprintNearImpact(X2GameRulesetVisibilityInterface VisibleObject
     local array<TTile> Tiles;
     local TTile Tile;
     local vector Delta;
-    local XComGameState_Destructible DestructibleState;
     local XComGameState_Unit UnitState;
-    local bool bFallback;
-    local float TestedRadius;
+    local box GeometryBounds;
+    local bool bUnitFallback, bNear;
 
     LastFootprintGeometry = "no_interface";
+    if (`XWORLD == none)
+        return true;
     if (VisibleObject != none)
     {
         VisibleObject.GetVisibilityLocation(Tiles);
@@ -448,43 +563,49 @@ function bool FootprintNearImpact(X2GameRulesetVisibilityInterface VisibleObject
     }
     if (Tiles.Length == 0)
     {
-        if (KnownState == none || KnownState.bRemoved || `XWORLD == none)
+        if (KnownState == none || KnownState.bRemoved || KnownState.ObjectID <= 0)
             return true;
-        DestructibleState = XComGameState_Destructible(KnownState);
         UnitState = XComGameState_Unit(KnownState);
-        if (DestructibleState != none)
-            Tile = DestructibleState.TileLocation;
-        else if (UnitState != none)
-            Tile = UnitState.TileLocation;
+        if (UnitState != none)
+        {
+            if (`XWORLD.IsTileOutOfRange(UnitState.TileLocation))
+                return true;
+            // Native occupied tiles include large UnitSize; never substitute
+            // only the anchor tile of an empty unit footprint.
+            UnitState.GetVisibilityForLocation(UnitState.TileLocation, Tiles);
+            bUnitFallback = true;
+            LastFootprintGeometry = "empty_unit_footprint";
+            if (Tiles.Length == 0)
+                return true;
+        }
         else
-            return true;
-        if (`XWORLD.IsTileOutOfRange(Tile))
-            return true;
-        // This is a location from a real live game state, not a guessed
-        // objective marker. A padded point remains conservative for large
-        // interactives whose mesh footprint is temporarily unavailable.
-        Tiles.AddItem(Tile);
-        bFallback = true;
-    }
-
-    TestedRadius = SafeRadius;
-    if (bFallback)
-    {
-        TestedRadius = ConservativeFallbackRadius(SafeRadius, `TILESTOUNITS(1.0));
-        LastFootprintGeometry = "known_state_tile_fallback";
+        {
+            LastFootprintGeometry = "unknown_objective_bounds";
+            if (!TryGetObjectiveGeometry(XComGameState_Destructible(KnownState), GeometryBounds))
+                return true;
+            bNear = RectangleNearImpact(Impact.X, Impact.Y, GeometryBounds.Min.X,
+                GeometryBounds.Min.Y, GeometryBounds.Max.X, GeometryBounds.Max.Y,
+                SafeRadius, true);
+            LastFootprintGeometry = bNear ? "near_objective_bounds" : "clear_objective_bounds";
+            return bNear;
+        }
     }
     foreach Tiles(Tile)
     {
-        Delta = `XWORLD.GetPositionFromTileCoordinates(Tile) - Impact;
-        // Protect vertical columns too: a floor can be destroyed below a unit.
-        Delta.Z = 0.0;
-        if (VSizeSq(Delta) <= Square(TestedRadius))
+        if (`XWORLD.IsTileOutOfRange(Tile))
         {
-            LastFootprintGeometry = bFallback ? "near_state_tile" : "near_footprint";
+            LastFootprintGeometry = "invalid_footprint_tile";
+            return true;
+        }
+        Delta = `XWORLD.GetPositionFromTileCoordinates(Tile) - Impact;
+        Delta.Z = 0.0;
+        if (VSizeSq(Delta) <= Square(SafeRadius))
+        {
+            LastFootprintGeometry = bUnitFallback ? "near_unit_occupied_tiles" : "near_footprint";
             return true;
         }
     }
-    LastFootprintGeometry = bFallback ? "clear_state_tile" : "clear_footprint";
+    LastFootprintGeometry = bUnitFallback ? "clear_unit_occupied_tiles" : "clear_footprint";
     return false;
 }
 

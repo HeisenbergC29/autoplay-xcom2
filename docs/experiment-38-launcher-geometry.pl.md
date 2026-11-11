@@ -1,76 +1,74 @@
-# Eksperyment #38a — odblokowanie legalnego granatnika bez osłabienia ochrony celów
+# Eksperyment #38a — geometria chronionych obiektów przy pustym obrysie
 
-Baza `main` v23: `64c28e76b035bcda92a0ecc902f38ed5c889f88e`.
-Gałąź `helper/38-native-launcher-objective-geometry`, NIE zintegrowana
-i jeszcze bez odrębnego PR ze względu na limit trzech aktywnych prac
-HELPER (#11, #43, #44). Nie instalować jako gotowej poprawki.
+Pierwotna baza v23: `64c28e76b035bcda92a0ecc902f38ed5c889f88e`.
+PR #45 przygotowuje LEAD na podstawie gałęzi HELPER-a
+`helper/38-native-launcher-objective-geometry`. Końcowy wariant do
+kompilacji wskazuje [issue #4](https://github.com/HeisenbergC29/autoplay-xcom2/issues/4).
+Jest częścią przygotowywanego v24 razem z #31 / PR #44.
+Windows WOTC SDK i gra: **NOT RUN**.
 
-## Potwierdzenie z prywatnego logu v23
+## Dowód z v23
 
-`ChallengeAbductionGasStation`: `outcome=loss`, końcowe natywne
-punkty **−10 600**. Unit `63486` miała zapisane `LaunchGrenade`:
-**13 razy AA_Success, 11 razy AA_CannotAfford_ActionPoints**.
-Dla tej jednostki `ThrowGrenade` zgłasza `AA_WeaponIncompatible`,
-co nie jest błędem moda. Granatnik był zatem legalnie dostępny
-w części decyzji, ale **nie został użyty**.
+GasStation zakończyło się porażką i natywnym końcowym **−10600**.
+Granatnik miał 13 kontroli `LaunchGrenade` z `AA_Success` i 11
+z `AA_CannotAfford_ActionPoints`. Nie były to wykonane ataki.
+`ThrowGrenade` z `AA_WeaponIncompatible` u granatnika nie jest błędem.
 
-Planer rozważał łącznie 355 centrów rzutów/wystrzałów z 118
-`grenade_scan`. Suma odmów: **262 range, 91 blast**,
-**0 accepted**. Dziesięć podsumowań skanu miało jako
-ostatni powód `objective_near_blast` wraz z
-`blast_blocker_geometry=empty_footprint`. To nie znaczy,
-że wszystkie 91 odrzuceń są błędne. Jednocześnie wskazuje
-konkretny nadmiernie zachowawczy przypadek: brak aktualnego
-wizualnego obrysu dowolnego chronionego obiektu powoduje
-globalną odmowę, nawet gdy jego natywny `TileLocation`
-znajduje się daleko od celu rzutu.
+Sprawdzono 355 centrów: 262 odrzucenia zasięgu, 2 trajektorii,
+91 bezpieczeństwa wybuchu, zero zaakceptowanych. Dziesięć podsumowań
+skanów miało `objective_near_blast / empty_footprint`. Nie wyjaśnia to
+wszystkich odmów i nie dowodzi, że wszystkie te miejsca były bezpieczne.
+[Pełny wyciąg](report-2026-11-11-v23.pl.md).
 
-## Implementacja 38a
+## Zachowanie po poprawce LEAD
 
-W `APX_AreaAttackPlanner.FootprintNearImpact` rozróżnia się teraz:
+`FootprintNearImpact` najpierw zachowuje natywny niepusty obrys.
+Przy jego braku:
 
-- natywny widoczny obrys — pełna ochrona po istniejącym promieniu;
-- pusty obrys przy znanym, rzeczywistym `XComGameState_Destructible`
-  (również `InteractiveObject`) lub `XComGameState_Unit` —
-  awaryjna kontrola ich `TileLocation` z **dodatkowymi
-  dwoma polami marginesu bezpieczeństwa**;
-- nieznana/usunięta lokalizacja, obiekt bez poprawnego
-  pola w mapie albo brak stanu — **nadal odmowa**.
+- Jednostka używa `GetVisibilityForLocation` i pełnych natywnych pól
+  zajmowanych przez jej `UnitSize`, zamiast pojedynczej kotwicy.
+- Obiekt destrukcyjny wymaga rzeczywistego wizualizera z pasującym
+  `ObjectID`. `GetComponentsBoundingBox` dostarcza granice komponentów
+  kolizyjnych, a iteracja `AllOwnedComponents` dołącza aktualne bounds
+  wszystkich właściwych meshy oraz komponentów kolizyjnych. To obejmuje
+  niekolizyjne `AttachedMesh1/2` obiektów interaktywnych, które sam
+  domyślny ActorBox mógłby pominąć.
+- Wymagane są poprawne, skończone, niepuste bounds i zgodny właściciel,
+  przyłączenie oraz brak oczekującego reattach/update transform. Jawnie
+  wskazane główne i dołączone meshe muszą wystąpić w zebranych granicach.
+  Brak, usunięty stan, nieznany typ mesha, nieaktualna geometria albo
+  przekroczenie 64 komponentów nadal odrzucają kandydaturę.
 
-Wszystkie wywołania chroniące jednostki, obiekty z
-`ObjectiveInfo` i aktywne interaktywne cele przekazują
-rzeczywisty obiekt stanu. `AA_Success`, właściciel zdolności,
-natywna trajektoria, obszar z obrażeniami, ochrona cywilów,
-możliwość rozerwania otoczenia i liczba AP pozostają
-niezmienione. Testy kodu: `tests/test_grenade_objective_fallback.py`
-oraz zaktualizowane `tests/test_grenade_blocker_diagnostics.py`.
-Weryfikacja SDK odbyła się lokalnie na prywatnym
-`Development sdk.rar`, bez publikowania zawartości.
+Odległość do prostokąta XY bada najbliższy punkt rzeczywistych granic,
+z dotychczasowym promieniem bezpieczeństwa. Z nadal pominiętym Z chroni
+również pionową kolumnę, np. podłogę pod obiektem. Duży albo przesunięty
+obiekt jest chroniony także daleko od kotwicy `TileLocation`.
+Pierwotny fallback HELPER-a z dwoma dodatkowymi polami został zastąpiony:
+stały margines nie wyznacza granic dowolnego celu.
 
-## Co dalej
+Limit 64 ogranicza naszą iterację komponentów; nie jest dowodem stałego
+czasu natywnego `GetComponentsBoundingBox`. Nie odświeżamy ani nie
+przemieszczamy wizualizera, komponentów lub stanu historii do podglądu.
+Niepewna geometria pozostaje blokadą, więc poprawka nie gwarantuje
+odblokowania każdego dotychczas odrzuconego rzutu.
 
-- **38b / scenariusz z samochodem:** `XComDestructibleActor` ma
-  natywne `HasRadialDamage()`, `GetRadialDamageTiles` i
-  `GetDestroyedDamagePreview`. Użycie tego w ofensywie
-  wymaga nie tylko wyceny możliwych obrażeń, ale też
-  sprawdzenia sojuszników, cywilów, celów i ewentualnych
-  kolejnych eksplozji w tych rzeczywistych polach.
-  Obecny kod nadal **odrzuca** `HasDangerousScenery`;
-  nie wyłączać tego globalnie i nie zakładać, że jedno
-  trafienie na pewno wysadzi samochód.
-- **#31a / osłona gracza:** osobny PR #44 ocenia
-  niebezpieczne osłony po stronie XCOM i używa tej
-  samej natywnej geometrii. Nie mieszać dwóch zmian
-  w jednym teście A/B.
-- A/B: na tym samym zapisie GasStation sprawdzić, czy
-  `LaunchGrenade` zostanie **wybrany i wykonany z
-  native AA_Success**. Zbierać `grenade_scan` z
-  reasons, wybrany cel, potwierdzone obrażenia i to,
-  czy nie ucierpiał żaden chroniony obiekt. Zapisać
-  outcome i natywne końcowe punkty misji — sam
-  przyrost użycia granatnika nie jest zwycięstwem.
+## Zachowane ograniczenia i próba
 
-Windows WOTC SDK kompilacja tej gałęzi i gra:
-**NIEPRZEPROWADZONE**. Publiczne CI wymaga normalnego
-PR do przeglądu LEAD, po zwolnieniu limitu. Nie
-przedstawiać tej gałęzi jako zaliczonej misji.
+Natywne zdolności, AP, właściciel, zasięg, trajektoria, ponowna walidacja
+ataku i ochrona sojuszników, cywilów, kontrolowanych żołnierzy oraz celów
+misji pozostają. `HasDangerousScenery` nadal odrzuca nieocenione wybuchy
+wtórne. **#38b — ofensywny solver reakcji łańcuchowej — nie jest wdrożony.**
+Nie zakładać, że pojedyncze trafienie na pewno wysadzi samochód.
+
+Testy `test_grenade_objective_fallback.py` wykonują matematykę faktycznego
+helpera UC dla dużego przesuniętego obiektu, braku/niepoprawności granic,
+styczności promienia i pionowej kolumny; dodatkowo kontrolują powiązanie
+z API SDK i diagnostyką. Zielone testy nie potwierdzają runtime bounds
+w Windows. Prywatne źródła SDK nie są publikowane.
+
+Po kompilacji końcowego SHA odtworzyć ten sam zapis GasStation. Sprawdzić
+powody odmów i nowe `blast_blocker_geometry`, faktycznie wybrany i wykonany
+`LaunchGrenade`, obrażenia oraz zachowanie chronionych obiektów. Sam wzrost
+liczby użytych granatów nie zalicza misji: wymagane jest zwycięstwo i znany
+wynik końcowy >0. Defensywna ocena osłon z PR #44 jest osobną zmianą;
+porównanie całego v24 do v23 nie izoluje wpływu samej geometrii.
