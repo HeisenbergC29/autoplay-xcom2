@@ -119,8 +119,6 @@ class EnemyKnowledgeTests(unittest.TestCase):
         self.assertIn('UnitState.IsEnemyUnit(Enemy)', snapshot)
         score=function_body(mission, 'ThreatRiskAtTile')
         self.assertIn('Weight = KnownThreatWeight;', score)
-        self.assertIn('GetCurrentStat(eStat_HP)', function_body(self.source, 'TargetThreatValue')
-                      if False else 'dummy') if False else None
         self.assertGreater(self.target(1, False, True, False, False),
                            self.target(1, False, False, False, False))
 
