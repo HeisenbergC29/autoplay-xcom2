@@ -2070,17 +2070,20 @@ static function bool ChooseMove(XComGameState_Unit UnitState,
         }
         if (bSafe)
         {
+            // Preserve one real, legal local move BEFORE soft cover/stealth
+            // penalties, including in revealed missions such as GasStation.
+            // Otherwise the only path could be discarded and the squad idle.
+            if ((!bConcealmentUrgent
+                || (!bCoverUrgent && UnitState.GetMyTemplate().bCanTakeCover))
+                && CandidateScore > LocalFallbackScore)
+            {
+                LocalFallbackPath = CandidatePath;
+                LocalFallbackScore = CandidateScore;
+                LocalFallbackRisk = CandidateRisk;
+                LocalFallbackCoverRisk = 0.0;
+            }
             if (!bConcealmentUrgent)
             {
-                // Preserve a constructive native/local path before charging
-                // stealth. This also works when A* could not reach the exact
-                // objective tile, so there was no preferred prefix to retain.
-                if (CandidateScore > LocalFallbackScore)
-                {
-                    LocalFallbackPath = CandidatePath;
-                    LocalFallbackScore = CandidateScore;
-                    LocalFallbackRisk = CandidateRisk;
-                }
                 CandidateScore -= class'APX_ConcealmentPlanner'.static.RouteConcealmentPenalty(
                     UnitState.IsConcealed(),
                     class'APX_ConcealmentPlanner'.static.InspectPathRisk(
@@ -2146,7 +2149,8 @@ static function bool ChooseMove(XComGameState_Unit UnitState,
     if (bUsedLocalFallback)
     {
         Score -= class'APX_ConcealmentPlanner'.static.RouteConcealmentPenalty(
-            true, true, true, class'APX_ConcealmentPlanner'.default.ConcealmentRiskPenalty);
+            UnitState.IsConcealed(), true, true,
+            class'APX_ConcealmentPlanner'.default.ConcealmentRiskPenalty);
         Score -= FMin(18.0, LocalFallbackCoverRisk);
     }
     return true;
