@@ -35,6 +35,7 @@ var private string LastGameScore;
 var private string LastHUDScore;
 var private int RecordedLadderIndex;
 var private int RecordedLadderRung;
+var private int LastRelayScanTurn;
 var private bool bHasLadderScore;
 var private array<string> RecordedScoreKeys;
 var private array<string> RecordedScoreRules;
@@ -659,6 +660,94 @@ function string AbilityHandler(XComGameState_Unit UnitState, name AbilityName)
     return "unhandled";
 }
 
+// Diagnostic only: no relay ID is guessed and no target is submitted.
+// Sample once each XCOM turn in the timed transmitter mission. BerserkerMP
+// may have no valid ranged weapon: report actual native target availability.
+function RecordSabotageRelayCandidates(int Turn)
+{
+    local XComGameState_Unit Soldier;
+    local XComGameState_Destructible TargetObject;
+    local XComGameState_Ability Ability;
+    local GameRulesCache_Unit UnitCache;
+    local AvailableAction Action;
+    local AvailableTarget Target;
+    local Actor Visualizer;
+    local int UnitsChecked, ActionsChecked, TargetsChecked, ObjectsChecked, Shown;
+    local string Fields;
+
+    if (RecordedMissionType != "SabotageTransmitter" || \`TACTICALRULES == none
+        || \`XCOMHISTORY == none || \`XWORLD == none)
+        return;
+    Emit("relay_scan", "|phase=begin|turn=" $ Turn
+        $ "|scope=diagnostics_only|classification=unverified");
+    foreach \`XCOMHISTORY.IterateByClassType(class'XComGameState_Destructible', TargetObject)
+    {
+        if (++ObjectsChecked > 256 || Shown >= 20)
+            break;
+        if (TargetObject == none || TargetObject.Health <= 0
+            || !TargetObject.IsTargetable(eTeam_XCom)
+            || \`XWORLD.IsTileOutOfRange(TargetObject.TileLocation))
+            continue;
+        Visualizer = \`XCOMHISTORY.GetVisualizer(TargetObject.ObjectID);
+        Fields = "|turn=" $ Turn $ "|id=" $ TargetObject.ObjectID
+            $ "|hp=" $ TargetObject.Health
+            $ "|x=" $ TargetObject.TileLocation.X
+            $ "|y=" $ TargetObject.TileLocation.Y
+            $ "|z=" $ TargetObject.TileLocation.Z
+            $ "|main_objective=" $ class'Helpers'.static.IsObjectiveTarget(TargetObject.ObjectID)
+            $ "|actor=" $ Safe(string(Visualizer))
+            $ "|type=unverified_destructible";
+        Emit("relay_object_candidate", Fields);
+        ++Shown;
+    }
+    foreach \`XCOMHISTORY.IterateByClassType(class'XComGameState_Unit', Soldier)
+    {
+        if (UnitsChecked >= 8 || ActionsChecked >= 128 || TargetsChecked >= 192)
+            break;
+        if (Soldier == none || !Soldier.IsAlive() || !Soldier.IsAbleToAct()
+            || Soldier.GetTeam() != eTeam_XCom
+            || Soldier.GetAssociatedPlayerID() != OwnerPlayerID)
+            continue;
+        ++UnitsChecked;
+        if (!\`TACTICALRULES.GetGameRulesCache_Unit(Soldier.GetReference(), UnitCache))
+            continue;
+        foreach UnitCache.AvailableActions(Action)
+        {
+            if (++ActionsChecked > 128 || TargetsChecked >= 192)
+                break;
+            Ability = XComGameState_Ability(\`XCOMHISTORY.GetGameStateForObjectID(
+                Action.AbilityObjectRef.ObjectID));
+            if (Ability == none || Ability.OwnerStateObject.ObjectID != Soldier.ObjectID
+                || class'APX_CombatPlanner'.default.AttackAbilities.Find(
+                    Ability.GetMyTemplateName()) == INDEX_NONE)
+                continue;
+            foreach Action.AvailableTargets(Target)
+            {
+                if (++TargetsChecked > 192)
+                    break;
+                TargetObject = XComGameState_Destructible(
+                    \`XCOMHISTORY.GetGameStateForObjectID(Target.PrimaryTarget.ObjectID));
+                if (TargetObject == none || TargetObject.Health <= 0)
+                    continue;
+                Emit("relay_legal_target", "|turn=" $ Turn
+                    $ "|unit=" $ Soldier.ObjectID
+                    $ "|ability=" $ Ability.GetMyTemplateName()
+                    $ "|code=" $ Action.AvailableCode
+                    $ "|target=" $ TargetObject.ObjectID
+                    $ "|hp=" $ TargetObject.Health
+                    $ "|main_objective=" $ class'Helpers'.static.IsObjectiveTarget(TargetObject.ObjectID)
+                    $ "|hostile=" $ Soldier.TargetIsEnemy(TargetObject.ObjectID));
+            }
+        }
+    }
+    Emit("relay_scan", "|phase=end|turn=" $ Turn
+        $ "|objects_scanned=" $ Min(ObjectsChecked, 256)
+        $ "|objects_reported=" $ Shown
+        $ "|units=" $ UnitsChecked
+        $ "|actions_checked=" $ Min(ActionsChecked, 128)
+        $ "|targets_checked=" $ Min(TargetsChecked, 192));
+}
+
 function Observe(string Phase)
 {
     local XComGameState_Unit UnitState;
@@ -675,7 +764,15 @@ function Observe(string Phase)
     PlayerState = XComGameState_Player(`XCOMHISTORY.GetGameStateForObjectID(OwnerPlayerID));
     PhaseState = "|phase=" $ Safe(Phase);
     if (PlayerState != none)
+    {
         PhaseState $= "|turn=" $ PlayerState.PlayerTurnCount;
+        if (RecordedMissionType == "SabotageTransmitter"
+            && PlayerState.PlayerTurnCount != LastRelayScanTurn)
+        {
+            LastRelayScanTurn = PlayerState.PlayerTurnCount;
+            RecordSabotageRelayCandidates(LastRelayScanTurn);
+        }
+    }
     if (`TACTICALRULES != none)
         PhaseState $= "|active_team=" $ string(`TACTICALRULES.GetUnitActionTeam());
     if (PhaseState != LastPhase)
