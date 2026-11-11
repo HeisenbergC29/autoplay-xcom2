@@ -137,6 +137,7 @@ class BerserkerSabotageContracts(unittest.TestCase):
         self.assertIn('ScoreBerserkerObjectiveRoute(Path.Length, HealthFraction,', scored)
         self.assertIn('GetMeleeThreatReaches(UnitState, VisibleEnemies, Reaches)', scored)
         self.assertIn('GetThreatWeights(UnitState, VisibleEnemies, Weights)', scored)
+        self.assertIn('"|ap_before=" $ UnitState.NumActionPoints()', scored)
         self.assertIn('"|source=" $ GoalSource', scored)
         self.assertIn('distance_before=', scored)
         self.assertIn('distance_after=', scored)
