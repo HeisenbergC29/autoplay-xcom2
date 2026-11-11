@@ -6,7 +6,17 @@ poziom potwierdzenia działania.
 
 ## Baza kodu
 
-- Bieżąca rewizja przygotowywanych źródeł: `mission-report-v24`, kontrola
+- Bieżąca rewizja przygotowywanych źródeł: `mission-report-v25`, obserwacyjny
+  heartbeat długiego oczekiwania (#40 / PR #50), rozróżnienie krytycznych
+  zdarzeń porażki od checkboxów UI oraz diagnostyka obiektów przekaźników
+  (#46 / PR #47). Nie zmienia taktyki i nie naprawia zawieszenia/PlantBomb.
+  [Heartbeat](experiment-40-wait-heartbeat.pl.md),
+  [nieudane cele i przekaźniki](experiment-46-critical-objective-relays.pl.md).
+  Windows/game v25: **NOT RUN**. Dokładny SHA wskazuje LEAD w
+  [issue #4](https://github.com/HeisenbergC29/autoplay-xcom2/issues/4).
+  PR #43 pozostaje poza integracją; PR #49 ma odrębny przegląd zakresu
+  wiedzy i poprawności obserwacji patroli.
+- Baza v24: `defdcee43945a0755de6d069d7690cd215c83c63`, kontrola
   ekspozycji wczesnej trasy, miękka kara samotnego otwarcia walki,
   wiedza o zdolnościach w wagach zagrożeń i ograniczona ocena wybuchowych
   osłon (#31 / PR #44), a także rzeczywista geometria chronionych obiektów
@@ -15,9 +25,11 @@ poziom potwierdzenia działania.
   PR #43 pozostaje poza integracją: wyjątek ostatniego AP omijał zabezpieczenia.
   [Zakres ruchu i otwarcia](experiment-31-safe-opening.pl.md),
   [geometria granatu](experiment-38-launcher-geometry.pl.md).
-  Windows/game v24: **NOT RUN**.
-  Dokładny wariant do kompilacji
-  wskazuje LEAD w [issue #4](https://github.com/HeisenbergC29/autoplay-xcom2/issues/4).
+  [Raport v24](report-2026-11-11-v24.pl.md) potwierdza uruchomienie rewizji
+  w grze, bez dokładnego SHA i osobnego logu kompilacji: SabotageCC native
+  win, lecz +6800 HUD / +11800 rekonstrukcji tylko częściowo; GasStation
+  loss z −10700 końcowymi punktami; Blood Killer ręczny OFF bez wyniku.
+  Późniejszy napis timera nie identyfikuje sam krytycznej porażki celu.
 - Baza v23 po porządkowaniu ostrzeżeń: `64c28e76b035bcda92a0ecc902f38ed5c889f88e`.
   [Raport v23 z 11 XI](report-2026-11-11-v23.pl.md): SabotageCC loss
   z częściowymi punktami, GasStation loss z natywnym −10600 finalnym,
@@ -123,10 +135,10 @@ LEAD poprawił priorytet podejścia przy ukrytym oddziale, współdzielony
 budżet inspekcji przez całą decyzję oraz fallback lokalnych legalnych ruchów.
 Kara za ukrycie nie nadaje nowej nielegalności ścieżce. [Zakres v23](experiment-32-concealment-route.pl.md).
 
-Otwarte osobne zadania: #40 obserwacyjna diagnostyka potwierdzonego
-zawieszenia, #29 prawdziwe pole/obiekt PlantBomb, #28 pilne leczenie,
-#31b izolowanie grup i #38 pozostałe ofensywne AoE. V24 nie naprawia
-zawieszenia ani nie potwierdza wykonania PlantBomb. Kary osłon i concealment
+Otwarte osobne zadania: przyczyna zawieszenia i próba diagnostyki #40,
+#29 prawdziwe pole/obiekt PlantBomb, #28 pilne leczenie,
+#31b izolowanie grup i #38 pozostałe ofensywne AoE. V25 nie naprawia
+zawieszenia ani nie potwierdza PlantBomb w Blood Killer. Kary osłon i concealment
 zachowują konstruktywną legalną trasę awaryjną; sześć inspekcji osłon
 jest współdzielone przez całą decyzję. Brak czytania prywatnej wiedzy AI.
 
@@ -160,9 +172,14 @@ v15, co nie oznacza wspólnego przodka commitów.
 
 ## Potwierdzenie i ograniczenia
 
-V24 po PR #44 i poprawkach geometrii PR #45 wymaga nowej kompilacji
+V25 po PR #50 i poprawkach PR #47 wymaga nowej kompilacji
 Windows WOTC SDK oraz próby w grze: **NOT RUN**. Dokładny SHA, wyniki
 kontroli i decyzje przeglądu zapisuje LEAD w PR i issue #4.
+
+V24 zachowuje potwierdzone zwycięstwo w SabotageCC, lecz częściowe
+punkty nie certyfikują zaliczenia projektu. GasStation −10700 jest FAIL;
+Blood Killer pozostaje UNKNOWN, bez końcowego wyniku. Przekazanie HELPER-a
+o CRITICAL FAIL na podstawie samego napisu timera było zbyt mocne.
 
 Historyczny SHA v23, kontrole i decyzja są zapisane w PR #39.
 Kompilację v23 potwierdził osobny log (0 błędów, 10 ostrzeżeń), a późniejszy

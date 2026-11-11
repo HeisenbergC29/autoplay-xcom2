@@ -117,6 +117,16 @@ granatu przy pustym obrysie; kompilować dopiero końcowy SHA wskazany
 w #4. Diagnostyka #40 pozostaje priorytetem niezależnym od tych zmian.
 [Zakres v24](experiment-31-safe-opening.pl.md).
 
+V25 łączy obserwacyjny heartbeat #40 / PR #50 i diagnostykę nieudanych
+celów oraz przekaźników #46 / PR #47. LEAD poprawił błędy składni UC,
+klasyfikację krytyczności, cykl obserwacji i granice skanów; kompilacja
+Windows i gra pozostają osobnym dowodem. UI ShowFailed ani sam napis
+timera nie oznaczają automatycznie porażki wymaganego celu. PR #49
+pozostaje osobnym przeglądem: bieżący cel patrolu wykracza poza pozycje,
+a IsEngaged czyta także prywatną wiedzę AI. Nie rozszerzać tej polityki
+bez potwierdzonej decyzji właściciela. #29 pozostaje następną pracą
+nad rzeczywistym obiektem i polem interakcji PlantBomb.
+
 ## Przekazanie i decyzja o scaleniu
 
 W PR napisz: konkretny problem i zachowanie po zmianie, źródła/commity,
