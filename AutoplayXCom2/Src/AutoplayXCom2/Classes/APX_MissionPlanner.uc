@@ -971,7 +971,10 @@ static function GetThreatWeights(XComGameState_Unit UnitState,
         Enemy = XComGameState_Unit(`XCOMHISTORY.GetGameStateForObjectID(VisibleEnemies[Index].ObjectID));
         if (Enemy != none && Enemy.IsAlive() && !Enemy.bRemovedFromPlay
             && UnitState != none && UnitState.IsEnemyUnit(Enemy))
-            Weights[Index] = class'APX_EnemyKnowledge'.static.ThreatWeight(Enemy);
+            // At most once per visible contact per movement search:
+            // the public installed ability templates reveal potential AoE,
+            // control and support. Never read enemy cooldown, AP or intent.
+            Weights[Index] = class'APX_EnemyKnowledge'.static.TargetThreat(Enemy);
     }
 }
 
@@ -1214,11 +1217,32 @@ static function bool IsSupportedAdvanceDestination(float StartDistance, float Di
     return Distance <= 10.0 || Distance < StartDistance - 0.5;
 }
 
+// Native route-to-goal may bypass local candidate risk ranking. A sudden
+// exposure increase must be reconsidered before dispatch, particularly with
+// several known enemy groups. Urgent rescue/evac and deadlines remain legal.
+static function bool RoutineRouteExposureAllowed(float CurrentRisk,
+    float DestinationRisk, bool bUrgent)
+{
+    return bUrgent
+        || DestinationRisk <= CurrentRisk + FMax(12.0, CurrentRisk * 0.25);
+}
+
 static function float ScoreRouteAdvance(float CurrentCohesion, float CandidateCohesion)
 {
     // Mission-marker routes need the same catch-up ordering as exploration;
     // a fixed route score otherwise lets the first soldier repeatedly lead.
     return 25.0 + FClamp(CandidateCohesion - CurrentCohesion, -6.0, 8.0);
+}
+
+// Soft preferences must not turn an already constructive legal action into
+// the controller's <= 2 NoPlan stop. Never improve the underlying score, and
+// never rescue an action rejected by base/opportunity scoring or hard guards.
+static function float ApplyConstructiveSoftPenalty(float BaseScore, float Penalty)
+{
+    Penalty = FMax(0.0, Penalty);
+    if (BaseScore > 2.0)
+        return FMax(FMin(3.0, BaseScore), BaseScore - Penalty);
+    return BaseScore - Penalty;
 }
 
 static function int AdvanceCoverLevel(XComGameState_Unit UnitState, TTile Tile, TTile GoalTile)
@@ -1870,7 +1894,8 @@ static function bool RequiresCombatMovement(bool bCombatGoal,
 
 static function bool ChooseMove(XComGameState_Unit UnitState,
     out array<TTile> Path, out float Score,
-    optional out int RemainingConcealmentChecks)
+    optional out int RemainingConcealmentChecks,
+    optional out int RemainingCoverChecks)
 {
     local XGUnit UnitVisualizer;
     local array<TTile> Tiles, CandidatePath, RiskyRoute, LocalFallbackPath;
@@ -1880,9 +1905,10 @@ static function bool ChooseMove(XComGameState_Unit UnitState,
     local TTile GoalTile, Tile, ClosestTile;
     local MissionGoal Goal;
     local bool bCombatGoal, bSafe, bRequireSupport, bRoutineRoute, bSabotageRush;
-    local bool bConcealmentUrgent, bUsedLocalFallback;
+    local bool bConcealmentUrgent, bCoverUrgent, bUsedLocalFallback;
     local string ConcealmentRiskReason;
     local int Index, PathIndex, SampleIndex, SampleCount;
+    local float CoverRisk, RiskyRouteCoverRisk, LocalFallbackCoverRisk, RiskyRouteScore;
     local float CurrentScore, CandidateScore, BestScore, CurrentRisk, CandidateRisk, PathCost, StartSupport, BestRisk;
     local float BestAttackNow, BestAttackAfterMove, HealthFraction;
     local float LocalFallbackScore, LocalFallbackRisk;
@@ -1909,6 +1935,8 @@ static function bool ChooseMove(XComGameState_Unit UnitState,
     bConcealmentUrgent = class'APX_ConcealmentPlanner'.static.ConcealmentIsUrgent(
         UnitState.IsConcealed(), !bRequireSupport, HasActiveMissionDeadline(),
         HasBleedingSquadmate(UnitState), Goal.bBerserkerSabotageGoal);
+    bCoverUrgent = ShouldEvacuate(UnitState) || HasBleedingSquadmate(UnitState)
+        || HasActiveMissionDeadline() || Goal.bBerserkerSabotageGoal;
     StartSupport = NearestSupportDistance(UnitState, UnitState.TileLocation);
     bRoutineRoute = bSabotageRush
         || CanUseRoutineRoute(Goal.bImmediateThreats,
@@ -1921,6 +1949,10 @@ static function bool ChooseMove(XComGameState_Unit UnitState,
         return false;
 
     UnitVisualizer.m_kReachableTilesCache.UpdateTileCacheIfNeeded();
+    // One movement-search snapshot for the early A* endpoint and later local
+    // fallback. No re-scan per candidate tile.
+    GetMeleeThreatReaches(UnitState, VisibleEnemies, MeleeThreatReaches);
+    GetThreatWeights(UnitState, VisibleEnemies, ThreatWeights);
     // Prefer the same native route on successive objective moves. A fallback
     // only after greedy failure would oscillate back toward a wall on the next
     // action whenever the necessary detour initially increases direct distance.
@@ -1938,17 +1970,52 @@ static function bool ChooseMove(XComGameState_Unit UnitState,
             else
                 return true;
         }
-        else if (!bConcealmentUrgent
-            && class'APX_ConcealmentPlanner'.static.InspectPathRisk(
-                UnitState, Path, ConcealmentRiskReason, RemainingConcealmentChecks))
-        {
-            // Search for a safer native blue path first, but retain this legal
-            // route as a bounded fallback; no infinite wait at the fog edge.
-            RiskyRoute = Path;
-            Path.Length = 0;
-        }
         else
-            return true;
+        {
+            // Unlike the native A* endpoint path, the local candidates below
+            // already pay ExposureRisk. Apply the same threat estimate here.
+            CurrentRisk = ExposureRisk(UnitState, UnitState.TileLocation,
+                VisibleEnemies, MeleeThreatReaches, ThreatWeights);
+            CandidateRisk = ExposureRisk(UnitState, Path[Path.Length - 1],
+                VisibleEnemies, MeleeThreatReaches, ThreatWeights);
+            if (!RoutineRouteExposureAllowed(CurrentRisk, CandidateRisk,
+                ShouldEvacuate(UnitState) || HasBleedingSquadmate(UnitState)
+                || HasActiveMissionDeadline()))
+            {
+                // Never retain a dangerous early route as a fallback.
+                Path.Length = 0;
+            }
+            else
+            {
+                Score = ApplyConstructiveSoftPenalty(Score,
+                    FMax(0.0, CandidateRisk - CurrentRisk) * 0.6);
+                CoverRisk = 0.0;
+                if (!bCoverUrgent && UnitState.GetMyTemplate().bCanTakeCover)
+                    CoverRisk = class'APX_ExplosiveCoverKnowledge'.static.InspectRiskAtTile(
+                        UnitState, Path[Path.Length - 1], VisibleEnemies, RemainingCoverChecks);
+                if (CoverRisk > 0.0)
+                {
+                    // Reconsider a car-side exposed endpoint; keep a bounded
+                    // fallback if every legal approach runs through this cover.
+                    RiskyRoute = Path;
+                    RiskyRouteScore = Score;
+                    RiskyRouteCoverRisk = CoverRisk;
+                    Path.Length = 0;
+                }
+                else if (!bConcealmentUrgent
+                    && class'APX_ConcealmentPlanner'.static.InspectPathRisk(
+                        UnitState, Path, ConcealmentRiskReason, RemainingConcealmentChecks))
+                {
+                    RiskyRoute = Path;
+                    RiskyRouteScore = Score;
+                    Path.Length = 0;
+                }
+                else
+                {
+                    return true;
+                }
+            }
+        }
     }
     // Blue moves preserve an action for combat, interactions or overwatch.
     UnitVisualizer.m_kReachableTilesCache.GetAllPathableTiles(Tiles, UnitVisualizer.GetMobility());
@@ -1956,8 +2023,6 @@ static function bool ChooseMove(XComGameState_Unit UnitState,
     // Make sure the closest destination participates even with bounded sampling.
     Tiles.InsertItem(0, ClosestTile);
     SampleCount = Min(Tiles.Length, Clamp(default.MaxCandidateTiles, 1, 512));
-    GetMeleeThreatReaches(UnitState, VisibleEnemies, MeleeThreatReaches);
-    GetThreatWeights(UnitState, VisibleEnemies, ThreatWeights);
     CurrentScore = PositionScore(UnitState, UnitState.TileLocation, GoalTile,
         bCombatGoal, VisibleEnemies, MeleeThreatReaches, ThreatWeights);
     BestScore = CurrentScore + FMax(1.0, default.MinimumPositionGain);
@@ -2020,23 +2085,46 @@ static function bool ChooseMove(XComGameState_Unit UnitState,
         }
         if (bSafe)
         {
+            // Preserve one real, legal local move BEFORE soft cover/stealth
+            // penalties, including in revealed missions such as GasStation.
+            // Otherwise the only path could be discarded and the squad idle.
+            if ((!bConcealmentUrgent
+                || (!bCoverUrgent && UnitState.GetMyTemplate().bCanTakeCover))
+                && CandidateScore > LocalFallbackScore)
+            {
+                LocalFallbackPath = CandidatePath;
+                LocalFallbackScore = CandidateScore;
+                LocalFallbackRisk = CandidateRisk;
+                LocalFallbackCoverRisk = 0.0;
+            }
+            // Save cover risk before either soft cost can discard the normal
+            // candidate. The retained fallback must not assume uninspected
+            // scenery is safe; all soldiers share the caller's finite budget.
+            CoverRisk = 0.0;
+            if (!bCoverUrgent && UnitState.GetMyTemplate().bCanTakeCover)
+            {
+                CoverRisk = class'APX_ExplosiveCoverKnowledge'.static.InspectRiskAtTile(
+                    UnitState, Tile, VisibleEnemies, RemainingCoverChecks);
+                if (LocalFallbackPath.Length > 1
+                    && LocalFallbackPath[LocalFallbackPath.Length - 1] == Tile)
+                    LocalFallbackCoverRisk = CoverRisk;
+            }
             if (!bConcealmentUrgent)
             {
-                // Preserve a constructive native/local path before charging
-                // stealth. This also works when A* could not reach the exact
-                // objective tile, so there was no preferred prefix to retain.
-                if (CandidateScore > LocalFallbackScore)
-                {
-                    LocalFallbackPath = CandidatePath;
-                    LocalFallbackScore = CandidateScore;
-                    LocalFallbackRisk = CandidateRisk;
-                }
                 CandidateScore -= class'APX_ConcealmentPlanner'.static.RouteConcealmentPenalty(
                     UnitState.IsConcealed(),
                     class'APX_ConcealmentPlanner'.static.InspectPathRisk(
                         UnitState, CandidatePath, ConcealmentRiskReason,
                         RemainingConcealmentChecks),
                     false, class'APX_ConcealmentPlanner'.default.ConcealmentRiskPenalty);
+                if (CandidateScore <= BestScore)
+                    continue;
+            }
+            // Explosive scenery remains dangerous AFTER concealment is lost.
+            // Rescue, deadlines and Berserker sabotage remain exceptions.
+            if (!bCoverUrgent && UnitState.GetMyTemplate().bCanTakeCover)
+            {
+                CandidateScore -= CoverRisk;
                 if (CandidateScore <= BestScore)
                     continue;
             }
@@ -2049,10 +2137,11 @@ static function bool ChooseMove(XComGameState_Unit UnitState,
     {
         Path = RiskyRoute;
         // An unavoidable reveal is not a reason to remain indefinitely idle.
-        Score = ScoreRouteAdvance(SquadPositionScore(UnitState, UnitState.TileLocation),
-            SquadPositionScore(UnitState, Path[Path.Length - 1]));
-        Score -= class'APX_ConcealmentPlanner'.static.RouteConcealmentPenalty(
-            true, true, true, class'APX_ConcealmentPlanner'.default.ConcealmentRiskPenalty);
+        Score = ApplyConstructiveSoftPenalty(RiskyRouteScore,
+            class'APX_ConcealmentPlanner'.static.RouteConcealmentPenalty(
+                UnitState.IsConcealed(), true, true,
+                class'APX_ConcealmentPlanner'.default.ConcealmentRiskPenalty)
+            + FMin(18.0, RiskyRouteCoverRisk));
         return true;
     }
     if (Path.Length < 2 && LocalFallbackPath.Length > 1)
@@ -2077,7 +2166,12 @@ static function bool ChooseMove(XComGameState_Unit UnitState,
     // Once all alternatives failed, allow necessary progress with the same
     // bounded unavoidable-reveal cost as the retained route prefix.
     if (bUsedLocalFallback)
-        Score -= class'APX_ConcealmentPlanner'.static.RouteConcealmentPenalty(
-            true, true, true, class'APX_ConcealmentPlanner'.default.ConcealmentRiskPenalty);
+    {
+        Score = ApplyConstructiveSoftPenalty(Score,
+            class'APX_ConcealmentPlanner'.static.RouteConcealmentPenalty(
+                UnitState.IsConcealed(), true, true,
+                class'APX_ConcealmentPlanner'.default.ConcealmentRiskPenalty)
+            + FMin(18.0, LocalFallbackCoverRisk));
+    }
     return true;
 }

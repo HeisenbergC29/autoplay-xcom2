@@ -6,13 +6,20 @@ poziom potwierdzenia działania.
 
 ## Baza kodu
 
-- Bieżąca rewizja przygotowywanych źródeł: `mission-report-v23`, wspólna
-  ocena ryzyka utraty concealment (#32 / PR #39), z poprawkami LEAD
-  pilności, budżetu inspekcji i legalnego fallbacku. Zachowuje formację
-  AoE v22, politykę PlantBomb, ostatni AP i limity ryzyka v21 oraz pełne
-  rozpoznanie v20.
+- Bieżąca rewizja przygotowywanych źródeł: `mission-report-v24`, kontrola
+  ekspozycji wczesnej trasy, miękka kara samotnego otwarcia walki,
+  wiedza o zdolnościach w wagach zagrożeń i ograniczona ocena wybuchowych
+  osłon (#31 / PR #44). Zachowuje concealment v23, formację AoE v22,
+  politykę PlantBomb, ostatni AP i limity ryzyka v21 oraz pełne rozpoznanie v20.
+  PR #43 pozostaje poza integracją: wyjątek ostatniego AP omijał zabezpieczenia.
+  [Zakres v24](experiment-31-safe-opening.pl.md). Windows/game v24: **NOT RUN**.
   Dokładny wariant do kompilacji
   wskazuje LEAD w [issue #4](https://github.com/HeisenbergC29/autoplay-xcom2/issues/4).
+- Baza v23 po porządkowaniu ostrzeżeń: `64c28e76b035bcda92a0ecc902f38ed5c889f88e`.
+  [Raport v23 z 11 XI](report-2026-11-11-v23.pl.md): SabotageCC loss
+  z częściowymi punktami, GasStation loss z natywnym −10600 finalnym,
+  Blood Killer przerwane ręcznie bez wyniku. Kompilacja wcześniejszego v23
+  zakończyła się bez błędów i z 10 ostrzeżeniami; nie jest dowodem kompilacji v24.
 - Baza v22: `75a83365dc9f862080dc3e8bab22399c1f875a29`. [Nowy raport](report-2026-11-07-v22.pl.md)
   potwierdza v22 i parametry formacji w trzech sesjach: SabotageCC loss,
   GasStation loss z −10600 finalnymi punktami oraz potwierdzone przez
@@ -115,8 +122,10 @@ Kara za ukrycie nie nadaje nowej nielegalności ścieżce. [Zakres v23](experime
 
 Otwarte osobne zadania: #40 obserwacyjna diagnostyka potwierdzonego
 zawieszenia, #29 prawdziwe pole/obiekt PlantBomb, #28 pilne leczenie,
-#31 izolowanie grup i #38 pozostałe ofensywne AoE. V23 nie naprawia
-zawieszenia ani nie potwierdza wykonania PlantBomb.
+#31b izolowanie grup i #38 pozostałe ofensywne AoE. V24 nie naprawia
+zawieszenia ani nie potwierdza wykonania PlantBomb. Kary osłon i concealment
+zachowują konstruktywną legalną trasę awaryjną; sześć inspekcji osłon
+jest współdzielone przez całą decyzję. Brak czytania prywatnej wiedzy AI.
 
 Wcześniejszy [raport GasStation v19](report-2026-11-06-v19-gasstation.pl.md):
 porażka, 40 przyjętych rozkazów, normalne zamknięcie gry. Ostatni natywny
@@ -129,7 +138,7 @@ v18 zastosowało poprawkę MP i wykonało dwa ciosy bez dawnego redscreen,
 ale później nastąpiło zawieszenie. Nie ustalono przyczyny ani nowego
 wyjątku ACCESS_VIOLATION. To przekazanie pomocnika, bez niezależnej analizy
 nowego surowego logu przez LEAD. #20 (skupienie pod AoE) pozostaje osobnym
-tematem; PR #11 nadal wymaga poprawek.
+tematem; stary PR #11 zamknięto bez scalenia, a pomysł #10 pozostaje do przebudowy.
 
 ## Pierwszy przegląd importu
 

@@ -117,6 +117,136 @@ static function bool HasUsefulShot(XComGameState_Unit Soldier)
     return false;
 }
 
+// A concealed first shot is not a coordinated ambush when the other soldiers
+// cannot cover the same pod. Keep this as a soft score penalty, never a new
+// gameplay action or a hard ban on legal attacks.
+static function float OpeningSupportPenalty(int ReadySupport, bool bConcealed,
+    bool bUrgent, bool bOpenerExposed)
+{
+    if (!bConcealed || bUrgent)
+        return 0.0;
+    if (bOpenerExposed)
+        return float(Max(0, 2 - ReadySupport)) * 18.0 + 10.0;
+    return float(Max(0, 2 - ReadySupport)) * 18.0;
+}
+
+static function bool OpeningReactionReserveReady(int OrdinaryPoints, int PistolPoints,
+    bool bOrdinaryShotAffordable, bool bPistolShotAffordable)
+{
+    return (OrdinaryPoints > 0 && bOrdinaryShotAffordable)
+        || (PistolPoints > 0 && bPistolShotAffordable);
+}
+
+// Only our own installed reaction abilities and their current native costs.
+// CanActivateAbility would reject a concealed overwatcher until the opener
+// reveals the squad. Cost readiness is a potential, not a future target check.
+static function bool HasAffordableOpeningReaction(XComGameState_Unit Soldier,
+    name AbilityName)
+{
+    local StateObjectReference AbilityRef;
+    local XComGameState_Ability Ability;
+
+    AbilityRef = Soldier.FindAbility(AbilityName);
+    Ability = XComGameState_Ability(`XCOMHISTORY.GetGameStateForObjectID(AbilityRef.ObjectID));
+    return Ability != none && Ability.OwnerStateObject.ObjectID == Soldier.ObjectID
+        && Ability.GetMyTemplate() != none
+        && Ability.GetMyTemplate().CanAfford(Ability, Soldier) == 'AA_Success';
+}
+
+static function bool HasReadyOpeningOverwatch(XComGameState_Unit Soldier)
+{
+    local int OrdinaryPoints, PistolPoints;
+
+    if (Soldier == none)
+        return false;
+    OrdinaryPoints = Soldier.NumReserveActionPoints(
+        class'X2CharacterTemplateManager'.default.OverwatchReserveActionPoint);
+    PistolPoints = Soldier.NumReserveActionPoints(
+        class'X2CharacterTemplateManager'.default.PistolOverwatchReserveActionPoint);
+    if (OrdinaryPoints <= 0 && PistolPoints <= 0)
+        return false;
+    // Suppression, KillZone and ReserveInterrupt have distinct conditions;
+    // their reserve points do not establish an ordinary reaction lane.
+    return OpeningReactionReserveReady(OrdinaryPoints, PistolPoints,
+        HasAffordableOpeningReaction(Soldier, 'OverwatchShot')
+            || HasAffordableOpeningReaction(Soldier, 'LongWatchShot'),
+        HasAffordableOpeningReaction(Soldier, 'PistolOverwatchShot'));
+}
+
+// Uses only living friendly state, matching legal overwatch and native geometry.
+// A possible reaction lane does not prove that activation scamper will trigger.
+static function int CountRangedOpeningSupport(XComGameState_Unit Opener,
+    XComGameState_Unit Enemy)
+{
+    local XComGameState_Unit Friend;
+    local AvailableAction OverwatchAction;
+    local GameRulesCache_VisibilityInfo Visibility;
+    local int TargetIndex, PointCost, Count;
+    local float SightDistance;
+    local bool bReadyOverwatch;
+
+    if (Opener == none || Enemy == none || `XWORLD == none)
+        return 0;
+    foreach `XCOMHISTORY.IterateByClassType(class'XComGameState_Unit', Friend)
+    {
+        if (Friend == none || Friend.ObjectID == Opener.ObjectID
+            || !IsLocalSoldier(Friend, Opener.GetAssociatedPlayerID())
+            || !Friend.IsAbleToAct())
+            continue;
+        bReadyOverwatch = HasReadyOpeningOverwatch(Friend);
+        if (Friend.NumActionPoints() <= 0 && !bReadyOverwatch)
+            continue;
+        SightDistance = `METERSTOUNITS(Friend.GetVisibilityRadius());
+        if (!`XWORLD.CanSeeTileToTile(Friend.TileLocation,
+            Enemy.TileLocation, Visibility)
+            || Visibility.DefaultTargetDist > Square(SightDistance))
+            continue;
+        if (bReadyOverwatch
+            || FindOverwatch(Friend, OverwatchAction, TargetIndex, PointCost))
+            ++Count;
+        if (Count >= 2)
+            break;
+    }
+    return Count;
+}
+
+// Only ordinary legal ranged openers. Do not apply this to the Berserker
+// melee objective, healing, mission interactions, or already revealed squads.
+static function float UnsupportedOpeningPenaltyForAction(
+    XComGameState_Unit Opener, AvailableAction Candidate, int TargetIndex)
+{
+    local XComGameState_Ability Ability;
+    local XComGameState_Unit Enemy;
+    local vector EnemyPosition, OpenerPosition;
+    local float Angle;
+    local ECoverType Cover;
+    local name AbilityName;
+
+    if (Opener == none || !Opener.IsConcealed()
+        || !SquadIsConcealed(Opener.GetAssociatedPlayerID())
+        || class'APX_MissionPlanner'.static.HasActiveMissionDeadline()
+        || TargetIndex < 0 || TargetIndex >= Candidate.AvailableTargets.Length
+        || Candidate.AvailableCode != 'AA_Success')
+        return 0.0;
+    Ability = XComGameState_Ability(`XCOMHISTORY.GetGameStateForObjectID(
+        Candidate.AbilityObjectRef.ObjectID));
+    if (Ability == none || Ability.OwnerStateObject.ObjectID != Opener.ObjectID)
+        return 0.0;
+    AbilityName = Ability.GetMyTemplateName();
+    if (AbilityName != 'StandardShot' && AbilityName != 'PistolStandardShot'
+        && AbilityName != 'SniperStandardFire')
+        return 0.0;
+    Enemy = XComGameState_Unit(`XCOMHISTORY.GetGameStateForObjectID(
+        Candidate.AvailableTargets[TargetIndex].PrimaryTarget.ObjectID));
+    if (Enemy == none || !Opener.IsEnemyUnit(Enemy))
+        return 0.0;
+    EnemyPosition = `XWORLD.GetPositionFromTileCoordinates(Enemy.TileLocation);
+    OpenerPosition = `XWORLD.GetPositionFromTileCoordinates(Opener.TileLocation);
+    Cover = `XWORLD.GetCoverTypeForTarget(EnemyPosition, OpenerPosition, Angle);
+    return OpeningSupportPenalty(CountRangedOpeningSupport(Opener, Enemy),
+        true, false, Cover == CT_None);
+}
+
 static function bool FindOverwatch(XComGameState_Unit Soldier,
     out AvailableAction Action, out int TargetIndex, out int PointCost)
 {
