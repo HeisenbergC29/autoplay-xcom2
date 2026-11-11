@@ -475,6 +475,14 @@ static function bool ShouldPrioritizeBerserkerSabotage(bool bEnabled,
     return bEnabled && bBerserker && bSabotageMission && !bObjectiveComplete;
 }
 
+// Once a real sabotage objective has been identified, the unit should not
+// forget it simply because its current turn has only one movement AP left.
+// Native AvailableActions and path costs still decide whether movement works.
+static function bool KeepSabotageGoalOnLastAP(bool bSabotageGoal, int StandardAP)
+{
+    return bSabotageGoal && StandardAP > 0;
+}
+
 // Choose a real unfinished objective-glint object closest to the native
 // mission marker. If it isn't available, fall back only to that native marker.
 // Never guess an object id or interact with an object without AvailableActions.
@@ -1893,15 +1901,17 @@ static function bool ChooseMove(XComGameState_Unit UnitState,
         || !FindGoal(UnitState, Goal, VisibleEnemies))
         return false;
     GoalTile = Goal.Tile;
-    bSabotageRush = Goal.bBerserkerSabotageGoal
-        && UnitState.NumActionPoints() >= 2;
+    bSabotageRush = KeepSabotageGoalOnLastAP(
+        Goal.bBerserkerSabotageGoal, UnitState.NumActionPoints());
     // For this one sabotage challenge, even a nearby enemy does not turn
     // the bomb emplacement into a combat-position destination. Threat risk
     // is still scored; emergency/attack actions still compete independently.
     bCombatGoal = RequiresCombatMovement(Goal.bCombat, Goal.bImmediateThreats,
         ShouldEvacuate(UnitState));
-    // The last AP retains combat reposition/attack-opportunity checks. A
-    // mission approach needs another AP left for the native bomb interaction.
+    // Do not turn the last AP into a defensive shuffle away from the
+    // mission objective: a one-AP move can still gain critical distance this
+    // turn. Any legal attack/PlantBomb retains its own independent priority
+    // in APX_Controller, and the native move/interaction costs are unchanged.
     if (bSabotageRush)
         bCombatGoal = false; // Do not score a bomb approach as a firing flank.
     bRequireSupport = !ShouldEvacuate(UnitState);
