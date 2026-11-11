@@ -65,11 +65,16 @@ and [docs/PROJECT-STATE.pl.md](docs/PROJECT-STATE.pl.md) before changing this pr
   positions of living, active hostiles outside LOS. `EnableFullIntel=false`
   retains normal visibility-based knowledge. This narrow exception does not
   grant native attack targets or make every distant contact an immediate threat.
-  The authorized map reveal changes visual fog; it does not authorize other
-  gameplay-state mutations.
+  On 11 November 2026 the user also authorized reading the currently selected
+  native patrol destination (`AIGroup.CurrentTargetLocation`) in full-intel mode.
+  This is a stored point, not a guaranteed future route or proof of engagement.
+  Use bounded validation of active hostile members; do not read IsEngaged or
+  HasAbsoluteKnowledge to classify groups. The authorized map reveal changes
+  visual fog; it does not authorize other gameplay-state mutations.
 - No artificially granted AP/ammo outside normal legal ability effects, forced
   hits/victory, RNG lookahead, or enemy current AP/ammo/cooldown/charge/private-intent
-  inspection. Native bonus actions, free reloads and AP-granting abilities remain
+  inspection beyond the explicit current-patrol-target exception above.
+  Native bonus actions, free reloads and AP-granting abilities remain
   legitimate when available. SDK template knowledge and player observations
   remain legitimate inputs. Attacks must retain native LOS/targeting, available
   actions and AP costs, including in full-intel mode.

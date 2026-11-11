@@ -42,13 +42,13 @@ simulated function APX_UITacticalControl InitAutoplayControl()
     Controller = class'APX_Controller'.static.GetOrCreate();
     // Reveal the map for the local squad without waiting for F8/autoplay.
     if (class'APX_FullIntel'.static.RevealMapForPlayer())
-        `log("Full intel|revision=mission-report-v26|enabled=True|map_revealed=True", true, 'AutoplayXCom2');
+        `log("Full intel|revision=mission-report-v25|enabled=True|map_revealed=True", true, 'AutoplayXCom2');
     ScoreCounter = new(self) class'APX_MissionScore';
     bScoreTextValid = false;
     CachedScoreHistory = none;
     CachedScoreHistoryIndex = -1;
     ScoreRefreshRemaining = 0.0;
-    `log("HUD score polling|revision=mission-report-v26|stable_interval_seconds=1.0|status_interval_seconds=0.25|history_invalidation=true", true, 'AutoplayXCom2');
+    `log("HUD score polling|revision=mission-report-v25|stable_interval_seconds=1.0|status_interval_seconds=0.25|history_invalidation=true", true, 'AutoplayXCom2');
 
     ToggleButton = Spawn(class'UIButton', self);
     ToggleButton.InitButton('APX_ToggleButton', EnableLabel, OnToggleClicked);

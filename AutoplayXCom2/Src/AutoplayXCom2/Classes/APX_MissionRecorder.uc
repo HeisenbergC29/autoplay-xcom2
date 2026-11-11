@@ -94,7 +94,7 @@ function Start(int PlayerID)
     bStarted = true;
     Emit("start", "|player=" $ PlayerID $ "|mission=" $ Safe(Mission)
         $ "|difficulty=" $ `TacticalDifficultySetting $ "|history=" $ HistoryCursor
-        $ "|revision=mission-report-v26|full_intel_enabled=" $ class'APX_FullIntel'.default.EnableFullIntel
+        $ "|revision=mission-report-v25|full_intel_enabled=" $ class'APX_FullIntel'.default.EnableFullIntel
         $ "|formation_area_radius_tiles=" $ class'APX_MissionPlanner'.default.SquadAreaRiskRadiusTiles
         $ "|formation_area_weight=" $ class'APX_MissionPlanner'.default.SquadAreaRiskWeight
         $ "|concealment_risk_penalty=" $ class'APX_ConcealmentPlanner'.default.ConcealmentRiskPenalty
@@ -610,44 +610,54 @@ function string AbilityHandler(XComGameState_Unit UnitState, name AbilityName)
     return "unhandled";
 }
 
-// Sample the CURRENT green-alert AIGroup waypoint once per turn.
-// This is a read-only history observation, not a prediction of a future
-// random corner/AI decision and not a new order given to the enemy.
+// Sample only the user-authorized stored current target and known positions.
+// A recorded target has unknown tactical use; no private engagement or next
+// decision is inspected, and no new enemy order is requested.
 function RecordCurrentPatrolWaypoints(int Turn)
 {
     local XComGameState_AIGroup Group;
+    local XComGameState_Player LocalPlayer;
     local TTile TargetTile;
     local vector Midpoint;
-    local int Seen, Waypoints;
+    local int Seen, Waypoints, HostileMembers, MemberBudget, RemainingMemberChecks;
 
-    if (`XCOMHISTORY == none || `XWORLD == none)
+    if (!class'APX_FullIntel'.default.EnableFullIntel
+        || `XCOMHISTORY == none || `XWORLD == none || `TACTICALRULES == none
+        || OwnerPlayerID != `TACTICALRULES.GetLocalClientPlayerObjectID())
         return;
+    LocalPlayer = XComGameState_Player(`XCOMHISTORY.GetGameStateForObjectID(OwnerPlayerID));
+    if (LocalPlayer == none || LocalPlayer.GetTeam() != eTeam_XCom)
+        return;
+    MemberBudget = Clamp(class'APX_PatrolKnowledge'.default.MaxMemberReferencesPerObservation, 1, 256);
+    RemainingMemberChecks = MemberBudget;
     foreach `XCOMHISTORY.IterateByClassType(class'XComGameState_AIGroup', Group)
     {
-        if (Seen >= Clamp(class'APX_PatrolKnowledge'.default.MaxGroupsPerObservation, 1, 48))
+        if (Seen >= Clamp(class'APX_PatrolKnowledge'.default.MaxGroupsPerObservation, 1, 48)
+            || RemainingMemberChecks <= 0)
             break;
         ++Seen;
         if (!class'APX_PatrolKnowledge'.static.GetCurrentPatrolWaypoint(
-            Group, TargetTile))
+            Group, OwnerPlayerID, TargetTile, Midpoint, HostileMembers,
+            RemainingMemberChecks))
             continue;
-        Midpoint = Group.GetGroupMidpoint();
         ++Waypoints;
         Emit("patrol_group", "|turn=" $ Turn
             $ "|group=" $ Group.ObjectID
-            $ "|encounter=" $ Safe(string(Group.EncounterID))
-            $ "|members=" $ Group.m_arrMembers.Length
+            $ "|members=" $ HostileMembers
             $ "|target_x=" $ TargetTile.X
             $ "|target_y=" $ TargetTile.Y
             $ "|target_z=" $ TargetTile.Z
             $ "|mid_x=" $ Midpoint.X
             $ "|mid_y=" $ Midpoint.Y
             $ "|mid_z=" $ Midpoint.Z
-            $ "|last_destination_turn=" $ Group.TurnCountForLastDestination
-            $ "|is_current_waypoint=true|next_waypoint_unknown=true");
+            $ "|is_stored_current_target=true|target_usage=unknown"
+            $ "|next_waypoint_unknown=true");
     }
     Emit("patrol_scan", "|turn=" $ Turn
         $ "|groups_checked=" $ Seen
         $ "|current_waypoints=" $ Waypoints
+        $ "|member_refs_checked=" $ (MemberBudget - RemainingMemberChecks)
+        $ "|member_budget_exhausted=" $ string(RemainingMemberChecks <= 0)
         $ "|future_route=unknown");
 }
 
@@ -669,7 +679,8 @@ function Observe(string Phase)
     if (PlayerState != none)
     {
         PhaseState $= "|turn=" $ PlayerState.PlayerTurnCount;
-        if (PlayerState.PlayerTurnCount != LastPatrolObservationTurn)
+        if (class'APX_FullIntel'.default.EnableFullIntel
+            && PlayerState.PlayerTurnCount != LastPatrolObservationTurn)
         {
             LastPatrolObservationTurn = PlayerState.PlayerTurnCount;
             RecordCurrentPatrolWaypoints(LastPatrolObservationTurn);
