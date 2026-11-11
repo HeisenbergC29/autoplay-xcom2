@@ -130,7 +130,50 @@ static function float OpeningSupportPenalty(int ReadySupport, bool bConcealed,
     return float(Max(0, 2 - ReadySupport)) * 18.0;
 }
 
-// Uses only living friendly state, current legal overwatch and native geometry.
+static function bool OpeningReactionReserveReady(int OrdinaryPoints, int PistolPoints,
+    bool bOrdinaryShotAffordable, bool bPistolShotAffordable)
+{
+    return (OrdinaryPoints > 0 && bOrdinaryShotAffordable)
+        || (PistolPoints > 0 && bPistolShotAffordable);
+}
+
+// Only our own installed reaction abilities and their current native costs.
+// CanActivateAbility would reject a concealed overwatcher until the opener
+// reveals the squad. Cost readiness is a potential, not a future target check.
+static function bool HasAffordableOpeningReaction(XComGameState_Unit Soldier,
+    name AbilityName)
+{
+    local StateObjectReference AbilityRef;
+    local XComGameState_Ability Ability;
+
+    AbilityRef = Soldier.FindAbility(AbilityName);
+    Ability = XComGameState_Ability(`XCOMHISTORY.GetGameStateForObjectID(AbilityRef.ObjectID));
+    return Ability != none && Ability.OwnerStateObject.ObjectID == Soldier.ObjectID
+        && Ability.GetMyTemplate() != none
+        && Ability.GetMyTemplate().CanAfford(Ability, Soldier) == 'AA_Success';
+}
+
+static function bool HasReadyOpeningOverwatch(XComGameState_Unit Soldier)
+{
+    local int OrdinaryPoints, PistolPoints;
+
+    if (Soldier == none)
+        return false;
+    OrdinaryPoints = Soldier.NumReserveActionPoints(
+        class'X2CharacterTemplateManager'.default.OverwatchReserveActionPoint);
+    PistolPoints = Soldier.NumReserveActionPoints(
+        class'X2CharacterTemplateManager'.default.PistolOverwatchReserveActionPoint);
+    if (OrdinaryPoints <= 0 && PistolPoints <= 0)
+        return false;
+    // Suppression, KillZone and ReserveInterrupt have distinct conditions;
+    // their reserve points do not establish an ordinary reaction lane.
+    return OpeningReactionReserveReady(OrdinaryPoints, PistolPoints,
+        HasAffordableOpeningReaction(Soldier, 'OverwatchShot')
+            || HasAffordableOpeningReaction(Soldier, 'LongWatchShot'),
+        HasAffordableOpeningReaction(Soldier, 'PistolOverwatchShot'));
+}
+
+// Uses only living friendly state, matching legal overwatch and native geometry.
 // A possible reaction lane does not prove that activation scamper will trigger.
 static function int CountRangedOpeningSupport(XComGameState_Unit Opener,
     XComGameState_Unit Enemy)
@@ -140,6 +183,7 @@ static function int CountRangedOpeningSupport(XComGameState_Unit Opener,
     local GameRulesCache_VisibilityInfo Visibility;
     local int TargetIndex, PointCost, Count;
     local float SightDistance;
+    local bool bReadyOverwatch;
 
     if (Opener == none || Enemy == none || `XWORLD == none)
         return 0;
@@ -147,64 +191,23 @@ static function int CountRangedOpeningSupport(XComGameState_Unit Opener,
     {
         if (Friend == none || Friend.ObjectID == Opener.ObjectID
             || !IsLocalSoldier(Friend, Opener.GetAssociatedPlayerID())
-            || !Friend.IsAbleToAct()
-            || (Friend.NumActionPoints() <= 0 && Friend.NumAllReserveActionPoints() <= 0))
+            || !Friend.IsAbleToAct())
+            continue;
+        bReadyOverwatch = HasReadyOpeningOverwatch(Friend);
+        if (Friend.NumActionPoints() <= 0 && !bReadyOverwatch)
             continue;
         SightDistance = `METERSTOUNITS(Friend.GetVisibilityRadius());
         if (!`XWORLD.CanSeeTileToTile(Friend.TileLocation,
             Enemy.TileLocation, Visibility)
             || Visibility.DefaultTargetDist > Square(SightDistance))
             continue;
-        if (Friend.NumAllReserveActionPoints() > 0
+        if (bReadyOverwatch
             || FindOverwatch(Friend, OverwatchAction, TargetIndex, PointCost))
             ++Count;
         if (Count >= 2)
             break;
     }
     return Count;
-}
-
-// Penalize a speculative shot at a previously unengaged pod while XCOM
-// is already occupied with another pod. Only observed native group/alert
-// state is used, never enemy future moves, charges, RNG or hidden intentions.
-static function bool IsSecondaryGroupOpening(bool bHasGroup,
-    bool bTargetEngaged, bool bOtherGroupEngaged, bool bUrgent)
-{
-    return bHasGroup && !bTargetEngaged && bOtherGroupEngaged && !bUrgent;
-}
-
-static function float SecondaryGroupEngagementPenalty(XComGameState_Unit Attacker,
-    AvailableAction Candidate, int TargetIndex)
-{
-    local XComGameState_Unit Target;
-    local XComGameState_AIGroup Group, Other;
-    local int Scanned;
-    local bool bTargetEngaged;
-
-    if (Attacker == none || `XCOMHISTORY == none
-        || class'APX_MissionPlanner'.static.HasActiveMissionDeadline()
-        || TargetIndex < 0 || TargetIndex >= Candidate.AvailableTargets.Length)
-        return 0.0;
-    Target = XComGameState_Unit(`XCOMHISTORY.GetGameStateForObjectID(
-        Candidate.AvailableTargets[TargetIndex].PrimaryTarget.ObjectID));
-    if (Target == none || !Target.IsAlive() || !Attacker.IsEnemyUnit(Target))
-        return 0.0;
-    Group = Target.GetGroupMembership();
-    if (Group == none)
-        return 0.0;
-    bTargetEngaged = Group.IsEngaged();
-    if (bTargetEngaged)
-        return 0.0;
-
-    foreach `XCOMHISTORY.IterateByClassType(class'XComGameState_AIGroup', Other)
-    {
-        if (++Scanned > 32)
-            break;
-        if (Other != none && Other.ObjectID != Group.ObjectID
-            && IsSecondaryGroupOpening(true, bTargetEngaged, Other.IsEngaged(), false))
-            return 35.0;
-    }
-    return 0.0;
 }
 
 // Only ordinary legal ranged openers. Do not apply this to the Berserker

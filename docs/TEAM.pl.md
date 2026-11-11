@@ -63,8 +63,9 @@ Nie zmieniaj benchmarku, aby wynik wyglądał lepiej. Ryzykowne eksperymenty
 mogą pozostać na roboczych gałęziach z opisanym wynikiem.
 
 Pierwszy przegląd importu przyjął ataki Berserkera z PR #7 i ochronę
-kontrolowanego sojusznika z PR #9 do rewizji v17. PR #11 z twardym filtrem
-pamięci marszu wymaga poprawek i pozostaje poza integracją.
+kontrolowanego sojusznika z PR #9 do rewizji v17. Stary PR #11 z twardym
+filtrem pamięci marszu zamknięto bez scalenia; pomysł #10 wymaga przebudowy
+na aktualnej bazie.
 [Stan i źródła v17](tactics-v17.pl.md). Kolejne prace zaczynaj od aktualnego
 `main`; oryginalna baza v16 pozostaje punktem porównania zachowanych zabezpieczeń.
 
@@ -106,6 +107,15 @@ pojedynczej decyzji i zachowaniem konstruktywnego legalnego fallbacku.
 Nie jest poprawką potwierdzonego zawieszenia v22: obserwacyjny heartbeat
 jest osobnym priorytetem #40, a właściwy obiekt PlantBomb nadal bada #29.
 [Zakres v23](experiment-32-concealment-route.pl.md).
+
+V24 / PR #44 obejmuje ekspozycję wczesnej trasy, gotowość zwykłego
+otwarcia z ukrycia, wagi zdolności wrogów i ograniczone ryzyko wybuchowych
+osłon. LEAD zachowuje legalne konstruktywne trasy awaryjne i jeden budżet
+inspekcji na decyzję. PR #43 pozostaje w draft: wyjątek ostatniego AP
+omijał zabezpieczenia ruchu. PR #45 jest osobnym przeglądem geometrii
+granatu przy pustym obrysie; kompilować dopiero końcowy SHA wskazany
+w #4. Diagnostyka #40 pozostaje priorytetem niezależnym od tych zmian.
+[Zakres v24](experiment-31-safe-opening.pl.md).
 
 ## Przekazanie i decyzja o scaleniu
 

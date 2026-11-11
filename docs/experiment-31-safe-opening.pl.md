@@ -1,10 +1,10 @@
 # Eksperyment #31a — osłonięte otwarcie walki i kontrola ryzyka tras
 
 Baza `64c28e76b035bcda92a0ecc902f38ed5c889f88e` (v23).
-Wariant roboczy `mission-report-v25` — numer porządkowy zakłada wcześniejszą
-integrację osobnego PR #43/v24. Jeżeli LEAD zmieni kolejność, trzeba
-zaktualizować rewizję na aktualnym `main` przed scaleniem. Windows SDK
-compile / test w grze tego PR jeszcze **NOT RUN**.
+Wariant integracji `mission-report-v24`. PR #43 pozostaje poza integracją,
+ponieważ proponowany tryb ostatniego AP omijał wcześniejsze kontrole ryzyka
+i utraconego ataku. Zachowujemy obecne zabezpieczenia v21–v23. Windows SDK
+compile / test w grze tego wariantu jeszcze **NOT RUN**.
 
 ## Potwierdzony problem z raportu użytkownika v23 (11 XI 2026)
 
@@ -17,8 +17,8 @@ compile / test w grze tego PR jeszcze **NOT RUN**.
   i samotny `StandardShot`; reszta oddziału nie była właściwie
   przygotowana do wspólnego otwarcia.
 - `ChallengeAbductionGasStation`: `loss`, natywne **−10 600**
-  (`mission_final=true`). 32 wykonane rozkazy, w tym
-  `MedikitHeal` x1, ale także wielokrotny kontakt z przeciwnikami.
+  (`mission_final=true`). 32 wykonane rozkazy,
+  bez potwierdzonego zaliczenia ani poprawy wobec poprzedniej próby.
 - `SabotageTransmitter` / Blood Killer: ręczne `Escape`,
   `outcome=unknown`, HUD **+500 tylko częściowe**; 30 ruchów,
   2 `DevastatingPunchMP`, zero `objective_completed`.
@@ -45,6 +45,12 @@ compile / test w grze tego PR jeszcze **NOT RUN**.
    strzału: przy braku dobrej alternatywy wciąż może
    zostać wykonany. Nie obejmuje ataków wręcz Berserkerów
    i nie osłabia ratunku, celu misji ani aktywnego timera.
+   Rezerwa liczy się tylko dla zwykłego/pistoletowego overwatch
+   i pasującej własnej zdolności reakcji z dostępnymi kosztami.
+   Suppression, KillZone i ReserveInterrupt nie stanowią takiego wsparcia.
+   Jest to potencjalna gotowość: przyszłe warunki celu reakcji nadal
+   rozstrzyga silnik. Konstruktywny strzał zachowuje wynik powyżej progu
+   NoPlan także wtedy, gdy nie ma lepszej alternatywy.
 3. `APX_Controller.CanUseAction`: przed wybraniem akcji
    musi ona pochodzić z obecnie dostępnej listy silnika
    z `AA_Success` i mieć `Ability.OwnerStateObject` zgodne
@@ -63,29 +69,40 @@ Zagrożenia są pobierane **raz na listę kontaktów** w danym wyszukiwaniu
 ruchu, nie ponownie na każdym polu. Nie czytamy ukrytego AP, czasu
 odnowienia ani decyzji przeciwnika.
 
-Nowy `APX_ExplosiveCoverKnowledge` bierze pod uwagę faktycznie
-istniejące `XComDestructibleActor` z `HasRadialDamage()` i
-`GetDestroyedDamagePreview() > 0`. Ocenia pięć pól wokół wybranego
-miejsca i sprawdza, czy pole żołnierza należy do natywnej listy
-`GetRadialDamageTiles`. Wymaga znanego wroga z możliwym atakiem
-dystansowym/obszarowym; przy włączonym pełnym rozpoznaniu może również
-brać pod uwagę jego obecnie znaną pozycję przed aktywacją podu.
+Nowy `APX_ExplosiveCoverKnowledge` sprawdza istniejące, jeszcze niezniszczone
+`XComDestructibleActor` przy nowej pozycji. Czyta ograniczoną liczbę zdarzeń
+`DestroyedEvents` i natywne `GetBlastExtents` dla zdarzeń radialnych; bada
+pole żołnierza bez tworzenia tablicy wszystkich pól. Sumuje nominalne dodatnie
+`UnitDamage` pasujących zdarzeń jako estymację ryzyka. Nie używa do tego
+`GetRadialDamageTiles`, które stock implementuje pętlami UC, ani nie uznaje
+samej sumy UI `GetDestroyedDamagePreview` za dokładną prognozę trafienia.
+Wraki, stan Dead oraz rozpoczęte/zakończone zniszczenie nie są przyszłą bombą;
+płonący, wciąż żywy `_Damaged` może pozostawać zagrożeniem.
+
+Wymaga znanego wroga z potencjalnym atakiem dystansowym/obszarowym w
+przybliżonym zasięgu geometrycznym. Pełne rozpoznanie może dostarczyć jego
+obecną pozycję, lecz nie jego zamiary, aktualny AP ani ukrytą wiedzę.
 **Nie oznacza to**, że przeciwnik wykona taki atak w następnej turze,
 ani że obiekt da się zniszczyć jednym trafieniem. Punktacja jest tylko
 miękką, ograniczoną karą: maksymalnie 42 jednostki score.
 
 Dla natywnego A* ryzyko samochodu prowokuje poszukanie innej legalnej
-pozycji, a oryginalną ścieżkę zachowuje jako awaryjną. W lokalnym
-wyszukiwaniu tylko pierwsze sześć obiecujących endpointów otrzymuje
-kosztowną ocenę otoczenia — reszta ma małą karę niepewności. Dotyczy
-**również oddziału, który utracił concealment**, np. GasStation.
+pozycji, a oryginalną ścieżkę zachowuje jako awaryjną dopiero po przejściu
+kontroli ekspozycji i pozostałych ograniczeń. Jeden budżet sześciu ocen
+osłon obejmuje całą decyzję, wszystkie jednostki, prefiks i lokalne warianty.
+Każda ocena bada najwyżej pięć pól, 16 obiektów oraz 32 zdarzenia zniszczenia.
+Niepełna ocena ma koszt niepewności 42, bez premii za niesprawdzenie.
+Dotyczy **również oddziału, który utracił concealment**, np. GasStation.
 Aktywne terminy, ratunek, ewakuacja i specjalny sabotaż BerserkerMP
 nie mogą zostać zablokowane przez tę preferencję.
 
-**Zastrzeżenie produkcyjne:** odczyt `GetRadialDamageTiles` jest native,
-a nowe źródło `APX_ExplosiveCoverKnowledge.uc` wymaga osobnej kompilacji
-Windows WOTC SDK. Zielony test Python gwarantuje tylko kontrakty
-źródłowe i matematykę. W pierwszej próbie A/B sprawdzić koszt sprawdzania
+Konstruktywny wynik legalnego fallbacku nie może spaść poniżej progu
+globalnego NoPlan/OFF wyłącznie przez miękką karę. Nie podnosimy natomiast
+wyniku bazowo niekonstruktywnego ruchu i nie pomijamy utraconego ataku.
+
+Nowe źródło `APX_ExplosiveCoverKnowledge.uc` wymaga kompilacji Windows WOTC
+SDK. Zielony test Python sprawdza kontrakty źródłowe i matematykę.
+W pierwszej próbie A/B sprawdzić koszt sprawdzania
 samochodów, zapętlenia w pobliżu osłon i to, czy osłona uznana za
 wybuchową rzeczywiście ma wtórne obrażenia. Jeżeli nie, wyregulować
 karę na podstawie dowodów, nie na domysłach.
@@ -94,21 +111,20 @@ karę na podstawie dowodów, nie na domysłach.
 GasStation v23 miała `LaunchGrenade` `AA_Success` dla unit 63486,
 lecz wszystkie 355 sprawdzonych centrów nie przeszły filtrów
 (`range=262`, `blast=91`). Wśród blokad było
-`objective_near_blast / empty_footprint`. Bezpieczny fallback na
-`XComGameState_Destructible.TileLocation` jest rozwijany oddzielnie,
-bez pozwalania na niezweryfikowane eksplozje łańcuchowe. Tego kodu
-**nie ma w tym PR**.
+`objective_near_blast / empty_footprint`. PR #45 oddzielnie bada natywny
+obrys jednostki i rzeczywiste granice wizualizera przy brakującym footprint.
+Kotwica `TileLocation` i stałe dwa pola nie są granicą dowolnego obiektu.
+Brak zweryfikowanych granic nadal wymaga odrzucenia kandydatury. Tego kodu
+**nie ma w PR #44**; przed następną kompilacją LEAD wskaże końcowy SHA integracji.
 
 ## Czego to NIE rozwiązuje
 
-- **#31b** — pełna sekwencja `XComGameState_AIGroup`
-  (wybór tylko jednego niezaangażowanego podu, staging
-  legalnych OW, kontrolowany opener bez concealment,
-  długotrwała pamięć celu i status `IsEngaged()`).
-  Tego nie należy uznawać za już zaimplementowane.
-- Przyjazne/niebezpieczne obiekty wybuchowe w obronie,
-  ocena synergii całego zestawu zdolności i prawdziwy
-  `PlantBomb` są innymi zadaniami.
+- **#31b** — wybór jednej grupy na podstawie dozwolonych obserwacji,
+  staging legalnych OW, kontrolowany opener bez concealment i pamięć celu.
+  Samo `AIGroup.IsEngaged()` czyta również wewnętrzną wiedzę AI; ten wariant
+  nie stosuje takiej kary. Pełny plan kolejnych grup nie jest wdrożony.
+- Ofensywny solver wybuchów wtórnych, ocena synergii całego
+  zestawu zdolności i prawdziwy `PlantBomb` są innymi zadaniami.
 - Brak gwarancji, że activation scamper uruchomi overwatch,
   ani że ukończenie każdej misji jest możliwe przy obecnym
   zestawie ogólnych plannerów. Brak modyfikacji natywnych
@@ -122,9 +138,9 @@ Zmierzyć D1-D10: ryzyko otwierającego, faktycznie wybrany
 ruch, liczba przygotowanych OW i strzelców z LOS/cover,
 ile natywnych grup rzeczywiście aktywowano i czy doszło
 do kolejnej fazy. W GasStation sprawdzić, czy wariant
-ogranicza prowokowanie dodatkowego podu (pod-ID z SDK,
-a nie intuicyjnie estymowane klastery). Blood Killer
-testować tylko w odrębnej gałęzi #43 z priorytetem PlantBomb.
+ogranicza prowokowanie dodatkowych przeciwników na podstawie obserwowanych
+aktywacji i ataków. Blood Killer oraz brak PlantBomb pozostają osobnym
+testem #29; odrzucony wariant ostatniego AP z #43 nie jest częścią v24.
 
 W **każdej** misji raportować native outcome, wykonanie
 wszystkich wymaganych celów i punkty: końcowe potwierdzone,

@@ -953,13 +953,15 @@ function MakeDecision(XComTacticalController PC)
     local array<vector> CandidateLocations, BestLocations;
     local vector CandidateAim, BestAim;
     local int TargetIndex, BestTargetIndex, ChosenTargetID, AmbushTargetIndex, RescuePatientID;
-    local int RemainingConcealmentChecks;
+    local int RemainingConcealmentChecks, RemainingCoverChecks;
     local float Score, BestScore, AmbushScore;
     local bool bMove, bArea, bHavePlan, bSuccess, bCanExplore, bCombatThreats;
     local bool bVisibleThreats, bContactSearch, bCandidateMove, bGrenadeCandidate;
 
     // Shared by every unit and every movement/preparation/loot search below.
     RemainingConcealmentChecks = 6;
+    // Prefix and local cover inspections share one decision budget across units.
+    RemainingCoverChecks = 6;
     PlayerRef = `TACTICALRULES.GetCachedUnitActionPlayerRef();
     PlayerState = XComGameState_Player(`XCOMHISTORY.GetGameStateForObjectID(PlayerRef.ObjectID));
     if (PlayerState == none || PC.m_XGPlayer == none
@@ -1019,10 +1021,9 @@ function MakeDecision(XComTacticalController PC)
             // A distant, unsupported opening shot was previously selected
             // solely by damage value. Allow safe moves/overwatch to compete
             // before revealing an otherwise concealed squad.
-            Score -= class'APX_SquadPlanner'.static.UnsupportedOpeningPenaltyForAction(
-                UnitState, Candidate, TargetIndex);
-            Score -= class'APX_SquadPlanner'.static.SecondaryGroupEngagementPenalty(
-                UnitState, Candidate, TargetIndex);
+            Score = class'APX_MissionPlanner'.static.ApplyConstructiveSoftPenalty(Score,
+                class'APX_SquadPlanner'.static.UnsupportedOpeningPenaltyForAction(
+                    UnitState, Candidate, TargetIndex));
             if (TraceCandidateAction(UnitState, "combat", Candidate, TargetIndex, Score)
                 && Score > BestScore && CanUseAction(UnitState, Candidate, TargetIndex))
             {
@@ -1136,7 +1137,8 @@ function MakeDecision(XComTacticalController PC)
             bCandidateMove = ChooseContactSearchMove(UnitState, CandidatePath, Score);
         else
             bCandidateMove = class'APX_MissionPlanner'.static.ChooseMove(
-                UnitState, CandidatePath, Score, RemainingConcealmentChecks);
+                UnitState, CandidatePath, Score, RemainingConcealmentChecks,
+                RemainingCoverChecks);
         if (bCandidateMove
             && TraceCandidateMove(UnitState, CandidatePath, Score)
             && Score > BestScore && CanUseMove(UnitState, CandidatePath))
