@@ -120,7 +120,7 @@ class BerserkerSabotageContracts(unittest.TestCase):
     def test_native_route_safety_and_existing_fallback_remain(self):
         choose = function_body(self.source, 'ChooseMove')
         for required in (
-            'bSabotageRush = Goal.bBerserkerSabotageGoal',
+            'bSabotageRush = KeepSabotageGoalOnLastAP(',
             'KeepSabotageGoalOnLastAP(',
             'ChooseRoutePrefix(UnitState, UnitVisualizer, GoalTile, Path, bCombatGoal)',
             'HasBlockingHazard(UnitState, CandidatePath[PathIndex])',
