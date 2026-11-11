@@ -67,6 +67,10 @@ class ExplosiveCoverContracts(unittest.TestCase):
         # evaluate explosive cover, unlike a concealment-only guard.
         self.assertNotIn('if (!bConcealmentUrgent && UnitState.GetMyTemplate().bCanTakeCover)',move)
         self.assertIn('if (!bCoverUrgent && UnitState.GetMyTemplate().bCanTakeCover)',move)
+        self.assertIn('LocalFallbackPath = CandidatePath;',move)
+        self.assertIn('|| (!bCoverUrgent && UnitState.GetMyTemplate().bCanTakeCover)',move)
+        self.assertIn('LocalFallbackCoverRisk = 0.0;',move)
+        self.assertIn('UnitState.IsConcealed(), true, true,',move)
         self.assertEqual(move.count('GetThreatWeights(UnitState, VisibleEnemies, ThreatWeights);'),1)
         self.assertEqual(move.count('GetMeleeThreatReaches(UnitState, VisibleEnemies, MeleeThreatReaches);'),1)
 
