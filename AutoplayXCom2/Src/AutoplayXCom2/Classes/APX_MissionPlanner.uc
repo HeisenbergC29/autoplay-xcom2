@@ -588,6 +588,7 @@ static function float ScoreBerserkerObjectivePath(
     Score = ScoreBerserkerObjectiveRoute(Path.Length, HealthFraction,
         CurrentRisk, CandidateRisk);
     `log("Berserker sabotage route|unit=" $ UnitState.ObjectID
+        $ "|ap_before=" $ UnitState.NumActionPoints()
         $ "|source=" $ GoalSource
         $ "|goal_x=" $ GoalTile.X $ "|goal_y=" $ GoalTile.Y
         $ "|goal_z=" $ GoalTile.Z
