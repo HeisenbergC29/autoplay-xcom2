@@ -953,13 +953,15 @@ function MakeDecision(XComTacticalController PC)
     local array<vector> CandidateLocations, BestLocations;
     local vector CandidateAim, BestAim;
     local int TargetIndex, BestTargetIndex, ChosenTargetID, AmbushTargetIndex, RescuePatientID;
-    local int RemainingConcealmentChecks;
+    local int RemainingConcealmentChecks, RemainingCoverChecks;
     local float Score, BestScore, AmbushScore;
     local bool bMove, bArea, bHavePlan, bSuccess, bCanExplore, bCombatThreats;
     local bool bVisibleThreats, bContactSearch, bCandidateMove, bGrenadeCandidate;
 
     // Shared by every unit and every movement/preparation/loot search below.
     RemainingConcealmentChecks = 6;
+    // Prefix and local cover inspections share one decision budget across units.
+    RemainingCoverChecks = 6;
     PlayerRef = `TACTICALRULES.GetCachedUnitActionPlayerRef();
     PlayerState = XComGameState_Player(`XCOMHISTORY.GetGameStateForObjectID(PlayerRef.ObjectID));
     if (PlayerState == none || PC.m_XGPlayer == none
@@ -1013,18 +1015,27 @@ function MakeDecision(XComTacticalController PC)
             || class'APX_MissionPlanner'.static.HasCombatThreats(UnitState);
         if (!UnitState.IsAbleToAct())
             continue;
-        if (class'APX_CombatPlanner'.static.ChooseAction(UnitState, Candidate, TargetIndex, Score, bContactSearch)
-            && TraceCandidateAction(UnitState, "combat", Candidate, TargetIndex, Score)
-            && Score > BestScore && CanUseAction(UnitState, Candidate, TargetIndex))
+        if (class'APX_CombatPlanner'.static.ChooseAction(UnitState, Candidate,
+            TargetIndex, Score, bContactSearch))
         {
-            BestAction = Candidate;
-            BestTargetIndex = TargetIndex;
-            BestScore = Score;
-            BestUnit = UnitState;
-            bMove = false;
-            bArea = false;
-            BestLocations.Length = 0;
-            bHavePlan = true;
+            // A distant, unsupported opening shot was previously selected
+            // solely by damage value. Allow safe moves/overwatch to compete
+            // before revealing an otherwise concealed squad.
+            Score = class'APX_MissionPlanner'.static.ApplyConstructiveSoftPenalty(Score,
+                class'APX_SquadPlanner'.static.UnsupportedOpeningPenaltyForAction(
+                    UnitState, Candidate, TargetIndex));
+            if (TraceCandidateAction(UnitState, "combat", Candidate, TargetIndex, Score)
+                && Score > BestScore && CanUseAction(UnitState, Candidate, TargetIndex))
+            {
+                BestAction = Candidate;
+                BestTargetIndex = TargetIndex;
+                BestScore = Score;
+                BestUnit = UnitState;
+                bMove = false;
+                bArea = false;
+                BestLocations.Length = 0;
+                bHavePlan = true;
+            }
         }
         if (class'APX_MissionPlanner'.static.ChooseInteraction(UnitState, Candidate, TargetIndex, Score)
             && TraceCandidateAction(UnitState, "interaction", Candidate, TargetIndex, Score)
@@ -1126,7 +1137,8 @@ function MakeDecision(XComTacticalController PC)
             bCandidateMove = ChooseContactSearchMove(UnitState, CandidatePath, Score);
         else
             bCandidateMove = class'APX_MissionPlanner'.static.ChooseMove(
-                UnitState, CandidatePath, Score, RemainingConcealmentChecks);
+                UnitState, CandidatePath, Score, RemainingConcealmentChecks,
+                RemainingCoverChecks);
         if (bCandidateMove
             && TraceCandidateMove(UnitState, CandidatePath, Score)
             && Score > BestScore && CanUseMove(UnitState, CandidatePath))
@@ -1405,7 +1417,20 @@ simulated event Destroyed()
 
 function bool CanUseAction(XComGameState_Unit UnitState, AvailableAction Action, int TargetIndex)
 {
+    local XComGameState_Ability Ability;
     local int TargetID, Index;
+
+    // Defensive ownership gate: an entry is usable only by its real owner.
+    // Native rules-cache entries normally satisfy this already. Do not infer
+    // an ability from class/template names or grant it to another soldier.
+    if (UnitState == none || `XCOMHISTORY == none
+        || Action.AvailableCode != 'AA_Success')
+        return false;
+    Ability = XComGameState_Ability(`XCOMHISTORY.GetGameStateForObjectID(
+        Action.AbilityObjectRef.ObjectID));
+    if (Ability == none || Ability.OwnerStateObject.ObjectID != UnitState.ObjectID)
+        return false;
+
     if (TargetIndex != INDEX_NONE)
     {
         if (TargetIndex < 0 || TargetIndex >= Action.AvailableTargets.Length)
