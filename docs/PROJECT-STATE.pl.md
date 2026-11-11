@@ -9,10 +9,13 @@ poziom potwierdzenia działania.
 - Bieżąca rewizja przygotowywanych źródeł: `mission-report-v24`, kontrola
   ekspozycji wczesnej trasy, miękka kara samotnego otwarcia walki,
   wiedza o zdolnościach w wagach zagrożeń i ograniczona ocena wybuchowych
-  osłon (#31 / PR #44). Zachowuje concealment v23, formację AoE v22,
+  osłon (#31 / PR #44), a także rzeczywista geometria chronionych obiektów
+  przy pustym obrysie granatu (#38 / PR #45). Zachowuje concealment v23, formację AoE v22,
   politykę PlantBomb, ostatni AP i limity ryzyka v21 oraz pełne rozpoznanie v20.
   PR #43 pozostaje poza integracją: wyjątek ostatniego AP omijał zabezpieczenia.
-  [Zakres v24](experiment-31-safe-opening.pl.md). Windows/game v24: **NOT RUN**.
+  [Zakres ruchu i otwarcia](experiment-31-safe-opening.pl.md),
+  [geometria granatu](experiment-38-launcher-geometry.pl.md).
+  Windows/game v24: **NOT RUN**.
   Dokładny wariant do kompilacji
   wskazuje LEAD w [issue #4](https://github.com/HeisenbergC29/autoplay-xcom2/issues/4).
 - Baza v23 po porządkowaniu ostrzeżeń: `64c28e76b035bcda92a0ecc902f38ed5c889f88e`.
@@ -157,8 +160,14 @@ v15, co nie oznacza wspólnego przodka commitów.
 
 ## Potwierdzenie i ograniczenia
 
-Końcowy SHA v23, kontrole i decyzja są zapisane w PR #39. Kompilacja Windows
-WOTC SDK i rozgrywka v23: **NIEURUCHOMIONE**.
+V24 po PR #44 i poprawkach geometrii PR #45 wymaga nowej kompilacji
+Windows WOTC SDK oraz próby w grze: **NOT RUN**. Dokładny SHA, wyniki
+kontroli i decyzje przeglądu zapisuje LEAD w PR i issue #4.
+
+Historyczny SHA v23, kontrole i decyzja są zapisane w PR #39.
+Kompilację v23 potwierdził osobny log (0 błędów, 10 ostrzeżeń), a późniejszy
+raport gry zawiera dwie porażki i ręczne zatrzymanie Blood Killer bez wyniku.
+Nie potwierdza wygranej ani naprawy zawieszenia.
 
 Historyczne kontrole v22 są zapisane w PR #37 dotyczącym #20.
 Kod v22 zaliczył **566 testów z prywatnymi wejściami, bez pominięć**,

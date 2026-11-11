@@ -112,7 +112,7 @@ V24 / PR #44 obejmuje ekspozycję wczesnej trasy, gotowość zwykłego
 otwarcia z ukrycia, wagi zdolności wrogów i ograniczone ryzyko wybuchowych
 osłon. LEAD zachowuje legalne konstruktywne trasy awaryjne i jeden budżet
 inspekcji na decyzję. PR #43 pozostaje w draft: wyjątek ostatniego AP
-omijał zabezpieczenia ruchu. PR #45 jest osobnym przeglądem geometrii
+omijał zabezpieczenia ruchu. PR #45 uzupełnia v24 o rzeczywistą geometrię
 granatu przy pustym obrysie; kompilować dopiero końcowy SHA wskazany
 w #4. Diagnostyka #40 pozostaje priorytetem niezależnym od tych zmian.
 [Zakres v24](experiment-31-safe-opening.pl.md).
