@@ -28,6 +28,12 @@ class CriticalObjectiveRelayContracts(unittest.TestCase):
         self.assertIn('FailedObjectiveIDs.AddItem(ObjectiveID)',failed)
         self.assertIn('Emit("objective_failed"',failed)
         self.assertIn('|critical=true|',failed)
+        challenge=function_body(self.source,'OnChallengeObjectiveFailed')
+        self.assertIn('challenge_native_event',challenge)
+        self.assertIn('FailedObjectiveIDs.Find(ObjectiveID)',challenge)
+        self.assertIn('Emit("objective_failed"',challenge)
+        self.assertIn("'ChallengeObjectiveFailed'",registration)
+        self.assertIn("'ChallengeObjectiveFailed'",cleanup)
         for forbidden in ('FailBattle(', 'SubmitGameState(', 'ModifyStateObject('):
             self.assertNotIn(forbidden,failed)
 
