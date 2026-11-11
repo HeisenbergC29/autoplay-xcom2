@@ -24,6 +24,8 @@ class BerserkerSabotageContracts(unittest.TestCase):
             MISSION, 'ScoreBerserkerObjectiveRoute'))
         cls.risk_allowed = staticmethod(load_uc_function(
             MISSION, 'IsBerserkerObjectiveRiskAllowed'))
+        cls.keep_objective = staticmethod(load_uc_function(
+            MISSION, 'KeepSabotageGoalOnLastAP'))
 
     def test_only_enabled_berserker_mp_with_unfinished_sabotage_objective(self):
         self.assertTrue(self.policy(True, True, True, False))
@@ -61,17 +63,24 @@ class BerserkerSabotageContracts(unittest.TestCase):
         self.assertLess(choose.index(risk_guard),
                         choose.index('CandidateScore = PositionScore('))
 
-    def test_last_ap_keeps_normal_combat_movement_and_attack_checks(self):
+    def test_last_ap_still_advances_sabotage_but_never_bypasses_native_legality(self):
+        self.assertTrue(self.keep_objective(True, 1))
+        self.assertTrue(self.keep_objective(True, 2))
+        self.assertFalse(self.keep_objective(True, 0))
+        self.assertFalse(self.keep_objective(False, 1))
         choose = function_body(self.source, 'ChooseMove')
-        rush = 'bSabotageRush = Goal.bBerserkerSabotageGoal'
+        rush = 'bSabotageRush = KeepSabotageGoalOnLastAP('
         override = 'if (bSabotageRush)'
         self.assertLess(choose.index(rush), choose.index(override))
-        self.assertIn('UnitState.NumActionPoints() >= 2;', choose)
+        self.assertIn('Goal.bBerserkerSabotageGoal, UnitState.NumActionPoints()', choose)
         self.assertNotIn('if (Goal.bBerserkerSabotageGoal)', choose)
         self.assertIn('RequiresCombatMovement(Goal.bCombat, Goal.bImmediateThreats,', choose)
         self.assertIn('bCombatGoal && !IsUsefulReposition(', choose)
         self.assertIn('MoveOpportunityPenalty(BestAttackNow, BestAttackAfterMove,', choose)
         self.assertIn('if (!Goal.bImmediateThreats && !bRoutineRoute)', choose)
+        self.assertIn('if (!HasLegalMove(UnitState)', choose)
+        self.assertIn('m_kReachableTilesCache.BuildPathToTile(Tile, CandidatePath)', choose)
+        self.assertIn('HasBlockingHazard(UnitState, CandidatePath[PathIndex])', choose)
 
     def test_only_valid_native_goal_objects_or_objective_marker(self):
         find = function_body(self.source, 'FindBerserkerSabotageGoal')
@@ -112,7 +121,7 @@ class BerserkerSabotageContracts(unittest.TestCase):
         choose = function_body(self.source, 'ChooseMove')
         for required in (
             'bSabotageRush = Goal.bBerserkerSabotageGoal',
-            'UnitState.NumActionPoints() >= 2',
+            'KeepSabotageGoalOnLastAP(',
             'ChooseRoutePrefix(UnitState, UnitVisualizer, GoalTile, Path, bCombatGoal)',
             'HasBlockingHazard(UnitState, CandidatePath[PathIndex])',
             'IsSupportedAdvanceStep(StartSupport,',
