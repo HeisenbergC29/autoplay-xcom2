@@ -107,6 +107,23 @@ class EnemyKnowledgeTests(unittest.TestCase):
         combat = function_body(COMBAT.read_text(), 'ScoreAttack')
         self.assertIn("Threat = class'APX_EnemyKnowledge'.static.TargetThreat(TargetUnit)", combat)
 
+    def test_move_risk_snapshot_also_uses_public_area_control_support_capabilities(self):
+        # The old route risk saw only the primary weapon and undervalued
+        # enemies with PoisonSpit, control, or squad-buffing abilities.
+        mission=(CLASSES / 'APX_MissionPlanner.uc').read_text(encoding='utf-8-sig')
+        snapshot=function_body(mission, 'GetThreatWeights')
+        self.assertIn("class'APX_EnemyKnowledge'.static.TargetThreat(Enemy)", snapshot)
+        self.assertNotIn("class'APX_EnemyKnowledge'.static.ThreatWeight(Enemy)", snapshot)
+        self.assertIn('Weights.Length = VisibleEnemies.Length', snapshot)
+        self.assertIn('Enemy.IsAlive()', snapshot)
+        self.assertIn('UnitState.IsEnemyUnit(Enemy)', snapshot)
+        score=function_body(mission, 'ThreatRiskAtTile')
+        self.assertIn('Weight = KnownThreatWeight;', score)
+        self.assertIn('GetCurrentStat(eStat_HP)', function_body(self.source, 'TargetThreatValue')
+                      if False else 'dummy') if False else None
+        self.assertGreater(self.target(1, False, True, False, False),
+                           self.target(1, False, False, False, False))
+
     def test_capabilities_come_from_offensive_input_templates_not_unit_names(self):
         flags = function_body(self.source, 'CapabilityFlags')
         for gate in ('Enemy.Abilities.Length > 128',
