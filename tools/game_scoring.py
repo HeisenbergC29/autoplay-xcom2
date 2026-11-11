@@ -469,12 +469,23 @@ def assess_attempt(records: list[dict], outcome: str, scoring: dict,
         if complete:
             score = comparison['total']
 
+    failed_objectives = sorted({
+        str(record.get('objective_id', 'unknown'))
+        for record in records if record['event'] == 'objective_failed'
+    })
     result = {'criterion': ATTEMPT_CRITERION, 'status': 'unknown',
               'mission_outcome': outcome, 'score': score, 'observed_score': observed_score,
               'score_source': source, 'score_status': score_status,
-              'score_complete': complete, 'score_profile': profile}
+              'score_complete': complete, 'score_profile': profile,
+              'critical_objective_failed': bool(failed_objectives),
+              'failed_objectives': failed_objectives}
     normalized = str(outcome).casefold()
-    if conflicting_records:
+    if failed_objectives:
+        # A required mission objective failed. Neither a later positive HUD
+        # observation nor a missing terminal event can make this a PASS.
+        result.update(status='fail', reason='critical_objective_failed',
+                      explanation='A native mission objective failed; the attempt is a critical failure regardless of score.')
+    elif conflicting_records:
         result.update(score=None, score_complete=False, reason='conflicting_records',
                       explanation='Conflicting recording observations prevent a reliable acceptance verdict.')
     elif normalized == 'loss':
