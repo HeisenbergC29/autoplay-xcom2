@@ -971,7 +971,10 @@ static function GetThreatWeights(XComGameState_Unit UnitState,
         Enemy = XComGameState_Unit(`XCOMHISTORY.GetGameStateForObjectID(VisibleEnemies[Index].ObjectID));
         if (Enemy != none && Enemy.IsAlive() && !Enemy.bRemovedFromPlay
             && UnitState != none && UnitState.IsEnemyUnit(Enemy))
-            Weights[Index] = class'APX_EnemyKnowledge'.static.ThreatWeight(Enemy);
+            // At most once per visible contact per movement search:
+            // the public installed ability templates reveal potential AoE,
+            // control and support. Never read enemy cooldown, AP or intent.
+            Weights[Index] = class'APX_EnemyKnowledge'.static.TargetThreat(Enemy);
     }
 }
 
