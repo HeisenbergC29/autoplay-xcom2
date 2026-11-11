@@ -240,7 +240,7 @@ function EventListenerReturn OnObjectiveFailed(Object EventData, Object EventSou
             && Info.TextPoolIndex == DisplayAction.TextPoolIndex
             && Info.LineIndex == DisplayAction.LineIndex
             && Info.GroupID == DisplayAction.GroupID
-            && !Info.HideInTactical)
+            && Info.ShowFailed && !Info.HideInTactical)
         {
             ObjectiveName = Info.DisplayLabel;
             bFound = true;
