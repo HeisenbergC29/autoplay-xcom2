@@ -1214,6 +1214,16 @@ static function bool IsSupportedAdvanceDestination(float StartDistance, float Di
     return Distance <= 10.0 || Distance < StartDistance - 0.5;
 }
 
+// Native route-to-goal may bypass local candidate risk ranking. A sudden
+// exposure increase must be reconsidered before dispatch, particularly with
+// several known enemy groups. Urgent rescue/evac and deadlines remain legal.
+static function bool RoutineRouteExposureAllowed(float CurrentRisk,
+    float DestinationRisk, bool bUrgent)
+{
+    return bUrgent
+        || DestinationRisk <= CurrentRisk + FMax(12.0, CurrentRisk * 0.25);
+}
+
 static function float ScoreRouteAdvance(float CurrentCohesion, float CandidateCohesion)
 {
     // Mission-marker routes need the same catch-up ordering as exploration;
@@ -1880,7 +1890,7 @@ static function bool ChooseMove(XComGameState_Unit UnitState,
     local TTile GoalTile, Tile, ClosestTile;
     local MissionGoal Goal;
     local bool bCombatGoal, bSafe, bRequireSupport, bRoutineRoute, bSabotageRush;
-    local bool bConcealmentUrgent, bUsedLocalFallback;
+    local bool bConcealmentUrgent, bUsedLocalFallback, bThreatSamplesReady;
     local string ConcealmentRiskReason;
     local int Index, PathIndex, SampleIndex, SampleCount;
     local float CurrentScore, CandidateScore, BestScore, CurrentRisk, CandidateRisk, PathCost, StartSupport, BestRisk;
@@ -1938,17 +1948,38 @@ static function bool ChooseMove(XComGameState_Unit UnitState,
             else
                 return true;
         }
-        else if (!bConcealmentUrgent
-            && class'APX_ConcealmentPlanner'.static.InspectPathRisk(
-                UnitState, Path, ConcealmentRiskReason, RemainingConcealmentChecks))
-        {
-            // Search for a safer native blue path first, but retain this legal
-            // route as a bounded fallback; no infinite wait at the fog edge.
-            RiskyRoute = Path;
-            Path.Length = 0;
-        }
         else
-            return true;
+        {
+            // Unlike the native A* endpoint path, the local candidates below
+            // already pay ExposureRisk. Apply the same threat estimate here.
+            GetMeleeThreatReaches(UnitState, VisibleEnemies, MeleeThreatReaches);
+            GetThreatWeights(UnitState, VisibleEnemies, ThreatWeights);
+            bThreatSamplesReady = true;
+            CurrentRisk = ExposureRisk(UnitState, UnitState.TileLocation,
+                VisibleEnemies, MeleeThreatReaches, ThreatWeights);
+            CandidateRisk = ExposureRisk(UnitState, Path[Path.Length - 1],
+                VisibleEnemies, MeleeThreatReaches, ThreatWeights);
+            if (!RoutineRouteExposureAllowed(CurrentRisk, CandidateRisk,
+                ShouldEvacuate(UnitState) || HasBleedingSquadmate(UnitState)
+                || HasActiveMissionDeadline()))
+            {
+                // Never retain a dangerous early route as a fallback.
+                Path.Length = 0;
+            }
+            else if (!bConcealmentUrgent
+                && class'APX_ConcealmentPlanner'.static.InspectPathRisk(
+                    UnitState, Path, ConcealmentRiskReason, RemainingConcealmentChecks))
+            {
+                // Only a concealment risk may use the guarded fallback.
+                RiskyRoute = Path;
+                Path.Length = 0;
+            }
+            else
+            {
+                Score -= FMax(0.0, CandidateRisk - CurrentRisk) * 0.6;
+                return true;
+            }
+        }
     }
     // Blue moves preserve an action for combat, interactions or overwatch.
     UnitVisualizer.m_kReachableTilesCache.GetAllPathableTiles(Tiles, UnitVisualizer.GetMobility());
@@ -1956,8 +1987,11 @@ static function bool ChooseMove(XComGameState_Unit UnitState,
     // Make sure the closest destination participates even with bounded sampling.
     Tiles.InsertItem(0, ClosestTile);
     SampleCount = Min(Tiles.Length, Clamp(default.MaxCandidateTiles, 1, 512));
-    GetMeleeThreatReaches(UnitState, VisibleEnemies, MeleeThreatReaches);
-    GetThreatWeights(UnitState, VisibleEnemies, ThreatWeights);
+    if (!bThreatSamplesReady)
+    {
+        GetMeleeThreatReaches(UnitState, VisibleEnemies, MeleeThreatReaches);
+        GetThreatWeights(UnitState, VisibleEnemies, ThreatWeights);
+    }
     CurrentScore = PositionScore(UnitState, UnitState.TileLocation, GoalTile,
         bCombatGoal, VisibleEnemies, MeleeThreatReaches, ThreatWeights);
     BestScore = CurrentScore + FMax(1.0, default.MinimumPositionGain);
