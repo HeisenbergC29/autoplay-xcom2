@@ -44,6 +44,7 @@ class CriticalObjectiveRelayContracts(unittest.TestCase):
         self.assertIn('RecordedMissionType == "SabotageTransmitter"',observe)
         self.assertIn('PlayerState.PlayerTurnCount != LastRelayScanTurn',observe)
         self.assertIn('RecordSabotageRelayCandidates(LastRelayScanTurn)',observe)
+        self.assertIn('LastRelayScanTurn = -1;', function_body(self.source,'Start'))
         self.assertIn('RecordedMissionType != "SabotageTransmitter"',scan)
         self.assertIn('classification=unverified',scan)
         self.assertIn('type=unverified_destructible',scan)
