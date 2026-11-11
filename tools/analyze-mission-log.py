@@ -270,6 +270,12 @@ def summarize_session(session: str, records: list[dict]) -> dict:
     start = next((record for record in records if record['event'] == 'start'), {})
     ends = [record for record in records if record['event'] == 'end']
     outcome = ends[-1].get('outcome', 'unknown') if ends else 'unknown'
+    failed_objective_records = [record for record in records
+                                if record['event'] == 'objective_failed']
+    failed_objective_ids = sorted({
+        str(record.get('objective_id', 'unknown'))
+        for record in failed_objective_records
+    })
     weak_shots = [record for record in accepted if isinstance(record.get('chance'), (int, float))
                   and 0 <= record['chance'] < 35]
     unsupported = Counter(str(record.get('ability', 'unknown')) for record in records
@@ -302,6 +308,8 @@ def summarize_session(session: str, records: list[dict]) -> dict:
             "this is not proof of a native rejection.")
     if end_turn['orphan_confirmed'] or end_turn['orphan_unconfirmed']:
         warnings.append('End-turn evidence without a matching recorded request; report may be incomplete.')
+    if failed_objective_ids:
+        warnings.append('A native mission objective failed: critical failure of the attempt, regardless of mission points.')
     if not start:
         warnings.append('Recording starts mid-session; the start record is missing.')
     if not ends:
@@ -319,6 +327,8 @@ def summarize_session(session: str, records: list[dict]) -> dict:
         'mission': start.get('mission', 'unknown'),
         'difficulty': start.get('difficulty', 'unknown'),
         'outcome': outcome,
+        'critical_objective_failed': bool(failed_objective_ids),
+        'failed_objective_ids': failed_objective_ids,
         'events': dict(sorted(events.items())),
         'accepted_actions': len(accepted),
         'rejected_actions': sum(record.get('accepted') is False for record in chosen),
@@ -434,6 +444,10 @@ def human_summary(report: dict) -> str:
         lines.append(f"Session {session['session']}: mission={session['mission']}, "
                      f"difficulty={session['difficulty']}, outcome={session['outcome']}, "
                      f"mission points={points_label}")
+        if session['critical_objective_failed']:
+            lines.append('  CRITICAL OBJECTIVE FAILURE: '
+                         + ', '.join(session['failed_objective_ids'])
+                         + '; any positive or provisional points cannot pass.')
         lines.append(f"  Accepted actions={session['accepted_actions']}, moves={session['moves']}, "
                      f"recorded misses={session['recorded_misses']}")
         if session['recorded_misses_by_source']:
