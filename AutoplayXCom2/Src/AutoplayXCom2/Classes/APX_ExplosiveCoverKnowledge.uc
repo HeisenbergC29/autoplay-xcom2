@@ -45,7 +45,30 @@ static function float ExplosiveCoverPenalty(float NativeUnitDamage,
         + (1.0 - FClamp(HealthFraction, 0.0, 1.0)) * 12.0);
 }
 
-static function bool HasRelevantRangedThreat(
+// Installed melee capability is enough to consider a future accidental
+// cover detonation. This is a bounded reach estimate, not an assumption that
+// an enemy will move, attack or have AP in the next turn.
+static function bool MayDamageCoverFromPosition(bool bMeleeOnly,
+    bool bHasRangedDamage, bool bHasAreaAbility, float Mobility,
+    int DeltaX, int DeltaY, int DeltaZ)
+{
+    local float ApproximateMeleeReach;
+
+    if (Abs(DeltaZ) > 2)
+        return false;
+    if (bMeleeOnly)
+    {
+        // A next-turn maneuver and swing could ignite scenery; a four-tile
+        // radius would miss even stock Faceless mobility. Never inspect AP.
+        ApproximateMeleeReach = FClamp(Mobility * 0.5 + 2.0, 4.0, 16.0);
+        return Abs(DeltaX) <= ApproximateMeleeReach
+            && Abs(DeltaY) <= ApproximateMeleeReach;
+    }
+    return (bHasRangedDamage || bHasAreaAbility)
+        && Abs(DeltaX) <= 22 && Abs(DeltaY) <= 22;
+}
+
+static function bool HasRelevantDestructionThreat(
     XComGameState_Unit UnitState, TTile Position,
     const out array<StateObjectReference> VisibleEnemies)
 {
@@ -59,17 +82,19 @@ static function bool HasRelevantRangedThreat(
             return true; // Uninspected contacts may still threaten scenery.
         Enemy = XComGameState_Unit(`XCOMHISTORY.GetGameStateForObjectID(Ref.ObjectID));
         if (Enemy == none || !Enemy.IsAlive() || Enemy.IsIncapacitated()
-            || Enemy.bRemovedFromPlay || Enemy.IsMeleeOnly()
-            || !UnitState.IsEnemyUnit(Enemy))
+            || Enemy.bRemovedFromPlay || !UnitState.IsEnemyUnit(Enemy))
             continue;
-        // The native equipped weapon template is a potential capability, not
-        // a promise that the enemy can attack this cover this turn.
-        if ((class'APX_EnemyKnowledge'.static.PrimaryWeaponMeanDamage(Enemy) > 0.0
-                || (class'APX_EnemyKnowledge'.static.CapabilityFlags(Enemy)
-                    & 2) != 0)
-            && Abs(Enemy.TileLocation.X - Position.X) <= 22
-            && Abs(Enemy.TileLocation.Y - Position.Y) <= 22
-            && Abs(Enemy.TileLocation.Z - Position.Z) <= 2)
+        // A nearby Faceless/other melee unit can damage destructible scenery
+        // even without an equipped ranged weapon. Read installed capabilities
+        // and public mobility, not enemy current AP/cooldowns or future intent.
+        if (MayDamageCoverFromPosition(
+            Enemy.IsMeleeOnly(),
+            class'APX_EnemyKnowledge'.static.PrimaryWeaponMeanDamage(Enemy) > 0.0,
+            (class'APX_EnemyKnowledge'.static.CapabilityFlags(Enemy) & 2) != 0,
+            Enemy.GetCurrentStat(eStat_Mobility),
+            Enemy.TileLocation.X - Position.X,
+            Enemy.TileLocation.Y - Position.Y,
+            Enemy.TileLocation.Z - Position.Z))
             return true;
     }
     return false;
@@ -93,7 +118,7 @@ static function float RiskAtTile(XComGameState_Unit UnitState, TTile Tile,
     ThreatRefs = VisibleEnemies;
     if (class'APX_FullIntel'.default.EnableFullIntel)
         class'APX_FullIntel'.static.GetKnownEnemies(UnitState, ThreatRefs);
-    if (!HasRelevantRangedThreat(UnitState, Tile, ThreatRefs))
+    if (!HasRelevantDestructionThreat(UnitState, Tile, ThreatRefs))
         return 0.0;
 
     HealthFraction = UnitState.GetCurrentStat(eStat_HP)
