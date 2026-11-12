@@ -193,6 +193,15 @@ def terminal_challenge_rollup(records: list[dict]) -> dict | None:
         return None
     values = sorted({r['added_points'] for r in totals})
     latest = max(totals, key=lambda r: (r['history'], r['seq']))
+    # A later committed award can make an earlier rollup stale. Entries in
+    # the same atomic history state may be emitted in either order.
+    if any(r['event'] == 'score_delta' and r.get('session') == end.get('session')
+           and r.get('source') == 'game_runtime'
+           and r.get('scoring_type') not in {'CMPT_None', 'CMPT_TotalScore'}
+           and type(r.get('history')) is int and latest['history'] < r['history'] <= end['history']
+           and type(r.get('seq')) is int and start['seq'] < r['seq'] < end['seq']
+           for r in records):
+        return None
     return {'status': 'confirmed' if len(values) == 1 else 'conflicting',
             'source': 'native_total_score_rollup',
             'mission_points': values[0] if len(values) == 1 else None,

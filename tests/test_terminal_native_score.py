@@ -67,6 +67,23 @@ class TerminalNativeScoreTests(unittest.TestCase):
         self.assertEqual(result['score_status'], 'conflicting_native_totals')
         self.assertNotEqual(result['status'], 'pass')
 
+    def test_award_committed_after_rollup_makes_it_stale(self):
+        rows = attempt(outcome='win')
+        rows.insert(-1, {**rollup(score_id=750, scoring_type='CMPT_DeadSoldier',
+                                 added_points=-5000, history=3925), 'session': 's'})
+        for seq, row in enumerate(rows, 1):
+            row['seq'] = seq
+        self.assertIsNone(SCORING.terminal_challenge_rollup(rows))
+        self.assertFalse(verdict(rows)['score_complete'])
+
+    def test_same_atomic_history_award_order_does_not_invalidate_total(self):
+        rows = attempt()
+        rows.insert(-1, {**rollup(score_id=750, scoring_type='CMPT_KilledEnemy',
+                                 added_points=100), 'session': 's'})
+        for seq, row in enumerate(rows, 1):
+            row['seq'] = seq
+        self.assertEqual(verdict(rows, 'loss')['score'], 7100)
+
     def test_missing_terminal_or_start_cannot_confirm_a_rollup(self):
         for rows in (attempt()[:-1], attempt()[1:]):
             with self.subTest(events=[r['event'] for r in rows]):

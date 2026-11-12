@@ -505,6 +505,8 @@ startem a end/reason=tactical_game_ended, znany native outcome i history_pending
 Legacy zachowuje pierwszeństwo własnej bazy/natywnych mission_points.
 Różne końcowe total lub konflikt rekordów nie dają etykiety confirmed;
 ręczny OFF i niepełna historia także nie wystarczają.
+Nagroda/kara w późniejszym zatwierdzonym stanie unieważnia wcześniejszy
+rollup; kolejność wpisów w tym samym atomowym stanie nie zmienia jego wartości.
 
 Raport v28 Blood Killer ma rollup +7100 przed opróżnionym końcem misji,
 zgodny z późniejszym native postgame save. To **oficjalny wynik końcowy**,
