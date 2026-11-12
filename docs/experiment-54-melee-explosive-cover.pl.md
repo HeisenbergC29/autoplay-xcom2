@@ -37,8 +37,13 @@ Zastępujemy filtr `HasRelevantRangedThreat` nowym
 `MayDamageCoverFromPosition` zachowuje dotychczasowy warunek
 ranged/area w 22 polach (X/Y) i maksymalnie ±2 poziomach Z.
 Dla melee `IsMeleeOnly()` rozpoznaje możliwą zdolność uszkodzenia
-otoczenia w **konserwatywnym, ograniczonym** promieniu
-`FClamp(Mobility*0.5+2,4,16)`. To geometryczny *scenariusz*,
+otoczenia w **ograniczonym** kwadracie o półboku
+`FClamp(MoveTiles+3,4,16)`. MoveTiles używa natywnego przeliczenia
+`Mobility*WORLD_METERS_TO_UNITS_MULTIPLIER/WORLD_StepSize`, czyli w stock
+`Mobility*64/96`; dodatek3 obejmuje długość stock ScythingClaws.
+Przegląd LEAD odrzucił wcześniejsze `Mobility*0.5+2`: Mobility12 pozwala
+na ruch8 pól i cios3, a wcześniejsza bramka gubiła pola9–11.
+To geometryczny *scenariusz*,
 nie odczyt cudzych AP, cooldownów, aktualnego celu, RNG, trafienia ani
 gwarancja reakcji. Właściwy naliczany koszt wciąż wymaga natywnych
 `GetActorsOnTile`, `XComDestructibleActor`, `DestroyedEvents`,
@@ -51,8 +56,9 @@ i zewnętrzny budżet kontrolera) pozostają.
 ## Testy i granice
 
 `tests/test_explosive_cover.py` zawiera dodatkowe wykonywalne próby
-prawdziwego helpera z UnrealScript: bliski/daleki melee przy Mobility4/14/
-300, pułap Z, zakres ranged/area oraz odrzucenie wroga bez zdolności.
+prawdziwego helpera z UnrealScript: bliski/daleki melee, przeliczenie
+Mobility12/14, minimum/maksimum, pułap Z, zakres ranged/area oraz
+odrzucenie wroga bez zdolności.
 Kontrakty strukturalne potwierdzają obecność filtra melee w estymatorze,
 brak nielegalnego odczytu AP i zachowanie natywnych radial events.
 
@@ -63,3 +69,10 @@ porównać strategiczne decyzje oraz wynik bez obietnicy uniknięcia
 każdego kolejnego wybuchu. Nie zmieniono wyboru patrolu i akcji
 faceless przez samą grę. LEAD nie powinien scalać bez przeglądu
 exact HEAD i zatwierdzonego CI.
+
+Integracja LEAD nadaje marker mission-report-v27. Prywatne SDK/configi:
+668 testów PASS bez pominięć; audyt22 klas/31 zdolności i diffcheck PASS.
+Publiczne CI oraz dokładny końcowy SHA do kompilacji wskazuje #4.
+Windows/game v27 NOT RUN. Ta zmiana nie naprawia zgłoszonego zatrzymania
+Blood Killer v26; [wyciąg raportu](report-2026-11-12-v26.pl.md) oraz
+[instrukcja zewnętrznego dowodu](hang-evidence.pl.md) rozdzielają te tematy.

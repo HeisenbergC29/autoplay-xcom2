@@ -49,7 +49,7 @@ static function float ExplosiveCoverPenalty(float NativeUnitDamage,
 // cover detonation. This is a bounded reach estimate, not an assumption that
 // an enemy will move, attack or have AP in the next turn.
 static function bool MayDamageCoverFromPosition(bool bMeleeOnly,
-    bool bHasRangedDamage, bool bHasAreaAbility, float Mobility,
+    bool bHasRangedDamage, bool bHasAreaAbility, float MoveTiles,
     int DeltaX, int DeltaY, int DeltaZ)
 {
     local float ApproximateMeleeReach;
@@ -58,9 +58,9 @@ static function bool MayDamageCoverFromPosition(bool bMeleeOnly,
         return false;
     if (bMeleeOnly)
     {
-        // A next-turn maneuver and swing could ignite scenery; a four-tile
-        // radius would miss even stock Faceless mobility. Never inspect AP.
-        ApproximateMeleeReach = FClamp(Mobility * 0.5 + 2.0, 4.0, 16.0);
+        // One move plus a three-tile swing buffer covers stock ScythingClaws.
+        // This capped square estimate is not an exact path/cone forecast.
+        ApproximateMeleeReach = FClamp(MoveTiles + 3.0, 4.0, 16.0);
         return Abs(DeltaX) <= ApproximateMeleeReach
             && Abs(DeltaY) <= ApproximateMeleeReach;
     }
@@ -91,7 +91,9 @@ static function bool HasRelevantDestructionThreat(
             Enemy.IsMeleeOnly(),
             class'APX_EnemyKnowledge'.static.PrimaryWeaponMeanDamage(Enemy) > 0.0,
             (class'APX_EnemyKnowledge'.static.CapabilityFlags(Enemy) & 2) != 0,
-            Enemy.GetCurrentStat(eStat_Mobility),
+            FMax(0.0, Enemy.GetCurrentStat(eStat_Mobility))
+                * class'XComWorldData'.const.WORLD_METERS_TO_UNITS_MULTIPLIER
+                / class'XComWorldData'.const.WORLD_StepSize,
             Enemy.TileLocation.X - Position.X,
             Enemy.TileLocation.Y - Position.Y,
             Enemy.TileLocation.Z - Position.Z))
