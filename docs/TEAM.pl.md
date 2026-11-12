@@ -130,6 +130,14 @@ Zgoda nie obejmuje AP, cooldownów, RNG i innych ukrytych zamiarów.
 #29 pozostaje następną pracą
 nad rzeczywistym obiektem i polem interakcji PlantBomb.
 
+LEAD przygotowuje v26 z kontrolowaną obsługą potwierdzonego relaya #46
+w PR #51 oraz osobnym polem interakcji #29. Raport v25 jest już odebrany:
+GasStation −21200 finalne, Blood Killer bez zaliczonego X4 i bez native end.
+Nie przypisywać czterech kar DeadSoldier czterem fizycznym zgonom.
+Zmiany runtime muszą zachować ograniczenia ostatniego AP i ryzyka;
+do jednej następnej kompilacji LEAD wskaże wspólny końcowy SHA.
+[Wyciąg v25](report-2026-11-12-v25.pl.md).
+
 ## Przekazanie i decyzja o scaleniu
 
 W PR napisz: konkretny problem i zachowanie po zmianie, źródła/commity,
