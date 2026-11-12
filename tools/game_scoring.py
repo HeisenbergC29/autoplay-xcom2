@@ -159,6 +159,48 @@ def decayed_value(rule: dict, turn: int) -> int:
                int(rule['starting_points']) - elapsed * int(rule['decrease_per_turn']))
 
 
+def terminal_challenge_rollup(records: list[dict]) -> dict | None:
+    """Bind an actual native total to a drained tactical end, never to a HUD.
+
+    CMPT_TotalScore is a rollup, not another award to sum. Legacy's explicit
+    mission-points/baseline contract retains priority over this fallback.
+    """
+    if any(r['event'] == 'game_score' and r.get('source') == 'legacy_runtime'
+           for r in records):
+        return None
+    ends = [r for r in records if r['event'] == 'end']
+    end = ends[-1] if ends else {}
+    if (not isinstance(end.get('session'), str) or not end['session']
+            or end.get('reason') != 'tactical_game_ended' or end.get('outcome') not in {'win', 'loss'}
+            or type(end.get('history_pending')) is not int or end['history_pending'] != 0
+            or type(end.get('history')) is not int or end['history'] < 0
+            or type(end.get('seq')) is not int):
+        return None
+    starts = [r for r in records if r['event'] == 'start'
+              and r.get('session') == end.get('session')
+              and type(r.get('seq')) is int and r['seq'] < end['seq']]
+    start = starts[-1] if starts else {}
+    if type(start.get('history')) is not int or not 0 <= start['history'] <= end['history']:
+        return None
+    totals = [r for r in records if r['event'] == 'score_delta'
+              and r.get('session') == end.get('session')
+              and r.get('source') == 'game_runtime' and r.get('scoring_type') == 'CMPT_TotalScore'
+              and type(r.get('score_id')) is int and r['score_id'] > 0
+              and type(r.get('added_points')) is int and type(r.get('history')) is int
+              and start['history'] <= r['history'] <= end['history']
+              and type(r.get('seq')) is int and start['seq'] < r['seq'] < end['seq']]
+    if not totals:
+        return None
+    values = sorted({r['added_points'] for r in totals})
+    latest = max(totals, key=lambda r: (r['history'], r['seq']))
+    return {'status': 'confirmed' if len(values) == 1 else 'conflicting',
+            'source': 'native_total_score_rollup',
+            'mission_points': values[0] if len(values) == 1 else None,
+            'observed_totals': values, 'score_id': latest['score_id'],
+            'history': latest['history'], 'seq': latest['seq'],
+            'end_history': end['history'], 'end_seq': end['seq']}
+
+
 def official_observations(records: list[dict]) -> dict:
     scores = [r for r in records if r['event'] == 'game_score'
               and r.get('source') == 'legacy_runtime'
@@ -173,10 +215,14 @@ def official_observations(records: list[dict]) -> dict:
                if 'score_id' in event and 'history' in event else ('seq', event['seq']))
         unique_deltas.setdefault(str(key), event)
     if not scores:
-        return {'status': 'not_recorded', 'cumulative_score': None,
-                'recording_delta': None, 'from_history': None, 'to_history': None,
-                'terminal_snapshot': False,
-                'score_events': list(unique_deltas.values())}
+        rollup = terminal_challenge_rollup(records)
+        return {'status': ('observed_native_rollup' if rollup['status'] == 'confirmed'
+                           else 'conflicting_native_rollup') if rollup else 'not_recorded',
+                'cumulative_score': None, 'recording_delta': None,
+                'from_history': rollup['history'] if rollup else None,
+                'to_history': rollup['end_history'] if rollup else None,
+                'terminal_snapshot': bool(rollup and rollup['status'] == 'confirmed'),
+                'terminal_rollup': rollup, 'score_events': list(unique_deltas.values())}
     first = scores[0]
     stage = (first.get('ladder_index'), first.get('ladder_rung'))
     same_stage_scores = [r for r in scores
@@ -451,7 +497,14 @@ def assess_attempt(records: list[dict], outcome: str, scoring: dict,
 
     score, observed_score, source, score_status, profile = None, None, None, 'not_recorded', None
     complete = False
-    if native_records or native_hud or official['status'] == 'observed_native':
+    rollup = official.get('terminal_rollup')
+    if rollup and not native_records:
+        source = 'native_mission_points'
+        complete = rollup['status'] == 'confirmed'
+        score_status = 'final_native_observation' if complete else 'conflicting_native_totals'
+        if complete:
+            score = observed_score = rollup['mission_points']
+    elif native_records or native_hud or official['status'] == 'observed_native':
         source = 'native_mission_points'
         if native_records:
             last = native_records[-1]

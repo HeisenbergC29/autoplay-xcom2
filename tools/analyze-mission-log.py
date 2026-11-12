@@ -485,6 +485,11 @@ def human_summary(report: dict) -> str:
         if official['status'] == 'observed_native':
             lines.append(f"  Observed native cumulative score={official['cumulative_score']}, "
                          f"recording delta={official['recording_delta']}; later end awards may be pending.")
+        elif official['status'] == 'observed_native_rollup':
+            lines.append(f"  Confirmed native final mission score="
+                         f"{official['terminal_rollup']['mission_points']} (CMPT_TotalScore, drained tactical end).")
+        elif official['status'] == 'conflicting_native_rollup':
+            lines.append('  Conflicting terminal native score rollups; final score unavailable.')
         else:
             lines.append('  Native earned score was not recorded.')
         comparison = scoring['comparison']
