@@ -37,15 +37,38 @@ static function float InspectRiskAtTile(XComGameState_Unit UnitState, TTile Tile
 }
 
 static function float ExplosiveCoverPenalty(float NativeUnitDamage,
-    bool bArmedRangedEnemyNearby, float HealthFraction)
+    bool bPossibleCoverDetonation, float HealthFraction)
 {
-    if (!bArmedRangedEnemyNearby || NativeUnitDamage <= 0.0)
+    if (!bPossibleCoverDetonation || NativeUnitDamage <= 0.0)
         return 0.0;
     return FMin(42.0, 12.0 + FMin(18.0, NativeUnitDamage * 2.0)
         + (1.0 - FClamp(HealthFraction, 0.0, 1.0)) * 12.0);
 }
 
-static function bool HasRelevantRangedThreat(
+// Installed melee capability is enough to consider a future accidental
+// cover detonation. This is a bounded reach estimate, not an assumption that
+// an enemy will move, attack or have AP in the next turn.
+static function bool MayDamageCoverFromPosition(bool bMeleeOnly,
+    bool bHasRangedDamage, bool bHasAreaAbility, float MoveTiles,
+    int DeltaX, int DeltaY, int DeltaZ)
+{
+    local float ApproximateMeleeReach;
+
+    if (Abs(DeltaZ) > 2)
+        return false;
+    if (bMeleeOnly)
+    {
+        // One move plus a three-tile swing buffer covers stock ScythingClaws.
+        // This capped square estimate is not an exact path/cone forecast.
+        ApproximateMeleeReach = FClamp(MoveTiles + 3.0, 4.0, 16.0);
+        return Abs(DeltaX) <= ApproximateMeleeReach
+            && Abs(DeltaY) <= ApproximateMeleeReach;
+    }
+    return (bHasRangedDamage || bHasAreaAbility)
+        && Abs(DeltaX) <= 22 && Abs(DeltaY) <= 22;
+}
+
+static function bool HasRelevantDestructionThreat(
     XComGameState_Unit UnitState, TTile Position,
     const out array<StateObjectReference> VisibleEnemies)
 {
@@ -59,17 +82,21 @@ static function bool HasRelevantRangedThreat(
             return true; // Uninspected contacts may still threaten scenery.
         Enemy = XComGameState_Unit(`XCOMHISTORY.GetGameStateForObjectID(Ref.ObjectID));
         if (Enemy == none || !Enemy.IsAlive() || Enemy.IsIncapacitated()
-            || Enemy.bRemovedFromPlay || Enemy.IsMeleeOnly()
-            || !UnitState.IsEnemyUnit(Enemy))
+            || Enemy.bRemovedFromPlay || !UnitState.IsEnemyUnit(Enemy))
             continue;
-        // The native equipped weapon template is a potential capability, not
-        // a promise that the enemy can attack this cover this turn.
-        if ((class'APX_EnemyKnowledge'.static.PrimaryWeaponMeanDamage(Enemy) > 0.0
-                || (class'APX_EnemyKnowledge'.static.CapabilityFlags(Enemy)
-                    & 2) != 0)
-            && Abs(Enemy.TileLocation.X - Position.X) <= 22
-            && Abs(Enemy.TileLocation.Y - Position.Y) <= 22
-            && Abs(Enemy.TileLocation.Z - Position.Z) <= 2)
+        // A nearby Faceless/other melee unit can damage destructible scenery
+        // even without an equipped ranged weapon. Read installed capabilities
+        // and public mobility, not enemy current AP/cooldowns or future intent.
+        if (MayDamageCoverFromPosition(
+            Enemy.IsMeleeOnly(),
+            class'APX_EnemyKnowledge'.static.PrimaryWeaponMeanDamage(Enemy) > 0.0,
+            (class'APX_EnemyKnowledge'.static.CapabilityFlags(Enemy) & 2) != 0,
+            FMax(0.0, Enemy.GetCurrentStat(eStat_Mobility))
+                * class'XComWorldData'.const.WORLD_METERS_TO_UNITS_MULTIPLIER
+                / class'XComWorldData'.const.WORLD_StepSize,
+            Enemy.TileLocation.X - Position.X,
+            Enemy.TileLocation.Y - Position.Y,
+            Enemy.TileLocation.Z - Position.Z))
             return true;
     }
     return false;
@@ -93,7 +120,7 @@ static function float RiskAtTile(XComGameState_Unit UnitState, TTile Tile,
     ThreatRefs = VisibleEnemies;
     if (class'APX_FullIntel'.default.EnableFullIntel)
         class'APX_FullIntel'.static.GetKnownEnemies(UnitState, ThreatRefs);
-    if (!HasRelevantRangedThreat(UnitState, Tile, ThreatRefs))
+    if (!HasRelevantDestructionThreat(UnitState, Tile, ThreatRefs))
         return 0.0;
 
     HealthFraction = UnitState.GetCurrentStat(eStat_HP)

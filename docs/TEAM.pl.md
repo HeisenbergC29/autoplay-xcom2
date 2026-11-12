@@ -151,6 +151,21 @@ próba była FAIL. Aktualny SHA poprawki i status ponownej próby są w #4.
 
 ## Przekazanie i decyzja o scaleniu
 
+Raport v26 z 12 XI 11:24 UTC otrzymał najpierw HELPER; LEAD sprawdził
+manifest, identyczność Launch.log i istotne rekordy. Sześć relay oraz X4
+działają w tej próbie; końcowego zwycięstwa/score brak, zgłoszony HANG
+po potwierdzonym końcu tury pozostaje niewyjaśniony. Nie cofać działającej
+obsługi X4/relay ani nie udawać naprawy przez ForceComplete.
+PR #55 po poprawkach LEAD stanowi v27: tylko rozszerzenie miękkiej oceny
+wybuchowej osłony o melee, z natywną konwersją Mobility i zachowanymi limitami.
+Nowy marker odróżnia tę zmianę runtime; Windows/game v27 wymagają dowodu.
+[Raport](report-2026-11-12-v26.pl.md),
+[zewnętrzny materiał przy kolejnym zatrzymaniu](hang-evidence.pl.md).
+Priorytet HELPER #31b nadal obejmuje pojedynczy potwierdzony kontakt,
+legalny focus/OW po ujawnieniu i ograniczony fallback. Nie wymuszać
+„wszystkie pody przed relay” ani nie przypisywać CurrentTargetLocation
+gwarantowanej przyszłej trasy; presję czasu oceniać osobno per misja.
+
 W PR napisz: konkretny problem i zachowanie po zmianie, źródła/commity,
 testy rzeczywiście wykonane, pominięcia, ograniczenia oraz scenariusz do gry.
 Oznacz gotowość do przeglądu, gdy wynik jest konkretny i odtwarzalny.

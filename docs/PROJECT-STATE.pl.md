@@ -6,7 +6,24 @@ poziom potwierdzenia działania.
 
 ## Baza kodu
 
-- Bieżąca rewizja przygotowywanych źródeł: `mission-report-v26`, obsługa
+- Bieżąca rewizja przygotowywanych źródeł: `mission-report-v27`, PR #55:
+  miękkie ryzyko wybuchowego otoczenia obejmuje także pobliskie melee.
+  LEAD poprawił propozycję HELPER o natywne przeliczenie Mobility64/96
+  i bufor3 dla stock ScythingClaws. Limity inspekcji i kara<=42 pozostają;
+  kwadrat/pułap16/±2Z są estymatą, nie pełną przyszłą trasą ataku.
+  [Zakres](experiment-54-melee-explosive-cover.pl.md).
+  Windows/game v27 **NOT RUN**. To nie jest naprawa zgłoszonego HANG.
+- Sprawdzone w grze `mission-report-v26`, dokładny lokalny SHA nieznany:
+  [raport z 12 XI 11:24 UTC](report-2026-11-12-v26.pl.md).
+  GasStation native loss z−21200 końcowymi punktami. Blood Killer:
+  6 przyjętych ciosów w relay, wykonane Interact_PlantBomb i dwa completed
+  natywnego UI w turn8; brak terminalnego zwycięstwa/final score. Bieżące
+  +7100 pozostaje częściowe. Zgłoszone zatrzymanie po D65 i potwierdzonym
+  końcu tury, w fazie Alien/HUD; przyczyna nieustalona, stack/dump brak.
+  Heartbeat działa (23 wpisy), nie jest naprawą wątku silnika.
+  [Potrzebny zewnętrzny dowód](hang-evidence.pl.md).
+- Baza v26 po poprawce kompilacji: `37e4fdeff3c8ac075e621a7b71284afcb01c69fc`.
+  Obsługa
   natywnych ofert DevastatingPunchMP przeciw potwierdzonemu przekaźnikowi
   SabotageTransmitter (#46 / PR #51). Zachowuje pełne kontrole ścieżki,
   limituje priorytet poniżej gotowego PlantBomb/pilnej pomocy i kończy
@@ -22,7 +39,8 @@ poziom potwierdzenia działania.
   SDK/DLC. Log nie zawiera dokładnego SHA lokalnych źródeł. Poprawka
   przywraca poprzednie zależności planera i zostawia PlantGoalResult wewnątrz
   klasy wiedzy; API przekazuje TTile, string i status int bez zmiany taktyki.
-  Ponowna kompilacja poprawki i gra v26: **NOT RUN**; końcowy SHA w #4.
+  Raport v26 potwierdza uruchomienie tej rewizji w grze, bez osobnego
+  logu udanej ponownej kompilacji i bez potwierdzenia dokładnego SHA.
 - Baza v25: `eae4db165f679d6cac56d6e207900106c4ed3f55`, obserwacyjny
   heartbeat długiego oczekiwania (#40 / PR #50), rozróżnienie krytycznych
   zdarzeń porażki od checkboxów UI oraz diagnostyka obiektów przekaźników
