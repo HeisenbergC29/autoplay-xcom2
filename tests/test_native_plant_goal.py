@@ -61,7 +61,7 @@ class NativePlantGoalContracts(unittest.TestCase):
             anchors.add(candidate)
             self.assertIn(point, {tuple(a + b for a, b in zip(candidate, d)) for d in offsets})
         self.assertEqual(anchors, {(30, 40, 1), (29, 40, 1), (30, 39, 1), (29, 39, 1)})
-        find = function_body(self.source, 'FindInteractionGoal')
+        find = function_body(self.source, 'FindInteractionGoalResult')
         self.assertIn('InteractionAnchorCoordinate(QueryTile.X, OccupiedTile.X, UnitState.TileLocation.X)', find)
         self.assertIn('UnitState.GetVisibilityForLocation(Candidate, FutureFootprint)', find)
         self.assertIn('ContainsTile(FutureFootprint, QueryTile)', find)
@@ -81,7 +81,7 @@ class NativePlantGoalContracts(unittest.TestCase):
         self.assertIn((28, 38, 1), anchors)
 
     def test_hidden_interactors_require_full_intel_before_visualizer_discovery(self):
-        find = function_body(self.source, 'FindInteractionGoal')
+        find = function_body(self.source, 'FindInteractionGoalResult')
         gate = find.index("if (!class'APX_FullIntel'.default.EnableFullIntel")
         query = find.index('CanXComSquadSeeTarget(ObjectState.ObjectID)', gate)
         self.assertLess(gate, query)
@@ -100,7 +100,7 @@ class NativePlantGoalContracts(unittest.TestCase):
         current_anchor_z = occupied_z = 1
         self.assertEqual(self.anchor(verified_query_z, occupied_z, current_anchor_z), 1)
         self.assertEqual(self.anchor(point_tile_z, occupied_z, current_anchor_z), 2)
-        find = function_body(self.source, 'FindInteractionGoal')
+        find = function_body(self.source, 'FindInteractionGoalResult')
         proof = find.index('NativePlantPointOnTile(ObjectState, Visualizer, QueryTile, RemainingQueries)')
         anchor = find.index('Candidate.Z = InteractionAnchorCoordinate(QueryTile.Z,')
         self.assertLess(proof, anchor)
@@ -114,7 +114,7 @@ class NativePlantGoalContracts(unittest.TestCase):
         self.assertIn('Point.InteractiveActor == Visualizer', point)
         self.assertIn('ObjectState.IsLocationValidForInteraction(Point.Location)', point)
         self.assertNotIn('IsLocationValidForInteraction(Position)', point)
-        find = function_body(self.source, 'FindInteractionGoal')
+        find = function_body(self.source, 'FindInteractionGoalResult')
         self.assertIn("Visualizer.InteractionAbilityTemplateName != 'Interact_PlantBomb'", find)
         self.assertIn('Visualizer.ObjectID != ObjectState.ObjectID', find)
         self.assertIn('ObjectState.CanInteractNormally(UnitState)', find)
@@ -126,7 +126,7 @@ class NativePlantGoalContracts(unittest.TestCase):
         self.assertIsNone(re.search(r'UnitState\.TileLocation\s*=', self.source))
 
     def test_inspection_and_native_query_caps_are_before_expensive_operations(self):
-        find = function_body(self.source, 'FindInteractionGoal')
+        find = function_body(self.source, 'FindInteractionGoalResult')
         self.assertLess(find.index('++ObjectsChecked > 128'), find.index('ObjectState.GetVisualizer()'))
         self.assertLess(find.index('++PointsChecked > 32'), find.index('Point.Location.X'))
         self.assertIn('RemainingQueries = 32;', find)
@@ -164,10 +164,28 @@ class NativePlantGoalContracts(unittest.TestCase):
     def test_unverified_marker_never_replaces_native_point_or_consumed_object(self):
         find = function_body(self.mission, 'FindBerserkerSabotageGoal')
         self.assertIn("class'APX_PlantInteractionKnowledge'.static.FindInteractionGoal", find)
-        self.assertLess(find.index('if (NativeGoal.bFound)'), find.index('MapData.ObjectiveLocation'))
-        self.assertLess(find.index('if (NativeGoal.bConsumedObject)'), find.index('MapData.ObjectiveLocation'))
-        self.assertIn('GoalSource = "mission_marker_unverified:" $ NativeGoal.Reason;', find)
+        self.assertLess(find.index('if (NativeGoalStatus > 0)'), find.index('MapData.ObjectiveLocation'))
+        self.assertLess(find.index('if (NativeGoalStatus < 0)'), find.index('MapData.ObjectiveLocation'))
+        self.assertIn('GoalSource = "mission_marker_unverified:" $ NativeGoalReason;', find)
         self.assertNotIn('GetRequiresObjectiveGlint()', find)
+
+    def test_compiler_boundary_keeps_custom_result_inside_knowledge_class(self):
+        # Regression from the native make error: adding the knowledge class to
+        # MissionPlanner.DependsOn made SDK dependency validation abort before
+        # function analysis. Use stock/scalar outputs, as ChoosePreparation does.
+        header = self.mission.split(';', 1)[0]
+        self.assertNotIn('APX_PlantInteractionKnowledge', header)
+        self.assertNotIn('PlantGoalResult', self.mission)
+        self.assertIn('static function int FindInteractionGoal(XComGameState_Unit UnitState,\n'
+                      '    out TTile GoalTile, out string GoalReason)', self.source)
+        api = function_body(self.source, 'FindInteractionGoal')
+        self.assertIn('FindInteractionGoalResult(UnitState, Result);', api)
+        self.assertIn('GoalTile = Result.Tile;', api)
+        self.assertIn('GoalReason = Result.Reason;', api)
+        self.assertRegex(api, r'if \(Result.bFound\)\s+return 1;')
+        self.assertRegex(api, r'if \(Result.bConsumedObject\)\s+return -1;')
+        self.assertLess(api.index('if (Result.bFound)'), api.index('if (Result.bConsumedObject)'))
+        self.assertTrue(api.rstrip().endswith('return 0;'))
 
 
 @unittest.skipUnless(os.environ.get('APX_SDK_SOURCE_ROOT'), 'Private SDK contract')
