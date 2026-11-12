@@ -6,13 +6,28 @@ poziom potwierdzenia działania.
 
 ## Baza kodu
 
-- Bieżąca rewizja przygotowywanych źródeł: `mission-report-v27`, PR #55:
+- Bieżąca rewizja przygotowywanych źródeł: `mission-report-v28`, #57 / PR #58:
+  bezpieczny odczyt punktacji. Matching EXE i zrzut v27 potwierdziły stos
+  HUD.Tick→MissionScore.GetText→GetTotalScore→przebudowa cache historii.
+  Provider nie wywołuje już GetTotalScore; bieżące Challenge points czyta
+  z natywnych ChallengeScore.AddedPoints z zachowaniem wyłączenia None/TotalScore.
+  Oba guardy latent update poprzedzają odczyty historii. HUD zachowuje tekst
+  w czasie odroczenia, ale nie zapisuje go jako świeżej obserwacji.
+  Legacy baseline, wartości/maximum i taktyka pozostają.
+  [Zakres i dowód](experiment-57-safe-score-read.pl.md).
+  Windows/game v28 **NOT RUN**; potrzebna próba tej samej Blood Killer.
+  Usunięcie udowodnionej ścieżki nie gwarantuje braku wszystkich innych awarii.
+- Baza v27: `1575550c495dff2b11406f6b3731ae14a11669b9`, PR #55:
   miękkie ryzyko wybuchowego otoczenia obejmuje także pobliskie melee.
   LEAD poprawił propozycję HELPER o natywne przeliczenie Mobility64/96
   i bufor3 dla stock ScythingClaws. Limity inspekcji i kara<=42 pozostają;
   kwadrat/pułap16/±2Z są estymatą, nie pełną przyszłą trasą ataku.
   [Zakres](experiment-54-melee-explosive-cover.pl.md).
-  Windows/game v27 **NOT RUN**. To nie jest naprawa zgłoszonego HANG.
+  [Raport v27](report-2026-11-12-v27.pl.md) potwierdza runtime bez dokładnego
+  lokalnego SHA/logu kompilacji: GasStation native loss−12900 końcowe,
+  Blood Killer X4/relay wykonane, potem **CRASH**, nie HANG, bez native end.
+  Bieżące+6900 nie jest końcowym wynikiem. W odróżnieniu od starego v26
+  jest MDMP i matching obraz EXE; ścieżka score HUD ustalona binarnie.
 - Sprawdzone w grze `mission-report-v26`, dokładny lokalny SHA nieznany:
   [raport z 12 XI 11:24 UTC](report-2026-11-12-v26.pl.md).
   GasStation native loss z−21200 końcowymi punktami. Blood Killer:

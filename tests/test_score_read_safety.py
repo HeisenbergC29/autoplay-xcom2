@@ -37,7 +37,6 @@ class ScoreReadSafetyTests(unittest.TestCase):
                 (False, False, -5000), (False, False, 0)]
         self.assertEqual(sum(self.contribution(*row) for row in rows), 4000)
         self.assertEqual(self.contribution(False, False, -21200), -21200)
-        self.assertEqual(sum([]), 0)
 
     def test_challenge_reader_uses_committed_score_states_without_force_rebuild(self):
         read = function_body(self.score, 'ReadChallengePoints')

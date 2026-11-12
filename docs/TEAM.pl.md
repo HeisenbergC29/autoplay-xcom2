@@ -151,6 +151,16 @@ próba była FAIL. Aktualny SHA poprawki i status ponownej próby są w #4.
 
 ## Przekazanie i decyzja o scaleniu
 
+Analiza v27 z matching EXE i rzeczywistym unwind ustaliła callback crashu:
+HUD licznika punktów wywoływał GetTotalScore, które wymusza przebudowę cache
+historii. LEAD prowadzi #57 / PR #58 jako v28: odczyt natywnych zdarzeń
+punktowych zamiast tego agregatora i guardy trwającej latent submission.
+Wynik odroczony może pozostać na ekranie, ale nie jest nową obserwacją.
+Zasady punktacji, maksimum/baseline i taktyka pozostają; Windows i ponowna
+próba tej samej Blood Killer są osobnym dowodem. Nie wymuszać końca tury,
+nie naprawiać ręcznie mapy silnika, nie utożsamiać starego HANG z nowym CRASH.
+[Dowód i zakres v28](experiment-57-safe-score-read.pl.md).
+
 Raport v26 z 12 XI 11:24 UTC otrzymał najpierw HELPER; LEAD sprawdził
 manifest, identyczność Launch.log i istotne rekordy. Sześć relay oraz X4
 działają w tej próbie; końcowego zwycięstwa/score brak, zgłoszony HANG
