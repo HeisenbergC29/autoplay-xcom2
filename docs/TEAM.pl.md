@@ -151,6 +151,22 @@ próba była FAIL. Aktualny SHA poprawki i status ponownej próby są w #4.
 
 ## Przekazanie i decyzja o scaleniu
 
+Po raporcie v28 z 12 XI 20:39 UTC następna kolej należy do HELPERA.
+Blood Killer doszła do native end bez crashu w tej próbie, lecz przegrała
+po trzecim zgonie i ustawieniu heavy-loss flag przy dwóch żywych Berserkerach.
+Priorytet #56: wspólny kontakt, przeżywalność podczas Sweep i relay jako
+rezerwa rzeczywistego timera, z zachowaniem działającego X4. Następnie #31
+dla nieukrytej drużyny strzelców. Jeden claim zakresu przed edycją wspólnego
+MissionPlanner; oddzielne focused PR-y do przeglądu LEAD. Użytkownik wraca
+do kompilacji i gry po przeglądzie nowej implementacji, nie po samej zmianie
+analizatora #59 / PR #60.
+
+Native rollup z opróżnionym terminalnym końcem potwierdza finalne +7100;
+porównawcze −7900 ma inne komponenty/coverage i nie jest równoważnym
+wynikiem oficjalnym. Warunek pełnego parytetu nie jest tu spełniony.
+Porażka nadal nie zalicza próby mimo dodatniej natywnej punktacji.
+[Wyciąg v28](report-2026-11-12-v28.pl.md).
+
 Analiza v27 z matching EXE i rzeczywistym unwind ustaliła callback crashu:
 HUD licznika punktów wywoływał GetTotalScore, które wymusza przebudowę cache
 historii. LEAD prowadzi #57 / PR #58 jako v28: odczyt natywnych zdarzeń

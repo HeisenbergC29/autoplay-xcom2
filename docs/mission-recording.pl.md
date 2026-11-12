@@ -494,3 +494,26 @@ Najnowszy [raport v19](report-2026-11-06-v19-gasstation.pl.md) zakończył
 GasStation porażką z `history_pending=18` i `mission_final=False`.
 −20100 to ostatni znany natywny odczyt, nie pewny wynik końcowy. Normalne
 zamknięcie logu nie uzupełnia brakujących wyników ostatnich klatek.
+
+## Terminalny wynik Challenge — analizator po raporcie v28
+
+Oprócz jawnego game_score/mission_final analizator rozpoznaje natywne
+score_delta/source=game_runtime/scoring_type=CMPT_TotalScore. To gotowy
+rollup gry, nie kolejna nagroda do sumowania z AddedPoints lub LadderBonus.
+Warunki potwierdzenia: ta sama sesja, poprawny start, historia i seq między
+startem a end/reason=tactical_game_ended, znany native outcome i history_pending=0.
+Legacy zachowuje pierwszeństwo własnej bazy/natywnych mission_points.
+Różne końcowe total lub konflikt rekordów nie dają etykiety confirmed;
+ręczny OFF i niepełna historia także nie wystarczają.
+Nagroda/kara w późniejszym zatwierdzonym stanie unieważnia wcześniejszy
+rollup; kolejność wpisów w tym samym atomowym stanie nie zmienia jego wartości.
+
+Raport v28 Blood Killer ma rollup +7100 przed opróżnionym końcem misji,
+zgodny z późniejszym native postgame save. To **oficjalny wynik końcowy**,
+choć mission outcome=loss nadal oznacza FAIL projektu. Model porównawczy
+−7900 nie jest z nim równoważny; nie zmieniamy etykiety modelu na oficjalną.
+Sama stabilna/dodatnia liczba na HUD pozostaje obserwacją bieżącą.
+
+Ta poprawka dotyczy narzędzia Python, bez nowego markera runtime i bez
+kompilacji Windows. Od v28 HUD nie wywołuje GetTotalScore; stare uwagi
+o mierzeniu częstości tego wywołania dotyczą historycznego v19.
