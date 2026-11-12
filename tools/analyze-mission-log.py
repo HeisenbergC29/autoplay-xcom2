@@ -482,12 +482,16 @@ def human_summary(report: dict) -> str:
                          f"native false but confirmed={turns['native_false_confirmed']}.")
         scoring = session['game_scoring']
         official = scoring['official']
+        verdict = session['attempt_verdict']
         if official['status'] == 'observed_native':
             lines.append(f"  Observed native cumulative score={official['cumulative_score']}, "
                          f"recording delta={official['recording_delta']}; later end awards may be pending.")
         elif official['status'] == 'observed_native_rollup':
-            lines.append(f"  Confirmed native final mission score="
-                         f"{official['terminal_rollup']['mission_points']} (CMPT_TotalScore, drained tactical end).")
+            if verdict['score_complete']:
+                lines.append(f"  Confirmed native final mission score="
+                             f"{official['terminal_rollup']['mission_points']} (CMPT_TotalScore, drained tactical end).")
+            else:
+                lines.append('  Native total rollup observed; final mission-score evidence is unconfirmed.')
         elif official['status'] == 'conflicting_native_rollup':
             lines.append('  Conflicting terminal native score rollups; final score unavailable.')
         else:
@@ -501,7 +505,6 @@ def human_summary(report: dict) -> str:
                          'no award components could be reconstructed, total unavailable.')
         if comparison['missing_components']:
             lines.append('  Comparison incomplete: ' + ', '.join(comparison['missing_components']))
-        verdict = session['attempt_verdict']
         lines.append(f"  Attempt assessment (victory and mission score > 0): {verdict['status'].upper()}; "
                      f"score={verdict['score']}, source={verdict['score_source']}, "
                      f"score status={verdict['score_status']}. {verdict['explanation']}")

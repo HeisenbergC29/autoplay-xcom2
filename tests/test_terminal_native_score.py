@@ -130,3 +130,17 @@ class TerminalNativeScoreTests(unittest.TestCase):
         before = deepcopy(rows)
         verdict(rows, 'loss')
         self.assertEqual(rows, before)
+
+    def test_conflicting_duplicate_sequence_cannot_be_printed_as_confirmed(self):
+        rows = attempt(outcome='win')
+        conflicting = {**rows[-2], 'added_points': -100}
+        def encode(items):
+            return '\n'.join('APXREC|v=1|' + '|'.join(f'{k}={v}' for k, v in row.items())
+                             for row in items)
+        report = LOG.analyze_logs([('a.log', encode(rows)), ('b.log', encode([conflicting]))])
+        result = report['sessions'][0]['attempt_verdict']
+        self.assertIsNone(result['score'])
+        self.assertFalse(result['score_complete'])
+        self.assertEqual(result['score_status'], 'conflicting_records')
+        self.assertEqual(result['status'], 'unknown')
+        self.assertNotIn('Confirmed native final mission score', LOG.human_summary(report))

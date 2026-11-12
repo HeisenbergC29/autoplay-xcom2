@@ -549,7 +549,8 @@ def assess_attempt(records: list[dict], outcome: str, scoring: dict,
               'critical_failed_objectives': critical_failures}
     normalized = str(outcome).casefold()
     if conflicting_records:
-        result.update(score=None, score_complete=False, reason='conflicting_records',
+        result.update(score=None, score_complete=False, score_status='conflicting_records',
+                      reason='conflicting_records',
                       explanation='Conflicting recording observations prevent a reliable acceptance verdict.')
     elif critical_failures:
         # A required mission objective failed. Neither a later positive HUD

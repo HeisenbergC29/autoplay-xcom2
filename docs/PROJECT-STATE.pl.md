@@ -15,8 +15,16 @@ poziom potwierdzenia działania.
   w czasie odroczenia, ale nie zapisuje go jako świeżej obserwacji.
   Legacy baseline, wartości/maximum i taktyka pozostają.
   [Zakres i dowód](experiment-57-safe-score-read.pl.md).
-  Windows/game v28 **NOT RUN**; potrzebna próba tej samej Blood Killer.
-  Usunięcie udowodnionej ścieżki nie gwarantuje braku wszystkich innych awarii.
+  [Raport v28](report-2026-11-12-v28.pl.md) potwierdza runtime i dojście obu
+  misji do native end, bez odnotowanego crashu w tej próbie; dokładny lokalny
+  SHA i osobny log kompilacji nie są zapisane. GasStation loss−21200 final,
+  Blood Killer loss **+7100 natywne końcowe**. HUD i końcowy native rollup
+  zgadzają się w tej próbie. Brak gwarancji wszystkich innych scenariuszy.
+  #59 / PR #60 poprawia wyłącznie analizator rozpoznający terminalny rollup;
+  runtime/revision v28 bez zmian, bez kolejnej kompilacji Windows.
+  **Następna kolej HELPERA:** #56 fazowy fokus/ograniczenie ciężkich strat,
+  potem odrębne #31 dla strzelców. Powtórzenie identycznego testu użytkownika
+  teraz nie wniesie brakującej implementacji taktycznej.
 - Baza v27: `1575550c495dff2b11406f6b3731ae14a11669b9`, PR #55:
   miękkie ryzyko wybuchowego otoczenia obejmuje także pobliskie melee.
   LEAD poprawił propozycję HELPER o natywne przeliczenie Mobility64/96
