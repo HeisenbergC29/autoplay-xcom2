@@ -134,7 +134,27 @@ static function string PlantDiscoveryFailureReason(int PlantActors,
     return "no_path_to_plant_anchor";
 }
 
-static function FindInteractionGoal(XComGameState_Unit UnitState,
+// Keep PlantGoalResult inside this class's compilation boundary. A custom
+// struct in the caller would require a cross-mod DependsOn edge that breaks
+// the stock compiler's dependency validation (as with AmbushPreparation).
+// Status: 1 = found, -1 = consumed without a goal, 0 = ordinary fallback.
+// A found goal retains precedence if a different plant object was consumed.
+static function int FindInteractionGoal(XComGameState_Unit UnitState,
+    out TTile GoalTile, out string GoalReason)
+{
+    local PlantGoalResult Result;
+
+    FindInteractionGoalResult(UnitState, Result);
+    GoalTile = Result.Tile;
+    GoalReason = Result.Reason;
+    if (Result.bFound)
+        return 1;
+    if (Result.bConsumedObject)
+        return -1;
+    return 0;
+}
+
+static function FindInteractionGoalResult(XComGameState_Unit UnitState,
     out PlantGoalResult Result)
 {
     local PlantGoalResult EmptyResult;

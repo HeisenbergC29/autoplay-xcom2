@@ -17,7 +17,12 @@ poziom potwierdzenia działania.
   i osiągalna kotwica z ograniczonym wyszukiwaniem. Marker pozostaje jawnie
   niepotwierdzonym fallbackiem, a Sweep wymaga native bCompleted.
   [Zakres podejścia](experiment-29-native-plant-goal.pl.md).
-  Windows/game v26: **NOT RUN**; końcowy SHA wskazuje LEAD w #4.
+  Pierwsza próba Windows v26: **FAIL**, jeden błąd walidacji DependsOn
+  (`Unparsed class 'XComWorldData'` dla APX_MissionPlanner), osiem ostrzeżeń
+  SDK/DLC. Log nie zawiera dokładnego SHA lokalnych źródeł. Poprawka
+  przywraca poprzednie zależności planera i zostawia PlantGoalResult wewnątrz
+  klasy wiedzy; API przekazuje TTile, string i status int bez zmiany taktyki.
+  Ponowna kompilacja poprawki i gra v26: **NOT RUN**; końcowy SHA w #4.
 - Baza v25: `eae4db165f679d6cac56d6e207900106c4ed3f55`, obserwacyjny
   heartbeat długiego oczekiwania (#40 / PR #50), rozróżnienie krytycznych
   zdarzeń porażki od checkboxów UI oraz diagnostyka obiektów przekaźników

@@ -82,3 +82,25 @@ Testy wykonują matematykę offsets/poziomów i sprawdzają kontrakty źródeł
 SDK; nie są kompilacją UnrealScript ani potwierdzeniem zwycięstwa.
 Kryterium pozostaje: wymagane cele, native win i znany końcowy wynik >0.
 Surowe SDK i raporty są prywatne.
+
+## Poprawka po pierwszej kompilacji v26 — 12 XI 2026
+
+Przekazany tylko LEAD plik mod-make.log zawiera **1 unique error /8 warnings**.
+Kompilację AutoplayXCom2 przerywa `Unparsed class 'XComWorldData' found while
+validating DependsOn entries for 'APX_MissionPlanner'`. Ostrzeżenia dotyczą
+źródeł/zasobów SDK/DLC, a nie są przyczyną tego przerwania. Log nie zapisuje
+dokładnego SHA lokalnej kopii źródeł.
+
+Dodanie PlantGoalResult do lokalnych zmiennych MissionPlanner wymagało
+DependsOn(APX_PlantInteractionKnowledge). To odtwarza znany problem granicy
+kompilacji, wcześniej usunięty dla AmbushPreparation w `b87db36`. Poprawka
+przywraca listę zależności planera sprzed PR #52, pozostawia strukturę
+wewnątrz klasy wiedzy i wystawia TTile/string oraz status int: 1 oznacza
+znaleziony cel, −1 zużyty interaktor bez celu, 0 zwykły fallback. Znaleziony
+cel nadal ma pierwszeństwo, jeżeli inny interaktor jest zużyty. Cała procedura
+odkrywania geometrii i jej limity pozostają identyczne.
+
+Rewizja rejestratora pozostaje v26. Test regresyjny sprawdza brak nowej
+zależności i struktury w planerze oraz zachowanie wyjść/priorytetu statusów.
+Ponowna kompilacja Windows i gra poprawki pozostają **NOT RUN** do otrzymania
+nowych dowodów. Aktualny końcowy SHA do pobrania wskazuje #4.

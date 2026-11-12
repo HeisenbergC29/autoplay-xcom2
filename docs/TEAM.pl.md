@@ -141,6 +141,14 @@ Zmiany runtime muszą zachować ograniczenia ostatniego AP i ryzyka;
 do jednej następnej kompilacji LEAD wskaże wspólny końcowy SHA.
 [Wyciąg v25](report-2026-11-12-v25.pl.md).
 
+Pierwsza kompilacja v26 zatrzymała się na walidacji DependsOn planera.
+Ten mod-make.log użytkownik przekazał wyłącznie LEAD; poprawkę wykonuje
+sam LEAD. PlantGoalResult pozostaje wewnątrz klasy wiedzy, a granica API
+używa typów gry i statusu int, jak wcześniejsza poprawka AmbushPreparation.
+Rewizja i taktyka v26 pozostają; ponowny Windows build i gra wymagają dowodu.
+Nie przyjmować już dla całego v26 statusu „kompilacja NOT RUN”: pierwsza
+próba była FAIL. Aktualny SHA poprawki i status ponownej próby są w #4.
+
 ## Przekazanie i decyzja o scaleniu
 
 W PR napisz: konkretny problem i zachowanie po zmianie, źródła/commity,

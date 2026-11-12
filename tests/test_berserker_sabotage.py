@@ -76,13 +76,14 @@ class BerserkerSabotageContracts(unittest.TestCase):
     def test_native_interaction_geometry_precedes_explicit_unverified_marker(self):
         find = function_body(self.source, 'FindBerserkerSabotageGoal')
         for required in (
-            "class'APX_PlantInteractionKnowledge'.static.FindInteractionGoal(UnitState, NativeGoal)",
-            'if (NativeGoal.bFound)',
-            'GoalTile = NativeGoal.Tile;',
-            'if (NativeGoal.bConsumedObject)',
+            "class'APX_PlantInteractionKnowledge'.static.FindInteractionGoal(",
+            'UnitState, NativeGoalTile, NativeGoalReason)',
+            'if (NativeGoalStatus > 0)',
+            'GoalTile = NativeGoalTile;',
+            'if (NativeGoalStatus < 0)',
             'MapData.ObjectiveLocation',
             'IsTileOutOfRange(MarkerTile)',
-            'GoalSource = "mission_marker_unverified:" $ NativeGoal.Reason',
+            'GoalSource = "mission_marker_unverified:" $ NativeGoalReason',
         ):
             with self.subTest(required=required):
                 self.assertIn(required, find)

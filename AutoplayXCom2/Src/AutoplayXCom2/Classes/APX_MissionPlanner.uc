@@ -2,8 +2,7 @@
 class APX_MissionPlanner extends Object
     config(AutoplayXCom2)
     dependson(X2GameRuleset, X2TacticalGameRulesetDataStructures, XComWorldData,
-        X2GameRulesetVisibilityDataStructures, XGTacticalGameCoreNativeBase,
-        APX_PlantInteractionKnowledge);
+        X2GameRulesetVisibilityDataStructures, XGTacticalGameCoreNativeBase);
 
 var config int MaxCandidateTiles;
 var config float PreferredCombatRangeTiles;
@@ -482,22 +481,24 @@ static function bool FindBerserkerSabotageGoal(XComGameState_Unit UnitState,
     XComGameState_BattleData BattleData, out TTile GoalTile,
     out string GoalSource)
 {
-    local PlantGoalResult NativeGoal;
-    local TTile MarkerTile;
+    local int NativeGoalStatus;
+    local TTile NativeGoalTile, MarkerTile;
+    local string NativeGoalReason;
 
     GoalSource = "none";
     if (UnitState == none || BattleData == none || `XWORLD == none)
         return false;
-    class'APX_PlantInteractionKnowledge'.static.FindInteractionGoal(UnitState, NativeGoal);
-    GoalSource = NativeGoal.Reason;
-    if (NativeGoal.bFound)
+    NativeGoalStatus = class'APX_PlantInteractionKnowledge'.static.FindInteractionGoal(
+        UnitState, NativeGoalTile, NativeGoalReason);
+    GoalSource = NativeGoalReason;
+    if (NativeGoalStatus > 0)
     {
-        GoalTile = NativeGoal.Tile;
+        GoalTile = NativeGoalTile;
         return true;
     }
     // Do not march back to a marker after the genuine one-shot plant object
     // was used, even when a mission variant omitted strategy objective flags.
-    if (NativeGoal.bConsumedObject)
+    if (NativeGoalStatus < 0)
         return false;
     if (VSizeSq(BattleData.MapData.ObjectiveLocation) > 1.0)
     {
@@ -506,7 +507,7 @@ static function bool FindBerserkerSabotageGoal(XComGameState_Unit UnitState,
         if (!`XWORLD.IsTileOutOfRange(MarkerTile))
         {
             GoalTile = MarkerTile;
-            GoalSource = "mission_marker_unverified:" $ NativeGoal.Reason;
+            GoalSource = "mission_marker_unverified:" $ NativeGoalReason;
             return true;
         }
     }
