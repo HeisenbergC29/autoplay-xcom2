@@ -774,8 +774,18 @@ function RecordSabotageRelayCandidates(int Turn)
             $ "|actor=" $ Safe(string(Visualizer))
             $ "|type=unverified_destructible";
         if (Visualizer != none)
+        {
             Fields $= "|actor_class=" $ Safe(string(Visualizer.Class))
                 $ "|archetype=" $ Safe(PathName(Visualizer.ObjectArchetype));
+            // Once-per-turn evidence for the melee relay guard, rather than
+            // a per-candidate log flood. This is not a secondary-blast solver.
+            if (class'APX_CombatPlanner'.static.IsTransmitterRelay(TargetObject))
+                Fields $= "|damaged_events=" $ Visualizer.DamagedEvents.Length
+                    $ "|destroyed_events=" $ Visualizer.DestroyedEvents.Length
+                    $ "|annihilated_events=" $ Visualizer.AnnihilatedEvents.Length
+                    $ "|radial_event_lists_clear="
+                    $ class'APX_CombatPlanner'.static.RelayHasNoRadialEvent(TargetObject);
+        }
         else
             Fields $= "|actor_class=unknown|archetype=unknown";
         Emit("relay_object_candidate", Fields);
