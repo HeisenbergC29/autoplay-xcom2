@@ -12,8 +12,12 @@ poziom potwierdzenia działania.
   limituje priorytet poniżej gotowego PlantBomb/pilnej pomocy i kończy
   preferencję po natywnym ukończeniu X4. Profil radialnych zdarzeń pozostaje
   konserwatywną blokadą; nie ma solvera wybuchów wtórnych.
-  [Zakres](experiment-46-relay-melee.pl.md). #29 przygotowuje osobno rzeczywiste
-  pole interakcji. Windows/game v26: **NOT RUN**; końcowy SHA wskazuje LEAD w #4.
+  [Zakres przekaźników](experiment-46-relay-melee.pl.md). #29 dodaje rzeczywiste
+  pole interakcji: aktor PlantBomb, natywne punkty, footprint dużej jednostki
+  i osiągalna kotwica z ograniczonym wyszukiwaniem. Marker pozostaje jawnie
+  niepotwierdzonym fallbackiem, a Sweep wymaga native bCompleted.
+  [Zakres podejścia](experiment-29-native-plant-goal.pl.md).
+  Windows/game v26: **NOT RUN**; końcowy SHA wskazuje LEAD w #4.
 - Baza v25: `eae4db165f679d6cac56d6e207900106c4ed3f55`, obserwacyjny
   heartbeat długiego oczekiwania (#40 / PR #50), rozróżnienie krytycznych
   zdarzeń porażki od checkboxów UI oraz diagnostyka obiektów przekaźników

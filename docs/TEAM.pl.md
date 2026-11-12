@@ -131,7 +131,10 @@ Zgoda nie obejmuje AP, cooldownów, RNG i innych ukrytych zamiarów.
 nad rzeczywistym obiektem i polem interakcji PlantBomb.
 
 LEAD przygotowuje v26 z kontrolowaną obsługą potwierdzonego relaya #46
-w PR #51 oraz osobnym polem interakcji #29. Raport v25 jest już odebrany:
+w PR #51 oraz rzeczywistym polem interakcji #29. Podejście używa native
+punktów/footprint i zachowuje rozróżnienie przewidywanej geometrii od
+AA_Success po faktycznym ruchu. Sam zużyty interaktor nie oznacza Sweep.
+Raport v25 jest już odebrany:
 GasStation −21200 finalne, Blood Killer bez zaliczonego X4 i bez native end.
 Nie przypisywać czterech kar DeadSoldier czterem fizycznym zgonom.
 Zmiany runtime muszą zachować ograniczenia ostatniego AP i ryzyka;
