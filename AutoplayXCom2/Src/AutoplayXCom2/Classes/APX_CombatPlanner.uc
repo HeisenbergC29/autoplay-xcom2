@@ -51,7 +51,7 @@ static function bool ChooseAction(XComGameState_Unit UnitState,
             continue;
 
         Ability = XComGameState_Ability(History.GetGameStateForObjectID(Candidate.AbilityObjectRef.ObjectID));
-        if (Ability == none)
+        if (Ability == none || Ability.OwnerStateObject.ObjectID != UnitState.ObjectID)
             continue;
         AbilityTemplate = Ability.GetMyTemplate();
         if (AbilityTemplate == none)
@@ -84,7 +84,7 @@ static function bool ChooseAction(XComGameState_Unit UnitState,
                 else
                 {
                     CandidateScore = ScoreObjectiveAttack(UnitState, Ability,
-                        Candidate.AvailableTargets[Index]);
+                        Candidate.AvailableTargets[Index], VisibleEnemies);
                 }
                 if (CandidateScore > Score)
                 {
@@ -154,22 +154,26 @@ static function bool ChooseAction(XComGameState_Unit UnitState,
 }
 
 static function bool HasRequiredMeleePath(XComGameState_Unit SourceUnit,
-    XComGameState_Unit TargetUnit, X2AbilityTemplate AbilityTemplate,
+    XComGameState_BaseObject TargetState, X2AbilityTemplate AbilityTemplate,
     array<StateObjectReference> VisibleEnemies, out float RiskPenalty)
 {
     local array<TTile> Destinations, Path;
     local XGUnit UnitVisualizer;
+    local XComGameState_Unit TargetUnit;
     local X2AbilityToHitCalc_StandardAim MeleeCalc;
     local int Index;
     local float StartSupport;
     local bool bRequireSupport;
 
     RiskPenalty = 0.0;
+    if (SourceUnit == none || TargetState == none || AbilityTemplate == none)
+        return false;
+    TargetUnit = XComGameState_Unit(TargetState);
     // The native counterattack conversion can also defeat a guaranteed melee
     // preview. Check the visible capability before stationary/path shortcuts;
     // never inspect the enemy's private once-per-turn counter value.
     MeleeCalc = X2AbilityToHitCalc_StandardAim(AbilityTemplate.AbilityToHitCalc);
-    if (MeleeCalc != none && MeleeCalc.bMeleeAttack
+    if (TargetUnit != none && MeleeCalc != none && MeleeCalc.bMeleeAttack
         && class'APX_EnemyKnowledge'.static.HasMeleeCounter(TargetUnit))
         return false;
     if (AbilityTemplate.TargetingMethod == none || !AbilityTemplate.TargetingMethod.default.ProvidesPath)
@@ -183,7 +187,7 @@ static function bool HasRequiredMeleePath(XComGameState_Unit SourceUnit,
         return false;
     UnitVisualizer.m_kReachableTilesCache.UpdateTileCacheIfNeeded();
     if (!class'X2AbilityTarget_MovingMelee'.static.SelectAttackTile(
-        SourceUnit, TargetUnit, AbilityTemplate, Destinations) || Destinations.Length == 0)
+        SourceUnit, TargetState, AbilityTemplate, Destinations) || Destinations.Length == 0)
         return false;
     if (Destinations[0] == SourceUnit.TileLocation)
         return true;
@@ -528,44 +532,173 @@ static function float ScoreAttack(XComGameState_Ability Ability,
     return Result;
 }
 
-// A mission relay/transmitter is a destructible state rather than a unit. Only
-// consider it when the normal rules cache supplied a legal ranged attack and
-// the game marks it as a hostile, visible mission objective. Ordinary cover,
-// explosive scenery, and friendly defense devices are never attack goals.
+static function bool RelayIdentityMatches(bool bSabotageMission,
+    bool bNativeMissionTarget, bool bKnownArchetype)
+{
+    return bSabotageMission && bNativeMissionTarget && bKnownArchetype;
+}
+
+// The runtime report identified this exact official relay archetype. Two HP
+// alone, a generic objective marker or an actor instance name is not evidence.
+static function bool IsTransmitterRelay(XComGameState_Destructible TargetObject)
+{
+    local XComGameState_BattleData BattleData;
+    local XComDestructibleActor Visualizer;
+
+    if (TargetObject == none || TargetObject.bRemoved || TargetObject.Health <= 0
+        || `XCOMHISTORY == none)
+        return false;
+    BattleData = XComGameState_BattleData(`XCOMHISTORY.GetSingleGameStateObjectForClass(
+        class'XComGameState_BattleData', true));
+    Visualizer = XComDestructibleActor(TargetObject.GetVisualizer());
+    if (BattleData == none || Visualizer == none || Visualizer.bDeleteMe
+        || Visualizer.ObjectID != TargetObject.ObjectID || Visualizer.ObjectArchetype == none)
+        return false;
+    return RelayIdentityMatches(BattleData.MapData.ActiveMission.sType == "SabotageTransmitter",
+        class'Helpers'.static.IsObjectiveTarget(TargetObject.ObjectID),
+        PathName(Visualizer.ObjectArchetype)
+            ~= "DestroyTransmitter_TempAssets.Archetypes.ARC_IA_PsionicNode");
+}
+
+// Stock MissionDefs identifies PlantBomb as this mission's strategy objective,
+// while Sweep is separate. Do not invent remaining turns or keep a relay bonus
+// after X4 is planted merely because there are still enemies to sweep.
+static function bool HasUnfinishedTransmitterPlantObjective()
+{
+    local XComGameState_BattleData BattleData;
+    local int Index;
+
+    if (`XCOMHISTORY == none)
+        return false;
+    BattleData = XComGameState_BattleData(`XCOMHISTORY.GetSingleGameStateObjectForClass(
+        class'XComGameState_BattleData', true));
+    if (BattleData == none || BattleData.MapData.ActiveMission.sType != "SabotageTransmitter")
+        return false;
+    for (Index = 0; Index < Min(32, BattleData.MapData.ActiveMission.MissionObjectives.Length); ++Index)
+    {
+        if (BattleData.MapData.ActiveMission.MissionObjectives[Index].ObjectiveName == 'PlantBomb')
+            return BattleData.MapData.ActiveMission.MissionObjectives[Index].bIsStrategyObjective
+                && !BattleData.MapData.ActiveMission.MissionObjectives[Index].bCompleted;
+    }
+    return false;
+}
+
+static function bool RelayEventBudgetAllowed(int Damaged, int Destroyed, int Annihilated)
+{
+    return Damaged >= 0 && Damaged <= 32 && Destroyed >= 0 && Destroyed <= 32
+        && Annihilated >= 0 && Annihilated <= 32 && Damaged + Destroyed + Annihilated <= 32;
+}
+
+// A surviving hit can trigger DamagedEvents, while a pristine lethal hit can
+// use AnnihilatedEvents instead of DestroyedEvents. Cover all three within one
+// budget; no secondary-explosion solver or blast-volume enumeration is added.
+static function bool RelayHasNoRadialEvent(XComGameState_Destructible TargetObject)
+{
+    local XComDestructibleActor Visualizer;
+    local int Index;
+
+    Visualizer = XComDestructibleActor(TargetObject.GetVisualizer());
+    if (Visualizer == none || Visualizer.bDeleteMe
+        || Visualizer.ObjectID != TargetObject.ObjectID
+        || !RelayEventBudgetAllowed(Visualizer.DamagedEvents.Length,
+            Visualizer.DestroyedEvents.Length, Visualizer.AnnihilatedEvents.Length))
+        return false;
+    for (Index = 0; Index < Visualizer.DamagedEvents.Length; ++Index)
+    {
+        if (XComDestructibleActor_Action_RadialDamage(Visualizer.DamagedEvents[Index].Action) != none)
+            return false;
+    }
+    for (Index = 0; Index < Visualizer.DestroyedEvents.Length; ++Index)
+    {
+        if (XComDestructibleActor_Action_RadialDamage(Visualizer.DestroyedEvents[Index].Action) != none)
+            return false;
+    }
+    for (Index = 0; Index < Visualizer.AnnihilatedEvents.Length; ++Index)
+    {
+        if (XComDestructibleActor_Action_RadialDamage(Visualizer.AnnihilatedEvents[Index].Action) != none)
+            return false;
+    }
+    return true;
+}
+
+// A destruction opportunity buys objective time, not a guessed number of
+// points/turns. The bounded bonus prefers an actual likely destruction and
+// stays below ready PlantBomb (200), stabilization (400) and emergency healing.
+static function float ScoreRelayOpportunity(float MinDamage, float MaxDamage,
+    float Health, int HitChance, float MoveRisk)
+{
+    local float Chance, ExpectedDamage, Value;
+
+    if (Health <= 0.0 || MaxDamage <= 0.0 || HitChance <= 0 || MaxDamage < MinDamage)
+        return -10000.0;
+    Chance = float(Clamp(HitChance, 0, 100)) / 100.0;
+    ExpectedDamage = FMax(0.0, (MinDamage + MaxDamage) * 0.5) * Chance;
+    Value = FMin(35.0, ExpectedDamage * 5.0);
+    if (MaxDamage >= Health)
+        Value += 50.0 * Chance;
+    if (MinDamage >= Health)
+        Value += 60.0 * Chance;
+    return FMin(135.0, Value) - FMax(0.0, MoveRisk);
+}
+
+// Native rules must have supplied the legal hostile, visible objective target.
+// Moving melee remains excluded except for the identified transmitter relay
+// and the stock player-input MP punch with the normal safe native path.
 static function float ScoreObjectiveAttack(XComGameState_Unit SourceUnit,
-    XComGameState_Ability Ability, AvailableTarget Target)
+    XComGameState_Ability Ability, AvailableTarget Target,
+    array<StateObjectReference> VisibleEnemies)
 {
     local XComGameState_Destructible Destructible;
     local X2AbilityTemplate AbilityTemplate;
     local ShotBreakdown Breakdown;
     local WeaponDamageValue MinDamage, MaxDamage;
     local int HitChance, AllowsShield;
-    local float ExpectedDamage, Result;
+    local float ExpectedDamage, Result, MeleePenalty;
+    local bool bRelay, bMovingMelee;
 
+    if (SourceUnit == none || Ability == none || `XCOMHISTORY == none
+        || Ability.OwnerStateObject.ObjectID != SourceUnit.ObjectID)
+        return -10000.0;
     AbilityTemplate = Ability.GetMyTemplate();
-    if (Target.AdditionalTargets.Length != 0
+    if (AbilityTemplate == none || Target.AdditionalTargets.Length != 0
         || AbilityTemplate.AbilityTargetStyle == none
         || !AbilityTemplate.AbilityTargetStyle.IsA('X2AbilityTarget_Single')
-        || AbilityTemplate.AbilityTargetStyle.IsA('X2AbilityTarget_MovingMelee')
         || AbilityTemplate.AbilityMultiTargetStyle != none
         || AbilityTemplate.AbilityToHitCalc == none)
         return -10000.0;
-    if (AbilityTemplate.TargetingMethod != none
-        && AbilityTemplate.TargetingMethod.default.ProvidesPath)
-        return -10000.0;
-
     Destructible = XComGameState_Destructible(`XCOMHISTORY.GetGameStateForObjectID(Target.PrimaryTarget.ObjectID));
-    if (Destructible == none || Destructible.Health <= 0
+    if (Destructible == none || Destructible.bRemoved || Destructible.Health <= 0
         || !Destructible.IsTargetable(SourceUnit.GetTeam())
         || !SourceUnit.TargetIsEnemy(Destructible.ObjectID)
         || !class'Helpers'.static.IsObjectiveTarget(Destructible.ObjectID)
         || !class'X2TacticalVisibilityHelpers'.static.CanXComSquadSeeTarget(Destructible.ObjectID))
         return -10000.0;
 
+    bRelay = IsTransmitterRelay(Destructible);
+    if (bRelay && (!HasUnfinishedTransmitterPlantObjective() || !RelayHasNoRadialEvent(Destructible)))
+        return -10000.0;
+    bMovingMelee = AbilityTemplate.AbilityTargetStyle.IsA('X2AbilityTarget_MovingMelee');
+    if (bMovingMelee)
+    {
+        // Only the MP punch has verified non-unit targeting and no knockback.
+        if (!bRelay || Ability.GetMyTemplateName() != 'DevastatingPunchMP'
+            || AbilityTemplate.TargetingMethod == none
+            || !AbilityTemplate.TargetingMethod.default.ProvidesPath
+            || !HasRequiredMeleePath(SourceUnit, Destructible, AbilityTemplate,
+                VisibleEnemies, MeleePenalty))
+            return -10000.0;
+    }
+    else if (AbilityTemplate.TargetingMethod != none
+        && AbilityTemplate.TargetingMethod.default.ProvidesPath)
+        return -10000.0;
+
     HitChance = Clamp(Ability.GetShotBreakdown(Target, Breakdown), 0, 100);
     if (HitChance < default.MinimumHitChance)
         return -10000.0;
     Ability.GetDamagePreview(Target.PrimaryTarget, MinDamage, MaxDamage, AllowsShield);
+    if (bRelay)
+        return ScoreRelayOpportunity(MinDamage.Damage, MaxDamage.Damage,
+            Destructible.Health, HitChance, MeleePenalty);
     ExpectedDamage = float(MinDamage.Damage + MaxDamage.Damage) * 0.5 * float(HitChance) / 100.0;
     if (ExpectedDamage <= 0.0)
         return -10000.0;

@@ -1,4 +1,4 @@
-# Stan przekazania projektu — 11 listopada 2026
+# Stan przekazania projektu — 12 listopada 2026
 
 To punkt startowy po pierwszym przeglądzie importu pomocnika. Bieżące issue i PR-y mogą zawierać nowsze
 ustalenia; po integracji aktualizuj ten dokument, gdy zmienia się baza lub
@@ -6,7 +6,15 @@ poziom potwierdzenia działania.
 
 ## Baza kodu
 
-- Bieżąca rewizja przygotowywanych źródeł: `mission-report-v25`, obserwacyjny
+- Bieżąca rewizja przygotowywanych źródeł: `mission-report-v26`, obsługa
+  natywnych ofert DevastatingPunchMP przeciw potwierdzonemu przekaźnikowi
+  SabotageTransmitter (#46 / PR #51). Zachowuje pełne kontrole ścieżki,
+  limituje priorytet poniżej gotowego PlantBomb/pilnej pomocy i kończy
+  preferencję po natywnym ukończeniu X4. Profil radialnych zdarzeń pozostaje
+  konserwatywną blokadą; nie ma solvera wybuchów wtórnych.
+  [Zakres](experiment-46-relay-melee.pl.md). #29 przygotowuje osobno rzeczywiste
+  pole interakcji. Windows/game v26: **NOT RUN**; końcowy SHA wskazuje LEAD w #4.
+- Baza v25: `eae4db165f679d6cac56d6e207900106c4ed3f55`, obserwacyjny
   heartbeat długiego oczekiwania (#40 / PR #50), rozróżnienie krytycznych
   zdarzeń porażki od checkboxów UI oraz diagnostyka obiektów przekaźników
   (#46 / PR #47) oraz zatwierdzony przez użytkownika odczyt bieżącego
@@ -15,8 +23,10 @@ poziom potwierdzenia działania.
   [Heartbeat](experiment-40-wait-heartbeat.pl.md),
   [nieudane cele i przekaźniki](experiment-46-critical-objective-relays.pl.md).
   [Aktualny punkt grupy](experiment-48-patrol-waypoint.pl.md).
-  Windows/game v25: **NOT RUN**. Dokładny SHA wskazuje LEAD w
-  [issue #4](https://github.com/HeisenbergC29/autoplay-xcom2/issues/4).
+  [Raport v25](report-2026-11-12-v25.pl.md) potwierdza grę tej rewizji,
+  bez dokładnego SHA/logu kompilacji: GasStation loss z −21200 końcowymi
+  punktami; Blood Killer ręczny OFF, dwa nieudane cele UI i brak native end
+  lub końcowego score. Telemetria działa i pokazuje postęp historii.
   PR #43 zamknięto bez scalenia. Zgoda na aktualny punkt z 11 XI nie
   obejmuje prywatnej wiedzy IsEngaged/HasAbsoluteKnowledge; te odczyty
   usunięto. Punkt ma nieznane przyszłe użycie i nie jest całą trasą.
@@ -176,9 +186,15 @@ v15, co nie oznacza wspólnego przodka commitów.
 
 ## Potwierdzenie i ograniczenia
 
-V25 po PR #50 i poprawkach PR #47 wymaga nowej kompilacji
+V26 po PR #51 wymaga nowej kompilacji
 Windows WOTC SDK oraz próby w grze: **NOT RUN**. Dokładny SHA, wyniki
 kontroli i decyzje przeglądu zapisuje LEAD w PR i issue #4.
+
+V25: GasStation naliczyło cztery kary DeadSoldier, lecz trzy jednostki
+faktycznie zginęły, a jedna pozostała żywa i nieprzytomna. Granaty gracza
+mają zapisane tylko wrogie ofiary. Pięć ofert ciosu w relay474 nie dawało
+kandydatury z powodu filtra MovingMelee/ProvidesPath, mimo prawidłowej
+flagi objective. [Pełny wyciąg](report-2026-11-12-v25.pl.md).
 
 V24 zachowuje potwierdzone zwycięstwo w SabotageCC, lecz częściowe
 punkty nie certyfikują zaliczenia projektu. GasStation −10700 jest FAIL;
