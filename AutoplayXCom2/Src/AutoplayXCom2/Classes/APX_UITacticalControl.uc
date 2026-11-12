@@ -27,6 +27,7 @@ var float RefreshRemaining;
 // Cache only HUD text; authoritative mission score reads stay uncached.
 var float ScoreRefreshRemaining;
 var bool bScoreTextValid;
+var bool bScoreReadDeferred;
 var string CachedScoreText;
 var XComGameStateHistory CachedScoreHistory;
 var int CachedScoreHistoryIndex;
@@ -167,10 +168,20 @@ simulated function string GetDisplayedScoreText()
     local XComGameStateHistory History;
     local int HistoryIndex;
 
+    bScoreReadDeferred = false;
     if (ScoreCounter == none)
         return "";
 
     History = `XCOMHISTORY;
+    if (!class'APX_MissionScore'.static.CanReadScoreNow())
+    {
+        bScoreReadDeferred = true;
+        // Keep only already displayed text from this history. Do not query
+        // its index, mark a new observation or reset the refresh deadline.
+        if (!bScoreTextValid || History != CachedScoreHistory)
+            return ScoreCounter.UnavailableText();
+        return CachedScoreText;
+    }
     HistoryIndex = -1;
     if (History != none)
         HistoryIndex = History.GetCurrentHistoryIndex();
@@ -201,7 +212,7 @@ simulated function UpdateStatus()
         ScoreText = GetDisplayedScoreText();
         ScoreLabel.SetCenteredText(class'UIUtilities_Text'.static.GetColoredText(
             ScoreText, eUIState_Normal, ToggleButton.FontSize));
-        if (Controller != none)
+        if (Controller != none && !bScoreReadDeferred)
             Controller.RecordDisplayedScore(ScoreText);
     }
 
@@ -265,6 +276,7 @@ simulated event Removed()
         ScoreCounter.Cleanup();
     ScoreCounter = none;
     bScoreTextValid = false;
+    bScoreReadDeferred = false;
     CachedScoreText = "";
     CachedScoreHistory = none;
     CachedScoreHistoryIndex = -1;

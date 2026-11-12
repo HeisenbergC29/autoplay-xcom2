@@ -57,7 +57,7 @@ class ScorePollingTests(unittest.TestCase):
         self.assertIn('GetText();', native)
         self.assertNotIn('GetDisplayedScoreText', native)
         scoring = function_body(self.score, 'GetText')
-        self.assertIn('Manager.GetTotalScore()', scoring)
+        self.assertIn('ReadChallengePoints(History, CurrentPoints)', scoring)
         self.assertIn('GetMaxChallengeScore()', scoring)
         self.assertIn('ComparisonCounter.GetObservedScore()', scoring)
         self.assertIn('return "~" $ string(ComparisonPoints)', scoring)
