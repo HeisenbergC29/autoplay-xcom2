@@ -14,13 +14,15 @@ var config float EmergencyHealthFraction;
 
 static function bool ChooseAction(XComGameState_Unit UnitState,
     out AvailableAction Action, out int TargetIndex, out float Score,
-    optional bool bRecentContact)
+    optional bool bRecentContact, optional int BerserkerFocusTargetID,
+    optional bool bBerserkerOpeningContact)
 {
     local XComGameStateHistory History;
     local GameRulesCache_Unit UnitCache;
     local AvailableAction Candidate, EmptyAction;
     local XComGameState_Ability Ability;
     local XComGameState_Unit TargetUnit;
+    local XComGameState_Destructible ObjectiveTarget;
     local X2AbilityTemplate AbilityTemplate;
     local array<StateObjectReference> VisibleEnemies;
     local name AbilityName;
@@ -80,11 +82,30 @@ static function bool ChooseAction(XComGameState_Unit UnitState,
                         continue;
                     CandidateScore = ScoreAttack(Ability, Candidate.AvailableTargets[Index], TargetUnit);
                     CandidateScore -= MeleePenalty;
+                    if (UnitState.GetMyTemplateName() == 'BerserkerMP'
+                        && TargetUnit.ObjectID == BerserkerFocusTargetID)
+                        CandidateScore += class'APX_BerserkerFocus'.static.FocusAttackBonus(
+                            true, bBerserkerOpeningContact,
+                            UnitState.GetCurrentStat(eStat_HP)
+                                / FMax(1.0, UnitState.GetMaxStat(eStat_HP)),
+                            TargetUnit.GetCurrentStat(eStat_HP)
+                                / FMax(1.0, TargetUnit.GetMaxStat(eStat_HP)));
                 }
                 else
                 {
                     CandidateScore = ScoreObjectiveAttack(UnitState, Ability,
                         Candidate.AvailableTargets[Index], VisibleEnemies);
+                    // Keep a confirmed relay legal during the brief opening,
+                    // but prefer a safe focused native punch if available.
+                    if (bBerserkerOpeningContact
+                        && UnitState.GetMyTemplateName() == 'BerserkerMP')
+                    {
+                        ObjectiveTarget = XComGameState_Destructible(History.GetGameStateForObjectID(
+                            Candidate.AvailableTargets[Index].PrimaryTarget.ObjectID));
+                        if (ObjectiveTarget != none && IsTransmitterRelay(ObjectiveTarget))
+                            CandidateScore = class'APX_BerserkerFocus'.static.ContactRelayScore(
+                                CandidateScore, true);
+                    }
                 }
                 if (CandidateScore > Score)
                 {
