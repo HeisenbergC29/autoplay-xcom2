@@ -6,7 +6,7 @@ ability targeting and path validation must not change.
 import os
 from pathlib import Path
 import unittest
-from test_ui_gating import CHECKS, function_body
+from test_ui_gating import CHECKS, braced_body, function_body
 from uc_math import load_uc_function
 
 ROOT=Path(__file__).resolve().parents[1]
@@ -163,7 +163,15 @@ class FullIntelPolicyScenarios(unittest.TestCase):
         intel = function_body((CLASSES / 'APX_FullIntel.uc').read_text(), 'GetKnownEnemies')
         self.assertNotIn('IsReclaimableControlledSquadmate(', intel)
         goal = function_body(self.source, 'FindGoal')
-        self.assertEqual(goal.count('IsReclaimableControlledSquadmate(UnitState, OtherUnit)'), 2)
+        # Each pursuit branch must retain the protection, including the new
+        # post-PlantBomb Sweep. A fixed count of two sites hid that distinction.
+        for marker in ('foreach ImmediateEnemies(EnemyRef)', 'if (bBerserkerSweep)',
+                       'if (ShouldPursueKnownEnemies('):
+            with self.subTest(branch=marker):
+                body = braced_body(goal, goal.index('{', goal.index(marker)))
+                guard = body.index('IsReclaimableControlledSquadmate(UnitState, OtherUnit)')
+                self.assertLess(guard, body.index('ConsiderGoal(UnitState, OtherUnit.TileLocation'))
+                self.assertIn('continue;', body[guard:body.index('ConsiderGoal(')])
         native = function_body(self.source, 'GetImmediateThreats')
         self.assertIn('GetAllVisibleEnemiesForPlayer(', native)
         # The existing attack/grenade protection is verified in its dedicated tests.
