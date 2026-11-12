@@ -17,8 +17,9 @@ static function float GroupPriority(float Distance, int Members, bool bRetained)
 {
     if (Members <= 0 || Distance < 0.0)
         return -10000.0;
-    return 36.0 - Distance - FMax(0.0, float(Members - 3)) * 2.0
-        + (bRetained ? 12.0 : 0.0);
+    if (bRetained)
+        return 48.0 - Distance - FMax(0.0, float(Members - 3)) * 2.0;
+    return 36.0 - Distance - FMax(0.0, float(Members - 3)) * 2.0;
 }
 
 // Spend only a bounded early window confronting an actual nearby pod. If
@@ -45,9 +46,9 @@ static function float FocusAttackBonus(bool bInFocus, bool bOpeningContact,
 {
     if (!bInFocus || OwnHealthFraction < 0.55)
         return 0.0;
-    return (bOpeningContact ? 34.0 : 16.0)
-        + FClamp(1.0 - EnemyHealthFraction, 0.0, 1.0)
-            * (bOpeningContact ? 14.0 : 10.0);
+    if (bOpeningContact)
+        return 34.0 + FClamp(1.0 - EnemyHealthFraction, 0.0, 1.0) * 14.0;
+    return 16.0 + FClamp(1.0 - EnemyHealthFraction, 0.0, 1.0) * 10.0;
 }
 
 // A real, native-legal relay remains an option during the opening contact.
