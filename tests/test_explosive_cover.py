@@ -24,6 +24,8 @@ class ExplosiveCoverContracts(unittest.TestCase):
         cls.contains=staticmethod(load_uc_function(COVER,'BlastExtentsContain'))
         cls.live_cover=staticmethod(load_uc_function(COVER,'FutureBlastStillPossible'))
         cls.consume=staticmethod(load_uc_function(COVER,'RemainingInspectionBudget'))
+        cls.melee_threat=staticmethod(
+            load_uc_function(COVER,'MayDamageCoverFromPosition'))
 
     def test_risk_depends_on_real_native_damage_and_enemy_capability(self):
         self.assertEqual(self.penalty(5,False,1.0),0)
@@ -108,11 +110,35 @@ class ExplosiveCoverContracts(unittest.TestCase):
         self.assertNotIn('return 8.0;',inspect)
         self.assertIn('RemainingInspectionBudget(RemainingCoverChecks)',inspect)
 
+    def test_melee_can_destroy_explosive_scenery_without_ranged_weapon(self):
+        # Faceless-like public mobility permits considering a nearby melee hit
+        # even when no primary weapon is equipped. This is a possibility only.
+        self.assertTrue(self.melee_threat(True,False,False,14.0,8,8,1))
+        self.assertTrue(self.melee_threat(True,False,False,14.0,0,9,2))
+        self.assertFalse(self.melee_threat(True,False,False,14.0,10,0,1))
+        self.assertFalse(self.melee_threat(True,False,False,14.0,3,3,3))
+        self.assertTrue(self.melee_threat(True,False,False,4.0,4,4,0))
+        self.assertFalse(self.melee_threat(True,False,False,4.0,5,0,0))
+        self.assertTrue(self.melee_threat(True,False,False,300.0,16,16,0))
+        self.assertFalse(self.melee_threat(True,False,False,300.0,17,0,0))
+        self.assertFalse(self.melee_threat(False,False,False,14.0,0,0,0))
+        self.assertTrue(self.melee_threat(False,True,False,0,22,22,0))
+        self.assertTrue(self.melee_threat(False,False,True,0,22,22,0))
+        self.assertFalse(self.melee_threat(False,True,False,0,23,0,0))
+        self.assertFalse(self.melee_threat(False,False,True,0,0,0,3))
+
     def test_threats_use_only_installed_ability_capabilities_and_enemy_positions(self):
-        threats=function_body(self.source,'HasRelevantRangedThreat')
+        threats=function_body(self.source,'HasRelevantDestructionThreat')
         self.assertIn("class'APX_EnemyKnowledge'.static.PrimaryWeaponMeanDamage",threats)
         self.assertIn("class'APX_EnemyKnowledge'.static.CapabilityFlags",threats)
         self.assertIn('Enemy.IsMeleeOnly()',threats)
+        self.assertIn('Enemy.GetCurrentStat(eStat_Mobility)',threats)
+        self.assertIn('MayDamageCoverFromPosition(',threats)
+        self.assertNotIn('|| Enemy.IsMeleeOnly()',threats)
+        risk=function_body(self.source,'RiskAtTile')
+        self.assertIn('HasRelevantDestructionThreat(UnitState, Tile, ThreatRefs)',risk)
+        self.assertIn('DestroyedEvents[Index].Action',risk)
+        self.assertNotIn('Enemy.NumActionPoints(',threats)
         self.assertIn('!UnitState.IsEnemyUnit(Enemy)',threats)
         self.assertIn('Checked > 32',threats)
         risk=function_body(self.source,'RiskAtTile')
