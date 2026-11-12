@@ -103,6 +103,10 @@ and [docs/PROJECT-STATE.pl.md](docs/PROJECT-STATE.pl.md) before changing this pr
 - SDK source and raw game/DLC INIs are private inputs, not repository contents.
   Publish derived metadata with relative provenance only. Keep raw supplied logs,
   saves, account paths and archives out of commits; share a suitable summary.
+- Keep custom result structs inside their owning mod class and pass stock types
+  or scalar outputs between planners. Adding a mod-to-mod DependsOn for a result
+  struct has twice broken stock compiler dependency validation (AmbushPreparation
+  and v26 PlantGoalResult); portable tests do not certify that boundary.
 - Do not bump the runtime recording revision for documentation/CI-only changes.
   Update revision and diagnostics together when runtime behavior changes.
 
