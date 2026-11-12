@@ -73,22 +73,20 @@ class BerserkerSabotageContracts(unittest.TestCase):
         self.assertIn('MoveOpportunityPenalty(BestAttackNow, BestAttackAfterMove,', choose)
         self.assertIn('if (!Goal.bImmediateThreats && !bRoutineRoute)', choose)
 
-    def test_only_valid_native_goal_objects_or_objective_marker(self):
+    def test_native_interaction_geometry_precedes_explicit_unverified_marker(self):
         find = function_body(self.source, 'FindBerserkerSabotageGoal')
         for required in (
+            "class'APX_PlantInteractionKnowledge'.static.FindInteractionGoal(UnitState, NativeGoal)",
+            'if (NativeGoal.bFound)',
+            'GoalTile = NativeGoal.Tile;',
+            'if (NativeGoal.bConsumedObject)',
             'MapData.ObjectiveLocation',
-            "IterateByClassType(",
-            "class'XComGameState_InteractiveObject', ObjectState",
-            'IsUnfinishedObject(ObjectState)',
-            'ObjectState.GetRequiresObjectiveGlint()',
-            'IsTileOutOfRange(ObjectState.TileLocation)',
-            'Considered > 128',
-            'BestDistance > 6.0',
-            'GoalSource = "objective_glint"',
-            'GoalSource = "mission_marker"',
+            'IsTileOutOfRange(MarkerTile)',
+            'GoalSource = "mission_marker_unverified:" $ NativeGoal.Reason',
         ):
             with self.subTest(required=required):
                 self.assertIn(required, find)
+        self.assertNotIn('GetRequiresObjectiveGlint()', find)
         for forbidden in ('ModifyStateObject', 'CreateNewGameState',
                           'SubmitGameState', 'Interact_PlantBomb(', 'Rand('):
             self.assertNotIn(forbidden, find)

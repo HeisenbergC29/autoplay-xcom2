@@ -2,7 +2,8 @@
 class APX_MissionPlanner extends Object
     config(AutoplayXCom2)
     dependson(X2GameRuleset, X2TacticalGameRulesetDataStructures, XComWorldData,
-        X2GameRulesetVisibilityDataStructures, XGTacticalGameCoreNativeBase);
+        X2GameRulesetVisibilityDataStructures, XGTacticalGameCoreNativeBase,
+        APX_PlantInteractionKnowledge);
 
 var config int MaxCandidateTiles;
 var config float PreferredCombatRangeTiles;
@@ -475,59 +476,41 @@ static function bool ShouldPrioritizeBerserkerSabotage(bool bEnabled,
     return bEnabled && bBerserker && bSabotageMission && !bObjectiveComplete;
 }
 
-// Choose a real unfinished objective-glint object closest to the native
-// mission marker. If it isn't available, fall back only to that native marker.
-// Never guess an object id or interact with an object without AvailableActions.
+// Resolve a real PlantBomb actor and occupied interaction anchor before any
+// marker fallback. Glint and proximity alone never certify interaction legality.
 static function bool FindBerserkerSabotageGoal(XComGameState_Unit UnitState,
     XComGameState_BattleData BattleData, out TTile GoalTile,
     out string GoalSource)
 {
-    local XComGameState_InteractiveObject ObjectState;
+    local PlantGoalResult NativeGoal;
     local TTile MarkerTile;
-    local float Distance, BestDistance;
-    local bool bMarkerAvailable, bObjectFound;
-    local int Considered;
 
     GoalSource = "none";
     if (UnitState == none || BattleData == none || `XWORLD == none)
         return false;
-    bMarkerAvailable = VSizeSq(BattleData.MapData.ObjectiveLocation) > 1.0;
-    if (bMarkerAvailable)
+    class'APX_PlantInteractionKnowledge'.static.FindInteractionGoal(UnitState, NativeGoal);
+    GoalSource = NativeGoal.Reason;
+    if (NativeGoal.bFound)
+    {
+        GoalTile = NativeGoal.Tile;
+        return true;
+    }
+    // Do not march back to a marker after the genuine one-shot plant object
+    // was used, even when a mission variant omitted strategy objective flags.
+    if (NativeGoal.bConsumedObject)
+        return false;
+    if (VSizeSq(BattleData.MapData.ObjectiveLocation) > 1.0)
     {
         MarkerTile = `XWORLD.GetTileCoordinatesFromPosition(
             BattleData.MapData.ObjectiveLocation);
-        bMarkerAvailable = !`XWORLD.IsTileOutOfRange(MarkerTile);
-    }
-    BestDistance = 1000000.0;
-    foreach `XCOMHISTORY.IterateByClassType(
-        class'XComGameState_InteractiveObject', ObjectState)
-    {
-        if (ObjectState == none || !IsUnfinishedObject(ObjectState)
-            || !ObjectState.GetRequiresObjectiveGlint()
-            || `XWORLD.IsTileOutOfRange(ObjectState.TileLocation))
-            continue;
-        ++Considered;
-        if (Considered > 128)
-            break;
-        Distance = bMarkerAvailable
-            ? TileDistance(ObjectState.TileLocation, MarkerTile)
-            : TileDistance(ObjectState.TileLocation, UnitState.TileLocation);
-        if (!bObjectFound || Distance < BestDistance)
+        if (!`XWORLD.IsTileOutOfRange(MarkerTile))
         {
-            BestDistance = Distance;
-            GoalTile = ObjectState.TileLocation;
-            GoalSource = "objective_glint";
-            bObjectFound = true;
+            GoalTile = MarkerTile;
+            GoalSource = "mission_marker_unverified:" $ NativeGoal.Reason;
+            return true;
         }
     }
-    // The exact map objective marker is preferable to an unrelated glint.
-    if (bMarkerAvailable && (!bObjectFound || BestDistance > 6.0))
-    {
-        GoalTile = MarkerTile;
-        GoalSource = "mission_marker";
-        return true;
-    }
-    return bObjectFound;
+    return false;
 }
 
 // Shared by the objective prefix and every local fallback candidate.
@@ -604,8 +587,8 @@ static function bool FindGoal(XComGameState_Unit UnitState, out MissionGoal Goal
     local MissionGoal EmptyGoal;
     local TTile SabotageGoalTile;
     local string SabotageGoalSource;
-    local int MissionObjectiveIndex;
-    local bool bStrategyObjective, bCompletedStrategyObjective;
+    local int PlantObjectivePhase;
+    local bool bCompletedStrategyObjective, bBerserkerSweep, bSkipUnverifiedPlantMarker;
 
     Goal = EmptyGoal;
 
@@ -627,26 +610,20 @@ static function bool FindGoal(XComGameState_Unit UnitState, out MissionGoal Goal
         class'XComGameState_BattleData', true));
     if (BattleData != none)
     {
-        for (MissionObjectiveIndex = 0; MissionObjectiveIndex <
-            BattleData.MapData.ActiveMission.MissionObjectives.Length;
-            ++MissionObjectiveIndex)
-        {
-            if (BattleData.MapData.ActiveMission.MissionObjectives[
-                MissionObjectiveIndex].bIsStrategyObjective)
-            {
-                bStrategyObjective = true;
-                break;
-            }
-        }
-        bCompletedStrategyObjective = bStrategyObjective
-            && BattleData.AllStrategyObjectivesCompleted();
+        PlantObjectivePhase = class'APX_PlantInteractionKnowledge'.static.NativePlantObjectivePhase(BattleData);
+        // Only the exact native PlantBomb completion establishes Sweep. An
+        // empty/missing definition, used object or proximity is not completion.
+        bCompletedStrategyObjective = PlantObjectivePhase == 1;
+        bBerserkerSweep = default.PrioritizeBerserkerSabotage
+            && UnitState.GetMyTemplateName() == 'BerserkerMP'
+            && BattleData.MapData.ActiveMission.sType == "SabotageTransmitter"
+            && bCompletedStrategyObjective;
         if (ShouldPrioritizeBerserkerSabotage(default.PrioritizeBerserkerSabotage,
             UnitState.GetMyTemplateName() == 'BerserkerMP',
             BattleData.MapData.ActiveMission.sType == "SabotageTransmitter",
             bCompletedStrategyObjective)
             && FindBerserkerSabotageGoal(UnitState, BattleData,
-                SabotageGoalTile, SabotageGoalSource)
-            && TileDistance(UnitState.TileLocation, SabotageGoalTile) > 1.5)
+                SabotageGoalTile, SabotageGoalSource))
         {
             Goal.Tile = SabotageGoalTile;
             Goal.Value = 115.0;
@@ -656,6 +633,8 @@ static function bool FindGoal(XComGameState_Unit UnitState, out MissionGoal Goal
             Goal.BerserkerSabotageGoalSource = SabotageGoalSource;
             return true;
         }
+        if (SabotageGoalSource == "plant_interaction_already_used")
+            bSkipUnverifiedPlantMarker = true;
     }
 
     // A squadmate's actual contact can still threaten this soldier. Distant
@@ -671,9 +650,24 @@ static function bool FindGoal(XComGameState_Unit UnitState, out MissionGoal Goal
     if (Goal.bFound)
         return true;
 
+    // PlantBomb is complete: use the existing known-enemy pursuit for Sweep,
+    // rather than returning to unrelated glints or the old objective marker.
+    if (bBerserkerSweep)
+    {
+        foreach VisibleEnemies(EnemyRef)
+        {
+            OtherUnit = XComGameState_Unit(`XCOMHISTORY.GetGameStateForObjectID(EnemyRef.ObjectID));
+            if (class'APX_CombatPlanner'.static.IsReclaimableControlledSquadmate(UnitState, OtherUnit))
+                continue;
+            ConsiderGoal(UnitState, OtherUnit.TileLocation, 40, true, Goal);
+        }
+        return Goal.bFound;
+    }
+
     foreach `XCOMHISTORY.IterateByClassType(class'XComGameState_InteractiveObject', ObjectState)
     {
-        if (IsUnfinishedObject(ObjectState) && ObjectState.GetRequiresObjectiveGlint())
+        if (!bSkipUnverifiedPlantMarker
+            && IsUnfinishedObject(ObjectState) && ObjectState.GetRequiresObjectiveGlint())
             ConsiderGoal(UnitState, ObjectState.TileLocation, 100, false,
                 Goal);
     }
@@ -698,7 +692,7 @@ static function bool FindGoal(XComGameState_Unit UnitState, out MissionGoal Goal
                 Goal);
     }
 
-    if (!Goal.bFound)
+    if (!Goal.bFound && !bSkipUnverifiedPlantMarker)
     {
         BattleData = XComGameState_BattleData(`XCOMHISTORY.GetSingleGameStateObjectForClass(class'XComGameState_BattleData', true));
         if (BattleData != none && VSizeSq(BattleData.MapData.ObjectiveLocation) > 1)
