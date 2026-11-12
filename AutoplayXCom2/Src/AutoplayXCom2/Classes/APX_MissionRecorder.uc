@@ -36,6 +36,7 @@ var private string LastHUDScore;
 var private int RecordedLadderIndex;
 var private int RecordedLadderRung;
 var private int LastRelayScanTurn;
+var private int LastPatrolObservationTurn;
 var private XComGameStateHistory RecordedHistory;
 var private int RecordedBattleID;
 var private int RecordedStartStateIndex;
@@ -105,6 +106,7 @@ function Start(int PlayerID)
     }
     RecordedMissionType = Mission;
     LastRelayScanTurn = -1; // include turn zero on a late F8/start.
+    LastPatrolObservationTurn = -1;
     bStarted = true;
     Emit("start", "|player=" $ PlayerID $ "|mission=" $ Safe(Mission)
         $ "|difficulty=" $ `TacticalDifficultySetting $ "|history=" $ HistoryCursor
@@ -831,6 +833,55 @@ function RecordSabotageRelayCandidates(int Turn)
         $ "|targets_checked=" $ Min(TargetsChecked, 192));
 }
 
+// Read only the authorized stored target; future tactical use is unknown.
+function RecordCurrentPatrolWaypoints(int Turn)
+{
+    local XComGameState_AIGroup Group;
+    local XComGameState_Player LocalPlayer;
+    local TTile TargetTile;
+    local vector Midpoint;
+    local int Seen, Waypoints, HostileMembers, MemberBudget, RemainingMemberChecks;
+
+    if (!IsRecordingMission() || !class'APX_FullIntel'.default.EnableFullIntel
+        || `XCOMHISTORY == none || `XWORLD == none || `TACTICALRULES == none
+        || OwnerPlayerID != `TACTICALRULES.GetLocalClientPlayerObjectID())
+        return;
+    LocalPlayer = XComGameState_Player(`XCOMHISTORY.GetGameStateForObjectID(OwnerPlayerID));
+    if (LocalPlayer == none || LocalPlayer.GetTeam() != eTeam_XCom)
+        return;
+    MemberBudget = Clamp(class'APX_PatrolKnowledge'.default.MaxMemberReferencesPerObservation, 1, 256);
+    RemainingMemberChecks = MemberBudget;
+    foreach `XCOMHISTORY.IterateByClassType(class'XComGameState_AIGroup', Group)
+    {
+        if (Seen >= Clamp(class'APX_PatrolKnowledge'.default.MaxGroupsPerObservation, 1, 48)
+            || RemainingMemberChecks <= 0)
+            break;
+        ++Seen;
+        if (!class'APX_PatrolKnowledge'.static.GetCurrentPatrolWaypoint(
+            Group, OwnerPlayerID, TargetTile, Midpoint, HostileMembers,
+            RemainingMemberChecks))
+            continue;
+        ++Waypoints;
+        Emit("patrol_group", "|turn=" $ Turn
+            $ "|group=" $ Group.ObjectID
+            $ "|members=" $ HostileMembers
+            $ "|target_x=" $ TargetTile.X
+            $ "|target_y=" $ TargetTile.Y
+            $ "|target_z=" $ TargetTile.Z
+            $ "|mid_x=" $ Midpoint.X
+            $ "|mid_y=" $ Midpoint.Y
+            $ "|mid_z=" $ Midpoint.Z
+            $ "|is_stored_current_target=true|target_usage=unknown"
+            $ "|next_waypoint_unknown=true");
+    }
+    Emit("patrol_scan", "|turn=" $ Turn
+        $ "|groups_checked=" $ Seen
+        $ "|current_waypoints=" $ Waypoints
+        $ "|member_refs_checked=" $ (MemberBudget - RemainingMemberChecks)
+        $ "|member_budget_exhausted=" $ string(RemainingMemberChecks <= 0)
+        $ "|future_route=unknown");
+}
+
 function Observe(string Phase)
 {
     local XComGameState_Unit UnitState;
@@ -849,6 +900,12 @@ function Observe(string Phase)
     if (PlayerState != none)
     {
         PhaseState $= "|turn=" $ PlayerState.PlayerTurnCount;
+        if (class'APX_FullIntel'.default.EnableFullIntel
+            && PlayerState.PlayerTurnCount != LastPatrolObservationTurn)
+        {
+            LastPatrolObservationTurn = PlayerState.PlayerTurnCount;
+            RecordCurrentPatrolWaypoints(LastPatrolObservationTurn);
+        }
         if (RecordedMissionType == "SabotageTransmitter"
             && PlayerState.PlayerTurnCount != LastRelayScanTurn)
         {
