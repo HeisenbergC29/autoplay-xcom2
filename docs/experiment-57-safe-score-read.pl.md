@@ -69,7 +69,7 @@ samej historii. Pierwszy odczyt/inna historia daje unavailable. Odroczenie
 nie wywołuje GetCurrentHistoryIndex ani providera, nie resetuje terminu
 odświeżenia i nie emituje hud_score jako świeżej obserwacji. Po uspokojeniu
 historii standardowe odświeżenie następuje przy najbliższym należnym statusie.
-Bezpośredni ReadNativeMissionPoints zwraca wtedy unknown, zamiast starej
+Podczas odroczenia bezpośredni ReadNativeMissionPoints zwraca unknown, zamiast starej
 liczby oznaczonej jako świeże/końcowe punkty.
 
 ## Weryfikacja i próba
