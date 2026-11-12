@@ -5,10 +5,11 @@ uc_math. Source contracts check surrounding game-state safety boundaries.
 Neither test mode compiles WOTC UC or validates native combat outcomes.
 """
 from pathlib import Path
+import os
 import unittest
 
 from uc_math import load_uc_function
-from test_ui_gating import function_body
+from test_ui_gating import CHECKS, function_body
 
 ROOT=Path(__file__).resolve().parents[1]
 CLASSES=ROOT/'AutoplayXCom2/Src/AutoplayXCom2/Classes'
@@ -155,6 +156,21 @@ class BloodKillerFocusContracts(unittest.TestCase):
                         'MaxMemberRefsPerDecision=128',
                         'MaxFriendlyUnitsPerDecision=12'):
             self.assertIn(setting,ini)
+
+
+@unittest.skipUnless(os.environ.get('APX_SDK_SOURCE_ROOT'),
+                     'Private WOTC SDK required for native type contracts')
+class BloodKillerFocusSDKContracts(unittest.TestCase):
+    def test_public_group_member_and_native_timer_fields_exist(self):
+        sdk=CHECKS.find_sdk_root(Path(os.environ['APX_SDK_SOURCE_ROOT']))/'XComGame/Classes'
+        timer=(sdk/'XComGameState_UITimer.uc').read_text(encoding='utf-8-sig')
+        group=(sdk/'XComGameState_AIGroup.uc').read_text(encoding='utf-8-sig')
+        unit=(sdk/'XComGameState_Unit.uc').read_text(encoding='utf-8-sig')
+        self.assertIn('var int TimerValue;',timer)
+        self.assertIn('var bool IsTimer;',timer)
+        self.assertIn('function bool IsSuspended(',timer)
+        self.assertIn('m_arrMembers',group)
+        self.assertIn('GetAssociatedPlayerID(',unit)
 
 
 if __name__=='__main__':
