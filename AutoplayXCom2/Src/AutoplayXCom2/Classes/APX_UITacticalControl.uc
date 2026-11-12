@@ -27,6 +27,7 @@ var float RefreshRemaining;
 // Cache only HUD text; authoritative mission score reads stay uncached.
 var float ScoreRefreshRemaining;
 var bool bScoreTextValid;
+var bool bScoreReadDeferred;
 var string CachedScoreText;
 var XComGameStateHistory CachedScoreHistory;
 var int CachedScoreHistoryIndex;
@@ -42,13 +43,13 @@ simulated function APX_UITacticalControl InitAutoplayControl()
     Controller = class'APX_Controller'.static.GetOrCreate();
     // Reveal the map for the local squad without waiting for F8/autoplay.
     if (class'APX_FullIntel'.static.RevealMapForPlayer())
-        `log("Full intel|revision=mission-report-v27|enabled=True|map_revealed=True", true, 'AutoplayXCom2');
+        `log("Full intel|revision=mission-report-v28|enabled=True|map_revealed=True", true, 'AutoplayXCom2');
     ScoreCounter = new(self) class'APX_MissionScore';
     bScoreTextValid = false;
     CachedScoreHistory = none;
     CachedScoreHistoryIndex = -1;
     ScoreRefreshRemaining = 0.0;
-    `log("HUD score polling|revision=mission-report-v27|stable_interval_seconds=1.0|status_interval_seconds=0.25|history_invalidation=true", true, 'AutoplayXCom2');
+    `log("HUD score polling|revision=mission-report-v28|stable_interval_seconds=1.0|status_interval_seconds=0.25|history_invalidation=true", true, 'AutoplayXCom2');
 
     ToggleButton = Spawn(class'UIButton', self);
     ToggleButton.InitButton('APX_ToggleButton', EnableLabel, OnToggleClicked);
@@ -167,10 +168,20 @@ simulated function string GetDisplayedScoreText()
     local XComGameStateHistory History;
     local int HistoryIndex;
 
+    bScoreReadDeferred = false;
     if (ScoreCounter == none)
         return "";
 
     History = `XCOMHISTORY;
+    if (!class'APX_MissionScore'.static.CanReadScoreNow())
+    {
+        bScoreReadDeferred = true;
+        // Keep only already displayed text from this history. Do not query
+        // its index, mark a new observation or reset the refresh deadline.
+        if (!bScoreTextValid || History != CachedScoreHistory)
+            return ScoreCounter.UnavailableText();
+        return CachedScoreText;
+    }
     HistoryIndex = -1;
     if (History != none)
         HistoryIndex = History.GetCurrentHistoryIndex();
@@ -201,7 +212,7 @@ simulated function UpdateStatus()
         ScoreText = GetDisplayedScoreText();
         ScoreLabel.SetCenteredText(class'UIUtilities_Text'.static.GetColoredText(
             ScoreText, eUIState_Normal, ToggleButton.FontSize));
-        if (Controller != none)
+        if (Controller != none && !bScoreReadDeferred)
             Controller.RecordDisplayedScore(ScoreText);
     }
 
@@ -265,6 +276,7 @@ simulated event Removed()
         ScoreCounter.Cleanup();
     ScoreCounter = none;
     bScoreTextValid = false;
+    bScoreReadDeferred = false;
     CachedScoreText = "";
     CachedScoreHistory = none;
     CachedScoreHistoryIndex = -1;

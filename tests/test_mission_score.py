@@ -169,7 +169,7 @@ class MissionScoreTests(unittest.TestCase):
                         text.index('MissionPoints(Ladder.CumulativeScore, CachedBaseline)'))
         self.assertIn('StartIndex = History.FindStartStateIndex()', text)
         self.assertIn('MaximumPoints = Manager.GetChallengeMaxPossibleScoreTable(ScoreTable)', text)
-        self.assertIn('CurrentPoints = Manager.GetTotalScore()', text)
+        self.assertIn('ReadChallengePoints(History, CurrentPoints)', text)
         self.assertIn('MaximumPoints = Manager.GetMaxChallengeScore()', text)
         self.assertIn('if (MaximumPoints <= 0)', text)
         self.assertIn('return FormatPoints(CurrentPoints, CachedMaximum)', text)
@@ -196,7 +196,8 @@ class MissionScoreTests(unittest.TestCase):
         forbidden = r'\b(?:AddKillMail|AddTacticalGameEnd|AddMissionObjectiveComplete|AddIndividualMissionObjectiveComplete|AddCivilianRescued|ModifyStateObject|CreateNewGameState|CreateStateObject|SubmitGameState|SetCurrentHistoryIndex|Init|Rand|FRand)\s*\('
         self.assertIsNone(re.search(forbidden, source))
         self.assertNotIn("class'XComGameState_Unit'", source)
-        self.assertNotIn('IterateByClassType', source)
+        self.assertIn("History.IterateByClassType(class'XComGameState_ChallengeScore', Score)", source)
+        self.assertNotIn('Manager.GetTotalScore(', source)
         self.assertNotIn('GetEnemyScoring', source)
         self.assertNotIn('APX_CombatPlanner', source)
         self.assertNotIn('APX_Controller', source)

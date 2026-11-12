@@ -22,11 +22,70 @@ var private APX_ComparisonScore ComparisonCounter;
 var private int LastNativePoints;
 var private bool bHasNativePoints;
 
+// Score APIs can rebuild the history cache. A latent submission is not done
+// until EndLatentUpdate has run and BuildingLatentGameState is cleared, even
+// if IsDoingLatentSubmission has already become false.
+static function bool CanQueryScoreHistory(bool bHasRules, bool bBuilding,
+    bool bSubmitting)
+{
+    return bHasRules && !bBuilding && !bSubmitting;
+}
+
+static function bool CanReadScoreNow()
+{
+    local X2TacticalGameRuleset Rules;
+
+    Rules = `TACTICALRULES;
+    if (Rules == none)
+        return false;
+    return CanQueryScoreHistory(true, Rules.BuildingLatentGameState,
+        Rules.IsDoingLatentSubmission());
+}
+
 function bool ReadNativeMissionPoints(out int Points)
 {
     GetText();
     Points = LastNativePoints;
     return bHasNativePoints;
+}
+
+// GetTotalScore's native implementation sums these committed entries, skips
+// None and the TotalScore rollup, and does not add LadderBonus. Unlike that
+// aggregator, this read does not explicitly rebuild the history object cache.
+static function int ChallengePointContribution(bool bNone, bool bTotal,
+    int AddedPoints)
+{
+    if (bNone || bTotal)
+        return 0;
+    return AddedPoints;
+}
+
+function bool ReadChallengePoints(XComGameStateHistory History, out int Points)
+{
+    local XComGameState_ChallengeScore Score;
+    local int Inspected;
+
+    Points = 0;
+    if (History == none || !CanReadScoreNow())
+        return false;
+    foreach History.IterateByClassType(class'XComGameState_ChallengeScore', Score)
+    {
+        if (++Inspected > 4096)
+        {
+            // Never expose a bounded subtotal as the complete native total.
+            Points = 0;
+            return false;
+        }
+        if (Score == none)
+        {
+            Points = 0;
+            return false;
+        }
+        Points += ChallengePointContribution(Score.ScoringType == CMPT_None,
+            Score.ScoringType == CMPT_TotalScore, Score.AddedPoints);
+    }
+    // With actual ChallengeData, no scoring entries is the native zero.
+    return true;
 }
 
 function string UnavailableText()
@@ -153,6 +212,10 @@ function string GetText()
 
     bHasNativePoints = false;
     LastNativePoints = 0;
+    // All modes share this gate, including comparison and recorder reads.
+    // Return unknown, never a cached value presented as a fresh native score.
+    if (!CanReadScoreNow())
+        return UnavailableText();
     History = `XCOMHISTORY;
     if (History == none)
     {
@@ -204,9 +267,10 @@ function string GetText()
     }
     else
     {
-        // The stock Challenge summary uses this native score/maximum pair.
-        // Require actual ChallengeData before interpreting zero as a score.
-        CurrentPoints = Manager.GetTotalScore();
+        // Preserve native integer awards/penalties without calling the native
+        // aggregator that force-rebuilds history (the v27 crash call chain).
+        if (!ReadChallengePoints(History, CurrentPoints))
+            return UnavailableText();
         if (!bHasMaximum)
             MaximumPoints = Manager.GetMaxChallengeScore();
     }

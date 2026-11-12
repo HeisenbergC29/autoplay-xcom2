@@ -1,7 +1,7 @@
 """Regression scenarios for the isolated HUD score read-rate experiment (#17).
 
-Numerical source helper checks are not XCOM engine execution. The complete
-score computation and recording remain in the existing classes unchanged.
+Numerical source helper checks are not XCOM engine execution. Native values
+remain separate from the HUD cache and deferred display observations.
 """
 from pathlib import Path
 import unittest
@@ -57,7 +57,7 @@ class ScorePollingTests(unittest.TestCase):
         self.assertIn('GetText();', native)
         self.assertNotIn('GetDisplayedScoreText', native)
         scoring = function_body(self.score, 'GetText')
-        self.assertIn('Manager.GetTotalScore()', scoring)
+        self.assertIn('ReadChallengePoints(History, CurrentPoints)', scoring)
         self.assertIn('GetMaxChallengeScore()', scoring)
         self.assertIn('ComparisonCounter.GetObservedScore()', scoring)
         self.assertIn('return "~" $ string(ComparisonPoints)', scoring)
