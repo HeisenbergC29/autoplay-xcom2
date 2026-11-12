@@ -37,9 +37,9 @@ static function float InspectRiskAtTile(XComGameState_Unit UnitState, TTile Tile
 }
 
 static function float ExplosiveCoverPenalty(float NativeUnitDamage,
-    bool bArmedRangedEnemyNearby, float HealthFraction)
+    bool bPossibleCoverDetonation, float HealthFraction)
 {
-    if (!bArmedRangedEnemyNearby || NativeUnitDamage <= 0.0)
+    if (!bPossibleCoverDetonation || NativeUnitDamage <= 0.0)
         return 0.0;
     return FMin(42.0, 12.0 + FMin(18.0, NativeUnitDamage * 2.0)
         + (1.0 - FClamp(HealthFraction, 0.0, 1.0)) * 12.0);
