@@ -417,8 +417,16 @@ wartości, nie kopiujemy danych M1 i nie żądamy z tego powodu kolejnych archiw
 
 Próba jest zaliczona tylko przy zwycięstwie i pewnych punktach misji > 0.
 Wynik natywny i porównawczy pozostają rozdzielone; porównanie v2 startuje od
-zera i jest oznaczane jako częściowe, gdy brakuje obserwacji. Nie zmieniaj
-tych zasad przy przenoszeniu taktyki z osobnego repozytorium.
+zera i jest oznaczane jako częściowe, gdy brakuje obserwacji.
+Użytkownik doprecyzował, że wynik obliczony przez mod według dokładnie
+tych samych reguł Legacy uznajemy za oficjalny; zachowujemy źródło obliczenia.
+Pełny zakres zdarzeń i końcowość są osobnymi warunkami pewnej sumy.
+Obecny observed_v2 nie ma jeszcze parytetu: m.in. zwykły AdvTrooperM1
+w turze10 otrzymuje100 zamiast1000 z konfiguracji Legacy, a runtime
+nie rozróżnia spawned/reinforcement. Nie zmieniać oficjalności archiwalnych
+szacunków ani historycznych profili przez samą zmianę etykiety.
+[Zasada i dowody różnic](scoring-policy.pl.md), dalszy zakres w #79.
+Ta aktualizacja dokumentacji nie zmienia paczki testowej v33/X4.
 
 Inwentaryzację i dalsze przekazania zapisujemy w
 [issue #1](https://github.com/HeisenbergC29/autoplay-xcom2/issues/1), zgodnie z

@@ -307,6 +307,15 @@ pochodzenia wrogów lub końcowych premii domysłami. Starsze raporty v8 także
 otrzymują analizę, lecz nie zyskują przez to danych, których nie rejestrowały.
 [Reguły i ograniczenia punktacji](tactics-v9.pl.md).
 
+Użytkownik uznaje wynik naliczony przez mod za oficjalny, jeśli naliczanie
+jest zgodne z Legacy. To wymaga sprawdzenia reguł, a pewna suma końcowa
+także kompletności zdarzeń; samo pochodzenie z moda nie dyskwalifikuje wyniku.
+Obecny schemat `official` opisuje odczyty natywne, a `comparison` nadal
+używa profilu v2 z udokumentowanymi różnicami. `complete_for_comparison_convention`
+nie jest dowodem pełnego parytetu z Legacy. Nie reinterpretujemy przez to
+starych JSON-ów ani nie zdejmujemy `partial` z istniejących szacunków.
+[Aktualna zasada oficjalności i zakres brakującej zgodności](scoring-policy.pl.md).
+
 Podgląd nie przewiduje ukrytego losowania. Zniknięcie przeciwnika z pola widzenia
 nie jest uznawane za zabicie. Brak końcowego wpisu albo osiągnięcie limitu
 oznacza niepełne dane, a nie domyślnie wygraną lub przegraną. Rejestr nie
