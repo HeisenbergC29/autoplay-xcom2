@@ -80,6 +80,35 @@ class BloodKillerFocusContracts(unittest.TestCase):
         self.assertLessEqual(self.attack(True,True,1.0,0),48)
         self.assertLessEqual(self.attack(True,False,1.0,0),26)
 
+    def test_originally_local_berserker_never_becomes_shared_enemy_contact(self):
+        # Run the actual UnrealScript policy, not a Python reimplementation.
+        exclude = load_uc_function(FOCUS, 'ExcludeFormerLocalBerserker')
+        self.assertTrue(exclude(True, True, True))
+        self.assertTrue(exclude(True, False, False))
+        self.assertFalse(exclude(True, True, False))
+        self.assertFalse(exclude(False, True, True))
+        self.assertFalse(exclude(False, False, False))
+
+    def test_original_owner_filter_is_only_read_only_berserker_pod_selection(self):
+        guard = function_body(self.focus, 'WasOriginallyLocalBerserker')
+        select = function_body(self.focus, 'SelectSquadContact')
+        self.assertIn("UnitState.GetMyTemplateName() != 'BerserkerMP'", guard)
+        self.assertIn('GetOriginalGameStateRevision(UnitState.ObjectID)', guard)
+        self.assertIn('OriginalUnit.GetTeam() == eTeam_XCom', guard)
+        self.assertIn('OriginalUnit.GetAssociatedPlayerID() == PlayerID', guard)
+        self.assertIn("OriginalUnit.GetMyTemplateName() == 'BerserkerMP'", guard)
+        self.assertIn('ExcludeFormerLocalBerserker(true, bKnown, bLocal)', guard)
+        self.assertIn('WasOriginallyLocalBerserker(Enemy, PlayerID)', select)
+        self.assertLess(select.index('WasOriginallyLocalBerserker(Enemy, PlayerID)'),
+                        select.index('++Members;'))
+        # Uncertain original ownership only drops a focus goal, never an
+        # otherwise native-legal punch on a truly hostile unit.
+        self.assertNotIn('WasOriginallyLocalBerserker(', self.combat)
+        self.assertNotIn('WasOriginallyLocalBerserker(', self.mission)
+        for bad in ('ModifyStateObject(', 'CreateNewGameState(',
+                    'SubmitGameState(', 'IsEngaged(', 'GetTotalScore('):
+            self.assertNotIn(bad, guard)
+
     def test_relay_is_always_legal_if_stock_cache_says_so(self):
         self.assertEqual(self.relay(105,False),105)
         self.assertEqual(self.relay(105,True),26)
