@@ -9,6 +9,9 @@ var config float ButtonWidth;
 var config float FadeSeconds;
 var config float CollapseDelaySeconds;
 var config float IndicatorAlpha;
+// Keep toggle/status/native score visible through the entire tactical HUD.
+// Opt-out restores the original mouse-out auto-collapse behavior.
+var config bool AlwaysExpanded;
 
 var localized string EnableLabel;
 var localized string DisableLabel;
@@ -43,13 +46,13 @@ simulated function APX_UITacticalControl InitAutoplayControl()
     Controller = class'APX_Controller'.static.GetOrCreate();
     // Reveal the map for the local squad without waiting for F8/autoplay.
     if (class'APX_FullIntel'.static.RevealMapForPlayer())
-        `log("Full intel|revision=mission-report-v29|enabled=True|map_revealed=True", true, 'AutoplayXCom2');
+        `log("Full intel|revision=mission-report-v30|enabled=True|map_revealed=True", true, 'AutoplayXCom2');
     ScoreCounter = new(self) class'APX_MissionScore';
     bScoreTextValid = false;
     CachedScoreHistory = none;
     CachedScoreHistoryIndex = -1;
     ScoreRefreshRemaining = 0.0;
-    `log("HUD score polling|revision=mission-report-v29|stable_interval_seconds=1.0|status_interval_seconds=0.25|history_invalidation=true", true, 'AutoplayXCom2');
+    `log("HUD score polling|revision=mission-report-v30|stable_interval_seconds=1.0|status_interval_seconds=0.25|history_invalidation=true", true, 'AutoplayXCom2');
 
     ToggleButton = Spawn(class'UIButton', self);
     ToggleButton.InitButton('APX_ToggleButton', EnableLabel, OnToggleClicked);
@@ -139,12 +142,23 @@ simulated function Expand()
 
 simulated function ScheduleCollapse()
 {
+    if (default.AlwaysExpanded)
+    {
+        bPendingCollapse = false;
+        Expand();
+        return;
+    }
     bPendingCollapse = true;
     CollapseRemaining = FMax(0.25, CollapseDelaySeconds);
 }
 
 simulated function Collapse()
 {
+    if (default.AlwaysExpanded)
+    {
+        Expand();
+        return;
+    }
     bExpanded = false;
     bPendingCollapse = false;
     // Only the slim indicator may intercept the battlefield while collapsed.
@@ -245,7 +259,9 @@ simulated event Tick(float DeltaTime)
         && `XWORLD != none && `XWORLD.bEnableFOW)
         class'APX_FullIntel'.static.RevealMapForPlayer();
 
-    if (bPendingCollapse)
+    if (default.AlwaysExpanded && !bExpanded)
+        Expand();
+    if (bPendingCollapse && !default.AlwaysExpanded)
     {
         CollapseRemaining -= DeltaTime;
         if (CollapseRemaining <= 0.0)
