@@ -82,6 +82,59 @@ static function int ReadActiveTimerTurns()
 // The entire squad shares ONE centroid for target selection. No member of
 // an enemy AIGroup is presumed visible for attack just because its position
 // is available to this permitted full-intel planning calculation.
+// A temporarily hostile original squad member is not a target for the
+// squad's shared pursuit bonus. Native combat rules may still resolve any
+// actually legal emergency attack; this filter selects contact goals only.
+static function bool ExcludeFormerLocalBerserker(bool bIsBerserker,
+    bool bOriginalKnown, bool bOriginallyLocal)
+{
+    if (!bIsBerserker)
+        return false;
+    // Unknown original ownership of a BerserkerMP is not evidence of an
+    // enemy pod. Fail closed for bonus/goal selection, not native targeting.
+    return !bOriginalKnown || bOriginallyLocal;
+}
+
+static function bool WasOriginallyLocalBerserker(XComGameState_Unit UnitState, int PlayerID)
+{
+    local XComGameStateHistory History;
+    local XComGameState StartState;
+    local XComGameStateContext_TacticalGameRule StartContext;
+    local XComGameState_Unit OriginalUnit;
+    local int StartIndex;
+    local bool bKnown, bLocal;
+
+    if (UnitState == none || UnitState.GetMyTemplateName() != 'BerserkerMP')
+        return false;
+    History = `XCOMHISTORY;
+    if (History == none || PlayerID <= 0)
+        return true;
+    // GetOriginalGameStateRevision returns the oldest version in the current
+    // archive, which need not be the mission's initial ownership. Use the
+    // validated tactical start snapshot, as the stock mission-will code does.
+    // Never pass -1: that means current state, not an unavailable start state.
+    StartIndex = History.FindStartStateIndex();
+    if (StartIndex < 0)
+        return true;
+    StartState = History.GetGameStateFromHistory(StartIndex);
+    if (StartState == none)
+        return true;
+    StartContext = XComGameStateContext_TacticalGameRule(StartState.GetContext());
+    if (StartContext == none || StartContext.GameRuleType != eGameRule_TacticalGameStart)
+        return true;
+    OriginalUnit = XComGameState_Unit(
+        History.GetGameStateForObjectID(UnitState.ObjectID,, StartIndex));
+    // A later spawn absent from this snapshot receives no shared focus bonus;
+    // its otherwise legal native attacks remain available to the old planner.
+    bKnown = OriginalUnit != none
+        && OriginalUnit.GetMyTemplateName() == 'BerserkerMP'
+        && OriginalUnit.GetAssociatedPlayerID() > 0;
+    if (bKnown)
+        bLocal = OriginalUnit.GetTeam() == eTeam_XCom
+            && OriginalUnit.GetAssociatedPlayerID() == PlayerID;
+    return ExcludeFormerLocalBerserker(true, bKnown, bLocal);
+}
+
 static function bool SelectSquadContact(int PlayerID, int PreviousGroupID,
     out int GroupID, out int TargetID, out TTile TargetTile,
     out float TargetDistance, out int LivingFriendlies, out int GroupMembers)
@@ -153,6 +206,7 @@ static function bool SelectSquadContact(int PlayerID, int PreviousGroupID,
                 || Enemy.GetMyTemplate().bIsCosmetic
                 || Enemy.GetMyTemplateName() == 'HostileVIPCivilian'
                 || !Representative.IsEnemyUnit(Enemy)
+                || WasOriginallyLocalBerserker(Enemy, PlayerID)
                 || `XWORLD.IsTileOutOfRange(Enemy.TileLocation))
                 continue;
             ++Members;

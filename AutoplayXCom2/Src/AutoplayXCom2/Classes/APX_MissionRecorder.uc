@@ -110,7 +110,7 @@ function Start(int PlayerID)
     bStarted = true;
     Emit("start", "|player=" $ PlayerID $ "|mission=" $ Safe(Mission)
         $ "|difficulty=" $ `TacticalDifficultySetting $ "|history=" $ HistoryCursor
-        $ "|revision=mission-report-v31|full_intel_enabled=" $ class'APX_FullIntel'.default.EnableFullIntel
+        $ "|revision=mission-report-v32|full_intel_enabled=" $ class'APX_FullIntel'.default.EnableFullIntel
         $ "|formation_area_radius_tiles=" $ class'APX_MissionPlanner'.default.SquadAreaRiskRadiusTiles
         $ "|formation_area_weight=" $ class'APX_MissionPlanner'.default.SquadAreaRiskWeight
         $ "|concealment_risk_penalty=" $ class'APX_ConcealmentPlanner'.default.ConcealmentRiskPenalty
@@ -965,14 +965,44 @@ function bool IsOwnUnitAt(int ObjectID, int HistoryIndex)
     return UnitState != none && UnitState.GetAssociatedPlayerID() == OwnerPlayerID;
 }
 
+// Never pass -1 to the history getter as a previous frame: native -1 means
+// CURRENT. The recorder's validated mission start is also a hard boundary.
+static function int ResultPreviousHistoryIndex(int ResultHistoryIndex, int StartStateIndex)
+{
+    if (StartStateIndex < 0 || ResultHistoryIndex <= 0)
+        return -1;
+    if (ResultHistoryIndex <= StartStateIndex)
+        return -1;
+    return ResultHistoryIndex - 1;
+}
+
+static function bool ResultInvolvesLocalUnit(bool bOwnSourceAfter,
+    bool bOwnSourceBefore, bool bOwnTargetEither)
+{
+    return bOwnSourceAfter || bOwnSourceBefore || bOwnTargetEither;
+}
+
+function bool IsOwnUnitAcrossResult(int ObjectID, int ResultHistoryIndex,
+    int BeforeHistoryIndex)
+{
+    if (ObjectID <= 0 || ResultHistoryIndex < 0 || `XCOMHISTORY == none)
+        return false;
+    if (IsOwnUnitAt(ObjectID, ResultHistoryIndex))
+        return true;
+    return BeforeHistoryIndex >= 0
+        && BeforeHistoryIndex >= RecordedStartStateIndex
+        && BeforeHistoryIndex < ResultHistoryIndex
+        && IsOwnUnitAt(ObjectID, BeforeHistoryIndex);
+}
+
 function RecordResults()
 {
     local XComGameState HistoryState;
     local XComGameStateContext_Ability Context;
     local array<StateObjectReference> VisibleEnemies, BeforeActionEnemies;
     local StateObjectReference TargetRef;
-    local int EndIndex, SourceID, TargetID, TargetIndex;
-    local bool bOwnAction, bOwnTarget, bSourceVisible;
+    local int EndIndex, SourceID, TargetID, TargetIndex, BeforeHistoryIndex;
+    local bool bOwnAction, bOwnActionBefore, bOwnTarget, bPrimaryOwnTarget, bSourceVisible;
     local string AbilityName, SourceScope;
 
     EndIndex = Min(`XCOMHISTORY.GetCurrentHistoryIndex(),
@@ -989,20 +1019,29 @@ function RecordResults()
             continue;
         SourceID = Context.InputContext.SourceObject.ObjectID;
         TargetID = Context.InputContext.PrimaryTarget.ObjectID;
+        BeforeHistoryIndex = ResultPreviousHistoryIndex(HistoryCursor, RecordedStartStateIndex);
         bOwnAction = IsOwnUnitAt(SourceID, HistoryCursor);
-        bOwnTarget = IsOwnUnitAt(TargetID, HistoryCursor);
+        bOwnActionBefore = false;
+        if (!bOwnAction && BeforeHistoryIndex >= 0)
+            bOwnActionBefore = IsOwnUnitAt(SourceID, BeforeHistoryIndex);
+        // Mind control can transfer a friendly target to the enemy in this
+        // very frame. Relevance and target redaction must retain its own-side
+        // observation before the transfer, including secondary targets.
+        bPrimaryOwnTarget = IsOwnUnitAcrossResult(TargetID, HistoryCursor, BeforeHistoryIndex);
+        bOwnTarget = bPrimaryOwnTarget;
         foreach Context.InputContext.MultiTargets(TargetRef)
-            bOwnTarget = bOwnTarget || IsOwnUnitAt(TargetRef.ObjectID, HistoryCursor);
+            bOwnTarget = bOwnTarget || IsOwnUnitAcrossResult(
+                TargetRef.ObjectID, HistoryCursor, BeforeHistoryIndex);
         // Never dump unrelated enemy actions or the positions of unseen units.
-        if (!bOwnAction && !bOwnTarget)
+        if (!ResultInvolvesLocalUnit(bOwnAction, bOwnActionBefore, bOwnTarget))
             continue;
         VisibleEnemies.Length = 0;
         BeforeActionEnemies.Length = 0;
         class'X2TacticalVisibilityHelpers'.static.GetAllVisibleEnemiesForPlayer(
             OwnerPlayerID, VisibleEnemies, HistoryCursor);
-        if (bOwnAction && HistoryCursor > 0)
+        if (bOwnAction && BeforeHistoryIndex >= 0)
             class'X2TacticalVisibilityHelpers'.static.GetAllVisibleEnemiesForPlayer(
-                OwnerPlayerID, BeforeActionEnemies, HistoryCursor - 1);
+                OwnerPlayerID, BeforeActionEnemies, BeforeHistoryIndex);
         bSourceVisible = bOwnAction || VisibleEnemies.Find('ObjectID', SourceID) != INDEX_NONE;
         SourceScope = "unseen_other";
         if (bOwnAction)
@@ -1015,7 +1054,7 @@ function RecordResults()
         else
             SourceID = 0;
         // Preserve friendly targets; redact enemy target IDs no longer visible.
-        if (!IsOwnUnitAt(TargetID, HistoryCursor)
+        if (!bPrimaryOwnTarget
             && VisibleEnemies.Find('ObjectID', TargetID) == INDEX_NONE)
         {
             if (BeforeActionEnemies.Find('ObjectID', TargetID) == INDEX_NONE)
@@ -1039,7 +1078,7 @@ function RecordResults()
         for (TargetIndex = 0; TargetIndex < Context.InputContext.MultiTargets.Length; ++TargetIndex)
         {
             TargetID = Context.InputContext.MultiTargets[TargetIndex].ObjectID;
-            if (!IsOwnUnitAt(TargetID, HistoryCursor)
+            if (!IsOwnUnitAcrossResult(TargetID, HistoryCursor, BeforeHistoryIndex)
                 && VisibleEnemies.Find('ObjectID', TargetID) == INDEX_NONE
                 && BeforeActionEnemies.Find('ObjectID', TargetID) == INDEX_NONE)
                 continue;

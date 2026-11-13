@@ -45,7 +45,7 @@ class MissionRecorderContracts(unittest.TestCase):
 
     def test_actual_result_requires_own_source_or_target_and_skips_interrupt(self):
         results = function_body(SOURCE, 'RecordResults')
-        self.assertIn('if (!bOwnAction && !bOwnTarget)', results)
+        self.assertIn('if (!ResultInvolvesLocalUnit(bOwnAction, bOwnActionBefore, bOwnTarget))', results)
         interrupt = results.index('Context.InterruptionStatus == eInterruptionStatus_Interrupt')
         result = results.index('Emit("result",')
         self.assertLess(interrupt, result)
@@ -55,8 +55,8 @@ class MissionRecorderContracts(unittest.TestCase):
     def test_previous_visibility_is_reset_for_every_action(self):
         results = function_body(SOURCE, 'RecordResults')
         reset = results.index('BeforeActionEnemies.Length = 0;')
-        prior = results.index('OwnerPlayerID, BeforeActionEnemies, HistoryCursor - 1')
-        redaction = results.index('// Preserve friendly targets') if '// Preserve friendly targets' in results else results.index('if (!IsOwnUnitAt(TargetID, HistoryCursor)')
+        prior = results.index('OwnerPlayerID, BeforeActionEnemies, BeforeHistoryIndex')
+        redaction = results.index('if (!bPrimaryOwnTarget')
         self.assertLess(reset, prior)
         self.assertLess(prior, redaction)
         self.assertIn('SourceID = 0;', results)

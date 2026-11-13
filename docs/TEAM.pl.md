@@ -161,12 +161,23 @@ centroidzie. Po review/CI LEAD scalił v29 jako
 `189aa3d3aba054109f7ca1405770a2c90b0676e9`. Log użytkownika odebrany 13 XI
 potwierdza Windows WOTC SDK **PASS: 0 błędów, 9 ostrzeżeń**, pakiet zapisany.
 Użytkownik potwierdził, że kompilował wskazaną paczkę; log sam nie zawiera SHA.
-Pierwotny zapis dowodu był wyłącznie dokumentacją. Następnie użytkownik
-poprosił o nowy link z poprawioną paczką: LEAD usunął tylko nieużywaną
-lokalną Distance, bez zmiany algorytmu i rewizji v29. Nowa paczka ma osobny
-SHA/ZIP w #4, kompilacja tej poprawki **NOT RUN**; wcześniejszy PASS pozostaje
-dowodem poprzedniej paczki. **Następna kolej należy do użytkownika**:
-kompilacja poprawionej paczki oraz Blood Killer diff2. Gra v29 nadal NOT RUN.
+Pierwotny zapis dowodu był dokumentacją; późniejsza poprawka #66 usunęła
+tylko nieużywaną Distance. Nowy raport v29 potwierdza obie porażki:
+GasStation −12900 final, Blood Killer +7100 final. W Blood wszystkie
+55 chosen / 109 result są identyczne z v28; opening contact ani razu
+nie spełnił obu progów. Dokładny SHA lokalnej kompilacji nie jest zapisany.
+[Raport v29](report-2026-11-13-v29.pl.md).
+
+LEAD integruje osobno przejrzane #63 (UIv30), #65 (etap1 strzelców v31)
+i #68 (v32: początkowa własność Berserkerów oraz zapis wyników przejęć).
+Nie wykluczać udanego MC na podstawie samych zapisanych MISS: rejestrator
+mógł pomijać udaną zmianę właściciela. W v32 odczyt początku misji
+i kwalifikacja przed/po akcji są poprawione; native targeting/score zachowane.
+**Następna kolej użytkownika** po integracji i wskazaniu jednego końcowego
+SHA/ZIP w #4: kompilacja v32 i GasStation/Blood Killer. Windows/game v32
+pozostają NOT RUN. **HELPER równolegle:** #56 wykonalne otwarcie i przeżycie
+Sweep, potem dalsze #31 OW; nowy claim/branch/PR i następna rewizja,
+z zachowaniem tej bazy. V32 nie deklaruje naprawy 21 wczesnych ruchów.
 [Dowód kompilacji](build-2026-11-13-v29.pl.md).
 HELPER może kontynuować odrębne #31 dla nieukrytej drużyny strzelców na nowej
 bazie. Jeden claim zakresu przed edycją wspólnego MissionPlanner; oddzielne
