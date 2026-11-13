@@ -60,6 +60,12 @@ and [docs/PROJECT-STATE.pl.md](docs/PROJECT-STATE.pl.md) before changing this pr
 - Native mission points exclude earlier ladder missions. Keep the zero-based
   `wotc_legacy_observed_v2` comparison and its partial marker; never invent initial
   bonuses, a maximum, or scoring changes to turn a failed benchmark green.
+- The user clarified on 13 November 2026 that a mod-calculated score is official
+  when it calculates exactly like Legacy. Preserve calculation provenance, but
+  do not reject official status solely because the mod calculated the value.
+  Legacy rule parity and complete, final mission observations are separate
+  requirements. The current observed_v2 profile has documented rule differences
+  and must not be relabelled official wholesale. See docs/scoring-policy.pl.md.
 - The user confirmed full map and enemy-position knowledge on 6 November 2026.
   `EnableFullIntel=true` is the default: local XCOM planning may know terrain and
   positions of living, active hostiles outside LOS. `EnableFullIntel=false`

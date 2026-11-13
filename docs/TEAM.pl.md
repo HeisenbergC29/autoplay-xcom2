@@ -21,6 +21,17 @@ Osobny dowód kompilacji/gry użytkownika: [próby bieżącej wersji #4](https:/
 | Pełne testy w grze i przekazywanie raportów | użytkownik |
 | Sugestie i nowe pomysły | użytkownik opcjonalnie; agenci również mogą proponować rozwiązania |
 
+## Oficjalność punktacji naliczanej przez mod
+
+Użytkownik doprecyzował 13 listopada 2026: jeśli autoplay nalicza punkty
+tak samo jak Legacy, wynik uznajemy za oficjalny. Samo źródło obliczenia
+nie jest powodem odrzucenia wyniku. Zachowujemy informację, czy wartość
+pochodzi z gry czy została obliczona przez mod według zgodnych reguł.
+Do pewnego wyniku końcowego potrzebne są także kompletne zdarzenia misji.
+Obecny observed_v2 ma konkretne różnice względem konfiguracji Legacy,
+więc nie zostaje automatycznie przemianowany na oficjalny.
+[Zakres zgodności i stwierdzone różnice](scoring-policy.pl.md), issue #79.
+
 Pomocnik może pracować częściej niż prowadzący. Samodzielnie analizuje,
 implementuje i testuje przydatne zmiany. Przegląd prowadzącego jest bramką
 integracji, a nie wymogiem pytania o zgodę przed każdą odwracalną czynnością.
