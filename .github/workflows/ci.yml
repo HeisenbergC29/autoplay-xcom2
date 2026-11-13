@@ -51,3 +51,7 @@ jobs:
         run: ./tests/Test-CollectMissionRecording.ps1
       - name: Test SDK-source collection with disposable fixtures
         run: ./tests/Test-CollectSdkSources.ps1
+      - name: Test reversible TLE duplicate repair with disposable fixtures
+        run: ./tests/Test-RepairSdkTleDuplicates.ps1
+      - name: Test TLE repair in Windows PowerShell 5.1
+        run: powershell.exe -NoProfile -ExecutionPolicy Bypass -File ./tests/Test-RepairSdkTleDuplicates.ps1
