@@ -15,7 +15,7 @@ var config float EmergencyHealthFraction;
 static function bool ChooseAction(XComGameState_Unit UnitState,
     out AvailableAction Action, out int TargetIndex, out float Score,
     optional bool bRecentContact, optional int BerserkerFocusTargetID,
-    optional bool bBerserkerOpeningContact)
+    optional bool bBerserkerOpeningContact, optional int RangedFocusTargetID)
 {
     local XComGameStateHistory History;
     local GameRulesCache_Unit UnitCache;
@@ -82,6 +82,19 @@ static function bool ChooseAction(XComGameState_Unit UnitState,
                         continue;
                     CandidateScore = ScoreAttack(Ability, Candidate.AvailableTargets[Index], TargetUnit);
                     CandidateScore -= MeleePenalty;
+                    // Bonus only AFTER normal native legality, target safety,
+                    // movement-melee checks and actual damage scoring. Only
+                    // basic ranged shots on the one squad-visible target.
+                    if (RangedFocusTargetID > 0
+                        && TargetUnit.ObjectID == RangedFocusTargetID
+                        && (AbilityName == 'StandardShot'
+                            || AbilityName == 'PistolStandardShot'
+                            || AbilityName == 'SniperStandardFire')
+                        && CandidateScore > 5.0)
+                        CandidateScore += class'APX_RevealedFocus'.static.LegalShotFocusBonus(
+                            true, true, true, true,
+                            TargetUnit.GetCurrentStat(eStat_HP)
+                                / FMax(1.0, TargetUnit.GetMaxStat(eStat_HP)));
                     if (UnitState.GetMyTemplateName() == 'BerserkerMP'
                         && TargetUnit.ObjectID == BerserkerFocusTargetID)
                         CandidateScore += class'APX_BerserkerFocus'.static.FocusAttackBonus(

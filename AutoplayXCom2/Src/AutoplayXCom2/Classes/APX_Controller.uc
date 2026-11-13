@@ -120,6 +120,13 @@ var private int BerserkerFocusStartIndex;
 var private int BerserkerFocusLastHistory;
 var private int BerserkerFocusBattleID;
 var private int BerserkerFocusPlayerID;
+// Separate revealed-ranged contact; never reused by BerserkerMP sabotage.
+var private int RangedFocusGroupID;
+var private XComGameStateHistory RangedFocusHistory;
+var private int RangedFocusStartIndex;
+var private int RangedFocusBattleID;
+var private int RangedFocusLastHistory;
+var private int RangedFocusPlayerID;
 
 static function bool MayRetryAreaPlan(int CurrentHistory, int RejectedHistory, int Attempts)
 {
@@ -417,6 +424,16 @@ function ResetBerserkerFocus()
     BerserkerFocusPlayerID = 0;
 }
 
+function ResetRangedFocus()
+{
+    RangedFocusGroupID = 0;
+    RangedFocusHistory = none;
+    RangedFocusStartIndex = -1;
+    RangedFocusBattleID = 0;
+    RangedFocusLastHistory = -1;
+    RangedFocusPlayerID = 0;
+}
+
 function StopAutoplay(string Reason, optional bool bPreservePendingHack = false)
 {
     bEnabled = false;
@@ -426,6 +443,7 @@ function StopAutoplay(string Reason, optional bool bPreservePendingHack = false)
     LastWaitDetails = "";
     ResetWaitHeartbeat();
     ResetBerserkerFocus();
+    ResetRangedFocus();
     // A user pause may happen before the hack UI has even appeared. Keep only
     // the exact submitted context, so resuming cannot claim a later manual hack
     // that happens to reuse the same soldier and ability IDs.
@@ -1102,12 +1120,13 @@ function MakeDecision(XComTacticalController PC)
     local int RemainingConcealmentChecks, RemainingCoverChecks;
     local int FocusTargetID, FocusGroupMembers, FocusLiving, FocusTimer;
     local int FocusHistoryIndex, FocusStartIndex, FocusPlantPhase, FocusPreviousGroupID;
-    local TTile FocusTile;
-    local float FocusDistance;
+    local int RangedPreviousGroupID, RangedTargetID, RangedMembers, RangedLiving;
+    local TTile FocusTile, RangedTile;
+    local float FocusDistance, RangedDistance;
     local float Score, BestScore, AmbushScore;
     local bool bMove, bArea, bHavePlan, bSuccess, bCanExplore, bCombatThreats;
     local bool bVisibleThreats, bContactSearch, bCandidateMove, bGrenadeCandidate;
-    local bool bOpeningContact, bFocusedGoal;
+    local bool bOpeningContact, bFocusedGoal, bRangedFocusGoal, bRangedConcealed;
 
     // Shared by every unit and every movement/preparation/loot search below.
     RemainingConcealmentChecks = 6;
@@ -1206,6 +1225,57 @@ function MakeDecision(XComTacticalController PC)
     else
         BerserkerFocusGroupID = 0;
 
+    // A separate current-contact goal for already revealed ranged squads.
+    // No speculative pod activation: only native player-visible members
+    // qualify; the same snapshot is reused for every allied decision.
+    if (RangedFocusHistory != `XCOMHISTORY
+        || RangedFocusStartIndex != FocusStartIndex
+        || (FocusBattle != none && RangedFocusBattleID != FocusBattle.ObjectID)
+        || RangedFocusPlayerID != PlayerRef.ObjectID
+        || FocusHistoryIndex < RangedFocusLastHistory)
+        RangedFocusGroupID = 0;
+    RangedFocusHistory = `XCOMHISTORY;
+    RangedFocusStartIndex = FocusStartIndex;
+    if (FocusBattle != none)
+        RangedFocusBattleID = FocusBattle.ObjectID;
+    else
+        RangedFocusBattleID = 0;
+    RangedFocusPlayerID = PlayerRef.ObjectID;
+    RangedFocusLastHistory = FocusHistoryIndex;
+    RangedTargetID = 0;
+    bRangedFocusGoal = false;
+    if (FocusBattle != none
+        && FocusBattle.MapData.ActiveMission.sType != "SabotageTransmitter"
+        && !class'APX_MissionPlanner'.static.HasActiveMissionDeadline())
+    {
+        bRangedConcealed = class'APX_SquadPlanner'.static.SquadIsConcealed(PlayerRef.ObjectID);
+        if (!bRangedConcealed)
+        {
+            RangedPreviousGroupID = RangedFocusGroupID;
+            if (class'APX_RevealedFocus'.static.SelectContact(
+                PlayerRef.ObjectID, RangedPreviousGroupID, RangedFocusGroupID,
+                RangedTargetID, RangedTile, RangedLiving, RangedDistance, RangedMembers))
+            {
+                bRangedFocusGoal = class'APX_RevealedFocus'.static.CanFocus(
+                    class'APX_RevealedFocus'.default.EnableRevealedGroupFocus,
+                    class'APX_FullIntel'.default.EnableFullIntel,
+                    bRangedConcealed, false, false, RangedLiving);
+                if (bRangedFocusGoal && MissionRecorder != none)
+                    MissionRecorder.Marker("revealed_focus",
+                        "group=" $ RangedFocusGroupID
+                        @ "target=" $ RangedTargetID
+                        @ "members_visible=" $ RangedMembers
+                        @ "ranged=" $ RangedLiving
+                        @ "distance=" $ RangedDistance);
+            }
+        }
+    }
+    if (!bRangedFocusGoal)
+    {
+        RangedFocusGroupID = 0;
+        RangedTargetID = 0;
+    }
+
     bVisibleThreats = RefreshContacts(PlayerRef.ObjectID, PlayerState.PlayerTurnCount);
     PruneObservedDefeats(PlayerRef.ObjectID);
     bContactSearch = !bVisibleThreats && RecentContacts.Length > 0;
@@ -1228,7 +1298,8 @@ function MakeDecision(XComTacticalController PC)
             continue;
         if (class'APX_CombatPlanner'.static.ChooseAction(UnitState, Candidate,
             TargetIndex, Score, bContactSearch,
-            (bFocusedGoal ? FocusTargetID : 0), bOpeningContact))
+            (bFocusedGoal ? FocusTargetID : 0), bOpeningContact,
+            (bRangedFocusGoal ? RangedTargetID : 0))
         {
             // A distant, unsupported opening shot was previously selected
             // solely by damage value. Allow safe moves/overwatch to compete
@@ -1350,7 +1421,8 @@ function MakeDecision(XComTacticalController PC)
         else
             bCandidateMove = class'APX_MissionPlanner'.static.ChooseMove(
                 UnitState, CandidatePath, Score, RemainingConcealmentChecks,
-                RemainingCoverChecks, FocusTargetID, bFocusedGoal);
+                RemainingCoverChecks, FocusTargetID, bFocusedGoal,
+                RangedTargetID, bRangedFocusGoal);
         if (bCandidateMove
             && TraceCandidateMove(UnitState, CandidatePath, Score)
             && Score > BestScore && CanUseMove(UnitState, CandidatePath))
