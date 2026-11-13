@@ -15,7 +15,8 @@ var config float EmergencyHealthFraction;
 static function bool ChooseAction(XComGameState_Unit UnitState,
     out AvailableAction Action, out int TargetIndex, out float Score,
     optional bool bRecentContact, optional int BerserkerFocusTargetID,
-    optional bool bBerserkerOpeningContact, optional int RangedFocusTargetID)
+    optional bool bBerserkerOpeningContact, optional int RangedFocusTargetID,
+    optional bool bNativeBerserkerStrikeOnly)
 {
     local XComGameStateHistory History;
     local GameRulesCache_Unit UnitCache;
@@ -98,7 +99,7 @@ static function bool ChooseAction(XComGameState_Unit UnitState,
                     if (UnitState.GetMyTemplateName() == 'BerserkerMP'
                         && TargetUnit.ObjectID == BerserkerFocusTargetID)
                         CandidateScore += class'APX_BerserkerFocus'.static.FocusAttackBonus(
-                            true, bBerserkerOpeningContact,
+                            true, bBerserkerOpeningContact || bNativeBerserkerStrikeOnly,
                             UnitState.GetCurrentStat(eStat_HP)
                                 / FMax(1.0, UnitState.GetMaxStat(eStat_HP)),
                             TargetUnit.GetCurrentStat(eStat_HP)
