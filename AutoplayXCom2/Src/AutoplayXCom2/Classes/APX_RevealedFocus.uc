@@ -47,8 +47,7 @@ static function float LegalShotFocusBonus(bool bInPod, bool bPrimary,
 // mandatory advance. Threat, full path and support still outrank this term.
 static function float FocusPositionBonus(float BeforeDistance, float AfterDistance)
 {
-    if (BeforeDistance < 0.0 || AfterDistance < 0.0
-        || AfterDistance >= BeforeDistance - 0.5)
+    if (BeforeDistance < 0.0 || AfterDistance < 0.0 || AfterDistance >= BeforeDistance - 0.5)
         return 0.0;
     return FMin(7.0, (BeforeDistance - AfterDistance) * 1.2);
 }
