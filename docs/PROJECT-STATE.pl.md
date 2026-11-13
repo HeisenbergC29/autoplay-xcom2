@@ -23,7 +23,13 @@ poziom potwierdzenia działania.
   Sam log nie zawiera SHA ani znacznika rewizji. Jedno ostrzeżenie moda
   dotyczy nieużywanej lokalnej Distance; pozostałe osiem pochodzi z SDK/DLC.
   [Dowód kompilacji](build-2026-11-13-v29.pl.md). Gra v29: **NOT RUN**.
-  Następna kolej użytkownika: wykonać Blood Killer diff2 na obecnym buildzie.
+  Na kolejną prośbę użytkownika o nową paczkę LEAD usunął wyłącznie
+  nieużywaną deklarację Distance z SelectSquadContact. Algorytm i rewizja
+  v29 pozostają; pozostałych ośmiu ostrzeżeń SDK/DLC ta zmiana nie dotyczy.
+  Kompilacja poprawionej paczki: **NOT RUN**, poprzedni dowód PASS dotyczy
+  paczki 189aa3d3. Dokładny SHA i ZIP poprawki wskazuje issue #4.
+  Następna kolej użytkownika: skompilować poprawioną paczkę i wykonać
+  Blood Killer diff2.
   Wspólny cel nie potwierdza jeszcze
   ograniczenia strat ani wygranej. HELPER może dalej prowadzić osobne #31.
   [Zakres i próba v29](experiment-56-berserker-focus-v29.pl.md).
