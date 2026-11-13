@@ -6,7 +6,23 @@ poziom potwierdzenia działania.
 
 ## Baza kodu
 
-- Bieżąca rewizja przygotowywanych źródeł: `mission-report-v28`, #57 / PR #58:
+- Bieżąca rewizja przygotowywanych źródeł: `mission-report-v29`, #56 / PR #61:
+  wspólny kontakt grupy dla BerserkerMP w SabotageTransmitter. Krótkie
+  otwarcie w turach 1–2 wymaga natywnego timera >=4, odległości <=18
+  i co najmniej trzech żywych Berserkerów; potem powrót do X4/relay.
+  Po natywnym ukończeniu X4 wspólny cel kieruje Sweep. Premia legalnego
+  ataku działa tylko w aktywnej fazie kontaktu/Sweep, przy HP >=55%.
+  Skany mają limity także dla odrzuconych stanów jednostek; częściowy
+  centroid oznacza powrót do dotychczasowego planera. LEAD poprawił oba
+  te kontrakty podczas przeglądu. Nie zmieniono natywnych akcji, AP,
+  punktacji, kryterium sukcesu ani bezpiecznego providera v28.
+  Kontrole: 710 testów z prywatnymi wejściami PASS, bez pominięć;
+  audyt SDK 23 klas / 31 nazw PASS. Windows WOTC SDK i gra v29: **NOT RUN**.
+  Po integracji LEAD następna kolej użytkownika: skompilować dokładny SHA
+  z issue #4 i wykonać Blood Killer diff2. Wspólny cel nie potwierdza jeszcze
+  ograniczenia strat ani wygranej. HELPER może dalej prowadzić osobne #31.
+  [Zakres i próba v29](experiment-56-berserker-focus-v29.pl.md).
+- Poprzednia rewizja `mission-report-v28`, #57 / PR #58:
   bezpieczny odczyt punktacji. Matching EXE i zrzut v27 potwierdziły stos
   HUD.Tick→MissionScore.GetText→GetTotalScore→przebudowa cache historii.
   Provider nie wywołuje już GetTotalScore; bieżące Challenge points czyta
@@ -22,9 +38,8 @@ poziom potwierdzenia działania.
   zgadzają się w tej próbie. Brak gwarancji wszystkich innych scenariuszy.
   #59 / PR #60 poprawia wyłącznie analizator rozpoznający terminalny rollup;
   runtime/revision v28 bez zmian, bez kolejnej kompilacji Windows.
-  **Następna kolej HELPERA:** #56 fazowy fokus/ograniczenie ciężkich strat,
-  potem odrębne #31 dla strzelców. Powtórzenie identycznego testu użytkownika
-  teraz nie wniesie brakującej implementacji taktycznej.
+  Te wyniki stanowią bazę dla fazowego fokusu #56 w v29; odrębne #31
+  dotyczy strzelców. Powtórzenie v28 nie weryfikuje nowej taktyki.
 - Baza v27: `1575550c495dff2b11406f6b3731ae14a11669b9`, PR #55:
   miękkie ryzyko wybuchowego otoczenia obejmuje także pobliskie melee.
   LEAD poprawił propozycję HELPER o natywne przeliczenie Mobility64/96

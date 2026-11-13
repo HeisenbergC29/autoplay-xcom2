@@ -113,6 +113,13 @@ var private array<RecentContact> RecentContacts;
 var private bool bContactHistoryInitialized;
 var private int ContactHistoryCursor;
 var private int AmbushPreparationActions;
+// One scoped contact for the Blood Killer Berserkers, not per-unit targets.
+var private int BerserkerFocusGroupID;
+var private XComGameStateHistory BerserkerFocusHistory;
+var private int BerserkerFocusStartIndex;
+var private int BerserkerFocusLastHistory;
+var private int BerserkerFocusBattleID;
+var private int BerserkerFocusPlayerID;
 
 static function bool MayRetryAreaPlan(int CurrentHistory, int RejectedHistory, int Attempts)
 {
@@ -400,6 +407,16 @@ function RecordDisplayedScore(string DisplayText)
         MissionRecorder.RecordHUDScore(DisplayText);
 }
 
+function ResetBerserkerFocus()
+{
+    BerserkerFocusGroupID = 0;
+    BerserkerFocusHistory = none;
+    BerserkerFocusStartIndex = -1;
+    BerserkerFocusLastHistory = -1;
+    BerserkerFocusBattleID = 0;
+    BerserkerFocusPlayerID = 0;
+}
+
 function StopAutoplay(string Reason, optional bool bPreservePendingHack = false)
 {
     bEnabled = false;
@@ -408,6 +425,7 @@ function StopAutoplay(string Reason, optional bool bPreservePendingHack = false)
     LastWaitReason = '';
     LastWaitDetails = "";
     ResetWaitHeartbeat();
+    ResetBerserkerFocus();
     // A user pause may happen before the hack UI has even appeared. Keep only
     // the exact submitted context, so resuming cannot claim a later manual hack
     // that happens to reuse the same soldier and ability IDs.
@@ -1072,6 +1090,7 @@ function MakeDecision(XComTacticalController PC)
 {
     local XComGameState_Unit UnitState, BestUnit, AmbushUnit;
     local XComGameState_Player PlayerState;
+    local XComGameState_BattleData FocusBattle;
     local XComGameState_Ability Ability;
     local XComGameStateContext_Ability SubmittedContext;
     local StateObjectReference PlayerRef;
@@ -1081,9 +1100,14 @@ function MakeDecision(XComTacticalController PC)
     local vector CandidateAim, BestAim;
     local int TargetIndex, BestTargetIndex, ChosenTargetID, AmbushTargetIndex, RescuePatientID;
     local int RemainingConcealmentChecks, RemainingCoverChecks;
+    local int FocusTargetID, FocusGroupMembers, FocusLiving, FocusTimer;
+    local int FocusHistoryIndex, FocusStartIndex, FocusPlantPhase, FocusPreviousGroupID;
+    local TTile FocusTile;
+    local float FocusDistance;
     local float Score, BestScore, AmbushScore;
     local bool bMove, bArea, bHavePlan, bSuccess, bCanExplore, bCombatThreats;
     local bool bVisibleThreats, bContactSearch, bCandidateMove, bGrenadeCandidate;
+    local bool bOpeningContact, bFocusedGoal;
 
     // Shared by every unit and every movement/preparation/loot search below.
     RemainingConcealmentChecks = 6;
@@ -1122,6 +1146,66 @@ function MakeDecision(XComTacticalController PC)
         AreaPlanner = new(self) class'APX_AreaAttackPlanner';
     if (MissionRecorder != none)
         MissionRecorder.BeginDecision();
+
+    // One bounded read-only group selection. The retained group survives
+    // regular history changes, but not battle change, rewind or manual OFF.
+    FocusHistoryIndex = `XCOMHISTORY.GetCurrentHistoryIndex();
+    FocusStartIndex = `XCOMHISTORY.FindStartStateIndex();
+    FocusBattle = XComGameState_BattleData(`XCOMHISTORY.GetSingleGameStateObjectForClass(
+        class'XComGameState_BattleData', true));
+    if (BerserkerFocusHistory != `XCOMHISTORY
+        || BerserkerFocusStartIndex != FocusStartIndex
+        || (FocusBattle != none && BerserkerFocusBattleID != FocusBattle.ObjectID)
+        || BerserkerFocusPlayerID != PlayerRef.ObjectID
+        || FocusHistoryIndex < BerserkerFocusLastHistory)
+        BerserkerFocusGroupID = 0;
+    BerserkerFocusHistory = `XCOMHISTORY;
+    BerserkerFocusStartIndex = FocusStartIndex;
+    BerserkerFocusLastHistory = FocusHistoryIndex;
+    if (FocusBattle != none)
+        BerserkerFocusBattleID = FocusBattle.ObjectID;
+    else
+        BerserkerFocusBattleID = 0;
+    BerserkerFocusPlayerID = PlayerRef.ObjectID;
+    FocusTargetID = 0;
+    bOpeningContact = false;
+    bFocusedGoal = false;
+    if (FocusBattle != none
+        && FocusBattle.MapData.ActiveMission.sType == "SabotageTransmitter")
+    {
+        FocusPreviousGroupID = BerserkerFocusGroupID;
+        if (class'APX_BerserkerFocus'.static.SelectSquadContact(
+            PlayerRef.ObjectID, FocusPreviousGroupID,
+            BerserkerFocusGroupID, FocusTargetID, FocusTile, FocusDistance,
+            FocusLiving, FocusGroupMembers))
+        {
+            FocusPlantPhase = class'APX_PlantInteractionKnowledge'.static.NativePlantObjectivePhase(FocusBattle);
+            FocusTimer = class'APX_BerserkerFocus'.static.ReadActiveTimerTurns();
+            bFocusedGoal = class'APX_BerserkerFocus'.static.ShouldUseContactGoal(
+                class'APX_BerserkerFocus'.default.EnableBerserkerGroupFocus,
+                FocusPlantPhase == 1, FocusTimer, PlayerState.PlayerTurnCount,
+                FocusDistance, FocusLiving,
+                Clamp(class'APX_BerserkerFocus'.default.OpeningContactTurns, 0, 4),
+                Clamp(class'APX_BerserkerFocus'.default.MinimumContactTimerTurns, 2, 12),
+                FClamp(class'APX_BerserkerFocus'.default.MaximumOpeningContactDistance, 1.0, 24.0));
+            bOpeningContact = bFocusedGoal && FocusPlantPhase != 1;
+            if (MissionRecorder != none)
+                MissionRecorder.Marker("berserker_focus",
+                    "phase=" $ (FocusPlantPhase == 1 ? "sweep" :
+                        (bOpeningContact ? "contact" : "objective"))
+                    @ "group=" $ BerserkerFocusGroupID
+                    @ "target=" $ FocusTargetID
+                    @ "members=" $ FocusGroupMembers
+                    @ "living=" $ FocusLiving
+                    @ "distance=" $ FocusDistance
+                    @ "timer=" $ FocusTimer);
+        }
+        else
+            BerserkerFocusGroupID = 0;
+    }
+    else
+        BerserkerFocusGroupID = 0;
+
     bVisibleThreats = RefreshContacts(PlayerRef.ObjectID, PlayerState.PlayerTurnCount);
     PruneObservedDefeats(PlayerRef.ObjectID);
     bContactSearch = !bVisibleThreats && RecentContacts.Length > 0;
@@ -1143,7 +1227,8 @@ function MakeDecision(XComTacticalController PC)
         if (!UnitState.IsAbleToAct())
             continue;
         if (class'APX_CombatPlanner'.static.ChooseAction(UnitState, Candidate,
-            TargetIndex, Score, bContactSearch))
+            TargetIndex, Score, bContactSearch,
+            (bFocusedGoal ? FocusTargetID : 0), bOpeningContact))
         {
             // A distant, unsupported opening shot was previously selected
             // solely by damage value. Allow safe moves/overwatch to compete
@@ -1265,7 +1350,7 @@ function MakeDecision(XComTacticalController PC)
         else
             bCandidateMove = class'APX_MissionPlanner'.static.ChooseMove(
                 UnitState, CandidatePath, Score, RemainingConcealmentChecks,
-                RemainingCoverChecks);
+                RemainingCoverChecks, FocusTargetID, bFocusedGoal);
         if (bCandidateMove
             && TraceCandidateMove(UnitState, CandidatePath, Score)
             && Score > BestScore && CanUseMove(UnitState, CandidatePath))

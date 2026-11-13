@@ -577,7 +577,8 @@ static function float ScoreBerserkerObjectivePath(
 }
 
 static function bool FindGoal(XComGameState_Unit UnitState, out MissionGoal Goal,
-    out array<StateObjectReference> VisibleEnemies)
+    out array<StateObjectReference> VisibleEnemies,
+    optional int BerserkerFocusTargetID, optional bool bBerserkerFocusGoal)
 {
     local XComGameState_InteractiveObject ObjectState;
     local XComGameState_Unit OtherUnit;
@@ -619,6 +620,32 @@ static function bool FindGoal(XComGameState_Unit UnitState, out MissionGoal Goal
             && UnitState.GetMyTemplateName() == 'BerserkerMP'
             && BattleData.MapData.ActiveMission.sType == "SabotageTransmitter"
             && bCompletedStrategyObjective;
+
+        // One verified member of one retained AIGroup is the squad's shared
+        // destination during the short opening or mandatory post-X4 sweep.
+        // Do not grant native attacks/LOS to a contact known only by full intel.
+        // Once the real timer becomes urgent the existing X4 route wins.
+        if ((bBerserkerSweep || bBerserkerFocusGoal)
+            && UnitState.GetMyTemplateName() == 'BerserkerMP'
+            && BattleData.MapData.ActiveMission.sType == "SabotageTransmitter"
+            && BerserkerFocusTargetID > 0)
+        {
+            OtherUnit = XComGameState_Unit(`XCOMHISTORY.GetGameStateForObjectID(
+                BerserkerFocusTargetID));
+            if (OtherUnit != none && OtherUnit.IsAlive()
+                && !OtherUnit.IsIncapacitated() && !OtherUnit.bRemovedFromPlay
+                && UnitState.IsEnemyUnit(OtherUnit)
+                && VisibleEnemies.Find('ObjectID', BerserkerFocusTargetID) != INDEX_NONE
+                && !class'APX_CombatPlanner'.static.IsReclaimableControlledSquadmate(
+                    UnitState, OtherUnit))
+            {
+                Goal.Tile = OtherUnit.TileLocation;
+                Goal.Value = 70.0;
+                Goal.bFound = true;
+                Goal.bCombat = true;
+                return true;
+            }
+        }
         if (ShouldPrioritizeBerserkerSabotage(default.PrioritizeBerserkerSabotage,
             UnitState.GetMyTemplateName() == 'BerserkerMP',
             BattleData.MapData.ActiveMission.sType == "SabotageTransmitter",
@@ -1890,7 +1917,8 @@ static function bool RequiresCombatMovement(bool bCombatGoal,
 static function bool ChooseMove(XComGameState_Unit UnitState,
     out array<TTile> Path, out float Score,
     optional out int RemainingConcealmentChecks,
-    optional out int RemainingCoverChecks)
+    optional out int RemainingCoverChecks,
+    optional int BerserkerFocusTargetID, optional bool bBerserkerFocusGoal)
 {
     local XGUnit UnitVisualizer;
     local array<TTile> Tiles, CandidatePath, RiskyRoute, LocalFallbackPath;
@@ -1911,7 +1939,8 @@ static function bool ChooseMove(XComGameState_Unit UnitState,
     Path.Length = 0;
     Score = 0;
     if (!HasLegalMove(UnitState)
-        || !FindGoal(UnitState, Goal, VisibleEnemies))
+        || !FindGoal(UnitState, Goal, VisibleEnemies,
+            BerserkerFocusTargetID, bBerserkerFocusGoal))
         return false;
     GoalTile = Goal.Tile;
     bSabotageRush = Goal.bBerserkerSabotageGoal

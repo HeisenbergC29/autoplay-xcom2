@@ -181,7 +181,7 @@ class SafeContactOpeningTests(unittest.TestCase):
         self.assertLess(decision.index('RemainingCoverChecks = 6;'),
                         decision.index('foreach `XCOMHISTORY.IterateByClassType('))
         call = decision.split("class'APX_MissionPlanner'.static.ChooseMove(", 1)[1].split(';', 1)[0]
-        self.assertIn('RemainingConcealmentChecks,\n                RemainingCoverChecks)', call)
+        self.assertIn('RemainingConcealmentChecks,\n                RemainingCoverChecks,', call)
         choose = function_body(self.mission, 'ChooseMove')
         self.assertEqual(choose.count('.static.InspectRiskAtTile('), 2)
         for call in choose.split('.static.InspectRiskAtTile(')[1:]:
@@ -191,7 +191,7 @@ class SafeContactOpeningTests(unittest.TestCase):
         self.assertNotIn('RemainingCoverChecks =', choose)
         self.assertNotIn('CoverRisk = 8.0', choose)
         self.assertIn('optional out int RemainingConcealmentChecks,\n'
-                      '    optional out int RemainingCoverChecks)', self.mission)
+                      '    optional out int RemainingCoverChecks,', self.mission)
 
     def test_local_fallback_records_cover_risk_before_either_soft_penalty(self):
         choose = function_body(self.mission, 'ChooseMove')
