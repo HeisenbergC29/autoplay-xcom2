@@ -157,9 +157,14 @@ po trzecim zgonie i ustawieniu heavy-loss flag przy dwóch żywych Berserkerach.
 V29 dodaje wspólny kontakt, ograniczone timerem otwarcie przed X4 i wspólny
 cel podczas Sweep. LEAD poprawił bramkę premii ataku poza aktywną fazą
 oraz rzeczywisty limit przeglądanych unit states z fallback przy częściowym
-centroidzie. Po końcowym review/CI i integracji LEAD **następna kolej należy
-do użytkownika**: nowa kompilacja Windows oraz Blood Killer diff2 z dokładnego
-SHA wskazanego w #4. Windows/game v29 pozostają NOT RUN do otrzymania dowodu.
+centroidzie. Po review/CI LEAD scalił v29 jako
+`189aa3d3aba054109f7ca1405770a2c90b0676e9`. Log użytkownika odebrany 13 XI
+potwierdza Windows WOTC SDK **PASS: 0 błędów, 9 ostrzeżeń**, pakiet zapisany.
+Użytkownik potwierdził, że kompilował wskazaną paczkę; log sam nie zawiera SHA.
+**Następna kolej należy do użytkownika**: Blood Killer diff2 na obecnym buildzie
+według #4. Gra v29 pozostaje NOT RUN; zapis dowodu jest tylko dokumentacją,
+bez zmiany runtime/revision ani nowej paczki wymagającej kompilacji.
+[Dowód kompilacji](build-2026-11-13-v29.pl.md).
 HELPER może kontynuować odrębne #31 dla nieukrytej drużyny strzelców na nowej
 bazie. Jeden claim zakresu przed edycją wspólnego MissionPlanner; oddzielne
 focused PR-y do przeglądu LEAD. Nie wymagamy powtórzenia samej wersji v28
