@@ -200,7 +200,7 @@ class RecorderScoringContracts(unittest.TestCase):
         source = RECORDER.read_text()
         self.assertIn("if (AbilityName == 'Loot')\n        return \"loot\";",
                       function_body(source, 'AbilityHandler'))
-        self.assertIn('revision=mission-report-v32', function_body(source, 'Start'))
+        self.assertIn('revision=mission-report-v33', function_body(source, 'Start'))
 
 
 @unittest.skipUnless(os.environ.get('APX_SDK_SOURCE_ROOT'), 'Scoring observer contracts need SDK sources')
