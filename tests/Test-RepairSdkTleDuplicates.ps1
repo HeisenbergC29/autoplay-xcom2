@@ -195,6 +195,35 @@ try {
     Assert-HashesEqual $beforeNonSdk (Get-Hashes $caseSdk) 'Non-SDK directory was changed'
     Assert-True (!(Test-Path -LiteralPath $backupRoot)) 'Non-SDK directory created a backup.'
 
+    # A Windows read-only sharing handle permits hashing but denies renaming.
+    # The first cache move therefore fails only after the 22 source moves,
+    # exercising recovery of a genuinely partially applied plan.
+    if ([Environment]::OSVersion.Platform -eq [PlatformID]::Win32NT) {
+        $caseSdk = New-CaseFixture 'locked cache rollback'
+        $backupRoot = Join-Path $fixtureRoot 'rollback backups'
+        $beforeRollback = Get-Hashes $caseSdk
+        $lockedCache = Join-Path $caseSdk 'XComGame/Script/DLC_3.u'
+        $lockedCacheHandle = $null
+        try {
+            $lockedCacheHandle = [IO.File]::Open($lockedCache, [IO.FileMode]::Open,
+                [IO.FileAccess]::Read, [IO.FileShare]::Read)
+            $refused = $false
+            try { & $repair -SdkPath $caseSdk -BackupRoot $backupRoot -Apply | Out-Null } catch { $refused = $true }
+            Assert-True $refused 'A locked SDK cache did not fail the requested move.'
+            $rollbackManifests = @(Get-ChildItem -LiteralPath $backupRoot -Filter 'manifest.json' -File -Recurse)
+            Assert-True ($rollbackManifests.Count -eq 1) 'Failed repair did not retain one recovery manifest.'
+            $rolledBack = Get-Content -LiteralPath $rollbackManifests[0].FullName -Raw | ConvertFrom-Json
+            Assert-True ($rolledBack.State -eq 'RolledBack') 'Failed cache move did not complete the source rollback.'
+            Assert-True (@($rolledBack.Files).Count -eq 24) 'Rollback manifest lost part of the original plan.'
+            Assert-True (@($rolledBack.Files | Where-Object { $_.Moved }).Count -eq 0) 'Rollback manifest still marks a file as moved.'
+        }
+        finally {
+            if ($null -ne $lockedCacheHandle) { $lockedCacheHandle.Dispose() }
+        }
+        Assert-HashesEqual $beforeRollback (Get-Hashes $caseSdk) 'Failed cache move left a partial SDK repair'
+    }
+    else { Write-Host 'SKIP: cache-lock rollback fixture requires Windows file sharing semantics.' }
+
     # Junctions need no administrator privilege on ordinary Windows NTFS.
     # Their availability is reported explicitly on other hosts/filesystems.
     $caseSdk = New-CaseFixture 'junction source'
