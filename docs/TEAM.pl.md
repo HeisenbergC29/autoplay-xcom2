@@ -151,15 +151,19 @@ próba była FAIL. Aktualny SHA poprawki i status ponownej próby są w #4.
 
 ## Przekazanie i decyzja o scaleniu
 
-Po raporcie v28 z 12 XI 20:39 UTC następna kolej należy do HELPERA.
+Po raporcie v28 z 12 XI 20:39 UTC HELPER przygotował #56 / PR #61 (v29).
 Blood Killer doszła do native end bez crashu w tej próbie, lecz przegrała
 po trzecim zgonie i ustawieniu heavy-loss flag przy dwóch żywych Berserkerach.
-Priorytet #56: wspólny kontakt, przeżywalność podczas Sweep i relay jako
-rezerwa rzeczywistego timera, z zachowaniem działającego X4. Następnie #31
-dla nieukrytej drużyny strzelców. Jeden claim zakresu przed edycją wspólnego
-MissionPlanner; oddzielne focused PR-y do przeglądu LEAD. Użytkownik wraca
-do kompilacji i gry po przeglądzie nowej implementacji, nie po samej zmianie
-analizatora #59 / PR #60.
+V29 dodaje wspólny kontakt, ograniczone timerem otwarcie przed X4 i wspólny
+cel podczas Sweep. LEAD poprawił bramkę premii ataku poza aktywną fazą
+oraz rzeczywisty limit przeglądanych unit states z fallback przy częściowym
+centroidzie. Po końcowym review/CI i integracji LEAD **następna kolej należy
+do użytkownika**: nowa kompilacja Windows oraz Blood Killer diff2 z dokładnego
+SHA wskazanego w #4. Windows/game v29 pozostają NOT RUN do otrzymania dowodu.
+HELPER może kontynuować odrębne #31 dla nieukrytej drużyny strzelców na nowej
+bazie. Jeden claim zakresu przed edycją wspólnego MissionPlanner; oddzielne
+focused PR-y do przeglądu LEAD. Nie wymagamy powtórzenia samej wersji v28
+po narzędziowej zmianie analizatora #59 / PR #60.
 
 Native rollup z opróżnionym terminalnym końcem potwierdza finalne +7100;
 porównawcze −7900 ma inne komponenty/coverage i nie jest równoważnym

@@ -53,6 +53,15 @@ class BloodKillerFocusContracts(unittest.TestCase):
         self.assertFalse(self.phase(True,True,4,14,33,0,2,4,18))
         self.assertFalse(self.phase(False,True,5,2,8,5,2,4,18))
 
+    def test_inactive_contact_cannot_outscore_the_urgent_objective_with_sweep_bonus(self):
+        # Regression: the selected group ID survives in diagnostics while the
+        # objective phase is active. It must not authorize a +16 sweep bonus.
+        decide=function_body(self.control,'MakeDecision')
+        self.assertIn('(bFocusedGoal ? FocusTargetID : 0), bOpeningContact',decide)
+        active=self.phase(True,False,3,3,9,5,2,4,18)
+        self.assertFalse(active)
+        self.assertEqual(self.attack(active,False,1.0,1.0),0)
+
     def test_retained_group_and_nearer_threat_can_both_win(self):
         self.assertGreater(self.group(12,3,True),self.group(12,3,False))
         self.assertGreater(self.group(4,3,False),self.group(22,3,True))
@@ -114,8 +123,17 @@ class BloodKillerFocusContracts(unittest.TestCase):
                         decide.index("class'APX_CombatPlanner'.static.ChooseAction("))
         self.assertLess(decide.index("class'APX_CombatPlanner'.static.ChooseAction("),
                         decide.index("class'APX_MissionPlanner'.static.ChooseMove("))
-        self.assertIn('FocusTargetID, bOpeningContact',decide)
+        self.assertIn('(bFocusedGoal ? FocusTargetID : 0), bOpeningContact',decide)
         self.assertIn('FocusTargetID, bFocusedGoal',decide)
+
+    def test_all_inspected_units_count_and_partial_centroid_is_rejected(self):
+        select=function_body(self.focus,'SelectSquadContact')
+        scan=select[select.index("IterateByClassType(class'XComGameState_Unit'"):
+                    select.index('CenterX /=')]
+        self.assertRegex(scan,r'if \(\+\+UnitsChecked > Clamp\(default.MaxUnitStatesPerDecision, 16, 256\)\)\s*return false;')
+        self.assertLess(scan.index('++UnitsChecked'),scan.index('if (Friend == none'))
+        self.assertRegex(scan,r'if \(LivingFriendlies >= Clamp\(default.MaxFriendlyUnitsPerDecision, 1, 16\)\)\s*return false;')
+        self.assertNotIn('break;',scan)
 
     def test_objective_and_native_sweep_have_scoped_contact_exception(self):
         goal=function_body(self.mission,'FindGoal')
@@ -154,7 +172,8 @@ class BloodKillerFocusContracts(unittest.TestCase):
                         'MaximumOpeningContactDistance=18.0',
                         'MaxGroupsPerDecision=24',
                         'MaxMemberRefsPerDecision=128',
-                        'MaxFriendlyUnitsPerDecision=12'):
+                        'MaxFriendlyUnitsPerDecision=12',
+                        'MaxUnitStatesPerDecision=128'):
             self.assertIn(setting,ini)
 
 

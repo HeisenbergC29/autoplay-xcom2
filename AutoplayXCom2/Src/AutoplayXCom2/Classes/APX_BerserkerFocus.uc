@@ -10,6 +10,7 @@ var config float MaximumOpeningContactDistance;
 var config int MaxGroupsPerDecision;
 var config int MaxMemberRefsPerDecision;
 var config int MaxFriendlyUnitsPerDecision;
+var config int MaxUnitStatesPerDecision;
 
 // An old group gets a soft bonus, but a substantially nearer threat can win.
 // This score never bypasses action, movement, hazard or formation legality.
@@ -90,7 +91,7 @@ static function bool SelectSquadContact(int PlayerID, int PreviousGroupID,
     local StateObjectReference Ref;
     local float CenterX, CenterY, BestScore, Distance, DistanceSq;
     local float NearestDistanceSq, CandidateScore;
-    local int GroupsChecked, RefsChecked, Members, CandidateID;
+    local int UnitsChecked, GroupsChecked, RefsChecked, Members, CandidateID;
     local TTile CandidateTile;
     local float CandidateDistance;
 
@@ -106,14 +107,18 @@ static function bool SelectSquadContact(int PlayerID, int PreviousGroupID,
 
     foreach `XCOMHISTORY.IterateByClassType(class'XComGameState_Unit', Friend)
     {
-        if (LivingFriendlies >= Clamp(default.MaxFriendlyUnitsPerDecision, 1, 16))
-            break;
+        // Rejected enemy/civilian/dead entries also consume this budget.
+        // A partial squad centroid must not authorize contact tactics.
+        if (++UnitsChecked > Clamp(default.MaxUnitStatesPerDecision, 16, 256))
+            return false;
         if (Friend == none || Friend.GetTeam() != eTeam_XCom
             || Friend.GetAssociatedPlayerID() != PlayerID
             || Friend.GetMyTemplateName() != 'BerserkerMP'
             || !Friend.IsAlive() || Friend.IsIncapacitated()
             || Friend.bRemoved || Friend.bRemovedFromPlay)
             continue;
+        if (LivingFriendlies >= Clamp(default.MaxFriendlyUnitsPerDecision, 1, 16))
+            return false;
         if (Representative == none)
             Representative = Friend;
         CenterX += float(Friend.TileLocation.X);

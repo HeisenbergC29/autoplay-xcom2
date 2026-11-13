@@ -23,7 +23,10 @@ Nie wpisujemy na sztywno limitu trzech zgonów do innych misji.
   cel. Poprzedni ID grupy ma miękką przewagę 12, ale bliższa nowa grupa
   może go zastąpić. Po zniszczeniu grupy następuje ponowny wybór.
 - Jeden bounded odczyt na decyzję: max 24 AIGroup, 128 referencji
-  członków, 12 własnych Berserkerów. Tylko `EnableFullIntel=true`;
+  członków, 12 własnych Berserkerów i 128 sprawdzonych stanów jednostek
+  łącznie z odrzuconymi wrogami/cywilami/martwymi. Przekroczenie limitu
+  skanu drużyny wyłącza nowy fokus w tej decyzji, zamiast używać częściowego
+  centroidu. Tylko `EnableFullIntel=true`;
   nie odczytujemy `IsEngaged`, prywatnego AP/amunicji/cooldownów,
   RNG/AI future intent ani nie traktujemy `CurrentTargetLocation` jako
   pełnej trasy patroli. Przy FullIntel=false obowiązuje stary planer.
@@ -48,6 +51,9 @@ Nie wpisujemy na sztywno limitu trzech zgonów do innych misji.
   celu. Realny przekaźnik może zostać legalnie uderzony okazjonalnie;
   jego score podczas wczesnego kontaktu jest ograniczony do 26
   (poza tą fazą dotychczasowa wartość i priorytety bez zmian).
+- Poza aktywnym wczesnym kontaktem i natywnym Sweep kontroler przekazuje
+  do oceny ataków ID celu 0. Zapamiętana grupa i diagnostyka nie nadają
+  premii Sweep podczas powrotu do pilnego celu X4/relay.
 - Po **natywnym** `PlantBomb.bCompleted` (a nie po glincie) włączamy
   wspólny kontakt na całym etapie Sweep, niezależnie od zakończonego
   timera. Nadal obowiązują HP/risk, native melee targeting i replan
@@ -61,10 +67,16 @@ Nowe `tests/test_berserker_focus.py`: prawdziwe helpery numeryczne UC
 uruchamiane przez `uc_math` (timer/turn/odległość, limit 2 tur,
 przełączenie Sweep, sticky group i przełączenie przy bliższym kontakcie,
 niski HP blokujący premię, legalny relay) oraz source contracts.
+Regresje LEAD sprawdzają również bramkę fazy na rzeczywistym wywołaniu
+CombatPlanner oraz zliczanie odrzuconych wpisów i odrzucenie częściowego
+centroidu przed oceną grup.
 `tests/test_safe_contact_opening.py` zachowuje kontrolę wspólnego
 budżetu wybuchowych osłon przy rozszerzonej *opcjonalnej* sygnaturze
-`ChooseMove`. Reszta istniejących źródeł pozostaje bez zmian, poza
-markerami rewizji v29 w MissionRecorder/HUD i konfiguracją.
+`ChooseMove`. Kontrole LEAD: **710 testów PASS bez pominięć** z prywatnym
+SDK/configami, w tym 13 testów fokusu, oraz audyt **23 klas / 31 nazw PASS**.
+Zmiany integracji obejmują kontroler, planery ruchu/ataku, konfigurację
+i znaczniki rewizji v29. Provider punktacji i zabezpieczenia HUD v28
+pozostają bez zmian.
 
 Bez samodzielnej kompilacji Windows WOTC SDK i bez wykonania gry. Zielone
 CI z pominiętymi prywatnymi SDK checks nie dowodzi legalności kompilatora
