@@ -1299,7 +1299,7 @@ function MakeDecision(XComTacticalController PC)
         if (class'APX_CombatPlanner'.static.ChooseAction(UnitState, Candidate,
             TargetIndex, Score, bContactSearch,
             (bFocusedGoal ? FocusTargetID : 0), bOpeningContact,
-            (bRangedFocusGoal ? RangedTargetID : 0))
+            (bRangedFocusGoal ? RangedTargetID : 0)))
         {
             // A distant, unsupported opening shot was previously selected
             // solely by damage value. Allow safe moves/overwatch to compete
