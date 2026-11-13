@@ -1230,13 +1230,16 @@ function MakeDecision(XComTacticalController PC)
     // qualify; the same snapshot is reused for every allied decision.
     if (RangedFocusHistory != `XCOMHISTORY
         || RangedFocusStartIndex != FocusStartIndex
-        || RangedFocusBattleID != BerserkerFocusBattleID
+        || (FocusBattle != none && RangedFocusBattleID != FocusBattle.ObjectID)
         || RangedFocusPlayerID != PlayerRef.ObjectID
         || FocusHistoryIndex < RangedFocusLastHistory)
         RangedFocusGroupID = 0;
     RangedFocusHistory = `XCOMHISTORY;
     RangedFocusStartIndex = FocusStartIndex;
-    RangedFocusBattleID = BerserkerFocusBattleID;
+    if (FocusBattle != none)
+        RangedFocusBattleID = FocusBattle.ObjectID;
+    else
+        RangedFocusBattleID = 0;
     RangedFocusPlayerID = PlayerRef.ObjectID;
     RangedFocusLastHistory = FocusHistoryIndex;
     RangedTargetID = 0;
