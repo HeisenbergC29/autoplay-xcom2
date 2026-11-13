@@ -22,19 +22,25 @@ w D54 odnosi się do identyfikatorów **pierwotnie własnych**
 `BerserkerMP` w stanie początkowym; później były widoczne
 w `scope=visible_enemy`. W t13 pierwotny unit26 wykonał wrogie
 `DevastatingPunchMP` na pierwotnym unit25. Zarejestrowane
-`PriestPsiMindControl` skierowane w24 są MISS — nie ma dowodu,
-że te przejścia na stronę przeciwnika są normalnym
-`X2Effect_MindControl`. Nie opierać bezpieczeństwa wyłącznie
+`PriestPsiMindControl` skierowane w24 są MISS, lecz rejestrator mógł
+pomijać udane przejęcia przy sprawdzaniu własności dopiero po akcji.
+Te pudła nie wykluczają zwykłego Mind Control; konkretny sprawca pozostaje
+nieustalony. Nie opierać bezpieczeństwa wyłącznie
 na `IsReclaimableControlledSquadmate`, który chroni konkretny,
 odwracalny aktywny efekt. Szczegóły [#4](https://github.com/HeisenbergC29/autoplay-xcom2/issues/4#issuecomment-6851447903).
 
 ## Zmiana źródeł v32
 
-Tylko `APX_BerserkerFocus.uc`: dla aktualnie wrogiej
+W `APX_BerserkerFocus.uc` dla aktualnie wrogiej
 jednostki `BerserkerMP` rozważanej jako członek `AIGroup`
-sprawdzamy read-only
-`XCOMHISTORY.GetOriginalGameStateRevision(UnitState.ObjectID)`.
-Jeżeli pierwotny stan jest XCOM i należy do tego samego
+sprawdzamy read-only stan jednostki as-of zweryfikowany początek misji:
+`GetGameStateForObjectID(UnitState.ObjectID,, StartIndex)`.
+LEAD zastąpił proponowane GetOriginalGameStateRevision: ten stock getter
+zwraca najstarszy stan w bieżącym archiwum, bez gwarancji początku misji.
+StartIndex musi być nieujemny, a kontekst stanu typu TacticalGameRule
+z GameRuleType TacticalGameStart. Nigdy nie przekazujemy -1, które oznacza
+stan bieżący. Wzorzec as-of początku misji występuje w stock WillRoll.
+Jeżeli początkowy stan jest XCOM i należy do tego samego
 `PlayerID`, **nie nadajemy bonusowego wspólnego celu** na tej
 jednostce. Jeżeli oryginału nie można bezpiecznie odczytać,
 również pomijamy wyłącznie bonus/goal dla niezweryfikowanego
@@ -43,18 +49,27 @@ listy akcji ani legalności przeciwnika.
 
 Własny squad i tak zawsze oceniamy osobno z aktualnego
 `XComGameState_Unit`. Pierwotnie wrodzy BerserkerMP pozostają
-dozwolonymi kandydatami, jeżeli oryginalny stan pozwala potwierdzić,
+dozwolonymi kandydatami, jeżeli stan początku misji pozwala potwierdzić,
 że nie należeli do gracza. Dla innych szablonów jednostek
 nie wykonujemy dodatkowego odczytu historii. Zliczanie
 `MaxUnitStatesPerDecision`, `MaxMemberRefsPerDecision`,
 `MaxGroupsPerDecision` i reszta filtrowania bez zmian.
 To tylko wybór celu; nie naprawia źródła berserk/possession,
 nie decyduje, czy wolno legalnie zabić dawną jednostkę,
-nie przejmuje/odwołuje kontroli.
+nie przejmuje/odwołuje kontroli. BerserkerMP utworzony dopiero po początku
+misji może nie mieć potwierdzonego stanu i nie otrzymać miękkiego fokusu.
 
 Żadnych zmian w `APX_Controller`, `APX_MissionPlanner`,
 `APX_CombatPlanner`, X4/relay/plant, timerze, scoringu
-lub już bezpiecznym HUD v28. V32 rejestratora/diagnostyki
+lub już bezpiecznym providerze punktacji v28. LEAD poprawił również
+RecordResults: wynik pozostaje w zapisie, jeżeli źródło lub cel należał
+do lokalnego gracza przed albo po akcji. Dotyczy to primary i multi-targetów,
+także redakcji identyfikatorów. Poprzedni indeks nie przekracza początku
+misji i nigdy nie korzysta z -1 jako odczytu poprzedniego stanu.
+Source_scope nadal opisuje obserwację po akcji; niewidoczne źródło pozostaje
+ukryte, a brak pewnego sprawcy nie jest zastępowany domysłem. Format rekordów,
+wyniki natywnych akcji i punktacja nie zmieniają się.
+V32 rejestratora/diagnostyki
 pozwala odróżnić zachowanie od v31 w nowym teście.
 `tests/test_berserker_focus.py` wykonuje czystą regułę UC
 `ExcludeFormerLocalBerserker` i kontroluje strukturalnie
@@ -63,12 +78,12 @@ historyczne ownership/scope/fail-closed; sama kontrola
 
 ## Kolejność integracji i ograniczenia
 
-**Stacked PR #68**, base `helper/31-revealed-squad-focus` (PR #65/v31)
-nad `helper/62-persistent-tactical-panel` (PR #63/v30).
-Przed review/merge LEAD powinien ustalić kolejność,
-uwzględnić zmiany main v29 (PR #64/#66) i rozstrzygnąć
-rebase. Nic nie modyfikuje już przetestowanej przez użytkownika
-paczki v29; nadal native LOSS i +7100 jako baseline.
+PR #68 powstał jako stos nad #63/v30 i #65/v31. LEAD scalił te dwa tematy
+osobno, uwzględnił main z #64/#66, poprawił odczyt początku misji i lukę
+rejestratora. Końcowa paczka zachowuje usunięcie nieużywanej Distance.
+Kompilacja Windows i gra v32: **NOT RUN**. Paczka v29 pozostaje historycznym
+baseline: native LOSS i finalne +7100.
+[Niezależnie sprawdzony raport v29](report-2026-11-13-v29.pl.md).
 
 W grze po odpowiedniej kompilacji sprawdzić, czy marker
 `berserker_focus` podczas Sweep unika ID własnych

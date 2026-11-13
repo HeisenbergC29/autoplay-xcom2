@@ -6,7 +6,20 @@ poziom potwierdzenia działania.
 
 ## Baza kodu
 
-- Bieżąca rewizja przygotowywanych źródeł: `mission-report-v29`, #56 / PR #61:
+- Bieżąca rewizja przygotowywanych źródeł: `mission-report-v32`.
+  Integracja osobno przejrzanych #63 (stały panel autoplay, opt-out), #65
+  (etap 1 wspólnego widocznego celu strzelców) i #68 (ochrona wyboru celu
+  przed wskazaniem początkowo własnych BerserkerMP). LEAD sprawdza własność
+  as-of zweryfikowany początek misji zamiast najstarszej wersji archiwum;
+  brak pewnego startu/stanu wyłącza miękki fokus dla tego Berserkera.
+  Rejestrator zachowuje też wyniki dotyczące własnego źródła/celu przed
+  lub po zmianie właściciela. Source_scope i redakcja źródeł pozostają;
+  nie zmienia to natywnych akcji ani punktacji. #66 zachowane.
+  Windows WOTC SDK i gra v32: **NOT RUN**. Jeden końcowy SHA i ZIP w #4;
+  użytkownik kompiluje i sprawdza GasStation oraz Blood Killer. Wykonalne
+  otwarcie Berserkerów względem timera i przeżycie Sweep pozostają #56;
+  synchronizacja OW to dalszy etap #31. Brak deklaracji wygranej.
+- Sprawdzona rewizja `mission-report-v29`, #56 / PR #61:
   wspólny kontakt grupy dla BerserkerMP w SabotageTransmitter. Krótkie
   otwarcie w turach 1–2 wymaga natywnego timera >=4, odległości <=18
   i co najmniej trzech żywych Berserkerów; potem powrót do X4/relay.
@@ -22,16 +35,18 @@ poziom potwierdzenia działania.
   użytkownik potwierdził paczkę LEAD `189aa3d3aba054109f7ca1405770a2c90b0676e9`.
   Sam log nie zawiera SHA ani znacznika rewizji. Jedno ostrzeżenie moda
   dotyczy nieużywanej lokalnej Distance; pozostałe osiem pochodzi z SDK/DLC.
-  [Dowód kompilacji](build-2026-11-13-v29.pl.md). Gra v29: **NOT RUN**.
+  [Dowód kompilacji](build-2026-11-13-v29.pl.md).
   Na kolejną prośbę użytkownika o nową paczkę LEAD usunął wyłącznie
   nieużywaną deklarację Distance z SelectSquadContact. Algorytm i rewizja
   v29 pozostają; pozostałych ośmiu ostrzeżeń SDK/DLC ta zmiana nie dotyczy.
-  Kompilacja poprawionej paczki: **NOT RUN**, poprzedni dowód PASS dotyczy
-  paczki 189aa3d3. Dokładny SHA i ZIP poprawki wskazuje issue #4.
-  Następna kolej użytkownika: skompilować poprawioną paczkę i wykonać
-  Blood Killer diff2.
-  Wspólny cel nie potwierdza jeszcze
-  ograniczenia strat ani wygranej. HELPER może dalej prowadzić osobne #31.
+  Nowy raport potwierdza runtime v29, bez dokładnego lokalnego SHA, więc
+  nie przypisujemy go konkretnie poprawce #66. [Raport v29](report-2026-11-13-v29.pl.md):
+  GasStation native LOSS / −12900 final; Blood Killer native LOSS / +7100 final.
+  Blood ma 55 chosen i 109 result identyczne z backupem v28; 0 faz contact.
+  Timer i dystans nigdy nie przeszły obu progów. Wybór celu obejmował
+  początkowo własnych Berserkerów. Luka kwalifikacji wyników po przejęciu
+  nie pozwala wykluczać udanego MC na podstawie samych zapisanych MISS.
+  Cele X4/relay działają; zwycięstwo i mniejsze straty nie są potwierdzone.
   [Zakres i próba v29](experiment-56-berserker-focus-v29.pl.md).
 - Poprzednia rewizja `mission-report-v28`, #57 / PR #58:
   bezpieczny odczyt punktacji. Matching EXE i zrzut v27 potwierdziły stos
