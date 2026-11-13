@@ -23,11 +23,16 @@ poziom potwierdzenia działania.
   12 ostrzeżeń**, pakiet AutoplayXCom2.u zapisany. Log nie zawiera SHA;
   przypisanie do powtórki v32 wynika z kontekstu. Siedem braków zasobów
   zniknęło, pozostał Day0 i pojawiło się 11 duplikatów TLE/DLC_3.
-  #73 porządkuje SDK osobnym opcjonalnym narzędziem z kopiami zapasowymi;
-  kod i rewizja moda pozostają bez zmian. Gra v32: **NOT RUN**.
+  Nowe logi po naprawie #73 potwierdzają **base make PASS 0 błędów / 1
+  ostrzeżenie i mod make PASS 0 błędów / 1 ostrzeżenie**. Duplikaty TLE
+  zniknęły, pakiety bazowe i AutoplayXCom2.u zapisane. Pozostał pusty Day0
+  na liście kompilatora SDK; jego opcjonalne pominięcie opisuje #75.
+  Kolektor może zebrać aktualne Src i dwa SDK-INI do prywatnego porównania.
+  Kod i rewizja moda pozostają bez zmian. Gra v32: **NOT RUN**.
   [Dowód i zakres poprawki](build-2026-11-13-v32.pl.md).
-  Paczka testowa b7a79972 pozostaje w #4. Po uporządkowaniu SDK i ponownym
-  zbudowaniu bazy/moda użytkownik sprawdza GasStation oraz Blood Killer. Wykonalne
+  Paczka testowa b7a79972 pozostaje w #4. Użytkownik może przejść do
+  GasStation i Blood Killer; kosmetyczne Day0 oraz migawka SDK są osobne.
+  Wykonalne
   otwarcie Berserkerów względem timera i przeżycie Sweep pozostają #56;
   synchronizacja OW to dalszy etap #31. Brak deklaracji wygranej.
 - Sprawdzona rewizja `mission-report-v29`, #56 / PR #61:
