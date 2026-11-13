@@ -110,7 +110,7 @@ function Start(int PlayerID)
     bStarted = true;
     Emit("start", "|player=" $ PlayerID $ "|mission=" $ Safe(Mission)
         $ "|difficulty=" $ `TacticalDifficultySetting $ "|history=" $ HistoryCursor
-        $ "|revision=mission-report-v30|full_intel_enabled=" $ class'APX_FullIntel'.default.EnableFullIntel
+        $ "|revision=mission-report-v31|full_intel_enabled=" $ class'APX_FullIntel'.default.EnableFullIntel
         $ "|formation_area_radius_tiles=" $ class'APX_MissionPlanner'.default.SquadAreaRiskRadiusTiles
         $ "|formation_area_weight=" $ class'APX_MissionPlanner'.default.SquadAreaRiskWeight
         $ "|concealment_risk_penalty=" $ class'APX_ConcealmentPlanner'.default.ConcealmentRiskPenalty
