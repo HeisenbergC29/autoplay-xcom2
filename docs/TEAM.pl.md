@@ -182,8 +182,13 @@ pakiet zapisany; gra v32 NOT RUN. Po pełnym SDK Steam siedem dawnych
 ostrzeżeń zasobów zniknęło, doszło 11 duplikatów klas TLE w DLC_3,
 pozostał Day0. Użytkownik potwierdził identyczną kopię przykładowej klasy
 w czterech lokalizacjach Src/SrcOrig i DLC_3/TLE. #73 to odrębna odwracalna
-naprawa środowiska SDK, bez nowych zmian runtime. Po czystym buildzie
-następuje gra. [Dowód](build-2026-11-13-v32.pl.md).
+naprawa środowiska SDK, bez nowych zmian runtime. Nowe dwa logi użytkownika
+potwierdzają sukces bazy i moda po naprawie: każdy **0 błędów / 1 ostrzeżenie**,
+duplikaty zniknęły. #73 zamknięto; Day0 z pustego pakietu kompilatora
+i aktualna prywatna migawka źródeł SDK są w #75. **Następny test gry może
+się odbyć na obecnej v32**; brak raportu gry nadal oznacza NOT RUN.
+HELPER nie otrzymał nowych logów, więc LEAD przekazał ich wynik na GitHubie.
+[Dowód](build-2026-11-13-v32.pl.md).
 **HELPER równolegle:** #56 wykonalne otwarcie i przeżycie
 Sweep, potem dalsze #31 OW; nowy claim/branch/PR i następna rewizja,
 z zachowaniem tej bazy. V32 nie deklaruje naprawy 21 wczesnych ruchów.
