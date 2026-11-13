@@ -1,4 +1,4 @@
-# Stan przekazania projektu — 12 listopada 2026
+# Stan przekazania projektu — 13 listopada 2026
 
 To punkt startowy po pierwszym przeglądzie importu pomocnika. Bieżące issue i PR-y mogą zawierać nowsze
 ustalenia; po integracji aktualizuj ten dokument, gdy zmienia się baza lub
@@ -17,9 +17,14 @@ poziom potwierdzenia działania.
   te kontrakty podczas przeglądu. Nie zmieniono natywnych akcji, AP,
   punktacji, kryterium sukcesu ani bezpiecznego providera v28.
   Kontrole: 710 testów z prywatnymi wejściami PASS, bez pominięć;
-  audyt SDK 23 klas / 31 nazw PASS. Windows WOTC SDK i gra v29: **NOT RUN**.
-  Po integracji LEAD następna kolej użytkownika: skompilować dokładny SHA
-  z issue #4 i wykonać Blood Killer diff2. Wspólny cel nie potwierdza jeszcze
+  audyt SDK 23 klas / 31 nazw PASS. Kompilacja Windows WOTC SDK użytkownika:
+  **PASS — 0 błędów, 9 ostrzeżeń**, pakiet moda zapisany. Log odebrano 13 XI;
+  użytkownik potwierdził paczkę LEAD `189aa3d3aba054109f7ca1405770a2c90b0676e9`.
+  Sam log nie zawiera SHA ani znacznika rewizji. Jedno ostrzeżenie moda
+  dotyczy nieużywanej lokalnej Distance; pozostałe osiem pochodzi z SDK/DLC.
+  [Dowód kompilacji](build-2026-11-13-v29.pl.md). Gra v29: **NOT RUN**.
+  Następna kolej użytkownika: wykonać Blood Killer diff2 na obecnym buildzie.
+  Wspólny cel nie potwierdza jeszcze
   ograniczenia strat ani wygranej. HELPER może dalej prowadzić osobne #31.
   [Zakres i próba v29](experiment-56-berserker-focus-v29.pl.md).
 - Poprzednia rewizja `mission-report-v28`, #57 / PR #58:

@@ -78,9 +78,12 @@ Zmiany integracji obejmują kontroler, planery ruchu/ataku, konfigurację
 i znaczniki rewizji v29. Provider punktacji i zabezpieczenia HUD v28
 pozostają bez zmian.
 
-Bez samodzielnej kompilacji Windows WOTC SDK i bez wykonania gry. Zielone
-CI z pominiętymi prywatnymi SDK checks nie dowodzi legalności kompilatora
-UnrealScript ani wygranej. Na realnej misji porównać A/B: pierwsza legalna
+Log użytkownika odebrany 13 XI potwierdza kompilację Windows WOTC SDK:
+**PASS, 0 błędów, 9 ostrzeżeń**, pakiet zapisany. Użytkownik potwierdził paczkę
+LEAD `189aa3d3aba054109f7ca1405770a2c90b0676e9`; sam log nie zapisuje SHA.
+[Szczegóły dowodu i ostrzeżeń](build-2026-11-13-v29.pl.md). **Gra v29: NOT RUN**.
+Zielone CI nie zastępuje tego dowodu kompilacji ani próby w grze.
+Na realnej misji porównać A/B: pierwsza legalna
 oferta i **wybrany** atak na pod, ruchy bez ciosu w turn1–3, licznik
 przed/po relay, X4 w czasie, rzeczywistą aktywację Sweep, liczebność
 odziału, flagę heavy-loss, natywne zwycięstwo i **znane końcowe punkty >0**.
