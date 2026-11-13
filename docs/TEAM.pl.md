@@ -161,9 +161,12 @@ centroidzie. Po review/CI LEAD scalił v29 jako
 `189aa3d3aba054109f7ca1405770a2c90b0676e9`. Log użytkownika odebrany 13 XI
 potwierdza Windows WOTC SDK **PASS: 0 błędów, 9 ostrzeżeń**, pakiet zapisany.
 Użytkownik potwierdził, że kompilował wskazaną paczkę; log sam nie zawiera SHA.
-**Następna kolej należy do użytkownika**: Blood Killer diff2 na obecnym buildzie
-według #4. Gra v29 pozostaje NOT RUN; zapis dowodu jest tylko dokumentacją,
-bez zmiany runtime/revision ani nowej paczki wymagającej kompilacji.
+Pierwotny zapis dowodu był wyłącznie dokumentacją. Następnie użytkownik
+poprosił o nowy link z poprawioną paczką: LEAD usunął tylko nieużywaną
+lokalną Distance, bez zmiany algorytmu i rewizji v29. Nowa paczka ma osobny
+SHA/ZIP w #4, kompilacja tej poprawki **NOT RUN**; wcześniejszy PASS pozostaje
+dowodem poprzedniej paczki. **Następna kolej należy do użytkownika**:
+kompilacja poprawionej paczki oraz Blood Killer diff2. Gra v29 nadal NOT RUN.
 [Dowód kompilacji](build-2026-11-13-v29.pl.md).
 HELPER może kontynuować odrębne #31 dla nieukrytej drużyny strzelców na nowej
 bazie. Jeden claim zakresu przed edycją wspólnego MissionPlanner; oddzielne

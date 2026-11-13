@@ -89,7 +89,7 @@ static function bool SelectSquadContact(int PlayerID, int PreviousGroupID,
     local XComGameState_Unit Friend, Enemy, Representative;
     local XComGameState_AIGroup Group;
     local StateObjectReference Ref;
-    local float CenterX, CenterY, BestScore, Distance, DistanceSq;
+    local float CenterX, CenterY, BestScore, DistanceSq;
     local float NearestDistanceSq, CandidateScore;
     local int UnitsChecked, GroupsChecked, RefsChecked, Members, CandidateID;
     local TTile CandidateTile;
