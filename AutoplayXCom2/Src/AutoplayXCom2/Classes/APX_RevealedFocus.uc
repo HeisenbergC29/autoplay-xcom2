@@ -52,6 +52,7 @@ static function bool SelectContact(int PlayerID, int PreviousGroupID,
     local XComGameState_Unit Friend, Enemy, Representative;
     local XComGameState_AIGroup Group;
     local StateObjectReference Member;
+    local array<StateObjectReference> PlayerVisibleEnemies;
     local array<int> SeenIDs;
     local float CenterX, CenterY, DistSq, Dist, NearestDist;
     local float BestGroupScore, GroupScore, PrimaryScore, MemberScore;
@@ -101,6 +102,12 @@ static function bool SelectContact(int PlayerID, int PreviousGroupID,
     CenterX /= float(LivingRanged);
     CenterY /= float(LivingRanged);
 
+    // Group membership can organize a CURRENTLY visible contact. It must
+    // never redirect an ongoing fight toward a different full-intel-only pod.
+    class'X2TacticalVisibilityHelpers'.static.GetAllVisibleEnemiesForPlayer(
+        PlayerID, PlayerVisibleEnemies);
+    if (PlayerVisibleEnemies.Length == 0 || PlayerVisibleEnemies.Length > 64)
+        return false;
     BestGroupScore = -10000.0;
     foreach `XCOMHISTORY.IterateByClassType(class'XComGameState_AIGroup', Group)
     {
@@ -129,6 +136,7 @@ static function bool SelectContact(int PlayerID, int PreviousGroupID,
                 || Enemy.IsCivilian() || Enemy.GetMyTemplate().bIsCosmetic
                 || Enemy.GetMyTemplateName() == 'HostileVIPCivilian'
                 || !Representative.IsEnemyUnit(Enemy)
+                || PlayerVisibleEnemies.Find('ObjectID', Enemy.ObjectID) == INDEX_NONE
                 || `XWORLD.IsTileOutOfRange(Enemy.TileLocation)
                 || class'APX_CombatPlanner'.static.IsReclaimableControlledSquadmate(
                     Representative, Enemy))
