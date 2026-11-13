@@ -9,6 +9,9 @@ var config float ButtonWidth;
 var config float FadeSeconds;
 var config float CollapseDelaySeconds;
 var config float IndicatorAlpha;
+// Keep toggle/status/native score visible through the entire tactical HUD.
+// Opt-out restores the original mouse-out auto-collapse behavior.
+var config bool AlwaysExpanded;
 
 var localized string EnableLabel;
 var localized string DisableLabel;
@@ -139,12 +142,23 @@ simulated function Expand()
 
 simulated function ScheduleCollapse()
 {
+    if (default.AlwaysExpanded)
+    {
+        bPendingCollapse = false;
+        Expand();
+        return;
+    }
     bPendingCollapse = true;
     CollapseRemaining = FMax(0.25, CollapseDelaySeconds);
 }
 
 simulated function Collapse()
 {
+    if (default.AlwaysExpanded)
+    {
+        Expand();
+        return;
+    }
     bExpanded = false;
     bPendingCollapse = false;
     // Only the slim indicator may intercept the battlefield while collapsed.
@@ -245,7 +259,9 @@ simulated event Tick(float DeltaTime)
         && `XWORLD != none && `XWORLD.bEnableFOW)
         class'APX_FullIntel'.static.RevealMapForPlayer();
 
-    if (bPendingCollapse)
+    if (default.AlwaysExpanded && !bExpanded)
+        Expand();
+    if (bPendingCollapse && !default.AlwaysExpanded)
     {
         CollapseRemaining -= DeltaTime;
         if (CollapseRemaining <= 0.0)
