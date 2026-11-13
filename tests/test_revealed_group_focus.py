@@ -5,10 +5,11 @@ ensure current native target eligibility, safety and mission separation.
 These tests do not demonstrate legal in-game reaction shots or victory.
 """
 from pathlib import Path
+import os
 import unittest
 
 from uc_math import load_uc_function
-from test_ui_gating import function_body
+from test_ui_gating import CHECKS, function_body
 
 ROOT = Path(__file__).resolve().parents[1]
 CLASSES = ROOT / 'AutoplayXCom2/Src/AutoplayXCom2/Classes'
@@ -131,6 +132,8 @@ class RevealedGroupFocusTests(unittest.TestCase):
         self.assertIn('HasBlockingHazard(UnitState, CandidatePath[PathIndex])',move)
         self.assertIn('IsSupportedAdvanceStep(StartSupport,',move)
         self.assertIn('FocusPositionBonus(',move)
+        self.assertIn('Goal.bRangedFocusGoal = true;',goal)
+        self.assertIn('if (Goal.bRangedFocusGoal && !bSabotageRush)',move)
         self.assertLess(move.index('PositionScore(UnitState, Tile, GoalTile, bCombatGoal,'),
                         move.index('FocusPositionBonus('))
 
@@ -154,6 +157,19 @@ class RevealedGroupFocusTests(unittest.TestCase):
         ):
             self.assertIn(entry,ini)
 
+
+
+@unittest.skipUnless(os.environ.get('APX_SDK_SOURCE_ROOT'),
+                     'Stock WOTC SDK unavailable: native visibility/group contracts')
+class RevealedFocusSDKContracts(unittest.TestCase):
+    def test_stock_group_and_visibility_api_are_real(self):
+        sdk=CHECKS.find_sdk_root(Path(os.environ['APX_SDK_SOURCE_ROOT']))/'XComGame/Classes'
+        ai=(sdk/'XComGameState_AIGroup.uc').read_text(encoding='utf-8-sig')
+        vis=(sdk/'X2TacticalVisibilityHelpers.uc').read_text(encoding='utf-8-sig')
+        unit=(sdk/'XComGameState_Unit.uc').read_text(encoding='utf-8-sig')
+        self.assertIn('m_arrMembers',ai)
+        self.assertIn('GetAllVisibleEnemiesForPlayer(',vis)
+        self.assertIn('IsBleedingOut(',unit)
 
 if __name__=='__main__':
     unittest.main()
