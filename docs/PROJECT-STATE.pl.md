@@ -15,8 +15,14 @@ poziom potwierdzenia działania.
   Rejestrator zachowuje też wyniki dotyczące własnego źródła/celu przed
   lub po zmianie właściciela. Source_scope i redakcja źródeł pozostają;
   nie zmienia to natywnych akcji ani punktacji. #66 zachowane.
-  Windows WOTC SDK i gra v32: **NOT RUN**. Jeden końcowy SHA i ZIP w #4;
-  użytkownik kompiluje i sprawdza GasStation oraz Blood Killer. Wykonalne
+  Pierwsza próba Windows WOTC SDK v32: **FAIL — 1 błąd, 8 ostrzeżeń**.
+  Brakowało zamykającego nawiasu if w Controller:1303; LEAD przeoczył go
+  podczas review. #71 / PR #72 dodaje jeden nawias i testy delimiterów
+  wszystkich źródeł. Log nie zapisuje SHA, lecz błąd odpowiada paczce2239c418.
+  Kompilacja po poprawce i gra v32: **NOT RUN**.
+  [Dowód i zakres poprawki](build-2026-11-13-v32.pl.md).
+  Jeden poprawiony SHA i ZIP w #4; użytkownik ponawia kompilację, a po jej
+  sukcesie sprawdza GasStation oraz Blood Killer. Wykonalne
   otwarcie Berserkerów względem timera i przeżycie Sweep pozostają #56;
   synchronizacja OW to dalszy etap #31. Brak deklaracji wygranej.
 - Sprawdzona rewizja `mission-report-v29`, #56 / PR #61:

@@ -174,8 +174,12 @@ Nie wykluczać udanego MC na podstawie samych zapisanych MISS: rejestrator
 mógł pomijać udaną zmianę właściciela. W v32 odczyt początku misji
 i kwalifikacja przed/po akcji są poprawione; native targeting/score zachowane.
 **Następna kolej użytkownika** po integracji i wskazaniu jednego końcowego
-SHA/ZIP w #4: kompilacja v32 i GasStation/Blood Killer. Windows/game v32
-pozostają NOT RUN. **HELPER równolegle:** #56 wykonalne otwarcie i przeżycie
+SHA/ZIP w #4: kompilacja v32 i GasStation/Blood Killer. Pierwszy Windows
+make v32 był **FAIL: 1 błąd, 8 ostrzeżeń** (brak ')' w Controller:1303).
+PR #72 naprawia nawias bez zmiany taktyki i rewizji; dodaje regresję
+i skan delimiterów. **Make po poprawce i gra v32 NOT RUN**; użytkownik
+ponawia kompilację poprawionego SHA, a potem grę. [Dowód](build-2026-11-13-v32.pl.md).
+**HELPER równolegle:** #56 wykonalne otwarcie i przeżycie
 Sweep, potem dalsze #31 OW; nowy claim/branch/PR i następna rewizja,
 z zachowaniem tej bazy. V32 nie deklaruje naprawy 21 wczesnych ruchów.
 [Dowód kompilacji](build-2026-11-13-v29.pl.md).
