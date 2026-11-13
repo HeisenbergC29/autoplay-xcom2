@@ -577,6 +577,17 @@ static function float ScoreBerserkerObjectivePath(
     return Score;
 }
 
+// Gate the post-clear Gatecrasher/X4 approach by real mission state.
+// Reaching a generic mission marker is not equivalent to standing on a
+// tile from which the stock Interact_PlantBomb action has a target.
+static function bool ShouldSeekMonumentPlantAnchor(bool bSabotageCC,
+    int KnownEnemyCount, bool bImmediateThreats, bool bBleeding,
+    bool bOwnPlantAbility)
+{
+    return bSabotageCC && KnownEnemyCount == 0 && !bImmediateThreats
+        && !bBleeding && bOwnPlantAbility;
+}
+
 static function bool FindGoal(XComGameState_Unit UnitState, out MissionGoal Goal,
     out array<StateObjectReference> VisibleEnemies,
     optional int BerserkerFocusTargetID, optional bool bBerserkerFocusGoal,
@@ -591,7 +602,7 @@ static function bool FindGoal(XComGameState_Unit UnitState, out MissionGoal Goal
     local MissionGoal EmptyGoal;
     local TTile SabotageGoalTile;
     local string SabotageGoalSource;
-    local int PlantObjectivePhase;
+    local int PlantObjectivePhase, MonumentNativeGoalStatus;
     local bool bCompletedStrategyObjective, bBerserkerSweep, bSkipUnverifiedPlantMarker;
 
     Goal = EmptyGoal;
@@ -665,6 +676,34 @@ static function bool FindGoal(XComGameState_Unit UnitState, out MissionGoal Goal
         }
         if (SabotageGoalSource == "plant_interaction_already_used")
             bSkipUnverifiedPlantMarker = true;
+    }
+
+    // SabotageCC/Gatecrasher's stock X4 interaction anchor may be above
+    // the generic ObjectiveLocation marker. Once the map is cleared,
+    // follow the same bounded native actor/socket discovery used by
+    // Berserker sabotage, rather than stopping <=3 tiles from a marker
+    // with AA_NoTargets. This changes a MOVE goal only: actual planting
+    // still requires stock AA_Success and the owned native ability.
+    if (BattleData != none
+        && BattleData.MapData.ActiveMission.sType == "SabotageCC"
+        && ShouldSeekMonumentPlantAnchor(true, VisibleEnemies.Length,
+            Goal.bImmediateThreats, HasBleedingSquadmate(UnitState),
+            UnitState.FindAbility('Interact_PlantBomb').ObjectID > 0))
+    {
+        MonumentNativeGoalStatus = class'APX_PlantInteractionKnowledge'.static.FindInteractionGoal(
+            UnitState, SabotageGoalTile, SabotageGoalSource);
+        if (MonumentNativeGoalStatus > 0)
+        {
+            Goal.Tile = SabotageGoalTile;
+            Goal.Value = 115.0;
+            Goal.bFound = true;
+            Goal.bCombat = false;
+            `log("Native monument plant approach|unit=" $ UnitState.ObjectID
+                $ "|goal_x=" $ SabotageGoalTile.X $ "|goal_y=" $ SabotageGoalTile.Y
+                $ "|goal_z=" $ SabotageGoalTile.Z $ "|source=" $ SabotageGoalSource,
+                true, 'AutoplayXCom2');
+            return true;
+        }
     }
 
     // For already revealed ranged squads, choose a single CURRENTLY
