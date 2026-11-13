@@ -25,6 +25,7 @@ struct MissionGoal
     var bool bFound;
     var bool bImmediateThreats;
     var bool bBerserkerSabotageGoal;
+    var bool bRangedFocusGoal;
     var string BerserkerSabotageGoalSource;
 };
 
@@ -689,6 +690,7 @@ static function bool FindGoal(XComGameState_Unit UnitState, out MissionGoal Goal
             Goal.Value = 45.0;
             Goal.bFound = true;
             Goal.bCombat = true;
+            Goal.bRangedFocusGoal = true;
             return true;
         }
     }
@@ -2110,7 +2112,7 @@ static function bool ChooseMove(XComGameState_Unit UnitState,
             continue;
         CandidateScore = PositionScore(UnitState, Tile, GoalTile, bCombatGoal,
             VisibleEnemies, MeleeThreatReaches, ThreatWeights);
-        if (bRangedFocusGoal && Goal.bCombat && !bSabotageRush)
+        if (Goal.bRangedFocusGoal && !bSabotageRush)
             CandidateScore += class'APX_RevealedFocus'.static.FocusPositionBonus(
                 TileDistance(UnitState.TileLocation, GoalTile),
                 TileDistance(Tile, GoalTile));
