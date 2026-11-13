@@ -1461,7 +1461,8 @@ static function float OffensivePositionScore(XComGameState_Unit UnitState, TTile
         bClearLOS = `XWORLD.CanSeeTileToTile(Tile, EnemyTile, Visibility);
         Value = FiringPositionValue(Distance, default.PreferredCombatRangeTiles,
             bClearLOS, Enemy.GetMyTemplate().bCanTakeCover && Cover == CT_None,
-            Tile.Z > EnemyTile.Z);
+            !UnitState.IsMeleeOnly() && Tile.Z + UnitState.GetHeightAdvantageBonusZ()
+                >= EnemyTile.Z + Max(1, class'X2TacticalGameRuleset'.default.UnitHeightAdvantage));
         BestValue = FMax(BestValue, Value);
     }
     if (BestValue == -10000.0)

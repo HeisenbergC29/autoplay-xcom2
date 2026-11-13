@@ -12,7 +12,7 @@ static event OnPostTemplatesCreated()
     Manager = class'X2AbilityTemplateManager'.static.GetAbilityTemplateManager();
     if (Manager == none)
     {
-        `log("MP visualization patch|revision=mission-report-v34|status=manager_unavailable", true, 'AutoplayXCom2');
+        `log("MP visualization patch|revision=mission-report-v35|status=manager_unavailable", true, 'AutoplayXCom2');
         return;
     }
     Manager.FindAbilityTemplateAllDifficulties('DevastatingPunchMP', Templates);
@@ -23,7 +23,7 @@ static event OnPostTemplatesCreated()
     }
     // One initialization summary, including safe skips of unknown shapes.
     // A match means both flags are present, including an idempotent re-run.
-    `log("MP visualization patch|revision=mission-report-v34|templates=" $ Templates.Length
+    `log("MP visualization patch|revision=mission-report-v35|templates=" $ Templates.Length
         $ "|matched=" $ Matched $ "|skipped=" $ (Templates.Length - Matched), true, 'AutoplayXCom2');
 }
 
