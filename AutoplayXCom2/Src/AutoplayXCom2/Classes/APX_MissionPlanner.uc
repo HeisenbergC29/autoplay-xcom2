@@ -578,7 +578,8 @@ static function float ScoreBerserkerObjectivePath(
 
 static function bool FindGoal(XComGameState_Unit UnitState, out MissionGoal Goal,
     out array<StateObjectReference> VisibleEnemies,
-    optional int BerserkerFocusTargetID, optional bool bBerserkerFocusGoal)
+    optional int BerserkerFocusTargetID, optional bool bBerserkerFocusGoal,
+    optional int RangedFocusTargetID, optional bool bRangedFocusGoal)
 {
     local XComGameState_InteractiveObject ObjectState;
     local XComGameState_Unit OtherUnit;
@@ -663,6 +664,33 @@ static function bool FindGoal(XComGameState_Unit UnitState, out MissionGoal Goal
         }
         if (SabotageGoalSource == "plant_interaction_already_used")
             bSkipUnverifiedPlantMarker = true;
+    }
+
+    // For already revealed ranged squads, choose a single CURRENTLY
+    // player-visible enemy from the retained AIGroup. This is active contact
+    // coordination, not a pursuit order for a distant undiscovered pod.
+    // Rescue, evacuation, active deadlines and the Blood Killer X4 override.
+    if (bRangedFocusGoal && RangedFocusTargetID > 0
+        && Goal.bImmediateThreats && !UnitState.IsConcealed()
+        && !UnitState.IsMeleeOnly()
+        && UnitState.GetMyTemplateName() != 'BerserkerMP'
+        && !HasBleedingSquadmate(UnitState)
+        && !HasActiveMissionDeadline())
+    {
+        OtherUnit = XComGameState_Unit(`XCOMHISTORY.GetGameStateForObjectID(
+            RangedFocusTargetID));
+        if (OtherUnit != none && OtherUnit.IsAlive() && !OtherUnit.IsIncapacitated()
+            && !OtherUnit.bRemovedFromPlay && UnitState.IsEnemyUnit(OtherUnit)
+            && VisibleEnemies.Find('ObjectID', RangedFocusTargetID) != INDEX_NONE
+            && !class'APX_CombatPlanner'.static.IsReclaimableControlledSquadmate(
+                UnitState, OtherUnit))
+        {
+            Goal.Tile = OtherUnit.TileLocation;
+            Goal.Value = 45.0;
+            Goal.bFound = true;
+            Goal.bCombat = true;
+            return true;
+        }
     }
 
     // A squadmate's actual contact can still threaten this soldier. Distant
@@ -1918,7 +1946,8 @@ static function bool ChooseMove(XComGameState_Unit UnitState,
     out array<TTile> Path, out float Score,
     optional out int RemainingConcealmentChecks,
     optional out int RemainingCoverChecks,
-    optional int BerserkerFocusTargetID, optional bool bBerserkerFocusGoal)
+    optional int BerserkerFocusTargetID, optional bool bBerserkerFocusGoal,
+    optional int RangedFocusTargetID, optional bool bRangedFocusGoal)
 {
     local XGUnit UnitVisualizer;
     local array<TTile> Tiles, CandidatePath, RiskyRoute, LocalFallbackPath;
@@ -1940,7 +1969,8 @@ static function bool ChooseMove(XComGameState_Unit UnitState,
     Score = 0;
     if (!HasLegalMove(UnitState)
         || !FindGoal(UnitState, Goal, VisibleEnemies,
-            BerserkerFocusTargetID, bBerserkerFocusGoal))
+            BerserkerFocusTargetID, bBerserkerFocusGoal,
+            RangedFocusTargetID, bRangedFocusGoal))
         return false;
     GoalTile = Goal.Tile;
     bSabotageRush = Goal.bBerserkerSabotageGoal
@@ -2080,6 +2110,10 @@ static function bool ChooseMove(XComGameState_Unit UnitState,
             continue;
         CandidateScore = PositionScore(UnitState, Tile, GoalTile, bCombatGoal,
             VisibleEnemies, MeleeThreatReaches, ThreatWeights);
+        if (bRangedFocusGoal && Goal.bCombat && !bSabotageRush)
+            CandidateScore += class'APX_RevealedFocus'.static.FocusPositionBonus(
+                TileDistance(UnitState.TileLocation, GoalTile),
+                TileDistance(Tile, GoalTile));
         // Small travel cost breaks equivalent-position ties and reduces churn.
         CandidateScore -= PathCost * 0.25;
         if (bCombatGoal && !IsUsefulReposition(CandidateScore - CurrentScore,
