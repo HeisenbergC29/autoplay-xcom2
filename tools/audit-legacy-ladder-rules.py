@@ -113,6 +113,13 @@ def decayed(record, turn):
                * record["DecreasePerTurn"])
 
 
+def previous_v2_decayed(record, turn):
+    """The historic JSON uses snake_case, unlike native INI's PascalCase."""
+    return max(record["min_points"],
+               record["starting_points"] - max(0, turn - record["turn_offset"])
+               * record["decrease_per_turn"])
+
+
 def rate_for_enemy(rules, template):
     return rules["categories"]["enemy"].get((template,), rules["defaults"]["DefaultEnemyScoring"])
 
@@ -151,7 +158,7 @@ def audit(rules, previous=None):
         report["previous_profile"] = previous["profile_id"]
         report["comparison_differences_at_turn10"] = {}
         for name in ("AdvTrooperM1", "AdvPriestM3", "Muton"):
-            before = decayed(old.get(name, default), 10)
+            before = previous_v2_decayed(old.get(name, default), 10)
             after = witnesses[name]
             report["comparison_differences_at_turn10"][name] = {
                 "previous": before, "configured": after, "difference": after - before
