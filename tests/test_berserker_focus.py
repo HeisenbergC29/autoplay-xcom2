@@ -93,7 +93,8 @@ class BloodKillerFocusContracts(unittest.TestCase):
         guard = function_body(self.focus, 'WasOriginallyLocalBerserker')
         select = function_body(self.focus, 'SelectSquadContact')
         self.assertIn("UnitState.GetMyTemplateName() != 'BerserkerMP'", guard)
-        self.assertIn('GetOriginalGameStateRevision(UnitState.ObjectID)', guard)
+        self.assertIn('GetGameStateForObjectID(UnitState.ObjectID,, StartIndex)', guard)
+        self.assertNotIn('GetOriginalGameStateRevision(UnitState.ObjectID)', guard)
         self.assertIn('OriginalUnit.GetTeam() == eTeam_XCom', guard)
         self.assertIn('OriginalUnit.GetAssociatedPlayerID() == PlayerID', guard)
         self.assertIn("OriginalUnit.GetMyTemplateName() == 'BerserkerMP'", guard)
@@ -108,6 +109,19 @@ class BloodKillerFocusContracts(unittest.TestCase):
         for bad in ('ModifyStateObject(', 'CreateNewGameState(',
                     'SubmitGameState(', 'IsEngaged(', 'GetTotalScore('):
             self.assertNotIn(bad, guard)
+
+    def test_start_owner_lookup_rejects_missing_or_non_tactical_start(self):
+        guard = function_body(self.focus, 'WasOriginallyLocalBerserker')
+        # Regression: -1 is the native current-state sentinel, so an absent
+        # start cannot silently become evidence that a former ally was hostile.
+        self.assertRegex(guard, r'if \(StartIndex < 0\)\s*return true;')
+        self.assertRegex(guard, r'if \(StartState == none\)\s*return true;')
+        self.assertRegex(guard, r'if \(StartContext == none \|\| StartContext.GameRuleType != eGameRule_TacticalGameStart\)\s*return true;')
+        read = guard.index('GetGameStateForObjectID(UnitState.ObjectID,, StartIndex)')
+        self.assertLess(guard.index('StartIndex < 0'), read)
+        self.assertLess(guard.index('StartState == none'), read)
+        self.assertLess(guard.index('StartContext.GameRuleType != eGameRule_TacticalGameStart'), read)
+        self.assertIn('OriginalUnit.GetAssociatedPlayerID() > 0', guard)
 
     def test_relay_is_always_legal_if_stock_cache_says_so(self):
         self.assertEqual(self.relay(105,False),105)
@@ -214,11 +228,17 @@ class BloodKillerFocusSDKContracts(unittest.TestCase):
         timer=(sdk/'XComGameState_UITimer.uc').read_text(encoding='utf-8-sig')
         group=(sdk/'XComGameState_AIGroup.uc').read_text(encoding='utf-8-sig')
         unit=(sdk/'XComGameState_Unit.uc').read_text(encoding='utf-8-sig')
+        history=(sdk/'XComGameStateHistory.uc').read_text(encoding='utf-8-sig')
+        context=(sdk/'XComGameStateContext_TacticalGameRule.uc').read_text(encoding='utf-8-sig')
         self.assertIn('var int TimerValue;',timer)
         self.assertIn('var bool IsTimer;',timer)
         self.assertIn('function bool IsSuspended(',timer)
         self.assertIn('m_arrMembers',group)
         self.assertIn('GetAssociatedPlayerID(',unit)
+        self.assertIn('native final function int FindStartStateIndex();',history)
+        self.assertIn('native final function XComGameState GetGameStateFromHistory(',history)
+        self.assertIn('GetGameStateForObjectID(int ObjectID, optional EGameStateReturnType DesiredReturnType=eReturnType_Reference, optional int HistoryIndex=-1)',history)
+        self.assertIn('eGameRule_TacticalGameStart',context)
 
 
 if __name__=='__main__':

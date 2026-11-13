@@ -97,23 +97,41 @@ static function bool ExcludeFormerLocalBerserker(bool bIsBerserker,
 
 static function bool WasOriginallyLocalBerserker(XComGameState_Unit UnitState, int PlayerID)
 {
+    local XComGameStateHistory History;
+    local XComGameState StartState;
+    local XComGameStateContext_TacticalGameRule StartContext;
     local XComGameState_Unit OriginalUnit;
+    local int StartIndex;
     local bool bKnown, bLocal;
 
     if (UnitState == none || UnitState.GetMyTemplateName() != 'BerserkerMP')
         return false;
-    if (`XCOMHISTORY == none || PlayerID <= 0)
+    History = `XCOMHISTORY;
+    if (History == none || PlayerID <= 0)
         return true;
-    // This public read-only history API is also used by controlled-ally
-    // protection in APX_CombatPlanner. It does not inspect enemy intent,
-    // resource state, or a future path.
+    // GetOriginalGameStateRevision returns the oldest version in the current
+    // archive, which need not be the mission's initial ownership. Use the
+    // validated tactical start snapshot, as the stock mission-will code does.
+    // Never pass -1: that means current state, not an unavailable start state.
+    StartIndex = History.FindStartStateIndex();
+    if (StartIndex < 0)
+        return true;
+    StartState = History.GetGameStateFromHistory(StartIndex);
+    if (StartState == none)
+        return true;
+    StartContext = XComGameStateContext_TacticalGameRule(StartState.GetContext());
+    if (StartContext == none || StartContext.GameRuleType != eGameRule_TacticalGameStart)
+        return true;
     OriginalUnit = XComGameState_Unit(
-        `XCOMHISTORY.GetOriginalGameStateRevision(UnitState.ObjectID));
-    bKnown = OriginalUnit != none;
+        History.GetGameStateForObjectID(UnitState.ObjectID,, StartIndex));
+    // A later spawn absent from this snapshot receives no shared focus bonus;
+    // its otherwise legal native attacks remain available to the old planner.
+    bKnown = OriginalUnit != none
+        && OriginalUnit.GetMyTemplateName() == 'BerserkerMP'
+        && OriginalUnit.GetAssociatedPlayerID() > 0;
     if (bKnown)
         bLocal = OriginalUnit.GetTeam() == eTeam_XCom
-            && OriginalUnit.GetAssociatedPlayerID() == PlayerID
-            && OriginalUnit.GetMyTemplateName() == 'BerserkerMP';
+            && OriginalUnit.GetAssociatedPlayerID() == PlayerID;
     return ExcludeFormerLocalBerserker(true, bKnown, bLocal);
 }
 
