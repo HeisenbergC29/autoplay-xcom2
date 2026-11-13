@@ -76,6 +76,11 @@ static function bool SelectContact(int PlayerID, int PreviousGroupID,
         // Count rejected states too; partial enumeration would skew centroid.
         if (++FriendStates > Clamp(default.MaxFriendlyStatesPerDecision, 1, 256))
             return false;
+        // Emergency rescue outranks focus. Include wounded/non-shooters too,
+        // not just the ranged units used to build the squad centroid.
+        if (Friend != none && Friend.GetAssociatedPlayerID() == PlayerID
+            && Friend.GetTeam() == eTeam_XCom && Friend.IsBleedingOut())
+            return false;
         if (Friend == none || Friend.GetMyTemplate() == none
             || Friend.GetTeam() != eTeam_XCom
             || Friend.GetAssociatedPlayerID() != PlayerID
