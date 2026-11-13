@@ -111,7 +111,6 @@ class RevealedGroupFocusTests(unittest.TestCase):
                          "FocusHistoryIndex < RangedFocusLastHistory",
                          "MissionRecorder.Marker(\"revealed_focus\""):
             self.assertIn(required,decision)
-        self.assertIn('RangedFocusTargetID',self.focus) if False else None
         self.assertLess(decision.index("SelectContact("),
                         decision.index("class'APX_CombatPlanner'.static.ChooseAction("))
         self.assertIn('RangedTargetID, bRangedFocusGoal',decision)
