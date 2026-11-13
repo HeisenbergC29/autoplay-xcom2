@@ -2,7 +2,7 @@
 
 ## Dowód i punkt startowy
 
-Użytkownik kompiluje/testuje v29, którego main `189aa3d3aba054109f7ca1405770a2c90b0676e9` jest niezależny od tej pracy. 
+Użytkownik kompiluje/testuje v29, którego main `189aa3d3aba054109f7ca1405770a2c90b0676e9` jest niezależny od tej pracy.
 Przed v29 GasStation `ChallengeAbductionGasStation` kończył native LOSS,
 z końcowym −21200 (v28) i −12900 (v27) w różnych próbach. Squad miał
 `concealed=False`, więc ścieżka `ChoosePreparation` przygotowująca
@@ -46,7 +46,7 @@ Rejestruje `revealed_focus`: group, native squad-visible primary target,
 liczbę widocznych członków, strzelców i dystans.
 
 `APX_CombatPlanner` po dotychczasowym
-`AvailableCode == 'AA_Success'`, `IsVisibleHostile`, 
+`AvailableCode == 'AA_Success'`, `IsVisibleHostile`,
 `AdditionalTargetsAreSafe`, `HasRequiredMeleePath` i `ScoreAttack`
 daje miękkie +14..22 **tylko** dla legalnych
 `StandardShot/PistolStandardShot/SniperStandardFire` na wskazany cel
