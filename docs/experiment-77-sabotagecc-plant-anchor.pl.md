@@ -60,7 +60,9 @@ zdolnością i oryginalnym AP.
 
 Zachowano Blood Killer/SabotageTransmitter, ewakuację,
 obronę, leczenie, ryzyko, native blue-path, hazard i
-wsparcie, wzór scoringu v28, bazowe `mission-report-v32`.
+wsparcie i wzór scoringu v28. Integracja LEAD otrzymuje
+`mission-report-v33` w rejestratorze i diagnostyce, aby odróżnić
+nową politykę od przetestowanej v32.
 To mały niezależny bugfix, nie narzuca AI sztucznej akcji.
 Brak osobnego zwiększenia premii do trasy: już istniejąca
 `ChooseRoutePrefix` daje użytecznej misji score>Overwatch
@@ -94,5 +96,6 @@ fikcyjnego interaction target.
 
 **Integracja**: branch HELPER na main v32
 `a4b0b1cd4a69adef3fe1cf38a59873d79ec32522`;
-oczekujące #69(v33) i stacked #70(v34) wymagają
-rebase LEAD po tym małym bugfixie. Nie scala HELPER.
+oczekujące #69 i stacked #70 wymagają uwzględnienia
+nowego main i nadania kolejnych rewizji po tym bugfixie.
+Nie należą do paczki v33. Nie scala HELPER.

@@ -4,8 +4,9 @@
 
 Po uporządkowaniu duplikatów TLE baza i mod skompilowały się z wynikiem
 PASS, każdy z 0 błędów i 1 ostrzeżeniem. Pozostało wyszukiwanie UC pustego
-XCom_DLC_Day0, wymienionego na liście kompilacji SDK. Gra v32 pozostaje
-NOT RUN; pojedyncze ostrzeżenie nie zatrzymuje kompilacji.
+XCom_DLC_Day0, wymienionego na liście kompilacji SDK. Najnowszy mod-make
+również kończy się 0/1. [Raport gry v32](report-2026-11-13-v32.pl.md)
+jest już dostępny; pojedyncze ostrzeżenie nie zatrzymuje kompilacji.
 
 ## Opcjonalne pominięcie pustego pakietu
 
@@ -54,5 +55,24 @@ w publicznym repozytorium. Kolektor kopiuje dane do archiwum, nie zmienia
 SDK i odmawia nadpisania istniejącego ZIP. Zasoby Content, Binaries,
 gotowe .u/.upk i PDB nie są potrzebne do tego porównania.
 
-To narzędzia i dokumentacja; źródła UC/config moda nadal odpowiadają v32.
+Samo rozszerzenie kolektora nie zmienia kodu moda. Dostarczona migawka
+dotyczy v32; nowa polityka X4 ma osobną rewizję v33.
 Przesłanie SDK nie zastępuje testu misji i końcowego wyniku gry.
+
+## Otrzymana migawka — niezależny audyt LEAD
+
+Sdk-current-for-review.zip przesłano obu agentom. CRC i wszystkie 4170
+rozmiarów/SHA-256 manifestu PASS, bez dodatkowych plików:
+4161 UC, 7 UCI, 2 INI. Po wyłączeniu 24 UC moda pozostają 4144 źródła gry,
+każde bajtowo identyczne z poprzednim Development/SrcOrig, 15 pakietów.
+Nie ma nowych, zmienionych ani usuniętych definicji do importowania.
+Nie ponawiamy generowania katalogu jednostek dla identycznych wejść.
+Wszystkie 24 UC moda odpowiadają main a4b0b1cd; nie utożsamiać migawki
+źródeł z potwierdzeniem hash skompilowanego pakietu.
+
+Oba INI również odpowiadają poprzednim konfiguracjom SDK. Nadal mają
+aktywne wpisy Day0 opisane powyżej, a pakiet nie ma źródeł UC.
+Nowy log nie potwierdza wykonania opcjonalnej edycji ani wyniku 0/0.
+Archiwum SDK ma SHA-256
+f4c75dce0d4a412b0221e9af9e365b9b268109124b643986eca9b5f28a71790a.
+SDK i oba INI pozostają prywatne; publikujemy tylko ten wyciąg.

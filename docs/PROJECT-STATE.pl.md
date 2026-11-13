@@ -6,7 +6,17 @@ poziom potwierdzenia działania.
 
 ## Baza kodu
 
-- Bieżąca rewizja przygotowywanych źródeł: `mission-report-v32`.
+- Bieżąca rewizja przygotowywanych źródeł: `mission-report-v33`, #77/PR #78.
+  Po oczyszczeniu SabotageCC z wrogów i przy braku wykrwawiającego się
+  własnego żołnierza planer szuka prawdziwego, osiągalnego natywnego
+  punktu X4 zamiast zatrzymywać się przy przybliżonym markerze. Używa
+  istniejącej obserwacyjnej inspekcji actor/socket/footprint/path; właściwe
+  podłożenie nadal wymaga stock AA_Success i natywnych AP.
+  LEAD nadał nową rewizję rejestratorowi i diagnostyce. Windows make v33
+  oraz autonomiczna próba SabotageCC: **NOT RUN**. #69/#70 są osobne,
+  wymagają aktualnej bazy i kolejnych rewizji, nie należą do v33.
+  [Zakres i próba v33](experiment-77-sabotagecc-plant-anchor.pl.md).
+- Przetestowana rewizja `mission-report-v32`:
   Integracja osobno przejrzanych #63 (stały panel autoplay, opt-out), #65
   (etap 1 wspólnego widocznego celu strzelców) i #68 (ochrona wyboru celu
   przed wskazaniem początkowo własnych BerserkerMP). LEAD sprawdza własność
@@ -28,13 +38,23 @@ poziom potwierdzenia działania.
   zniknęły, pakiety bazowe i AutoplayXCom2.u zapisane. Pozostał pusty Day0
   na liście kompilatora SDK; jego opcjonalne pominięcie opisuje #75.
   Kolektor może zebrać aktualne Src i dwa SDK-INI do prywatnego porównania.
-  Kod i rewizja moda pozostają bez zmian. Gra v32: **NOT RUN**.
+  Najnowszy mod-make także PASS 0/1; Day0 nadal na compilelist SDK.
+  Prywatna migawka ma 4144 źródła gry identyczne z dawnym SDK oraz 24 UC
+  moda identyczne z main a4b0b1cd. Nie wymaga ponownego importu katalogu.
+  [Nowy raport v32](report-2026-11-13-v32.pl.md): GasStation WIN/+6200
+  oficjalne końcowe i brak manual — PASS tej próby. SabotageCC WIN po
+  ręcznym X4 — nieautonomiczne, official score unknown. Cemetery LOSS,
+  punkty misji nieznane; Blood Killer LOSS/+7100 oficjalne końcowe.
+  Fokus nie wybiera pierwotnie własnych 23–27, lecz Sweep nadal przegrany.
+  Trzy udane rozstrzygnięcia PriestPsiMindControl wskazują AdvPriestM3 IDs 37/46;
+  pola mind_controlled brak w zredagowanym enemy record, nie jest False.
   [Dowód i zakres poprawki](build-2026-11-13-v32.pl.md).
-  Paczka testowa b7a79972 pozostaje w #4. Użytkownik może przejść do
-  GasStation i Blood Killer; kosmetyczne Day0 oraz migawka SDK są osobne.
+  Poprzednia paczka testowa b7a79972 pozostaje dowodem v32; następna
+  paczka v33 i dokładny SHA będą w #4. Day0 jest osobną kosmetyką SDK.
   Wykonalne
   otwarcie Berserkerów względem timera i przeżycie Sweep pozostają #56;
-  synchronizacja OW to dalszy etap #31. Brak deklaracji wygranej.
+  synchronizacja OW to dalszy etap #31. Blood Killer i Cemetery
+  pozostają niezaliczone; GasStation ma potwierdzenie opisanej próby.
 - Sprawdzona rewizja `mission-report-v29`, #56 / PR #61:
   wspólny kontakt grupy dla BerserkerMP w SabotageTransmitter. Krótkie
   otwarcie w turach 1–2 wymaga natywnego timera >=4, odległości <=18
