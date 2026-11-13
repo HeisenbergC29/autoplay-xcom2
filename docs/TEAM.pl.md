@@ -177,8 +177,13 @@ i kwalifikacja przed/po akcji są poprawione; native targeting/score zachowane.
 SHA/ZIP w #4: kompilacja v32 i GasStation/Blood Killer. Pierwszy Windows
 make v32 był **FAIL: 1 błąd, 8 ostrzeżeń** (brak ')' w Controller:1303).
 PR #72 naprawia nawias bez zmiany taktyki i rewizji; dodaje regresję
-i skan delimiterów. **Make po poprawce i gra v32 NOT RUN**; użytkownik
-ponawia kompilację poprawionego SHA, a potem grę. [Dowód](build-2026-11-13-v32.pl.md).
+i skan delimiterów. **Make po poprawce PASS: 0 błędów, 12 ostrzeżeń**,
+pakiet zapisany; gra v32 NOT RUN. Po pełnym SDK Steam siedem dawnych
+ostrzeżeń zasobów zniknęło, doszło 11 duplikatów klas TLE w DLC_3,
+pozostał Day0. Użytkownik potwierdził identyczną kopię przykładowej klasy
+w czterech lokalizacjach Src/SrcOrig i DLC_3/TLE. #73 to odrębna odwracalna
+naprawa środowiska SDK, bez nowych zmian runtime. Po czystym buildzie
+następuje gra. [Dowód](build-2026-11-13-v32.pl.md).
 **HELPER równolegle:** #56 wykonalne otwarcie i przeżycie
 Sweep, potem dalsze #31 OW; nowy claim/branch/PR i następna rewizja,
 z zachowaniem tej bazy. V32 nie deklaruje naprawy 21 wczesnych ruchów.

@@ -19,10 +19,15 @@ poziom potwierdzenia działania.
   Brakowało zamykającego nawiasu if w Controller:1303; LEAD przeoczył go
   podczas review. #71 / PR #72 dodaje jeden nawias i testy delimiterów
   wszystkich źródeł. Log nie zapisuje SHA, lecz błąd odpowiada paczce2239c418.
-  Kompilacja po poprawce i gra v32: **NOT RUN**.
+  Powtórka po poprawce i instalacji pełnego SDK Steam: **PASS — 0 błędów,
+  12 ostrzeżeń**, pakiet AutoplayXCom2.u zapisany. Log nie zawiera SHA;
+  przypisanie do powtórki v32 wynika z kontekstu. Siedem braków zasobów
+  zniknęło, pozostał Day0 i pojawiło się 11 duplikatów TLE/DLC_3.
+  #73 porządkuje SDK osobnym opcjonalnym narzędziem z kopiami zapasowymi;
+  kod i rewizja moda pozostają bez zmian. Gra v32: **NOT RUN**.
   [Dowód i zakres poprawki](build-2026-11-13-v32.pl.md).
-  Jeden poprawiony SHA i ZIP w #4; użytkownik ponawia kompilację, a po jej
-  sukcesie sprawdza GasStation oraz Blood Killer. Wykonalne
+  Paczka testowa b7a79972 pozostaje w #4. Po uporządkowaniu SDK i ponownym
+  zbudowaniu bazy/moda użytkownik sprawdza GasStation oraz Blood Killer. Wykonalne
   otwarcie Berserkerów względem timera i przeżycie Sweep pozostają #56;
   synchronizacja OW to dalszy etap #31. Brak deklaracji wygranej.
 - Sprawdzona rewizja `mission-report-v29`, #56 / PR #61:
