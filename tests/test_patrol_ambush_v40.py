@@ -201,6 +201,8 @@ class PatrolAmbushSourceContracts(unittest.TestCase):
         self.assertIn("CanUseAction(PatrolSupporter, PatrolReaction", decision)
         self.assertIn("PatrolAmbushPlanner.IsActualOpener(", decision)
         self.assertIn("PatrolAmbushPlanner.NoteSubmitted(", decision)
+        self.assertIn("BestUnit.ObjectID == PatrolReactionUnitID", decision)
+        self.assertIn("BestAction.AbilityObjectRef.ObjectID == PatrolReactionAbilityID", decision)
         self.assertLess(decision.index("PatrolAmbushPlanner.ChooseReactionSupport("),
                         decision.index("MissionRecorder.PrepareChosenAction("))
 
