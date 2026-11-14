@@ -28,6 +28,10 @@ class PatrolAmbushNumericPolicy(unittest.TestCase):
     def test_precontact_staging_requires_native_move_and_unused_blue_ap(self):
         self.assertTrue(self.stage(True, False, False, True, 2, 0, 3, 0, 2))
         self.assertTrue(self.stage(True, False, False, True, 2, 2, 3, 1, 2))
+        native_stage = load_uc_function(SQUAD, "CanStageMove")
+        self.assertTrue(native_stage(2, 1, False))
+        self.assertFalse(native_stage(2, 2, False))
+        self.assertFalse(native_stage(1, 1, False))
         for args in (
             (False, False, False, True, 2, 0, 3, 0, 2),
             (True, True, False, True, 2, 0, 3, 0, 2),
@@ -112,7 +116,8 @@ class PatrolAmbushSourceContracts(unittest.TestCase):
                     "PreparationPathIsSafe(", "AssessRoute(",
                     "ContactStatus == 1", "CountVariantLanes(",
                     "VariantPositionScore(", "RemainingConcealmentChecks",
-                    "MaxPositionSamples", "SquadPositionScore(",
+                    "MaxPositionSamples", "CanStageMove(", "OWCost, false",
+                    "SquadPositionScore(",
                     "IsSupportedAdvance"):
             # Support is inherited from PreparationPathIsSafe, which is
             # invoked on EVERY tested full path.
