@@ -1,4 +1,4 @@
-"""#38b: actual stock Faceoff uses native self-primary/all-enemy list.
+"""#38b: stock Faceoff fires hostile primary then other native enemies.
 
 Do not claim free-aim rockets, cones, lines or secondary car explosions are
 supported by this one selected-target policy. WOTC Windows/game not run.
@@ -55,7 +55,9 @@ class NativeMultiTargetSource(unittest.TestCase):
                      "!Multi.bAcceptEnemyUnits", "Multi.bAcceptFriendlyUnits",
                      "!Multi.bDontAcceptNeutralUnits",
                      "Multi.bRandomlySelectOne", "Multi.RandomChance > 0",
+                     "Template.AbilityTargetEffects.Length != 1",
                      "Template.AbilityMultiTargetEffects.Length != 1",
+                     "PrimaryDamageEffect.bExplosiveDamage",
                      "DamageEffect.bExplosiveDamage",
                      "Weapon.GetLoadedAmmoTemplate(Ability) != none"):
             self.assertIn(term, body)
@@ -64,15 +66,19 @@ class NativeMultiTargetSource(unittest.TestCase):
 
     def test_every_native_additional_target_current_visible_hostile_no_controlled_ally(self):
         body = function_body(self.native, "ScoreFaceoff")
-        for term in ("NativeTarget.PrimaryTarget.ObjectID != Shooter.ObjectID",
-                     "NativeTarget.AdditionalTargets.Length < 2",
-                     "NativeTarget.AdditionalTargets.Length > 16",
+        for term in ("NativeTarget.PrimaryTarget.ObjectID == Shooter.ObjectID",
+                     "NativeTarget.AdditionalTargets.Length < 1",
+                     "NativeTarget.AdditionalTargets.Length > 15",
+                     "for (Index = -1; Index < NativeTarget.AdditionalTargets.Length",
+                     "TargetRef = NativeTarget.PrimaryTarget;",
+                     "Template.AbilityTargetEffects[0]",
+                     "Template.AbilityMultiTargetEffects[0]",
                      "Seen.Find(TargetRef.ObjectID) != INDEX_NONE",
                      "IsVisibleHostile(", "IsReclaimableControlledSquadmate(",
                      "Preview = NativeTarget;", "Preview.PrimaryTarget = TargetRef;",
                      "Preview.AdditionalTargets.Length = 0",
                      "Ability.GetShotBreakdown(", "Chance < 0 || Chance > 100",
-                     "DamageEffect.GetDamagePreview(TargetRef, Ability, false,",
+                     "DamageEffect.GetDamagePreview(TargetRef, Ability, Index < 0,",
                      "PreviewDamageAfterArmor(", "Health <= 0.0",
                      "ScoreDamage(", "ScoreFaceoffOutcome("):
             self.assertIn(term, body)
@@ -120,7 +126,9 @@ class NativeFaceoffSDK(unittest.TestCase):
         psi = (folder / "X2Ability_PsiOperativeAbilitySet.uc").read_text(encoding="utf-8-sig")
         for t in ("Faceoff()", "MultiTargetUnits.bUseAbilitySourceAsPrimaryTarget = true",
                   "MultiTargetUnits.bAcceptEnemyUnits = true",
-                  "Template.AddMultiTargetEffect(new class'X2Effect_ApplyWeaponDamage')"):
+                  "Template.AddTargetEffect(new class'X2Effect_ApplyWeaponDamage')",
+                  "Template.AddMultiTargetEffect(new class'X2Effect_ApplyWeaponDamage')",
+                  "//  Fire at the primary target first"):
             self.assertIn(t, sharp)
         for t in ("bAcceptFriendlyUnits", "bDontAcceptNeutralUnits",
                   "bRandomlySelectOne", "GetMultiTargetOptions"):
