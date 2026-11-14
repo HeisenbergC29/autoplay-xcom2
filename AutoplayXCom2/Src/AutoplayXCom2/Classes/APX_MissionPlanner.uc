@@ -1907,7 +1907,8 @@ static function bool HasLegalMove(XComGameState_Unit UnitState)
 // then rebuild a blue-range prefix from the actual reachable cache for dispatch.
 static function bool ChooseRoutePrefix(XComGameState_Unit UnitState,
     XGUnit UnitVisualizer, TTile GoalTile, out array<TTile> Path,
-    optional bool bCombatRoute)
+    optional bool bCombatRoute, optional APX_RouteTempo RouteTempo,
+    optional int CurrentTurn)
 {
     local array<TTile> FullPath, CandidatePath;
     local int Index, PathIndex;
@@ -1952,6 +1953,9 @@ static function bool ChooseRoutePrefix(XComGameState_Unit UnitState,
             CandidateValue = AdvanceEndpointScore(float(Index),
                 AdvanceCoverLevel(UnitState, FullPath[Index], GoalTile));
             CandidateValue += SquadPositionScore(UnitState, FullPath[Index]);
+            if (RouteTempo != none && !bCombatRoute)
+                CandidateValue -= RouteTempo.PenaltyFor(
+                    UnitState.ObjectID, GoalTile, FullPath[Index], CurrentTurn);
             if (CandidateValue > BestValue)
             {
                 BestValue = CandidateValue;
@@ -2056,6 +2060,57 @@ static function bool ChoosePoisonEscape(XComGameState_Unit UnitState,
     return Path.Length > 1;
 }
 
+// Current-state exposure, not a guarantee of future enemy movements.
+// All tiles of BOTH native BLUE paths must stay within a small current-risk
+// margin, bounded to 64 tiles; no native attack/AI decision is simulated.
+static function bool IsRoutineBlueExposureAllowed(float StartRisk, float PathRisk)
+{
+    return PathRisk <= StartRisk + 3.0;
+}
+
+static function bool BlueRouteExposureSafe(XComGameState_Unit UnitState,
+    const out array<TTile> Path, array<StateObjectReference> VisibleEnemies,
+    const out array<float> MeleeThreatReaches,
+    const out array<float> ThreatWeights, float StartRisk)
+{
+    local int Index;
+
+    if (UnitState == none || Path.Length < 2 || Path.Length > 64)
+        return false;
+    for (Index = 1; Index < Path.Length; ++Index)
+    {
+        if (!IsRoutineBlueExposureAllowed(StartRisk,
+            ExposureRisk(UnitState, Path[Index], VisibleEnemies,
+                MeleeThreatReaches, ThreatWeights)))
+            return false;
+    }
+    return true;
+}
+
+// Real current explosive-cover risk must also be checked along the WHOLE
+// accelerated blue path. A missing/short budget is Unknown, never Clear.
+// The existing RiskAtTile is read-only; the same counter is shared by all
+// own units and candidate paths for this one Controller decision.
+static function bool BlueRouteExplosiveSafe(XComGameState_Unit UnitState,
+    const out array<TTile> Path,
+    const out array<StateObjectReference> VisibleEnemies,
+    out int RemainingTempoCoverChecks)
+{
+    local int Index;
+
+    if (UnitState == none || Path.Length < 2 || Path.Length > 64
+        || RemainingTempoCoverChecks < Path.Length - 1)
+        return false;
+    for (Index = 1; Index < Path.Length; ++Index)
+    {
+        --RemainingTempoCoverChecks;
+        if (class'APX_ExplosiveCoverKnowledge'.static.RiskAtTile(
+            UnitState, Path[Index], VisibleEnemies) > 0.0)
+            return false;
+    }
+    return true;
+}
+
 // Routine travel is never a substitute for combat risk/opportunity scoring.
 // Preserve one action while pursuing a remote enemy, except during evacuation.
 static function bool CanUseRoutineRoute(bool bImmediateThreats,
@@ -2064,12 +2119,34 @@ static function bool CanUseRoutineRoute(bool bImmediateThreats,
     return !bImmediateThreats && (bEvacuating || StandardAP >= 2);
 }
 
+// Ordinary move utility and the necessary-return floor use the same units.
+// A memory fallback is scored AFTER every soft cost; the floor prevents
+// memory alone from converting the only legal return into StatusNoPlan.
+static function float ScoreOrdinaryRouteCandidate(float PositionGain,
+    optional bool bNecessaryMemoryReturn)
+{
+    local float Value;
+
+    Value = 20.0 + FMin(60.0, PositionGain);
+    if (bNecessaryMemoryReturn)
+        return FMax(8.0, Value);
+    return Value;
+}
+
 // A protected hostile still makes movement dangerous even when it was not
 // selected as a combat goal. Keep evacuation's existing movement exception.
 static function bool RequiresCombatMovement(bool bCombatGoal,
     bool bImmediateThreats, bool bEvacuating)
 {
     return bCombatGoal || (bImmediateThreats && !bEvacuating);
+}
+
+// A deadline is not permission for every planner to revisit old endpoints.
+// Only this actual mission-travel proposal or a validated evac goal opts in.
+static function bool EmergencyRouteRevisitAllowed(bool bEvacGoal,
+    bool bActiveDeadline, bool bCombatMovement, bool bCombatGoal)
+{
+    return bEvacGoal || (bActiveDeadline && !bCombatMovement && !bCombatGoal);
 }
 
 static function bool ChooseMove(XComGameState_Unit UnitState,
@@ -2084,10 +2161,19 @@ static function bool ChooseMove(XComGameState_Unit UnitState,
     optional string ContactSnapshotReason,
     optional out int RemainingContactDetectors,
     optional out int RemainingContactTiles,
-    optional out int RemainingContactLOS)
+    optional out int RemainingContactLOS,
+    optional APX_RouteTempo RouteTempo, optional int CurrentTurn,
+    optional bool bActivePatrolPreparation, optional bool bRecentContact,
+    optional out TTile SelectedRouteGoal, optional out int iAcceptedRoutine,
+    optional out int iFirstBlueClear, optional out int RemainingTempoCoverChecks,
+    optional out int iEmergencyRoute)
 {
     local XGUnit UnitVisualizer;
-    local array<TTile> Tiles, CandidatePath, RiskyRoute, LocalFallbackPath;
+    local XComGameState_EvacZone RouteEvacZone;
+    local array<TTile> Tiles, CandidatePath, RiskyRoute, LocalFallbackPath, MemoryFallbackPath;
+    local AvailableAction ReadyObjectiveAction;
+    local int ReadyObjectiveTarget;
+    local float ReadyObjectiveScore;
     local array<StateObjectReference> VisibleEnemies;
     local array<float> MeleeThreatReaches;
     local array<float> ThreatWeights;
@@ -2095,6 +2181,8 @@ static function bool ChooseMove(XComGameState_Unit UnitState,
     local MissionGoal Goal;
     local bool bCombatGoal, bSafe, bRequireSupport, bRoutineRoute, bSabotageRush;
     local bool bConcealmentUrgent, bCoverUrgent, bUsedLocalFallback;
+    local bool bTempoCandidate, bSecondBlue, bSingleBlue, bStealthRisk;
+    local bool bBestBlueFullyClear, bTempoCurrentPathSafe, bMemoryFallbackFirstClear;
     local string ConcealmentRiskReason, ContactReason, BestContactReason, LocalContactReason, RiskyContactReason;
     local int ContactStatus, BestContactStatus, LocalContactStatus, RiskyContactStatus;
     local bool bInspectContact;
@@ -2103,15 +2191,20 @@ static function bool ChooseMove(XComGameState_Unit UnitState,
     local float CurrentScore, CandidateScore, BestScore, CurrentRisk, CandidateRisk, PathCost, StartSupport, BestRisk;
     local float BestAttackNow, BestAttackAfterMove, HealthFraction;
     local float LocalFallbackScore, LocalFallbackRisk;
+    local float MemoryPenalty, MemoryFallbackScore, MemoryFallbackRank, MemoryCandidateScore;
 
     Path.Length = 0;
     Score = 0;
+    iAcceptedRoutine = 0;
+    iFirstBlueClear = 0;
+    iEmergencyRoute = 0;
     if (!HasLegalMove(UnitState)
         || !FindGoal(UnitState, Goal, VisibleEnemies,
             BerserkerFocusTargetID, bBerserkerFocusGoal,
             RangedFocusTargetID, bRangedFocusGoal))
         return false;
     GoalTile = Goal.Tile;
+    SelectedRouteGoal = GoalTile;
     bSabotageRush = Goal.bBerserkerSabotageGoal
         && UnitState.NumActionPoints() >= 2;
     // For this one sabotage challenge, even a nearby enemy does not turn
@@ -2123,6 +2216,11 @@ static function bool ChooseMove(XComGameState_Unit UnitState,
     // mission approach needs another AP left for the native bomb interaction.
     if (bSabotageRush)
         bCombatGoal = false; // Do not score a bomb approach as a firing flank.
+    RouteEvacZone = class'XComGameState_EvacZone'.static.GetEvacZone(eTeam_XCom);
+    if (EmergencyRouteRevisitAllowed(RouteEvacZone != none
+        && ShouldEvacuate(UnitState) && GoalTile == RouteEvacZone.CenterLocation,
+        HasActiveMissionDeadline(), bCombatGoal, Goal.bCombat))
+        iEmergencyRoute = 1;
     bRequireSupport = !ShouldEvacuate(UnitState);
     // Keep rescue, danger, timers and bomb objective ahead of optional stealth.
     bConcealmentUrgent = class'APX_ConcealmentPlanner'.static.ConcealmentIsUrgent(
@@ -2134,8 +2232,38 @@ static function bool ChooseMove(XComGameState_Unit UnitState,
     // rescue, timer, X4 plant/relay, combat reposition or hazard escape.
     bInspectContact = !bCoverUrgent && !Goal.bImmediateThreats
         && !bCombatGoal && !Goal.bBerserkerSabotageGoal;
+    // Exact current-state checks, not next-turn corridor certification.
+    // Never spend the last AP on routine tempo when any urgent gameplay,
+    // recent contact, or a genuinely staged/armed patrol ambush exists.
+    bTempoCandidate = RouteTempo != none
+        && class'APX_RouteTempo'.static.IsRoutineTempoContext(
+            class'APX_RouteTempo'.default.EnableSequentialBlue,
+            class'APX_FullIntel'.default.EnableFullIntel,
+            bContactSnapshotComplete, bInspectContact, bCoverUrgent,
+            bActivePatrolPreparation, bRecentContact,
+            class'APX_HazardKnowledge'.static.NeedsPoisonEscape(UnitState));
+    // Reserving an AP for an already AVAILABLE objective interaction is
+    // more important than making another speculative blue advance.
+    if (bTempoCandidate && ChooseInteraction(UnitState,
+        ReadyObjectiveAction, ReadyObjectiveTarget, ReadyObjectiveScore))
+        bTempoCandidate = false;
+    if (RouteTempo != none && bInspectContact)
+        RouteTempo.SetGoal(UnitState.ObjectID, GoalTile);
+    bSecondBlue = bTempoCandidate
+        && RouteTempo.HasFirstBlueTicket(UnitState.ObjectID, GoalTile,
+            UnitState.TileLocation, CurrentTurn)
+        && class'APX_RouteTempo'.static.CanUseSecondBlue(
+            true, class'APX_FullIntel'.default.EnableFullIntel,
+            true, true, bActivePatrolPreparation, bRecentContact,
+            bCoverUrgent || Goal.bImmediateThreats, HasLegalMove(UnitState),
+            UnitState.NumActionPoints(), UnitState.NumActionPointsForMoving());
+    // Sequential blue is two REAL native actions, never a 2*Mobility dash.
+    bSingleBlue = bTempoCandidate && !bSecondBlue
+        && UnitState.NumActionPoints() >= 2
+        && UnitState.NumActionPoints('standard') >= 2
+        && UnitState.NumActionPointsForMoving() >= 2;
     StartSupport = NearestSupportDistance(UnitState, UnitState.TileLocation);
-    bRoutineRoute = bSabotageRush
+    bRoutineRoute = bSabotageRush || bSecondBlue
         || CanUseRoutineRoute(Goal.bImmediateThreats,
             ShouldEvacuate(UnitState), UnitState.NumActionPoints());
     // A known but distant enemy does not remove the reserve-AP travel rule.
@@ -2154,7 +2282,8 @@ static function bool ChooseMove(XComGameState_Unit UnitState,
     // only after greedy failure would oscillate back toward a wall on the next
     // action whenever the necessary detour initially increases direct distance.
     if (bRoutineRoute && (!bCombatGoal || class'APX_FullIntel'.default.EnableFullIntel)
-        && ChooseRoutePrefix(UnitState, UnitVisualizer, GoalTile, Path, bCombatGoal))
+        && ChooseRoutePrefix(UnitState, UnitVisualizer, GoalTile, Path, bCombatGoal,
+            (bInspectContact ? RouteTempo : none), CurrentTurn))
     {
         Score = ScoreRouteAdvance(SquadPositionScore(UnitState, UnitState.TileLocation),
             SquadPositionScore(UnitState, Path[Path.Length - 1]));
@@ -2200,7 +2329,20 @@ static function bool ChooseMove(XComGameState_Unit UnitState,
                     Score = ApplyConstructiveSoftPenalty(Score,
                         class'APX_ContactEnvelope'.static.PathStatusPenalty(ContactStatus));
                 }
-                if (bInspectContact && ContactStatus == 1)
+                bTempoCurrentPathSafe = false;
+                if ((bSecondBlue || bSingleBlue) && ContactStatus == 0)
+                    bTempoCurrentPathSafe = BlueRouteExposureSafe(UnitState, Path,
+                        VisibleEnemies, MeleeThreatReaches, ThreatWeights, CurrentRisk)
+                        && BlueRouteExplosiveSafe(UnitState, Path,
+                            VisibleEnemies, RemainingTempoCoverChecks);
+                if (bSecondBlue && (ContactStatus != 0 || CoverRisk > 0.0
+                    || !bTempoCurrentPathSafe))
+                {
+                    // Do not rescue a last-AP fast continuation from Unknown
+                    // or Caution via a historical soft-penalty fallback.
+                    Path.Length = 0;
+                }
+                else if (bInspectContact && ContactStatus == 1)
                 {
                     // Confirmed contact is less attractive than a verified
                     // safe local alternative; it remains a legal fallback.
@@ -2236,12 +2378,39 @@ static function bool ChooseMove(XComGameState_Unit UnitState,
                 }
                 else
                 {
-                    if (bInspectContact)
-                        `log("Contact envelope|unit=" $ UnitState.ObjectID
+                    MemoryPenalty = 0.0;
+                    if (RouteTempo != none && bInspectContact)
+                        MemoryPenalty = RouteTempo.PenaltyFor(
+                            UnitState.ObjectID, GoalTile,
+                            Path[Path.Length - 1], CurrentTurn);
+                    if (MemoryPenalty > 0.0 && !bSecondBlue)
+                    {
+                        MemoryFallbackPath = Path;
+                        // It remains useful when this is the *only* legal
+                        // return; a soft penalty must not induce StatusNoPlan.
+                        MemoryFallbackRank = Score - MemoryPenalty;
+                        MemoryFallbackScore = FMax(8.0, Score - MemoryPenalty);
+                        bMemoryFallbackFirstClear = bSingleBlue
+                            && ContactStatus == 0 && bTempoCurrentPathSafe;
+                        Path.Length = 0;
+                    }
+                    else
+                    {
+                        iAcceptedRoutine = bInspectContact ? 1 : 0;
+                        iFirstBlueClear = bSingleBlue && ContactStatus == 0
+                            && bTempoCurrentPathSafe ? 1 : 0;
+                        if (bSecondBlue)
+                            `log("Sequential blue second-leg|unit=" $ UnitState.ObjectID
+                                $ "|goal_x=" $ GoalTile.X
+                                $ "|goal_y=" $ GoalTile.Y
+                                $ "|source=native_blue_clear", true, 'AutoplayXCom2');
+                        if (bInspectContact)
+                            `log("Contact envelope|unit=" $ UnitState.ObjectID
                             $ "|horizon_ai_turns=0|status=" $ ContactStatus
                             $ "|reason=" $ ContactReason
                             $ "|source=route_prefix", true, 'AutoplayXCom2');
-                    return true;
+                        return true;
+                    }
                 }
             }
         }
@@ -2325,6 +2494,13 @@ static function bool ChooseMove(XComGameState_Unit UnitState,
         }
         if (bSafe)
         {
+            // Retain a memory-penalized ordinary return through every soft
+            // cost below, including for revealed units that cannot use cover.
+            // A last-AP second blue never receives this permissive fallback.
+            MemoryPenalty = 0.0;
+            if (RouteTempo != none && bInspectContact)
+                MemoryPenalty = RouteTempo.PenaltyFor(
+                    UnitState.ObjectID, GoalTile, Tile, CurrentTurn);
             if (bInspectContact)
             {
                 ContactStatus = class'APX_ContactEnvelope'.static.AssessRoute(
@@ -2334,11 +2510,23 @@ static function bool ChooseMove(XComGameState_Unit UnitState,
                     RemainingContactLOS, ContactReason);
                 CandidateScore -= class'APX_ContactEnvelope'.static.PathStatusPenalty(
                     ContactStatus);
+                if (bSecondBlue && ContactStatus != 0)
+                    continue;
             }
+            bTempoCurrentPathSafe = false;
+            if ((bSecondBlue || bSingleBlue) && ContactStatus == 0)
+                bTempoCurrentPathSafe = BlueRouteExposureSafe(UnitState,
+                    CandidatePath, VisibleEnemies, MeleeThreatReaches,
+                    ThreatWeights, CurrentRisk)
+                    && BlueRouteExplosiveSafe(UnitState, CandidatePath,
+                        VisibleEnemies, RemainingTempoCoverChecks);
+            if (bSecondBlue && !bTempoCurrentPathSafe)
+                continue;
             // Preserve one real, legal local move BEFORE soft cover/stealth
             // penalties, including in revealed missions such as GasStation.
             // Otherwise the only path could be discarded and the squad idle.
-            if ((!bConcealmentUrgent
+            if (!bSecondBlue
+                && (!bConcealmentUrgent
                 || (!bCoverUrgent && UnitState.GetMyTemplate().bCanTakeCover))
                 && CandidateScore > LocalFallbackScore)
             {
@@ -2349,6 +2537,9 @@ static function bool ChooseMove(XComGameState_Unit UnitState,
                 LocalContactReason = ContactReason;
                 LocalFallbackCoverRisk = 0.0;
             }
+            // #10: rank alternate endpoints with expiring penalty, but
+            // preserve the legal path as a non-blocking fallback first.
+            CandidateScore -= MemoryPenalty;
             // Save cover risk before either soft cost can discard the normal
             // candidate. The retained fallback must not assume uninspected
             // scenery is safe; all soldiers share the caller's finite budget.
@@ -2361,15 +2552,18 @@ static function bool ChooseMove(XComGameState_Unit UnitState,
                     && LocalFallbackPath[LocalFallbackPath.Length - 1] == Tile)
                     LocalFallbackCoverRisk = CoverRisk;
             }
+            bStealthRisk = false;
             if (!bConcealmentUrgent)
             {
+                bStealthRisk = class'APX_ConcealmentPlanner'.static.InspectPathRisk(
+                    UnitState, CandidatePath, ConcealmentRiskReason,
+                    RemainingConcealmentChecks);
+                if (bSecondBlue && bStealthRisk)
+                    continue;
                 CandidateScore -= class'APX_ConcealmentPlanner'.static.RouteConcealmentPenalty(
-                    UnitState.IsConcealed(),
-                    class'APX_ConcealmentPlanner'.static.InspectPathRisk(
-                        UnitState, CandidatePath, ConcealmentRiskReason,
-                        RemainingConcealmentChecks),
-                    false, class'APX_ConcealmentPlanner'.default.ConcealmentRiskPenalty);
-                if (CandidateScore <= BestScore)
+                    UnitState.IsConcealed(), bStealthRisk, false,
+                    class'APX_ConcealmentPlanner'.default.ConcealmentRiskPenalty);
+                if (MemoryPenalty <= 0.0 && CandidateScore <= BestScore)
                     continue;
             }
             // Explosive scenery remains dangerous AFTER concealment is lost.
@@ -2377,17 +2571,43 @@ static function bool ChooseMove(XComGameState_Unit UnitState,
             if (!bCoverUrgent && UnitState.GetMyTemplate().bCanTakeCover)
             {
                 CandidateScore -= CoverRisk;
-                if (CandidateScore <= BestScore)
+                if (MemoryPenalty <= 0.0 && CandidateScore <= BestScore)
                     continue;
             }
+            if (bSecondBlue && CoverRisk > 0.0)
+                continue;
+            if (!bSecondBlue && MemoryPenalty > 0.0)
+            {
+                // Compare full costs before applying the floor, so equally
+                // floored returns still prefer the less risky alternative.
+                MemoryCandidateScore = ScoreOrdinaryRouteCandidate(
+                    CandidateScore - CurrentScore);
+                if (MemoryFallbackPath.Length < 2 || MemoryCandidateScore > MemoryFallbackRank)
+                {
+                    MemoryFallbackPath = CandidatePath;
+                    MemoryFallbackRank = MemoryCandidateScore;
+                    MemoryFallbackScore = ScoreOrdinaryRouteCandidate(
+                        CandidateScore - CurrentScore, true);
+                    bMemoryFallbackFirstClear = bSingleBlue && ContactStatus == 0
+                        && CoverRisk <= 0.0 && !bStealthRisk && bTempoCurrentPathSafe;
+                }
+            }
+            // Memory-penalized units pass this AFTER every soft cost, even
+            // when neither cover nor stealth applies. Preserve the prior
+            // no-memory policy; necessary returns remain in the fallback.
+            if (MemoryPenalty > 0.0 && CandidateScore <= BestScore)
+                continue;
             BestScore = CandidateScore;
             BestRisk = CandidateRisk;
             BestContactStatus = ContactStatus;
             BestContactReason = ContactReason;
+            bBestBlueFullyClear = bInspectContact && ContactStatus == 0
+                && CoverRisk <= 0.0 && !bStealthRisk
+                && bTempoCurrentPathSafe;
             Path = CandidatePath;
         }
     }
-    if (Path.Length < 2 && RiskyRoute.Length > 1)
+    if (!bSecondBlue && Path.Length < 2 && RiskyRoute.Length > 1)
     {
         Path = RiskyRoute;
         // An unavoidable reveal is not a reason to remain indefinitely idle.
@@ -2403,7 +2623,7 @@ static function bool ChooseMove(XComGameState_Unit UnitState,
                 $ "|source=risky_fallback", true, 'AutoplayXCom2');
         return true;
     }
-    if (Path.Length < 2 && LocalFallbackPath.Length > 1)
+    if (!bSecondBlue && Path.Length < 2 && LocalFallbackPath.Length > 1)
     {
         Path = LocalFallbackPath;
         BestScore = LocalFallbackScore;
@@ -2411,6 +2631,14 @@ static function bool ChooseMove(XComGameState_Unit UnitState,
         BestContactStatus = LocalContactStatus;
         BestContactReason = LocalContactReason;
         bUsedLocalFallback = true;
+    }
+    if (Path.Length < 2 && MemoryFallbackPath.Length > 1)
+    {
+        Path = MemoryFallbackPath;
+        Score = MemoryFallbackScore;
+        iAcceptedRoutine = bInspectContact ? 1 : 0;
+        iFirstBlueClear = bMemoryFallbackFirstClear ? 1 : 0;
+        return true;
     }
     if (Path.Length < 2)
         return false;
@@ -2431,7 +2659,15 @@ static function bool ChooseMove(XComGameState_Unit UnitState,
             HealthFraction, CurrentRisk - BestRisk);
     }
     else
-        Score = 20 + FMin(60, BestScore - CurrentScore);
+        Score = ScoreOrdinaryRouteCandidate(BestScore - CurrentScore);
+    if (MemoryFallbackPath.Length > 1 && Score <= MemoryFallbackScore)
+    {
+        Path = MemoryFallbackPath;
+        Score = MemoryFallbackScore;
+        iAcceptedRoutine = bInspectContact ? 1 : 0;
+        iFirstBlueClear = bMemoryFallbackFirstClear ? 1 : 0;
+        return true;
+    }
     // Once all alternatives failed, allow necessary progress with the same
     // bounded unavoidable-reveal cost as the retained route prefix.
     if (bUsedLocalFallback)
@@ -2442,5 +2678,7 @@ static function bool ChooseMove(XComGameState_Unit UnitState,
                 class'APX_ConcealmentPlanner'.default.ConcealmentRiskPenalty)
             + FMin(18.0, LocalFallbackCoverRisk));
     }
+    iAcceptedRoutine = bInspectContact && !bUsedLocalFallback ? 1 : 0;
+    iFirstBlueClear = iAcceptedRoutine > 0 && bSingleBlue && bBestBlueFullyClear ? 1 : 0;
     return true;
 }

@@ -74,7 +74,7 @@ class FullIntelContracts(unittest.TestCase):
         self.assertIn("class'APX_FullIntel'.default.EnableFullIntel",known)
         self.assertIn('GetTileFOWValue(',known)
         chooser=function_body(self.mission,'ChooseMove')
-        for token in ('ChooseRoutePrefix(UnitState, UnitVisualizer, GoalTile, Path, bCombatGoal)',
+        for token in ('ChooseRoutePrefix(UnitState, UnitVisualizer, GoalTile, Path, bCombatGoal,',
                       'CanUseRoutineRoute(Goal.bImmediateThreats,', 'BuildPathToTile(Tile, CandidatePath)',
                       'HasBlockingHazard(', 'IsSupportedAdvanceStep(', 'CanPlanAtTile('):
             with self.subTest(token=token):
@@ -95,7 +95,7 @@ class FullIntelContracts(unittest.TestCase):
         recorder=(CLASSES/'APX_MissionRecorder.uc').read_text()
         dlc=(CLASSES/'X2DownloadableContentInfo_AutoplayXCom2.uc').read_text()
         for source in (recorder,dlc,self.hud):
-            self.assertIn('mission-report-v40',source)
+            self.assertIn('mission-report-v41',source)
 
 
 class FullIntelPolicyScenarios(unittest.TestCase):
