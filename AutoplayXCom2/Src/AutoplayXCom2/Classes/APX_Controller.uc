@@ -1697,6 +1697,22 @@ function MakeDecision(XComTacticalController PC)
     if ((!bHavePlan || BestScore <= 2.0) && MeaningfulActionsThisTurn == 0
         && !bCombatThreats)
     {
+        if (bPatrolActive && AutoEndTurn && PatrolAmbushPlanner != none
+            && PatrolAmbushPlanner.CanWaitForContact()
+            && !class'APX_MissionPlanner'.static.HasActiveMissionDeadline()
+            && BestUnit != none
+            && !class'APX_MissionPlanner'.static.HasBleedingSquadmate(BestUnit)
+            && !class'APX_MissionPlanner'.static.ShouldEvacuate(BestUnit))
+        {
+            // A finite wait is an explicit plan after a real staging order;
+            // no global watchdog suspension or counterfeit action.
+            if (MissionRecorder != none)
+                MissionRecorder.Marker("patrol_ambush_wait",
+                    "group=" $ PatrolAmbushPlanner.CurrentGroupID()
+                    @ "phase=" $ string(PatrolAmbushPlanner.CurrentPhase()));
+            RequestEndTurn(PC); // Native confirmed end-turn ticket still applies.
+            return;
+        }
         StopWithStatus("No constructive action or understood mission goal", StatusNoPlan);
         return;
     }
