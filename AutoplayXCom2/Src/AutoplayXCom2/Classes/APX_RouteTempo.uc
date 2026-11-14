@@ -163,9 +163,13 @@ static function float SoftVisitPenalty(int CurrentTurn, int VisitTurn,
     if (Age < 0 || Age > Window || (!bDirectReturn && !bRevisit))
         return 0.0;
     if (bDirectReturn)
+    {
         BasePenalty = FClamp(ReturnPenalty, 0.0, 40.0);
+    }
     else
+    {
         BasePenalty = FClamp(RevisitPenalty, 0.0, 25.0);
+    }
     Strength = float(Window + 1 - Age) / float(Window + 1);
     return BasePenalty * Strength;
 }
