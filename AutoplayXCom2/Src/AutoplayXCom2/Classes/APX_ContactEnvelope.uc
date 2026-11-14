@@ -13,6 +13,13 @@ var config int MaxLOS;
 var config float CautionRoutePenalty;
 var config float UnknownRoutePenalty;
 
+// A single anchor ray is not the native multi-tile visibility footprint.
+// Unsupported sizes must remain unknown until all occupied tiles are assessed.
+static function bool SupportsAnchorVisibility(int MovingSize, int DetectorSize)
+{
+    return MovingSize == 1 && DetectorSize == 1;
+}
+
 // This is an estimate of native concealment conditions, not an attack target.
 // When a DETECTOR moves to observe a stationary target, directional cover
 // matters. A moving concealed soldier does not gain that cover exception.
@@ -189,6 +196,11 @@ static function int AssessRoute(XComGameState_Unit Soldier, const out array<TTil
         Reason = "path_start_unverified";
         return -1;
     }
+    if (!SupportsAnchorVisibility(Soldier.UnitSize, 1))
+    {
+        Reason = "moving_unit_footprint_unverified";
+        return -1;
+    }
     if (RemainingDetectors <= 0 || RemainingTiles < Path.Length - 1 || RemainingLOS <= 0)
     {
         Reason = "decision_budget";
@@ -281,6 +293,11 @@ static function int AssessRoute(XComGameState_Unit Soldier, const out array<TTil
                 continue;
             if (!Soldier.IsConcealed() && Detector.IsCivilian())
                 continue;
+            if (!SupportsAnchorVisibility(Soldier.UnitSize, Detector.UnitSize))
+            {
+                Reason = "detector_footprint_unverified";
+                return -1;
+            }
             DetectorPosition = `XWORLD.GetPositionFromTileCoordinates(Detector.TileLocation);
             DistanceSq = VSizeSq(TilePosition - DetectorPosition);
             SightRange = `METERSTOUNITS(Detector.GetVisibilityRadius());

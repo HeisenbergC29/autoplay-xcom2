@@ -29,6 +29,13 @@ class ContactEnvelopeNumericContracts(unittest.TestCase):
         cls.detect = staticmethod(load_uc_function(CONTACT, "ConcealedContactPossible"))
         cls.budget = staticmethod(load_uc_function(CONTACT, "SnapshotBudgetsValid"))
         cls.combine = staticmethod(load_uc_function(CONTACT, "CombineRouteStatus"))
+        cls.anchor = staticmethod(load_uc_function(CONTACT, "SupportsAnchorVisibility"))
+
+    def test_single_anchor_cannot_certify_native_multitile_visibility(self):
+        self.assertTrue(self.anchor(1, 1))
+        for moving, detector in ((1, 2), (2, 1), (2, 2), (1, 3), (0, 1), (1, 0)):
+            with self.subTest(moving=moving, detector=detector):
+                self.assertFalse(self.anchor(moving, detector))
 
     def test_native_ai_clock_not_local_xcom_turn(self):
         self.assertEqual(self.clock(8, 8), 0)
@@ -128,6 +135,8 @@ class ContactEnvelopeSourceContracts(unittest.TestCase):
         self.assertIn("GetAllVisibleObjectsForPlayer(", self.contact)
         self.assertIn("GetKnownEnemies(", self.contact)
         self.assertIn("if (Path[0] != Soldier.TileLocation)", route)
+        self.assertIn("SupportsAnchorVisibility(Soldier.UnitSize, 1)", route)
+        self.assertIn("SupportsAnchorVisibility(Soldier.UnitSize, Detector.UnitSize)", route)
         self.assertIn("RemainingTiles < Path.Length - 1", route)
         self.assertIn("DistanceSq > Square(SightRange + 200.0)", route)
         self.assertIn("Visibility.DefaultTargetDist, SightRange, DetectRange", route)

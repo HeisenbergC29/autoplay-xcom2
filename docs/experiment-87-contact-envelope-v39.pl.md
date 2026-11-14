@@ -89,6 +89,13 @@ odmienić rzeczywisty wynik.
 
 ## Granice i następne etapy
 
+Przegląd LEAD zachowuje obliczone ryzyko wybuchowej osłony także wtedy,
+gdy ten sam prefix ma ContactStatus=CAUTION. Niezależne koszty nie znikają
+w legalnym fallbacku. Dodatkowo jednostki wielopolowe (własne lub detektory)
+dają Unknown: pojedynczy anchor ray nie odtwarza całego natywnego footprint.
+Weryfikacja wszystkich zajmowanych pól pozostaje warunkiem przyszłej
+certyfikacji #88/#89, a nie domyślnym Clear.
+
 `Clear` jest **wyłącznie current-state bound dla kontrolowanego
 ruchu w bieżącej decyzji**; nie jest prognozą ruchu patrolu w następnej
 turze, pewnością odległych scripted spawnów ani certyfikatem braku

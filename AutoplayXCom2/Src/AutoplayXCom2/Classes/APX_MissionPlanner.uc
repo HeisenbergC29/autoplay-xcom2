@@ -2208,7 +2208,9 @@ static function bool ChooseMove(XComGameState_Unit UnitState,
                     RiskyContactStatus = ContactStatus;
                     RiskyContactReason = ContactReason;
                     RiskyRouteScore = Score;
-                    RiskyRouteCoverRisk = 0.0;
+                    // Contact caution does not erase independently observed
+                    // explosive cover risk when this route is unavoidable.
+                    RiskyRouteCoverRisk = CoverRisk;
                     Path.Length = 0;
                 }
                 else if (CoverRisk > 0.0)
