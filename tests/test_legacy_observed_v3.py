@@ -174,7 +174,7 @@ class LegacyObservedV3Contracts(unittest.TestCase):
 
     def test_partial_coverage_is_permanent_until_native_parity_is_proven(self):
         self.assertIn("partial_unknown_enemy_origin", self.v3)
-        self.assertIn("partial_objective_civilian_listener_started_late", self.v3)
+        self.assertIn("partial_civilian_listener_started_late", self.v3)
         self.assertIn("partial_native_disabled_restart_bonus_unverified", self.v3)
         self.assertIn('bEarlyEventCoverage = bVerifiedTacticalStart && CurrentIndex <= CurrentStart + 1;', self.v3)
         self.assertIn('partial_unverified_tactical_start', self.v3)

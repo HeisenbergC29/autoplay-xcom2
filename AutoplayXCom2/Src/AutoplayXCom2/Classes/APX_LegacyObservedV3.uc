@@ -34,6 +34,8 @@ var private bool bInitialized;
 var private bool bEventsRegistered;
 var private bool bVerifiedTacticalStart;
 var private bool bEarlyEventCoverage;
+var private bool bObjectiveHistoryGap;
+var private int ReplayedObjectiveCount;
 var private bool bUnresolvedEnemyOrigins;
 var private int UnresolvedOriginCount;
 var private array<ObservedUnit> Units;
@@ -184,8 +186,12 @@ function string GetCoverageStatus()
         return "partial_unknown_enemy_origin";
     if (!bVerifiedTacticalStart)
         return "partial_unverified_tactical_start";
+    if (bObjectiveHistoryGap)
+        return "partial_objective_history_gap";
+    // Historical objective transitions can be replayed, but the native
+    // CivilianRescued event has no equally reliable state-only substitute.
     if (!bEarlyEventCoverage)
-        return "partial_objective_civilian_listener_started_late";
+        return "partial_civilian_listener_started_late";
     // Even with full observed history, the native disabled/restart/bonus
     // award qualification is not exposed by the UC SDK.
     return "partial_native_disabled_restart_bonus_unverified";
@@ -214,6 +220,8 @@ function Cleanup()
     bEventsRegistered = false;
     bVerifiedTacticalStart = false;
     bEarlyEventCoverage = false;
+    bObjectiveHistoryGap = false;
+    ReplayedObjectiveCount = 0;
     bUnresolvedEnemyOrigins = false;
     UnresolvedOriginCount = 0;
     bInitialized = false;
@@ -479,6 +487,88 @@ function ObserveResultTarget(int UnitID, int HistoryIndex,
     ObserveUnit(UnitState, bOwnTarget, HistoryIndex);
 }
 
+// Replay actual archived objective transitions for a late F8 enable or load.
+// The stock SeqAct_DisplayMissionObjective triggers the event on the first
+// ShowCompleted transition when neither completion nor failure was set before.
+// Do not award for a completed objective merely present in a start snapshot,
+// and do not guess when a required historical state is unavailable.
+function ObserveObjectiveHistory(XComGameState Frame, int HistoryIndex)
+{
+    local XComGameState_ObjectivesList CurrentList, PreviousList;
+    local ObjectiveDisplayInfo CurrentInfo, PreviousInfo;
+    local string ObjectiveID;
+    local bool bPreviouslySet;
+    local int Turn, ListsVisited;
+
+    if (Frame == none || HistoryIndex <= StartIndex)
+        return;
+    if (ObservedHistory.GetGameStateFromHistory(HistoryIndex - 1) == none)
+    {
+        bObjectiveHistoryGap = true;
+        return;
+    }
+    foreach Frame.IterateByClassType(class'XComGameState_ObjectivesList', CurrentList)
+    {
+        if (++ListsVisited > 128)
+        {
+            bObjectiveHistoryGap = true;
+            break;
+        }
+        if (CurrentList.ObjectiveDisplayInfos.Length > 128)
+        {
+            bObjectiveHistoryGap = true;
+            continue;
+        }
+        PreviousList = XComGameState_ObjectivesList(ObservedHistory.GetGameStateForObjectID(
+            CurrentList.ObjectID, eReturnType_Reference, HistoryIndex - 1));
+        if (PreviousList != none && PreviousList.ObjectiveDisplayInfos.Length > 128)
+        {
+            bObjectiveHistoryGap = true;
+            continue;
+        }
+        foreach CurrentList.ObjectiveDisplayInfos(CurrentInfo)
+        {
+            if (CurrentInfo.MissionType != MissionType
+                || !CurrentInfo.ShowCompleted || !CurrentInfo.ShowCheckBox
+                || CurrentInfo.HideInTactical)
+                continue;
+            ObjectiveID = MissionType $ ":" $ CurrentInfo.TextPoolIndex $ ":"
+                $ CurrentInfo.LineIndex $ ":" $ CurrentInfo.GroupID;
+            // A live event listener may already have counted this completion.
+            if (CompletedObjectives.Find(ObjectiveID) != INDEX_NONE)
+                continue;
+
+            bPreviouslySet = false;
+            // Stock identity is the first matching label OR valid full key,
+            // in list order. A completed/failed row may change its numeric
+            // keys without becoming a new native completion. The public
+            // read-only getter preserves that identity, including -1 keys.
+            if (PreviousList != none && PreviousList.GetObjectiveDisplay(
+                CurrentInfo.MissionType, CurrentInfo.DisplayLabel, PreviousInfo,
+                CurrentInfo.TextPoolIndex, CurrentInfo.LineIndex, CurrentInfo.GroupID))
+            {
+                bPreviouslySet = PreviousInfo.ShowCompleted || PreviousInfo.ShowFailed;
+            }
+            if (bPreviouslySet)
+                continue;
+            Turn = TurnAtHistory(HistoryIndex);
+            if (Turn < 0 || CompletedObjectives.Length >= 128)
+            {
+                bObjectiveHistoryGap = true;
+                continue;
+            }
+            CompletedObjectives.AddItem(ObjectiveID);
+            ObjectivePoints.AddItem(CompletedObjectivePoints(Turn,
+                name(MissionType), CurrentInfo.TextPoolIndex,
+                CurrentInfo.GroupID, CurrentInfo.LineIndex));
+            ++ReplayedObjectiveCount;
+            `log("Legacy objective history replay|profile=" $ GetProfileID()
+                $ "|history=" $ HistoryIndex
+                $ "|recovered=" $ ReplayedObjectiveCount, true, 'AutoplayXCom2');
+        }
+    }
+}
+
 function ObserveFrame(int HistoryIndex)
 {
     local XComGameState Frame;
@@ -490,7 +580,11 @@ function ObserveFrame(int HistoryIndex)
 
     Frame = ObservedHistory.GetGameStateFromHistory(HistoryIndex);
     if (Frame == none)
+    {
+        bObjectiveHistoryGap = true;
         return;
+    }
+    ObserveObjectiveHistory(Frame, HistoryIndex);
     // Ownership metadata is the gate; do not inspect hidden enemy fields.
     foreach Frame.IterateByClassType(class'XComGameState_Unit', UnitState)
     {
