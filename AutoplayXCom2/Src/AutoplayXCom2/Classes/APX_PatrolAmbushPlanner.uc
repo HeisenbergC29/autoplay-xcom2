@@ -197,16 +197,24 @@ function name CurrentPhase()
     return Phase;
 }
 
-// One optional native turn handoff after actual, previously accepted setup.
-// Never wait for an unseen group before a concrete blue move. The same
-// original turn window expires; no new cycle for unchanged waypoint.
+// One bounded native turn handoff after a submitted setup move OR reaction.
+// Native AP/trigger is not inferred: the state counters change only after
+// successful action dispatch. No wait on a fresh unarmed, speculative plan.
+static function bool CanWaitWindow(bool bEnabled, bool bExpired,
+    bool bStaged, bool bArmed, int Moves, int Reactions,
+    int ElapsedTurns, int MaxTurns)
+{
+    return bEnabled && !bExpired && (bStaged || bArmed)
+        && (Moves > 0 || Reactions > 0) && ElapsedTurns > 0
+        && ElapsedTurns < Clamp(MaxTurns, 1, 3);
+}
+
 function bool CanWaitForContact()
 {
-    return EnablePatrolAmbush && !bExpired
-        && (Phase == 'setup' || Phase == 'armed')
-        && (PreparedMoves > 0 || OrderedReactions > 0)
-        && LastTurn > StartTurn
-        && LastTurn - StartTurn < Clamp(MaxSetupTurns, 1, 3);
+    return CanWaitWindow(EnablePatrolAmbush, bExpired,
+        Phase == 'setup', Phase == 'armed',
+        PreparedMoves, OrderedReactions, LastTurn - StartTurn,
+        MaxSetupTurns);
 }
 
 function int CurrentGroupID()
