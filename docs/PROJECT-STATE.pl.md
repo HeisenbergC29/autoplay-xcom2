@@ -6,7 +6,21 @@ poziom potwierdzenia działania.
 
 ## Baza kodu
 
-- Bieżąca rewizja źródeł: **`mission-report-v39`**, merge #91
+- Bieżąca rewizja źródeł: **`mission-report-v40`**, PR #95; źródłowy head
+  `134eac9eb00b504868b58500f992330b56d77952`. Ograniczony staging do bieżącego
+  zweryfikowanego patrolu, kilka geometrycznych wariantów, native opener/OW,
+  potwierdzone dispatch i limity/reset przygotowania. Prognoza przyszłego
+  ruchu/footprint nadal Unknown. LEAD dołączył współdzieloną inspekcję ryzyka
+  wybuchowej osłony oraz zastąpił limit wszystkich jednostek skanem własnego
+  rosteru max24 (odczyty publicznego XGSquad i ponowna walidacja w historii).
+  **834 private PASS/0skip**, SDK27/31 i niezależne review PASS;
+  [CI300](https://github.com/HeisenbergC29/autoplay-xcom2/actions/runs/43628584338)
+  834 run = 752 PASS/82 SKIP + 6 kroków PowerShell PASS.
+  **Windows make/game v40 NOT RUN, #4 BLOCKED do końca #86.**
+  Następny HELPER #89/#10, potem #28/#38; bez osobnego buildu v40.
+  [Zakres v40](experiment-88-patrol-ambush-v40.pl.md),
+  [pozostała skończona kolejka](PREBUILD-QUEUE.pl.md).
+- Poprzednia rewizja źródeł: **`mission-report-v39`**, merge #91
   `fe495616d99d9f2b3062994733a383b30ac048e2`, reviewed head
   `02e75b4464d6628ab3357c33e71a3dc6192d7162`. Jeden snapshot kontaktu i wspólny
   budżet wpływają na bieżącą ocenę zwykłej trasy; waypoint używa zegara AI.

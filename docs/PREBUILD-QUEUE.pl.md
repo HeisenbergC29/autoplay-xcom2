@@ -5,15 +5,16 @@ Na polecenie użytkownika [#4](https://github.com/HeisenbergC29/autoplay-xcom2/i
 jest **BLOCKED** do końca bieżących prac źródłowych LEAD i HELPERA. Nie przekazujemy
 osobnego buildu po każdym PR. Następna kolej pracy: **HELPER**, review i integracja LEAD.
 
-Źródła po odbiorze #91/#92/#93: `fe495616d99d9f2b3062994733a383b30ac048e2` / v39,
-reviewed head #91 `02e75b4464d6628ab3357c33e71a3dc6192d7162`. **822 private PASS/0skip**,
-SDK26/31 PASS; CI253: 742 PASS/80 SKIP i 6 kroków PowerShell PASS.
-Native Windows make/game v39: **NOT RUN**. Po każdym scaleniu pobierać aktualne main.
-To odbiór trzech gotowych PR, nie zakończenie całej kolejki poniżej.
+Źródła po odbiorze #95: v40, source head `134eac9eb00b504868b58500f992330b56d77952`.
+**834 private PASS/0skip**, SDK27/31 i niezależne review PASS;
+CI300: 752 PASS/82 SKIP i 6 kroków PowerShell PASS.
+Native Windows make/game v40: **NOT RUN**. Pobierać aktualne main po integracji.
+Staging/OW jest źródłowo wdrożone, bez dowodu perfekcyjnego przyszłego kontaktu.
 
-**Następny HELPER: #88**, z wykorzystaniem #91 i jawnym pozostałym zakresem
-przyszłego kontaktu/footprint #87. Następnie #89/#10 oraz pozostałe #28/#38.
-Nie ma nowego zadania na powtórny audyt manifestu SDK albo osobny build v39.
+**Następny HELPER: #89 i skoordynowane #10**, potem pozostałe #28/#38.
+Przyszły horyzont/footprint #87 nadal Unknown; w #89 potrzebny źródłowy
+kontrakt albo precyzyjny disposition i bezpieczny krótszy ruch. Unknown nie
+certyfikuje dash. Nie trzeba kolejnego manifestu SDK ani osobnego buildu v40.
 
 ## Lista realizacji
 
@@ -27,8 +28,8 @@ końcowy wynik misji >0. Niekompletne punkty nie certyfikują zaliczenia.
 | LEAD, [#85](https://github.com/HeisenbergC29/autoplay-xcom2/pull/85) | SOURCE DONE | Naprawiony replay objective identity, bounded traversal, reviewed head9eca03d, merge49c7378. Pełna punktacja nadal osobno #79. |
 | LEAD, zasady i kolejka | SOURCE DONE #90, bieżąca aktualizacja po #91–93 | Aktualne AGENTS/TEAM/PROJECT-STATE, poszerzona zgoda patrolowa, zadania i bramka #4; brak polecenia buildu. |
 | HELPER [#87](https://github.com/HeisenbergC29/autoplay-xcom2/issues/87) | Bieżący horyzont SOURCE DONE #91; przyszły/footprint pozostały | Jeden snapshot/budżet kontaktu, świeżość danych patrolu na właściwym AI clock, concealment ruch/stacjonarny oraz revealed LOS; Clear/Caution/Unknown dla całej trasy i jawnego horyzontu. Musi wpływać na realną decyzję planera, nie tylko recorder. |
-| HELPER [#88](https://github.com/HeisenbergC29/autoplay-xcom2/issues/88), konsoliduje [#12](https://github.com/HeisenbergC29/autoplay-xcom2/issues/12)/[#31](https://github.com/HeisenbergC29/autoplay-xcom2/issues/31) | READY po #91; domyka brakujące kontrakty #87 | Proaktywna zasadzka z kierunkiem osłony, liniami reakcji, odstępami AoE i stanem approach/setup/armed/open/abort. Ograniczony czas oczekiwania, reset i przerwanie przez timer/ratunek/zmianę kontaktu. Native opener/OW/AP; concealed i revealed osobno. |
-| HELPER [#89](https://github.com/HeisenbergC29/autoplay-xcom2/issues/89) | Po #87/#88, skoordynować #10 | Szybszy zwykły marsz tylko po całej rzeczywiście osiągalnej, natywnie opłacalnej i potwierdzonej Clear trasie; Unknown prowadzi do legalnego krótszego ruchu. AA_Success StandardMove i Mobility×2 nie dowodzą kosztu dowolnej trasy. |
+| HELPER [#88](https://github.com/HeisenbergC29/autoplay-xcom2/issues/88), konsoliduje [#12](https://github.com/HeisenbergC29/autoplay-xcom2/issues/12)/[#31](https://github.com/HeisenbergC29/autoplay-xcom2/issues/31) | SOURCE STAGE DONE #95; przyszła pewność nieudowodniona | Proaktywna zasadzka z kierunkiem osłony, liniami reakcji, odstępami AoE i stanem approach/setup/armed/open/abort. Ograniczony czas oczekiwania, reset i przerwanie przez timer/ratunek/zmianę kontaktu. Native opener/OW/AP; concealed i revealed osobno. |
+| HELPER [#89](https://github.com/HeisenbergC29/autoplay-xcom2/issues/89) | READY po #95, skoordynować #10; domknąć kontrakty #87 | Szybszy zwykły marsz tylko po całej rzeczywiście osiągalnej, natywnie opłacalnej i potwierdzonej Clear trasie; Unknown prowadzi do legalnego krótszego ruchu. AA_Success StandardMove i Mobility×2 nie dowodzą kosztu dowolnej trasy. |
 | HELPER [#10](https://github.com/HeisenbergC29/autoplay-xcom2/issues/10) | READY | Ograniczona wygasająca pamięć spokojnej trasy między turami, per unit/kontekst celu. Preferować postęp i alternatywę, zachować jedyną legalną drogę powrotu. Bez wpływu na ratunek, ewakuację, hazard escape i combat. |
 | HELPER [#28](https://github.com/HeisenbergC29/autoplay-xcom2/issues/28) | READY | Podejście medyka do pilnego leczenia/detoksu, także niekrwawiącego pacjenta. Potwierdzony własny native ability/range/status/AP/ładunki, bezpieczna pełna trasa i świeży skan po ruchu. Obecna stabilizacja i ucieczka pacjenta z chmury nie zastępują tego zakresu. |
 | HELPER [#38b](https://github.com/HeisenbergC29/autoplay-xcom2/issues/38) | READY | Skończona macierz rodzin player AoE w SDK oraz konkretne rozszerzenie planera o potwierdzone kontrakty poza obecnymi Frag/Alien Throw/Launch. Dla innych rodzin precyzyjny zakres unsupported. Wtórne eksplozje wymagają rzeczywistych extents/triggers i ochrony obiektów, bez zdejmowania guardów. |
@@ -37,10 +38,11 @@ końcowy wynik misji >0. Niekompletne punkty nie certyfikują zaliczenia.
 
 ## Kolejność i granice pracy
 
-Etap bieżącego kontaktu #87 scalony jako #91. Najpierw claim #88 na aktualnym main.
+Etapy bieżącego kontaktu #87/#91 i staging/OW #88/#95 są wdrożone.
+Następny claim #89 i skoordynowane #10 na aktualnym main.
 Równolegle można prowadzić niezależne badania #28/#38,
 lecz przed edycją MissionPlanner/Controller trzeba uzgodnić właściciela plików.
-Następnie #89 i skoordynowane #10; pozostałe focused zmiany po review.
+Pozostałe focused zmiany #28/#38 po review; koordynować wspólne pliki.
 Maksymalnie trzy aktywne implementation PR. Nie ma potrzeby czekania na zgodę
 na już przypisane odwracalne prace, ale każdy PR wymaga aktualnej bazy i review LEAD.
 
@@ -58,8 +60,9 @@ mutujących getterów, AI wyboru następnego ruchu ani przyszłego RNG.
 
 #87 nadal nie ma konserwatywnego następnego horyzontu, cache segmentów ani pełnego
 multi-tile visibility contract. #91 nie zostaje uznane za ukończenie tych punktów.
-Są częścią zależnego zakresu #88/#89: obsłużony footprint/źródłowa obwiednia albo
-jawne Unknown, bez uznawania waypointu za pewny przyszły ruch. Prognoza wariantów
+Pozostały zakres #89 wymaga obsłużonego footprint/źródłowej obwiedni albo
+jawnego Unknown, bez uznawania waypointu za pewny przyszły ruch. Staging #95
+korzysta z wariantów jako heurystyki, bez pełnej rekonstrukcji trasy. Prognoza wariantów
 może rankować miejsca zasadzki; nie zwęża konserwatywnego dowodu bezpieczeństwa.
 
 #79 po #92 ma ukończone osobne raportowanie v3 i skończony source disposition.
