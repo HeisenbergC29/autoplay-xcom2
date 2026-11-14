@@ -25,6 +25,19 @@ class RoutePolicies(unittest.TestCase):
         cls.penalty = staticmethod(load_uc_function(ROUTE, "SoftVisitPenalty"))
         cls.risk = staticmethod(load_uc_function(MISSION, "IsRoutineBlueExposureAllowed"))
         cls.context = staticmethod(load_uc_function(ROUTE, "IsRoutineTempoContext"))
+        cls.emergency = staticmethod(load_uc_function(MISSION, "EmergencyRouteRevisitAllowed"))
+
+    def test_deadline_does_not_exempt_combat_proposals_from_revisit_guard(self):
+        # Actual evacuation is exempt. A timer exempts only the mission
+        # travel proposal, not combat movement or pursuit of a combat goal.
+        self.assertTrue(self.emergency(True, False, False, False))
+        self.assertTrue(self.emergency(False, True, False, False))
+        for args in ((False, False, False, False),
+                     (False, True, True, False),
+                     (False, True, False, True),
+                     (False, True, True, True)):
+            with self.subTest(args=args):
+                self.assertFalse(self.emergency(*args))
 
     def test_revealed_and_concealed_can_both_use_safe_native_blue_tempo(self):
         # Concealment is intentionally NOT a predicate. Both revealed and
@@ -159,9 +172,19 @@ class RouteSourceContracts(unittest.TestCase):
         explore_prefix = function_body(self.exploration, "BuildSafeBluePrefix")
         self.assertIn("MemoryFallbackPath", choose)
         can_use = function_body(self.controller, "CanUseMove")
-        for emergency in ("ShouldEvacuate(UnitState)", "HasBleedingSquadmate(UnitState)",
-                          "HasActiveMissionDeadline()", "NeedsPoisonEscape(UnitState)"):
-            self.assertIn(emergency, can_use)
+        self.assertIn("if (bEmergencyRevisit)", can_use)
+        for global_urgency in ("ShouldEvacuate(", "HasBleedingSquadmate(",
+                               "HasActiveMissionDeadline(", "NeedsPoisonEscape("):
+            self.assertNotIn(global_urgency, can_use)
+        decision = function_body(self.controller, "MakeDecision")
+        self.assertIn("iCandidateEmergencyRoute = 0;", decision)
+        self.assertIn("RemainingTempoCoverChecks, iCandidateEmergencyRoute", decision)
+        self.assertIn("CanUseMove(UnitState, CandidatePath, true)", decision)
+        self.assertIn("CanUseMove(UnitState, CandidatePath, RescuePatientID > 0)", decision)
+        self.assertIn("iCandidateEmergencyRoute > 0", decision)
+        self.assertIn("iEmergencyRoute = 0;", choose)
+        self.assertIn("GoalTile == RouteEvacZone.CenterLocation", choose)
+        self.assertIn("EmergencyRouteRevisitAllowed(", choose)
         self.assertIn("VisitedPositions[Index].Tile == Path[Path.Length - 1]", can_use)
         self.assertIn("if (Path.Length < 2 && MemoryFallbackPath.Length > 1)", choose)
         self.assertIn("RouteTempo.PenaltyFor(", choose)

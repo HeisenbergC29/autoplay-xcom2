@@ -1132,7 +1132,7 @@ function MakeDecision(XComTacticalController PC)
     local TTile PatrolApproachDestination, CandidateRouteGoal, BestRouteGoal;
     local TTile SelectedRouteDestination;
     local int SelectedRouteUnitID;
-    local int iCandidateRoutine, iCandidateFirstBlue;
+    local int iCandidateRoutine, iCandidateFirstBlue, iCandidateEmergencyRoute;
     local bool bSelectedRoute, bSelectedFirstBlue;
     local int RemainingConcealmentChecks, RemainingCoverChecks;
     local int RemainingContactGroups, RemainingContactMembers;
@@ -1494,7 +1494,7 @@ function MakeDecision(XComTacticalController PC)
         CandidatePath.Length = 0;
         if (class'APX_MissionPlanner'.static.ChoosePoisonEscape(UnitState, CandidatePath, Score)
             && TraceCandidateMove(UnitState, CandidatePath, Score)
-            && Score > BestScore && CanUseMove(UnitState, CandidatePath))
+            && Score > BestScore && CanUseMove(UnitState, CandidatePath, true))
         {
             BestPath = CandidatePath;
             BestScore = Score;
@@ -1522,6 +1522,7 @@ function MakeDecision(XComTacticalController PC)
         CandidatePath.Length = 0;
         iCandidateRoutine = 0;
         iCandidateFirstBlue = 0;
+        iCandidateEmergencyRoute = 0;
         if (bContactSearch && !class'APX_MissionPlanner'.static.ShouldEvacuate(UnitState))
             bCandidateMove = ChooseContactSearchMove(UnitState, CandidatePath, Score);
         else
@@ -1535,10 +1536,11 @@ function MakeDecision(XComTacticalController PC)
                 RouteTempo, PlayerState.PlayerTurnCount,
                 PatrolAmbushPlanner.HasActiveStaging(), bContactSearch || bVisibleThreats,
                 CandidateRouteGoal, iCandidateRoutine, iCandidateFirstBlue,
-                RemainingTempoCoverChecks);
+                RemainingTempoCoverChecks, iCandidateEmergencyRoute);
         if (bCandidateMove
             && TraceCandidateMove(UnitState, CandidatePath, Score)
-            && Score > BestScore && CanUseMove(UnitState, CandidatePath))
+            && Score > BestScore && CanUseMove(UnitState, CandidatePath,
+                iCandidateEmergencyRoute > 0))
         {
             BestPath = CandidatePath;
             BestScore = Score;
@@ -1556,7 +1558,7 @@ function MakeDecision(XComTacticalController PC)
         CandidatePath.Length = 0;
         if (class'APX_MissionPlanner'.static.ChooseRescueMove(UnitState, CandidatePath, Score, RescuePatientID)
             && TraceCandidateMove(UnitState, CandidatePath, Score)
-            && Score > BestScore && CanUseMove(UnitState, CandidatePath))
+            && Score > BestScore && CanUseMove(UnitState, CandidatePath, RescuePatientID > 0))
         {
             BestPath = CandidatePath;
             BestScore = Score;
@@ -1907,18 +1909,16 @@ function bool TraceCandidateMove(XComGameState_Unit UnitState,
 
 // Re-evaluation after every ally action can change support scores. Remember
 // this turn's visited endpoints so those changes cannot produce A-B-A shuffles.
-function bool CanUseMove(XComGameState_Unit UnitState, const out array<TTile> Path)
+function bool CanUseMove(XComGameState_Unit UnitState, const out array<TTile> Path,
+    optional bool bEmergencyRevisit)
 {
     local int Index;
     if (Path.Length < 2)
         return false;
-    // #10: even the historic SAME-TURN anti-shuffle guard cannot deny a
-    // critical evacuation, rescue or hazard exit along the sole legal way
-    // back. Other paths still use native Controller/ability/path checks.
-    if (class'APX_MissionPlanner'.static.ShouldEvacuate(UnitState)
-        || class'APX_MissionPlanner'.static.HasBleedingSquadmate(UnitState)
-        || class'APX_MissionPlanner'.static.HasActiveMissionDeadline()
-        || class'APX_HazardKnowledge'.static.NeedsPoisonEscape(UnitState))
+    // Only an actual emergency proposal may revisit a same-turn endpoint.
+    // The default is false: an unrelated bleeding ally or mission timer
+    // cannot remove anti-shuffle protection from combat, loot or staging.
+    if (bEmergencyRevisit)
         return true;
     for (Index = 0; Index < VisitedPositions.Length; ++Index)
     {

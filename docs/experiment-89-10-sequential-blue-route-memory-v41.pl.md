@@ -138,13 +138,33 @@ jak i jedyna legalna trasa w ExplorationPlanner utrzymują
 minimalny dodatni score 8.0, aby sama kara pamięci nie
 wywoływała fałszywego `StatusNoPlan`; alternatywy nadal
 konkurują o lepsze wartości i natywna legalność pozostaje
-oddzielną bramką. Stary hard filter pozostaje wyłącznie
+oddzielną bramką.
+
+Przegląd LEAD znalazł dodatkową lukę źródłową lokalnej ścieżki,
+gdy A* nie daje prefiksu: ujawniona jednostka bez zdolności korzystania
+z osłon (np. SPARK) pomija stare progi stealth/cover i nie zachowywała
+lokalnego fallbacku. Zysk5,5 przed miękkimi kosztami, Unknown8 i kara
+powrotu z poprzedniej tury21 dawały wynik20+5,5−8−21=−3,5.
+Sama pamięć mogła więc usunąć jedyny użyteczny powrót.
+Poprawka zachowuje taki legalny zwykły kandydat przez wszystkie miękkie
+koszty, porównuje pełne koszty przed zastosowaniem podłogi8 i dopiero
+potem sprawdza próg najlepszego kandydata. Bezpieczna, użyteczna alternatywa
+nadal wygrywa. Przypadek bez kary pamięci zachowuje poprzednią punktację;
+nie przywracamy w ten sposób odrzuconego drugiego blue. Regresje wykonują
+rzeczywiste numeryczne helpery UC i sprawdzają powiązanie z lokalną gałęzią,
+ale **nie są wykonaniem `ChooseMove` w silniku ani testem misji**.
+
+Stary hard filter pozostaje wyłącznie
 w `VisitedPositions` bieżącej tury (bez wprowadzania
 odrzuconego cross-turn hard ban PR #11). Dodatkowy, wąski
-wyjątek od tego historycznego filtra dopuszcza rzeczywisty
-powrót w sytuacji pilnej ewakuacji, wykrwawiania towarzysza,
-aktywnego timera lub koniecznego wyjścia z trucizny, nadal
-pod pełną kontrolą legalności natywnego ruchu.
+wyjątek od tego historycznego filtra dopuszcza tylko konkretną
+propozycję: natywne dojście do rzeczywistego celu ewakuacji,
+niebojowy marsz do celu przy aktywnym timerze, faktyczne podejście
+ratunkowe z ustalonym pacjentem albo wyjście z trucizny. LEAD zawęził
+pierwotny warunek globalnej pilności: sam timer lub dowolny krwawiący
+sojusznik nie wyłącza filtra dla pozycjonowania bojowego, lootu,
+eksploracji czy staging. Flaga jest zerowana dla każdego kandydata;
+pełna legalność natywnego ruchu i pozostałe zabezpieczenia obowiązują.
 Po ewakuacji, walce, ratunku lub wejściu w hazard pamięć
 nie blokuje zachowania mechaniki; przy zmianie celu
 wspólny kontekst przestaje obowiązywać.
