@@ -24,6 +24,24 @@ class RoutePolicies(unittest.TestCase):
         cls.second = staticmethod(load_uc_function(ROUTE, "CanUseSecondBlue"))
         cls.penalty = staticmethod(load_uc_function(ROUTE, "SoftVisitPenalty"))
         cls.risk = staticmethod(load_uc_function(MISSION, "IsRoutineBlueExposureAllowed"))
+        cls.context = staticmethod(load_uc_function(ROUTE, "IsRoutineTempoContext"))
+
+    def test_revealed_and_concealed_can_both_use_safe_native_blue_tempo(self):
+        # Concealment is intentionally NOT a predicate. Both revealed and
+        # concealed use full native current-path detection and exposure.
+        self.assertTrue(self.context(True, True, True, True, False, False, False, False))
+        for args in (
+            (False, True, True, True, False, False, False, False),
+            (True, False, True, True, False, False, False, False),
+            (True, True, False, True, False, False, False, False),
+            (True, True, True, False, False, False, False, False),
+            (True, True, True, True, True, False, False, False),
+            (True, True, True, True, False, True, False, False),
+            (True, True, True, True, False, False, True, False),
+            (True, True, True, True, False, False, False, True),
+        ):
+            with self.subTest(args=args):
+                self.assertFalse(self.context(*args))
 
     def test_second_blue_needs_accepted_actual_first_and_safe_new_context(self):
         self.assertTrue(self.second(True, True, True, True, False, False,
@@ -114,6 +132,8 @@ class RouteSourceContracts(unittest.TestCase):
                   "BestPath[BestPath.Length - 1] == SelectedRouteDestination",
                   "PatrolAmbushPlanner.HasActiveStaging()", "GameStateMoveUnitSingle("):
             self.assertIn(t, decision)
+        self.assertIn("IsRoutineTempoContext(", choose)
+        self.assertNotIn("&& !bConcealmentUrgent", choose)
         self.assertNotIn("Mobility * 2", choose)
         exposure = function_body(self.mission, "BlueRouteExposureSafe")
         self.assertIn("Path.Length > 64", exposure)
