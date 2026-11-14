@@ -1137,6 +1137,7 @@ function MakeDecision(XComTacticalController PC)
     local int RemainingConcealmentChecks, RemainingCoverChecks;
     local int RemainingContactGroups, RemainingContactMembers;
     local int RemainingContactDetectors, RemainingContactTiles, RemainingContactLOS;
+    local int RemainingTempoCoverChecks;
     local array<StateObjectReference> ContactSnapshotUnits, ContactSnapshotInteractives;
     local string ContactSnapshotReason;
     local bool bContactSnapshotReady, bContactSnapshotComplete;
@@ -1164,6 +1165,8 @@ function MakeDecision(XComTacticalController PC)
     RemainingContactDetectors = Clamp(class'APX_ContactEnvelope'.default.MaxDetectors, 1, 64);
     RemainingContactTiles = Clamp(class'APX_ContactEnvelope'.default.MaxTiles, 2, 128);
     RemainingContactLOS = Clamp(class'APX_ContactEnvelope'.default.MaxLOS, 1, 512);
+    RemainingTempoCoverChecks = Clamp(
+        class'APX_RouteTempo'.default.MaxTempoCoverChecks, 1, 64);
     PlayerRef = `TACTICALRULES.GetCachedUnitActionPlayerRef();
     PlayerState = XComGameState_Player(`XCOMHISTORY.GetGameStateForObjectID(PlayerRef.ObjectID));
     if (PlayerState == none || PC.m_XGPlayer == none
@@ -1531,7 +1534,8 @@ function MakeDecision(XComTacticalController PC)
                 RemainingContactDetectors, RemainingContactTiles, RemainingContactLOS,
                 RouteTempo, PlayerState.PlayerTurnCount,
                 PatrolAmbushPlanner.HasActiveStaging(), bContactSearch || bVisibleThreats,
-                CandidateRouteGoal, iCandidateRoutine, iCandidateFirstBlue);
+                CandidateRouteGoal, iCandidateRoutine, iCandidateFirstBlue,
+                RemainingTempoCoverChecks);
         if (bCandidateMove
             && TraceCandidateMove(UnitState, CandidatePath, Score)
             && Score > BestScore && CanUseMove(UnitState, CandidatePath))
