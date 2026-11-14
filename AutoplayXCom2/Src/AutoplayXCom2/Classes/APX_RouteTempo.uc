@@ -24,6 +24,7 @@ var config bool EnableSequentialBlue;
 var config bool EnableSoftRouteMemory;
 var config int MaxMemoryTurns;
 var config int MaxVisitEntries;
+var config int MaxTempoCoverChecks;
 var config float ReturnTilePenalty;
 var config float RevisitTilePenalty;
 
