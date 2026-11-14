@@ -44,23 +44,29 @@ prywatnego kodu do publicznego repo):
 `AbilityMultiTargetStyle`; inne multi pozostają nieobsługiwane.
 
 `APX_NativeMultiTarget.SupportedFaceoff` sprawdza dokładny
-stock self-primary AllUnits contract, zaznaczone enemy only,
-excluded friendly i neutral, brak random subset, jeden
-nieradialny `X2Effect_ApplyWeaponDamage`, brak źródłowych
+stock `AllUnits` enemy-relative-to-shooter contract, zaznaczone
+enemy only, excluded friendly i neutral, brak random subset;
+**natywny cel główny to pierwszy wróg, nie strzelec**.
+`Faceoff_BuildVisualization` w `X2Ability_SharpshooterAbilitySet.uc:1122–1130`
+jawnie wykonuje pierwszy strzał w `PrimaryTarget`, potem pozostałe.
+Wymagamy osobnego nieradialnego `X2Effect_ApplyWeaponDamage`
+na `AbilityTargetEffects` oraz `AbilityMultiTargetEffects` i braku źródłowych
 custom ammo effects. Gdy template lub source weapon się różni,
 akcja pozostaje nieobsługiwana, zamiast być z automatu nazywana
 bezpieczną.
 
-`ScoreFaceoff` wymaga 2–16 prawdziwych, unikalnych
-`AvailableTarget.AdditionalTargets` w **bieżącej** natywnej akcji.
-Każdy musi być aktualnie widocznym hostile, żywym, nie NPC
+`ScoreFaceoff` wymaga prawdziwego `PrimaryTarget` będącego wrogiem
+oraz 1–15 `AvailableTarget.AdditionalTargets` — w sumie
+2–16 **unikalnych** celów w bieżącej natywnej akcji.
+**Każdy (także PrimaryTarget)** musi być aktualnie widocznym hostile, żywym, nie NPC
 objective/civilian, nie wcześniej kontrolowanym oddziałem XCOM.
 W razie choć jednego wyjątku **cała** akcja jest odrzucana.
 Nie przeszukujemy wszystkich ukrytych jednostek ani nie tworzymy
 przyszłych targetów. Dla każdego prawidłowego enemy:
 read-only kopia native `AvailableTarget` do `GetShotBreakdown`
-(tylko *preview* hit probability), source damage effect
-`GetDamagePreview(..., false)`, korekta pancerza i bieżącego
+(tylko *preview* hit probability), właściwy osobny damage effect
+`GetDamagePreview(..., true)` dla pierwotnego wroga oraz
+`GetDamagePreview(..., false)` dla dodatkowych, korekta pancerza i bieżącego
 HP/Shield, `APX_CombatPlanner.ScoreDamage`. `ScoreFaceoffOutcome`
 sumuje oczekiwany potencjał dwóch lub więcej osób, pobiera
 niewielki koszt cooldown/zużycia AP (12) oraz maksymalnie 12
@@ -76,9 +82,12 @@ Controller nadal wysyła **oryginalny** `AvailableAction` i
 
 **Ograniczenie źródłowe**: `X2AbilityMultiTarget_AllUnits.GetMultiTargetOptions`
 jest `native`; pełna treść jego implementacji C++ nie
-występuje w publicznie dostępnych `.uc`. Jeśli prawdziwa
-bieżąca lista nie ma self-primary i wielu dodatkowych jednostek,
-ta gałąź pozostanie bezpiecznie nieaktywna. Stock `Faceoff`
+występuje w dostępnym SDK `.uc`. Nie utożsamiamy
+`bUseAbilitySourceAsPrimaryTarget` z oddaniem strzału w strzelca:
+native stock visualization dowodzi strzału w osobnego pierwszego
+wroga. Jeśli prawdziwa bieżąca `AvailableTargets` nie zawiera
+legalnego, obecnie widocznego pierwszego wroga i co najmniej
+jednego kolejnego wroga, ta gałąź pozostanie nieaktywna. Stock `Faceoff`
 pozwala na dodatkowe weapon upgrade effects; obecna inspekcja
 nie jest pełnym solverem takich efektów w modowanych
 broniach ani zagrożeń przez dalszą chain reaction.
