@@ -2087,6 +2087,30 @@ static function bool BlueRouteExposureSafe(XComGameState_Unit UnitState,
     return true;
 }
 
+// Real current explosive-cover risk must also be checked along the WHOLE
+// accelerated blue path. A missing/short budget is Unknown, never Clear.
+// The existing RiskAtTile is read-only; the same counter is shared by all
+// own units and candidate paths for this one Controller decision.
+static function bool BlueRouteExplosiveSafe(XComGameState_Unit UnitState,
+    const out array<TTile> Path,
+    const out array<StateObjectReference> VisibleEnemies,
+    out int RemainingTempoCoverChecks)
+{
+    local int Index;
+
+    if (UnitState == none || Path.Length < 2 || Path.Length > 64
+        || RemainingTempoCoverChecks < Path.Length - 1)
+        return false;
+    for (Index = 1; Index < Path.Length; ++Index)
+    {
+        --RemainingTempoCoverChecks;
+        if (class'APX_ExplosiveCoverKnowledge'.static.RiskAtTile(
+            UnitState, Path[Index], VisibleEnemies) > 0.0)
+            return false;
+    }
+    return true;
+}
+
 // Routine travel is never a substitute for combat risk/opportunity scoring.
 // Preserve one action while pursuing a remote enemy, except during evacuation.
 static function bool CanUseRoutineRoute(bool bImmediateThreats,
@@ -2119,7 +2143,7 @@ static function bool ChooseMove(XComGameState_Unit UnitState,
     optional APX_RouteTempo RouteTempo, optional int CurrentTurn,
     optional bool bActivePatrolPreparation, optional bool bRecentContact,
     optional out TTile SelectedRouteGoal, optional out int iAcceptedRoutine,
-    optional out int iFirstBlueClear)
+    optional out int iFirstBlueClear, optional out int RemainingTempoCoverChecks)
 {
     local XGUnit UnitVisualizer;
     local array<TTile> Tiles, CandidatePath, RiskyRoute, LocalFallbackPath, MemoryFallbackPath;
@@ -2279,7 +2303,9 @@ static function bool ChooseMove(XComGameState_Unit UnitState,
                 bTempoCurrentPathSafe = false;
                 if ((bSecondBlue || bSingleBlue) && ContactStatus == 0)
                     bTempoCurrentPathSafe = BlueRouteExposureSafe(UnitState, Path,
-                        VisibleEnemies, MeleeThreatReaches, ThreatWeights, CurrentRisk);
+                        VisibleEnemies, MeleeThreatReaches, ThreatWeights, CurrentRisk)
+                        && BlueRouteExplosiveSafe(UnitState, Path,
+                            VisibleEnemies, RemainingTempoCoverChecks);
                 if (bSecondBlue && (ContactStatus != 0 || CoverRisk > 0.0
                     || !bTempoCurrentPathSafe))
                 {
@@ -2454,7 +2480,9 @@ static function bool ChooseMove(XComGameState_Unit UnitState,
             if ((bSecondBlue || bSingleBlue) && ContactStatus == 0)
                 bTempoCurrentPathSafe = BlueRouteExposureSafe(UnitState,
                     CandidatePath, VisibleEnemies, MeleeThreatReaches,
-                    ThreatWeights, CurrentRisk);
+                    ThreatWeights, CurrentRisk)
+                    && BlueRouteExplosiveSafe(UnitState, CandidatePath,
+                        VisibleEnemies, RemainingTempoCoverChecks);
             if (bSecondBlue && !bTempoCurrentPathSafe)
                 continue;
             // Preserve one real, legal local move BEFORE soft cover/stealth
