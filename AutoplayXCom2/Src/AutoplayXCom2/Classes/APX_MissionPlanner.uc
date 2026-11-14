@@ -2323,7 +2323,9 @@ static function bool ChooseMove(XComGameState_Unit UnitState,
                     if (MemoryPenalty > 0.0 && !bSecondBlue)
                     {
                         MemoryFallbackPath = Path;
-                        MemoryFallbackScore = Score - MemoryPenalty;
+                        // It remains useful when this is the *only* legal
+                        // return; a soft penalty must not induce StatusNoPlan.
+                        MemoryFallbackScore = FMax(8.0, Score - MemoryPenalty);
                         bMemoryFallbackFirstClear = bSingleBlue
                             && ContactStatus == 0 && bTempoCurrentPathSafe;
                         Path.Length = 0;
@@ -2447,9 +2449,6 @@ static function bool ChooseMove(XComGameState_Unit UnitState,
                     ThreatWeights, CurrentRisk);
             if (bSecondBlue && !bTempoCurrentPathSafe)
                 continue;
-            if (RouteTempo != none && bInspectContact)
-                CandidateScore -= RouteTempo.PenaltyFor(
-                    UnitState.ObjectID, GoalTile, Tile, CurrentTurn);
             // Preserve one real, legal local move BEFORE soft cover/stealth
             // penalties, including in revealed missions such as GasStation.
             // Otherwise the only path could be discarded and the squad idle.
@@ -2465,6 +2464,11 @@ static function bool ChooseMove(XComGameState_Unit UnitState,
                 LocalContactReason = ContactReason;
                 LocalFallbackCoverRisk = 0.0;
             }
+            // #10: rank alternate endpoints with expiring penalty, but
+            // preserve the legal path as a non-blocking fallback first.
+            if (RouteTempo != none && bInspectContact)
+                CandidateScore -= RouteTempo.PenaltyFor(
+                    UnitState.ObjectID, GoalTile, Tile, CurrentTurn);
             // Save cover risk before either soft cost can discard the normal
             // candidate. The retained fallback must not assume uninspected
             // scenery is safe; all soldiers share the caller's finite budget.
