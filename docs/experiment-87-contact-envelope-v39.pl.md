@@ -58,6 +58,16 @@ odmienić rzeczywisty wynik.
    Sprawdza rzeczywiste active/alive/team, natywne
    `UnitBreaksConcealment`, `GetConcealmentDetectionDistance`,
    LOS na tiles, podróż przez okno/ścianę/drzwi i wspólne budżety.
+   Po przeglądzie dodano istotne ochrony: natywna ścieżka musi
+   zaczynać się w `Soldier.TileLocation`, lecz ruch detekcyjny
+   ocenia się od kroku 1 — własnego pola startowego nie traktujemy
+   jako nowo przebytego. Efekt ignorujący *concealment detection
+   distance* nadal podlega maksymalnemu **sight radius**;
+   dystans po raycast LOS pochodzi z `Visibility.DefaultTargetDist`,
+   a nie z dowolnej odległości środków kafelków. Bliski niepewny
+   brzeg LOS daje Unknown. Usunięto zbędne obliczanie kierunkowej
+   osłony własnego żołnierza podczas ruchu — native wyjątek
+   direction-cover dotyczy stojącego żołnierza przy ruchu detektora.
    Zwraca `1 Caution` dla realnej aktualnej okazji wykrycia,
    `0 Clear` **tylko dla obecnej znanej geometrii**
    (`horizon_ai_turns=0`), `-1 Unknown` przy jakiejkolwiek
