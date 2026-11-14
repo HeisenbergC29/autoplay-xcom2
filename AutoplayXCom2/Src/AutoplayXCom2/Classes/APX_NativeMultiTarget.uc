@@ -73,7 +73,7 @@ static function float ScoreFaceoff(XComGameState_Unit Shooter,
     local WeaponDamageValue MinDamage, MaxDamage, EmptyDamage;
     local array<int> Seen;
     local float Armor, MinAfterArmor, MaxAfterArmor, Health, Value;
-    local int Index, Chance, AllowsShield, StrongFinishes;
+    local int Index, Chance, AllowsShield, StrongFinishes, UsefulTargets;
 
     if (!SupportedFaceoff(Shooter, Ability)
         || NativeTarget.PrimaryTarget.ObjectID <= 0
@@ -134,6 +134,13 @@ static function float ScoreFaceoff(XComGameState_Unit Shooter,
         if (Health <= 0.0 || MinDamage.Damage < 0.0
             || MaxDamage.Damage < MinDamage.Damage)
             return -10000.0;
+        // A native list of three enemies with two impossible shots is not
+        // automatically a three-target benefit. Validate ALL for collateral,
+        // but credit only enemies with real nontrivial hit/damage previews.
+        if (Chance < Max(1, class'APX_CombatPlanner'.default.MinimumHitChance)
+            || MaxAfterArmor <= 0.0)
+            continue;
+        ++UsefulTargets;
         if (Chance >= 70 && MinAfterArmor >= Health)
             ++StrongFinishes;
         Value += class'APX_CombatPlanner'.static.ScoreDamage(
@@ -141,5 +148,5 @@ static function float ScoreFaceoff(XComGameState_Unit Shooter,
             1.0 - Enemy.GetCurrentStat(eStat_HP)
                 / FMax(1.0, Enemy.GetMaxStat(eStat_HP)));
     }
-    return ScoreFaceoffOutcome(Seen.Length, StrongFinishes, Value);
+    return ScoreFaceoffOutcome(UsefulTargets, StrongFinishes, Value);
 }
