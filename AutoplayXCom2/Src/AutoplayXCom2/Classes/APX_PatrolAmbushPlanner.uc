@@ -429,7 +429,9 @@ function bool ChooseReactionSupport(int PlayerID, XComGameState_Unit Opener,
     Enemy = XComGameState_Unit(`XCOMHISTORY.GetGameStateForObjectID(
         NativeOpener.AvailableTargets[OpenerTarget].PrimaryTarget.ObjectID));
     Group = XComGameState_AIGroup(`XCOMHISTORY.GetGameStateForObjectID(GroupID));
-    if (Enemy == none || Group == none
+    if (Enemy == none || Enemy.GetMyTemplate() == none
+        || Enemy.GetMyTemplate().UnitSize != 1
+        || Group == none
         || Group.m_arrMembers.Find('ObjectID', Enemy.ObjectID) == INDEX_NONE)
         return false;
     bRevealed = !class'APX_SquadPlanner'.static.SquadIsConcealed(PlayerID);
@@ -444,6 +446,7 @@ function bool ChooseReactionSupport(int PlayerID, XComGameState_Unit Opener,
         if (++Checked > 24)
             return false;
         if (!class'APX_SquadPlanner'.static.IsLocalSoldier(Soldier, PlayerID)
+            || Soldier.GetMyTemplate().UnitSize != 1
             || Soldier.ObjectID == Opener.ObjectID || !Soldier.IsAbleToAct())
             continue;
         if (RemainingLOS <= 0)
