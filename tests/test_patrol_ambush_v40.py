@@ -92,6 +92,15 @@ class PatrolAmbushNumericPolicy(unittest.TestCase):
             with self.subTest(args=args):
                 self.assertFalse(self.defer(*args))
 
+    def test_explosive_scenery_and_uninspected_cover_can_lose_to_safe_lane(self):
+        safe_one = self.rank(6, 1, False, 12, 0, 0, 8, 0)
+        dangerous_three = self.rank(6, 3, True, 12, 0, 0, 8, 30)
+        uninspected_three = self.rank(6, 3, True, 12, 0, 0, 8, 42)
+        self.assertGreater(safe_one, dangerous_three)
+        self.assertGreater(dangerous_three, uninspected_three)
+        self.assertEqual(self.rank(6, 3, True, 12, 0, 0, 8, -10),
+                         self.rank(6, 3, True, 12, 0, 0, 8, 0))
+
 
 class PatrolAmbushSourceContracts(unittest.TestCase):
     @classmethod
@@ -234,6 +243,19 @@ class PatrolAmbushSourceContracts(unittest.TestCase):
 @unittest.skipUnless(os.environ.get("APX_SDK_SOURCE_ROOT"),
                      "Private WOTC SDK classes not available")
 class PatrolAmbushSDKContracts(unittest.TestCase):
+    def test_local_roster_uses_public_read_only_bounded_sdk_accessors(self):
+        root = CHECKS.find_sdk_root(Path(os.environ["APX_SDK_SOURCE_ROOT"]))
+        native = (root / "XComGame/Classes/XGSquadNativeBase.uc").read_text(encoding="utf-8-sig")
+        player = (root / "XComGame/Classes/XGPlayer.uc").read_text(encoding="utf-8-sig")
+        self.assertIn("m_kSquad", player)
+        self.assertIn("return m_iNumUnits;", function_body(native, "GetNumMembers"))
+        self.assertIn("return m_arrUnits[iIndex];", function_body(native, "GetMemberAt"))
+        support = function_body(AMBUSH.read_text(encoding="utf-8-sig"), "ChooseReactionSupport")
+        self.assertNotIn("IterateByClassType", support)
+        self.assertIn("MemberCount > 24", support)
+        self.assertIn("Squad.GetMemberAt(MemberIndex)", support)
+        self.assertIn("MemberVisualizer.ObjectID", support)
+
     def test_read_only_native_source_contracts(self):
         root = CHECKS.find_sdk_root(Path(os.environ["APX_SDK_SOURCE_ROOT"]))
         group = (root / "XComGame/Classes/XComGameState_AIGroup.uc").read_text(encoding="utf-8-sig")

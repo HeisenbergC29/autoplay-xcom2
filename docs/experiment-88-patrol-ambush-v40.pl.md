@@ -95,6 +95,13 @@ i rzeczywistych żywych członków, nie przewiduje ich przyszłego LOS.
    `SabotageTransmitter` nie bierze udziału w tej zmianie trasy.
    Własny wielopolowy żołnierz bez pełnego footprint
    nigdy nie jest pozycjonowany przez anchor LOS v40.
+   Poprawka LEAD dołącza do tej nowej ścieżki istniejący
+   `APX_ExplosiveCoverKnowledge.InspectRiskAtTile`: kierunkowa osłona
+   i linie ognia nie usuwają ryzyka wybuchowego obiektu przy końcu ruchu.
+   Controller przekazuje ten sam `RemainingCoverChecks` co zwykłym
+   trasom; brak budżetu zachowuje konserwatywną karę42 zamiast uznania
+   pola za wolne od ryzyka. Wykonywalna regresja porównuje bezpieczną
+   pojedynczą linię z trzema liniami przy wybuchowej/nieocenionej osłonie.
 4. **Faktyczny opener przed OW:** tylko gdy obecnie wybrany
    `AvailableAction` jest natywnie legalnym `StandardShot`,
    `PistolStandardShot` albo `SniperStandardFire` na realnie
@@ -104,6 +111,11 @@ i rzeczywistych żywych członków, nie przewiduje ich przyszłego LOS.
    wroga lub jednostki wsparcia pojedynczy LOS do anchor
    nie wystarcza: zrezygnujemy z tego dodatkowego OW,
    pozostawiając normalny native legal direct shot.
+   LEAD poprawił także zakres skanu wsparcia: limit24 dotyczy istniejącego
+   rosteru lokalnego gracza przez publiczne odczyty `XGSquad`, nie wszystkich
+   rekordów jednostek historii. Duża liczba wrogów/cywilów nie wyłącza już
+   tego przygotowania. Członkowie rosteru są ponownie sprawdzani w bieżącej
+   historii; brak lub zbyt duży roster zachowuje zwykły strzał/fallback.
    Co najmniej 2 aktywne
    potencjalne reaction lanes; max3 i budget LOS dzielony
    z resztą jednej decyzji. W revealed mode dobry bezpośredni

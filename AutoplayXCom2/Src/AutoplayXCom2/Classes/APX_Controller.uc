@@ -1553,7 +1553,7 @@ function MakeDecision(XComTacticalController PC)
                 bContactSnapshotComplete, ContactSnapshotReason,
                 RemainingContactDetectors, RemainingContactTiles,
                 RemainingContactLOS, PatrolApproachPath, PatrolApproachScore,
-                PatrolApproachReason, RemainingConcealmentChecks)
+                PatrolApproachReason, RemainingConcealmentChecks, RemainingCoverChecks)
             && TraceCandidateMove(UnitState, PatrolApproachPath, PatrolApproachScore)
             && PatrolApproachScore > BestScore + 6.0
             && CanUseMove(UnitState, PatrolApproachPath))

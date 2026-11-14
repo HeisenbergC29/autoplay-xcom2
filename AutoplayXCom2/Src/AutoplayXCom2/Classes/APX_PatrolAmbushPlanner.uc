@@ -43,7 +43,7 @@ static function bool CanDeferOpener(bool bNativeOpener, bool bUrgent,
 
 static function float VariantPositionScore(float Progress, int CoveredLanes,
     bool bDirectionalCover, float PositionBenefit, float ExposureIncrease,
-    int ContactStatus, float UnknownPenalty)
+    int ContactStatus, float UnknownPenalty, optional float ExplosiveCoverRisk)
 {
     local float Value;
 
@@ -57,6 +57,9 @@ static function float VariantPositionScore(float Progress, int CoveredLanes,
         Value += 8.0;
     if (ContactStatus < 0)
         Value -= FClamp(UnknownPenalty, 0.0, 30.0);
+    // A useful firing lane does not remove independent scenery danger.
+    // The common inspector also penalizes an uninspected endpoint.
+    Value -= FMax(0.0, ExplosiveCoverRisk);
     return Value;
 }
 
@@ -288,7 +291,8 @@ function bool ChooseApproach(XComGameState_Unit Soldier,
     bool bSnapshotComplete, string SnapshotReason,
     out int RemainingDetectors, out int RemainingTiles, out int RemainingLOS,
     out array<TTile> Path, out float Score, out string Reason,
-    optional out int RemainingConcealmentChecks)
+    optional out int RemainingConcealmentChecks,
+    optional out int RemainingCoverChecks)
 {
     local XGUnit Visualizer;
     local array<TTile> Tiles, CandidatePath;
@@ -300,7 +304,7 @@ function bool ChooseApproach(XComGameState_Unit Soldier,
     local TTile Tile;
     local vector Source, Destination;
     local float Cost, Progress, NowDistance, NextDistance;
-    local float PositionGain, RiskNow, RiskThere, CandidateScore, Angle;
+    local float PositionGain, RiskNow, RiskThere, CandidateScore, Angle, CoverRisk;
     local int Sample, Index, ContactStatus, Lanes, OWTargetIndex, OWCost;
     local bool bCovered;
     local string ContactReason;
@@ -391,12 +395,14 @@ function bool ChooseApproach(XComGameState_Unit Soldier,
         if (ContactStatus == 1)
             continue;
         Lanes = CountVariantLanes(Soldier, Tile, Waypoint, RemainingLOS);
+        CoverRisk = class'APX_ExplosiveCoverKnowledge'.static.InspectRiskAtTile(
+            Soldier, Tile, VisibleEnemies, RemainingCoverChecks);
         PositionGain = class'APX_MissionPlanner'.static.SquadPositionScore(Soldier, Tile)
             - class'APX_MissionPlanner'.static.SquadPositionScore(
                 Soldier, Soldier.TileLocation);
         CandidateScore = VariantPositionScore(Progress, Lanes, bCovered,
             PositionGain, RiskThere - RiskNow, ContactStatus,
-            class'APX_ContactEnvelope'.static.PathStatusPenalty(-1));
+            class'APX_ContactEnvelope'.static.PathStatusPenalty(-1), CoverRisk);
         CandidateScore -= Cost * 0.25;
         if (CandidateScore <= Score)
             continue;
@@ -443,11 +449,15 @@ function bool ChooseReactionSupport(int PlayerID, XComGameState_Unit Opener,
     out int ReactionTarget, out float ReactionScore, out int RemainingLOS)
 {
     local XComGameState_Unit Soldier, Enemy;
+    local XComGameState_Player PlayerState;
+    local XGPlayer PlayerVisualizer;
+    local XGUnit MemberVisualizer;
+    local XGSquad Squad;
     local XComGameState_AIGroup Group;
     local XComGameState_Ability Ability;
     local AvailableAction Candidate;
     local array<StateObjectReference> VisibleEnemies;
-    local int Cost, TargetIndex, Checked, Eligible, AlreadyArmed;
+    local int Cost, TargetIndex, MemberIndex, MemberCount, Eligible, AlreadyArmed;
     local bool bRevealed;
     local GameRulesCache_VisibilityInfo Visibility;
     local float SightRange;
@@ -480,12 +490,34 @@ function bool ChooseReactionSupport(int PlayerID, XComGameState_Unit Opener,
     if (!class'APX_CombatPlanner'.static.IsVisibleHostile(
         Opener, Enemy, VisibleEnemies))
         return false;
+    // Read the local player's existing roster, not all history units. Enemy
+    // and civilian counts must not disable an otherwise complete squad scan.
+    PlayerState = XComGameState_Player(
+        `XCOMHISTORY.GetGameStateForObjectID(PlayerID));
+    if (PlayerState == none || PlayerState.GetTeam() != eTeam_XCom
+        || `TACTICALRULES == none
+        || PlayerID != `TACTICALRULES.GetLocalClientPlayerObjectID()
+        || Opener.GetAssociatedPlayerID() != PlayerID)
+        return false;
+    PlayerVisualizer = XGPlayer(PlayerState.GetVisualizer());
+    if (PlayerVisualizer == none || PlayerVisualizer.ObjectID != PlayerID
+        || PlayerVisualizer.m_kSquad == none)
+        return false;
+    Squad = PlayerVisualizer.m_kSquad;
+    if (Squad.m_kPlayer != PlayerVisualizer)
+        return false;
+    MemberCount = Squad.GetNumMembers();
+    if (MemberCount <= 0 || MemberCount > 24)
+        return false;
     // Native action cache on real, currently visible target, never a future
     // activation assumption. Two useful lanes required before spending OW AP.
-    foreach `XCOMHISTORY.IterateByClassType(class'XComGameState_Unit', Soldier)
+    for (MemberIndex = 0; MemberIndex < MemberCount; ++MemberIndex)
     {
-        if (++Checked > 24)
-            return false;
+        MemberVisualizer = Squad.GetMemberAt(MemberIndex);
+        if (MemberVisualizer == none || MemberVisualizer.ObjectID <= 0)
+            continue;
+        Soldier = XComGameState_Unit(`XCOMHISTORY.GetGameStateForObjectID(
+            MemberVisualizer.ObjectID));
         if (!class'APX_SquadPlanner'.static.IsLocalSoldier(Soldier, PlayerID)
             || Soldier.GetMyTemplate().UnitSize != 1
             || Soldier.ObjectID == Opener.ObjectID || !Soldier.IsAbleToAct())
