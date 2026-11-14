@@ -245,8 +245,10 @@ function bool ChooseApproach(XComGameState_Unit Soldier,
     Reason = "inactive";
     if (Phase != 'approach' && Phase != 'setup')
         return false;
-    if (Soldier == none || !class'APX_SquadPlanner'.static.IsLocalSoldier(
-        Soldier, OwnedPlayerID) || !Soldier.IsAbleToAct()
+    if (Soldier == none || Soldier.GetMyTemplate() == none
+        || Soldier.GetMyTemplate().UnitSize != 1
+        || !class'APX_SquadPlanner'.static.IsLocalSoldier(
+            Soldier, OwnedPlayerID) || !Soldier.IsAbleToAct()
         || Soldier.NumAllReserveActionPoints() > 0
         || !class'APX_MissionPlanner'.static.HasLegalMove(Soldier)
         || !class'APX_SquadPlanner'.static.FindOverwatch(
