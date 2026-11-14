@@ -474,8 +474,13 @@ function bool ChooseMove(XComGameState_Unit UnitState,
                 class'APX_MissionPlanner'.static.SquadPositionScore(UnitState, Path[Path.Length - 1]));
             SelectedGoal = Goals[GoalIndex].Tile;
             if (RouteTempo != none)
-                Score -= RouteTempo.PenaltyFor(UnitState.ObjectID, SelectedGoal,
-                    Path[Path.Length - 1], CurrentTurn);
+            {
+                // A SOFT memory preference must not turn the only native
+                // legal exploration return into an artificial no-plan stop.
+                Score = FMax(8.0, Score - RouteTempo.PenaltyFor(
+                    UnitState.ObjectID, SelectedGoal,
+                    Path[Path.Length - 1], CurrentTurn));
+            }
             return true;
         }
         RejectGoal(UnitState.ObjectID, Goals[GoalIndex].Tile);
