@@ -1907,7 +1907,8 @@ static function bool HasLegalMove(XComGameState_Unit UnitState)
 // then rebuild a blue-range prefix from the actual reachable cache for dispatch.
 static function bool ChooseRoutePrefix(XComGameState_Unit UnitState,
     XGUnit UnitVisualizer, TTile GoalTile, out array<TTile> Path,
-    optional bool bCombatRoute)
+    optional bool bCombatRoute, optional APX_RouteTempo RouteTempo,
+    optional int CurrentTurn)
 {
     local array<TTile> FullPath, CandidatePath;
     local int Index, PathIndex;
@@ -1952,6 +1953,9 @@ static function bool ChooseRoutePrefix(XComGameState_Unit UnitState,
             CandidateValue = AdvanceEndpointScore(float(Index),
                 AdvanceCoverLevel(UnitState, FullPath[Index], GoalTile));
             CandidateValue += SquadPositionScore(UnitState, FullPath[Index]);
+            if (RouteTempo != none && !bCombatRoute)
+                CandidateValue -= RouteTempo.PenaltyFor(
+                    UnitState.ObjectID, GoalTile, FullPath[Index], CurrentTurn);
             if (CandidateValue > BestValue)
             {
                 BestValue = CandidateValue;
@@ -2084,10 +2088,14 @@ static function bool ChooseMove(XComGameState_Unit UnitState,
     optional string ContactSnapshotReason,
     optional out int RemainingContactDetectors,
     optional out int RemainingContactTiles,
-    optional out int RemainingContactLOS)
+    optional out int RemainingContactLOS,
+    optional APX_RouteTempo RouteTempo, optional int CurrentTurn,
+    optional bool bActivePatrolPreparation, optional bool bRecentContact,
+    optional out TTile SelectedRouteGoal, optional out bool bAcceptedRoutine,
+    optional out bool bFirstBlueClear)
 {
     local XGUnit UnitVisualizer;
-    local array<TTile> Tiles, CandidatePath, RiskyRoute, LocalFallbackPath;
+    local array<TTile> Tiles, CandidatePath, RiskyRoute, LocalFallbackPath, MemoryFallbackPath;
     local array<StateObjectReference> VisibleEnemies;
     local array<float> MeleeThreatReaches;
     local array<float> ThreatWeights;
@@ -2095,6 +2103,7 @@ static function bool ChooseMove(XComGameState_Unit UnitState,
     local MissionGoal Goal;
     local bool bCombatGoal, bSafe, bRequireSupport, bRoutineRoute, bSabotageRush;
     local bool bConcealmentUrgent, bCoverUrgent, bUsedLocalFallback;
+    local bool bTempoCandidate, bSecondBlue, bSingleBlue;
     local string ConcealmentRiskReason, ContactReason, BestContactReason, LocalContactReason, RiskyContactReason;
     local int ContactStatus, BestContactStatus, LocalContactStatus, RiskyContactStatus;
     local bool bInspectContact;
@@ -2103,15 +2112,19 @@ static function bool ChooseMove(XComGameState_Unit UnitState,
     local float CurrentScore, CandidateScore, BestScore, CurrentRisk, CandidateRisk, PathCost, StartSupport, BestRisk;
     local float BestAttackNow, BestAttackAfterMove, HealthFraction;
     local float LocalFallbackScore, LocalFallbackRisk;
+    local float MemoryPenalty, MemoryFallbackScore;
 
     Path.Length = 0;
     Score = 0;
+    bAcceptedRoutine = false;
+    bFirstBlueClear = false;
     if (!HasLegalMove(UnitState)
         || !FindGoal(UnitState, Goal, VisibleEnemies,
             BerserkerFocusTargetID, bBerserkerFocusGoal,
             RangedFocusTargetID, bRangedFocusGoal))
         return false;
     GoalTile = Goal.Tile;
+    SelectedRouteGoal = GoalTile;
     bSabotageRush = Goal.bBerserkerSabotageGoal
         && UnitState.NumActionPoints() >= 2;
     // For this one sabotage challenge, even a nearby enemy does not turn
@@ -2134,8 +2147,33 @@ static function bool ChooseMove(XComGameState_Unit UnitState,
     // rescue, timer, X4 plant/relay, combat reposition or hazard escape.
     bInspectContact = !bCoverUrgent && !Goal.bImmediateThreats
         && !bCombatGoal && !Goal.bBerserkerSabotageGoal;
+    // Exact current-state checks, not next-turn corridor certification.
+    // Never spend the last AP on routine tempo when any urgent gameplay,
+    // recent contact, or a genuinely staged/armed patrol ambush exists.
+    bTempoCandidate = RouteTempo != none
+        && class'APX_RouteTempo'.default.EnableSequentialBlue
+        && class'APX_FullIntel'.default.EnableFullIntel
+        && bContactSnapshotComplete && bInspectContact
+        && !bActivePatrolPreparation && !bRecentContact
+        && !ShouldEvacuate(UnitState)
+        && !class'APX_HazardKnowledge'.static.NeedsPoisonEscape(UnitState);
+    if (RouteTempo != none && bInspectContact)
+        RouteTempo.SetGoal(UnitState.ObjectID, GoalTile);
+    bSecondBlue = bTempoCandidate
+        && RouteTempo.HasFirstBlueTicket(UnitState.ObjectID, GoalTile,
+            UnitState.TileLocation, CurrentTurn)
+        && class'APX_RouteTempo'.static.CanUseSecondBlue(
+            true, class'APX_FullIntel'.default.EnableFullIntel,
+            true, true, bActivePatrolPreparation, bRecentContact,
+            bCoverUrgent || Goal.bImmediateThreats, HasLegalMove(UnitState),
+            UnitState.NumActionPoints(), UnitState.NumActionPointsForMoving());
+    // Sequential blue is two REAL native actions, never a 2*Mobility dash.
+    bSingleBlue = bTempoCandidate && !bSecondBlue
+        && UnitState.NumActionPoints() >= 2
+        && UnitState.NumActionPoints('standard') >= 2
+        && UnitState.NumActionPointsForMoving() >= 2;
     StartSupport = NearestSupportDistance(UnitState, UnitState.TileLocation);
-    bRoutineRoute = bSabotageRush
+    bRoutineRoute = bSabotageRush || bSecondBlue
         || CanUseRoutineRoute(Goal.bImmediateThreats,
             ShouldEvacuate(UnitState), UnitState.NumActionPoints());
     // A known but distant enemy does not remove the reserve-AP travel rule.
@@ -2154,7 +2192,8 @@ static function bool ChooseMove(XComGameState_Unit UnitState,
     // only after greedy failure would oscillate back toward a wall on the next
     // action whenever the necessary detour initially increases direct distance.
     if (bRoutineRoute && (!bCombatGoal || class'APX_FullIntel'.default.EnableFullIntel)
-        && ChooseRoutePrefix(UnitState, UnitVisualizer, GoalTile, Path, bCombatGoal))
+        && ChooseRoutePrefix(UnitState, UnitVisualizer, GoalTile, Path, bCombatGoal,
+            (bInspectContact ? RouteTempo : none), CurrentTurn))
     {
         Score = ScoreRouteAdvance(SquadPositionScore(UnitState, UnitState.TileLocation),
             SquadPositionScore(UnitState, Path[Path.Length - 1]));
