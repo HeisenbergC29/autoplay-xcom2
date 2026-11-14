@@ -22,12 +22,79 @@ SCORING_KEYS = {
     "DefaultSoldierScoring": (),
     "RestartScorePenalty": (),
 }
-CONFIG_LINE = re.compile(r"^\s*([+.-]?)(Default(?:Enemy|Objective|Mission|Soldier)Scoring(?:Table)?|RestartScorePenalty)\s*=\s*(.*?)\s*$")
-FIELD = re.compile(r'(\w+)\s*=\s*(?:"([^"]*)"|(-?\d+))')
+PROPERTY_NAMES = {key.casefold(): key for key in SCORING_KEYS}
+CONFIG_PROPERTY = re.compile(r"^\s*([^\w\s]*)\s*(\w+)\b(.*)$")
+SCORING_PROPERTY = re.compile(r"Default(?:Enemy|Objective|Mission|Soldier)Scoring", re.I)
+ASSIGNMENT = re.compile(r"^\s*=\s*(.*?)\s*$")
+FIELD = re.compile(r'\s*(\w+)\s*=\s*(?:"([^"\\]*)"|(-?\d+))\s*')
 ENEMY_FIELDS = ("StartingPoints", "MinPoints", "DecreasePerTurn", "TurnOffset",
                 "SpawnedPoints", "ReinforcementPoints", "DisabledPoints", "MinDisabledPoints")
 OBJECTIVE_FIELDS = ("StartingPoints", "MinPoints", "DecreasePerTurn", "TurnOffset")
 SOLDIER_FIELDS = ("UninjuredBonus", "WoundedBonus", "RescuedCivilianBonus")
+NAME_FIELDS = {"CharacterTemplateName", "MissionType"}
+FIELD_NAMES = {key.casefold(): key for key in
+               (*NAME_FIELDS, "TextPoolIndex", "GroupID", "LineIndex",
+                *ENEMY_FIELDS, *OBJECTIVE_FIELDS, *SOLDIER_FIELDS)}
+REQUIRED_DEFAULTS = ("DefaultEnemyScoring", "DefaultObjectiveScoring",
+                     "DefaultMissionScoring", "DefaultSoldierScoring")
+
+
+def scoring_fields(kind):
+    return (ENEMY_FIELDS if kind.startswith("DefaultEnemy") else
+            OBJECTIVE_FIELDS if kind.startswith(("DefaultObjective", "DefaultMission")) else
+            SOLDIER_FIELDS)
+
+
+def scoring_identity(kind, entry):
+    """These identity strings are stock SDK name fields, not FString values."""
+    result = []
+    for field in SCORING_KEYS[kind]:
+        value = entry[field]
+        expected = str if field in NAME_FIELDS else int
+        if type(value) is not expected:
+            raise ValueError(f"invalid scoring identity type for {field}")
+        result.append(value.casefold() if field in NAME_FIELDS else value)
+    return tuple(result)
+
+
+def normalized_entry(entry):
+    return {key: value.casefold() if key in NAME_FIELDS else value
+            for key, value in entry.items()}
+
+
+def parse_tuple(rhs, kind, location):
+    """Parse the whole supported tuple; unmatched text is never discarded."""
+    if not rhs.startswith("(") or not rhs.endswith(")"):
+        raise ValueError(f"{location}: malformed scoring tuple")
+    body, position, values = rhs[1:-1], 0, {}
+    allowed = set(SCORING_KEYS[kind]) | set(scoring_fields(kind))
+    while position < len(body):
+        match = FIELD.match(body, position)
+        if not match:
+            raise ValueError(f"{location}: unsupported scoring syntax")
+        raw_key, quoted, numeric = match.groups()
+        key = FIELD_NAMES.get(raw_key.casefold())
+        if key not in allowed:
+            raise ValueError(f"{location}: unsupported scoring field {raw_key}")
+        if key in values:
+            raise ValueError(f"{location}: repeated field {key}")
+        values[key] = quoted if quoted is not None else int(numeric)
+        position = match.end()
+        if position == len(body):
+            break
+        if body[position] != "," or not body[position + 1:].strip():
+            raise ValueError(f"{location}: malformed scoring separator")
+        position += 1
+    if any(key not in values for key in SCORING_KEYS[kind]):
+        raise ValueError(f"{location}: missing scoring identity")
+    try:
+        scoring_identity(kind, values)
+    except ValueError as exc:
+        raise ValueError(f"{location}: {exc}") from exc
+    if any(key not in values or type(values[key]) is not int
+           for key in scoring_fields(kind)):
+        raise ValueError(f"{location}: incomplete scoring values")
+    return values
 
 
 def read_config(path):
@@ -44,35 +111,33 @@ def read_config(path):
             continue
         if not in_ladder or not stripped or stripped.startswith((";", "//")):
             continue
-        match = CONFIG_LINE.match(line)
+        match = CONFIG_PROPERTY.match(line)
         if not match:
             continue
-        operation, kind, rhs = match.groups()
+        operation, raw_kind, assignment = match.groups()
+        kind = PROPERTY_NAMES.get(raw_kind.casefold())
+        location = f"{source['filename']}:{number}"
+        if kind is None:
+            if SCORING_PROPERTY.match(raw_kind):
+                raise ValueError(f"{location}: unsupported scoring property {raw_kind}")
+            continue
+        # Array clearing/removal/force-append semantics are outside this narrow
+        # auditor. Refuse them instead of reporting a stale, apparently valid table.
+        if operation == "-":
+            raise ValueError(f"{location}: removal cannot be safely resolved")
+        if operation not in ("", "+") or (operation and not kind.endswith("Table")):
+            raise ValueError(f"{location}: unsupported scoring operator {operation}")
+        value_match = ASSIGNMENT.fullmatch(assignment)
+        if not value_match:
+            raise ValueError(f"{location}: malformed scoring assignment")
+        rhs = value_match[1]
         if kind == "RestartScorePenalty":
-            try:
-                value = int(rhs)
-            except ValueError as exc:
-                raise ValueError(f"{source['filename']}:{number}: invalid penalty") from exc
+            if not re.fullmatch(r"-?\d+", rhs):
+                raise ValueError(f"{location}: invalid penalty")
+            value = int(rhs)
             records.append((operation, kind, {"Value": value}, number))
             continue
-        if not rhs.startswith("(") or not rhs.endswith(")"):
-            raise ValueError(f"{source['filename']}:{number}: malformed scoring tuple")
-        values = {}
-        for entry in FIELD.finditer(rhs[1:-1]):
-            key, quoted, numeric = entry.groups()
-            if key in values:
-                raise ValueError(f"{source['filename']}:{number}: repeated field {key}")
-            values[key] = quoted if quoted is not None else int(numeric)
-        required = SCORING_KEYS[kind]
-        if any(key not in values for key in required):
-            raise ValueError(f"{source['filename']}:{number}: missing scoring identity")
-        fields = (ENEMY_FIELDS if kind.startswith("DefaultEnemy") else
-                  OBJECTIVE_FIELDS if kind.startswith(("DefaultObjective", "DefaultMission")) else
-                  SOLDIER_FIELDS)
-        if any(key not in values or not isinstance(values[key], int) for key in fields):
-            raise ValueError(f"{source['filename']}:{number}: incomplete scoring values")
-        if not all(ch in (",", " ", "\t") for ch in FIELD.sub("", rhs[1:-1])):
-            raise ValueError(f"{source['filename']}:{number}: unsupported scoring syntax")
+        values = parse_tuple(rhs, kind, location)
         records.append((operation, kind, values, number))
     return source, records
 
@@ -86,28 +151,31 @@ def load_rules(paths):
         origin, records = read_config(path)
         sources.append(origin)
         for operation, kind, entry, line in records:
-            if operation == "-":
-                raise ValueError(f"{origin['filename']}:{line}: removal cannot be safely resolved")
             category = ("enemy" if kind.startswith("DefaultEnemy") else
                         "objective" if kind.startswith("DefaultObjective") else
                         "mission" if kind.startswith("DefaultMission") else None)
             if category is None or kind == "RestartScorePenalty" or not kind.endswith("Table"):
-                if kind in defaults and defaults[kind] != entry:
+                if kind in defaults and normalized_entry(defaults[kind]) != normalized_entry(entry):
                     raise ValueError(f"{origin['filename']}:{line}: conflicting {kind} default")
                 defaults[kind] = entry
                 continue
-            identity_fields = SCORING_KEYS[kind]
-            identity = tuple(entry[key] for key in identity_fields)
-            if identity in categories[category] and categories[category][identity] != entry:
+            identity = scoring_identity(kind, entry)
+            if (identity in categories[category]
+                    and normalized_entry(categories[category][identity]) != normalized_entry(entry)):
                 raise ValueError(f"{origin['filename']}:{line}: ambiguous {kind} override {identity}")
             categories[category][identity] = entry
+    missing = [key for key in REQUIRED_DEFAULTS if key not in defaults]
+    if missing:
+        raise ValueError("missing required scoring defaults: " + ", ".join(missing))
     return {"sources": sources, "defaults": defaults, "categories": categories}
 
 
 def decayed(record, turn):
     """Explicit v2 convention for diagnostic comparison, NOT proven native C++."""
-    if turn < 0:
+    if type(turn) is not int or turn < 0:
         raise ValueError("native turn unknown")
+    if any(type(record.get(key)) is not int for key in OBJECTIVE_FIELDS):
+        raise ValueError("incomplete scoring values")
     return max(record["MinPoints"],
                record["StartingPoints"] - max(0, turn - record["TurnOffset"])
                * record["DecreasePerTurn"])
@@ -115,17 +183,24 @@ def decayed(record, turn):
 
 def previous_v2_decayed(record, turn):
     """The historic JSON uses snake_case, unlike native INI's PascalCase."""
+    if type(turn) is not int or turn < 0:
+        raise ValueError("native turn unknown")
+    if any(type(record.get(key)) is not int for key in
+           ("min_points", "starting_points", "turn_offset", "decrease_per_turn")):
+        raise ValueError("incomplete comparison scoring values")
     return max(record["min_points"],
                record["starting_points"] - max(0, turn - record["turn_offset"])
                * record["decrease_per_turn"])
 
 
 def rate_for_enemy(rules, template):
-    return rules["categories"]["enemy"].get((template,), rules["defaults"]["DefaultEnemyScoring"])
+    key = scoring_identity("DefaultEnemyScoringTable", {"CharacterTemplateName": template})
+    return rules["categories"]["enemy"].get(key, rules["defaults"]["DefaultEnemyScoring"])
 
 
 def rate_for_objective(rules, mission, text_pool, group, line):
-    key = (mission, text_pool, group, line)
+    key = scoring_identity("DefaultObjectiveScoringTable", {
+        "MissionType": mission, "TextPoolIndex": text_pool, "GroupID": group, "LineIndex": line})
     return rules["categories"]["objective"].get(key, rules["defaults"]["DefaultObjectiveScoring"])
 
 

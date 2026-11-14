@@ -1,5 +1,7 @@
 """No private SDK or game config files are committed or needed in public CI."""
 import importlib.util
+from contextlib import redirect_stderr
+from io import StringIO
 import json
 import os
 from pathlib import Path
@@ -89,6 +91,123 @@ class LegacyRateAuditTests(unittest.TestCase):
                             "+DefaultEnemyScoringTable=(CharacterTemplateName=\"Muton\", StartingPoints=3)\n")
         with self.assertRaisesRegex(ValueError, "incomplete scoring values"):
             mod.load_rules([self.base, self.tle])
+
+    def test_clear_force_append_and_unknown_operators_cannot_leave_stale_rules(self):
+        row = TLE.splitlines()[2]
+        for operation in ("!", ".", "++", "@"):
+            with self.subTest(operation=operation):
+                statement = ("!DefaultEnemyScoringTable=ClearArray"
+                             if operation == "!" else operation + row[1:])
+                self.tle.write_text("[XComGame.XComGameState_LadderProgress]\n" + statement + "\n")
+                with self.assertRaisesRegex(ValueError, "unsupported scoring operator"):
+                    mod.load_rules([self.base, self.tle])
+        self.tle.write_text(TLE.replace("RestartScorePenalty=", "+RestartScorePenalty="))
+        with self.assertRaisesRegex(ValueError, "unsupported scoring operator"):
+            mod.load_rules([self.base, self.tle])
+
+    def test_case_insensitive_properties_fields_and_fname_lookups(self):
+        # Stock SDK declares both CharacterTemplateName and MissionType as name.
+        self.base.write_text(BASE.lower())
+        self.tle.write_text(TLE.swapcase())
+        rules = mod.load_rules([self.base, self.tle])
+        self.assertEqual(mod.decayed(mod.rate_for_enemy(rules, "ADVTROOPERM1"), 10), 1000)
+        self.assertEqual(mod.decayed(mod.rate_for_enemy(rules, "mUtOn"), 10), 2000)
+        self.assertEqual(mod.decayed(mod.rate_for_objective(rules, "challengeterrorbar", 0, 1, 0), 10), 10000)
+        self.assertEqual(rules["defaults"]["RestartScorePenalty"]["Value"], 5000)
+
+    def test_fname_case_variants_cannot_bypass_conflict_detection(self):
+        for original, changed in (
+                ("AdvTrooperM1", "advtrooperm1"),
+                ("SabotageTransmitter", "sabotagetransmitter")):
+            with self.subTest(identity=original):
+                row = next(line for line in BASE.splitlines() if f'"{original}"' in line)
+                conflicting = row.replace(original, changed).replace("StartingPoints=", "StartingPoints=9")
+                self.tle.write_text("[XComGame.XComGameState_LadderProgress]\n+" + conflicting + "\n")
+                with self.assertRaisesRegex(ValueError, "ambiguous.*override"):
+                    mod.load_rules([self.base, self.tle])
+                # Same native identity and same values remain one override.
+                self.tle.write_text("[XComGame.XComGameState_LadderProgress]\n+" + row.lower() + "\n")
+                rules = mod.load_rules([self.base, self.tle])
+                self.assertEqual(len(rules["categories"]["enemy"]), 2)
+                self.assertEqual(len(rules["categories"]["objective"]), 1)
+
+    def test_duplicate_fields_are_case_insensitive(self):
+        self.tle.write_text(TLE.replace("StartingPoints=3000,", "StartingPoints=3000, startingpoints=3000,"))
+        with self.assertRaisesRegex(ValueError, "repeated field StartingPoints"):
+            mod.load_rules([self.base, self.tle])
+
+    def test_identity_and_score_types_cannot_silently_miss_a_lookup(self):
+        for before, after in (
+                ('GroupID=1', 'GroupID="1"'),
+                ('TextPoolIndex=0', 'TextPoolIndex="0"'),
+                ('LineIndex=0', 'LineIndex="0"'),
+                ('MissionType="ChallengeTerrorBar"', 'MissionType=123'),
+                ('CharacterTemplateName="Muton"', 'CharacterTemplateName=123'),
+                ('StartingPoints=3000', 'StartingPoints="3000"'),
+                ('StartingPoints=3000', 'StartingPoints=True'),
+                ('RestartScorePenalty=5000', 'RestartScorePenalty=True')):
+            with self.subTest(after=after):
+                self.tle.write_text(TLE.replace(before, after))
+                with self.assertRaises(ValueError):
+                    mod.load_rules([self.base, self.tle])
+        rules = mod.load_rules([self.base])
+        with self.assertRaisesRegex(ValueError, "identity type"):
+            mod.rate_for_objective(rules, "SabotageTransmitter", 0, True, 1)
+        with self.assertRaisesRegex(ValueError, "identity type"):
+            mod.rate_for_enemy(rules, 123)
+
+    def test_tuple_requires_each_separator_and_rejects_unsupported_fields(self):
+        for before, after in (
+                ('"Muton", StartingPoints', '"Muton" StartingPoints'),
+                ('StartingPoints=3000, MinPoints', 'StartingPoints=3000,, MinPoints'),
+                ('MinDisabledPoints=2000)', 'MinDisabledPoints=2000,)'),
+                ('MinDisabledPoints=2000)', 'MinDisabledPoints=2000, UnknownField=1)'),
+                ('+DefaultEnemyScoringTable=', '+DefaultEnemyScoringTable[0]='),
+                ('+DefaultEnemyScoringTable=', '+DefaultEnemyScoringTable'),
+                ('+DefaultEnemyScoringTable=', '+DefaultSoldierScoringTable=')):
+            with self.subTest(after=after):
+                self.tle.write_text(TLE.replace(before, after))
+                with self.assertRaises(ValueError):
+                    mod.load_rules([self.base, self.tle])
+
+    def test_missing_base_defaults_fail_with_an_explanation(self):
+        for kind in mod.REQUIRED_DEFAULTS:
+            with self.subTest(kind=kind):
+                self.base.write_text("\n".join(line for line in BASE.splitlines()
+                                               if not line.startswith(kind + "=")))
+                with self.assertRaisesRegex(ValueError, "missing required scoring defaults: " + kind):
+                    mod.load_rules([self.base, self.tle])
+
+    def test_boolean_values_are_not_accepted_as_integer_turns_or_points(self):
+        rule = {"StartingPoints": 100, "MinPoints": 0,
+                "TurnOffset": 1, "DecreasePerTurn": 10}
+        for turn in (True, 1.5, "1", -1):
+            with self.subTest(turn=turn):
+                with self.assertRaisesRegex(ValueError, "turn unknown"):
+                    mod.decayed(rule, turn)
+        for key in rule:
+            with self.subTest(key=key):
+                with self.assertRaisesRegex(ValueError, "incomplete scoring values"):
+                    mod.decayed({**rule, key: True}, 10)
+        old_rule = {"starting_points": 100, "min_points": 0,
+                    "turn_offset": 1, "decrease_per_turn": 10}
+        with self.assertRaisesRegex(ValueError, "comparison scoring values"):
+            mod.previous_v2_decayed({**old_rule, "min_points": False}, 10)
+
+    def test_cli_refuses_existing_report_and_preserves_inputs(self):
+        output = Path(self.temp.name) / "audit.json"
+        original = {path: path.read_bytes() for path in (self.base, self.tle)}
+        args = ["--base", str(self.base), "--overlay", str(self.tle), "--output", str(output)]
+        self.assertEqual(mod.main(args), 0)
+        contents = output.read_bytes()
+        stderr = StringIO()
+        with redirect_stderr(stderr), self.assertRaises(SystemExit) as error:
+            mod.main(args)
+        self.assertEqual(error.exception.code, 2)
+        self.assertIn("refusing to overwrite", stderr.getvalue())
+        self.assertEqual(output.read_bytes(), contents)
+        for path, data in original.items():
+            self.assertEqual(path.read_bytes(), data)
 
     def test_negative_unknown_turn_and_no_borrowed_initial_score(self):
         with self.assertRaisesRegex(ValueError, "turn unknown"):

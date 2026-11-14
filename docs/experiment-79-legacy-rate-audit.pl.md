@@ -70,6 +70,24 @@ Pozostałe ważne dane wejściowe obejmują:
 `RescuedCivilianBonus`, `RestartScorePenalty`.
 Parser nie wyrzuca ich przy uproszczeniu.
 
+## Granice parsera po przeglądzie LEAD
+
+Obsługiwany podzbiór to kompletne krotki z oddzielonymi przecinkami
+polami oraz zwykłe wpisy i `+` dla tabel. Parser odrzuca usuwanie,
+`!ClearArray`, wymuszane dopisywanie przez `.`, inne operatory,
+niepełne/niepoprawne typy pól i nieobsługiwaną składnię zamiast
+pomijać je i raportować starą tabelę. Wymaga jawnych bazowych
+stawek enemy/objective/mission/soldier; brak nie jest uzupełniany domysłem.
+
+Nazwy właściwości i pól są niewrażliwe na wielkość liter.
+CharacterTemplateName i MissionType są w dostarczonym SDK polami
+`name` (X2ChallengeModeDataStructures: ChallengeEnemyScoring,
+ChallengeObjectiveScoring, ChallengeMissionScoring), dlatego również
+klucze lookup i wykrywanie konfliktów stosują normalizację wielkości liter.
+Identyfikatory TextPoolIndex/GroupID/LineIndex i stawki wymagają liczb
+całkowitych; cytowany numer lub bool nie zastępuje poprawnego typu.
+Parser nadal nie jest ogólnym implementatorem dziedziczenia konfiguracji UE.
+
 ## Rozmyślnie NIE wykonano w tym etapie
 
 Nie zmieniono `APX_ComparisonScore.uc`, profilu
