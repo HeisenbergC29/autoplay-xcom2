@@ -18,12 +18,14 @@ przekazaniem. Jedna końcowa paczka powstanie po integracji skończonej
 [kolejki #86](https://github.com/HeisenbergC29/autoplay-xcom2/issues/86).
 [Zakres, zależności i kryteria końca](PREBUILD-QUEUE.pl.md).
 
-PR #85 scalony jako `49c73788a95692e588e40fc4a3df071736b91495`, runtime v38.
-LEAD poprawił natywną tożsamość celu w historycznym replay punktów: zmiana
-klucza ukończonego/failed wiersza o tym samym label nie tworzy nowej nagrody.
-802 testy z prywatnymi wejściami PASS/0skip; CI229: 723 PASS/79 SKIP,
-6 kroków PowerShell PASS. SDK25/31 i niezależny review PASS.
-**Windows make i gra v38: NOT RUN.** Licznik observed_v3 nadal partial.
+PR #91/#92/#93 scalone, źródła v39: `fe495616d99d9f2b3062994733a383b30ac048e2`.
+Jeden snapshot kontaktu i wspólne budżety wpływają na ocenę zwykłej trasy.
+LEAD zachował niezależne CoverRisk w fallbacku i jawne Unknown dla jednostek
+wielopolowych. Analizator pokazuje runtime observed_v3 oddzielnie od offline
+v2, bez fałszywego official/PASS. Audyt podpór zakończony: pełny forecast
+zawalenia unsupported, bez zakazu dachów. 822 prywatne testy PASS/0skip;
+CI253: 742 PASS/80 SKIP i 6 kroków PowerShell PASS; SDK26/31/review PASS.
+**Windows make i gra v39: NOT RUN.** Licznik observed_v3 nadal partial.
 
 Użytkownik rozszerzył zgodę na wszystkie dostępne zapisane dane patroli,
 w tym pełną trasę, jeśli faktycznie istnieje. Typowy stock patrol nie ma
@@ -31,11 +33,16 @@ ustalonej wieloturowej trasy; waypoint, cache przebytego ruchu i graf korytarzy
 mają różną wartość dowodową. Odczyt ma pozostać obserwacyjny, z oceną świeżości
 i niepewności; brak mutowania AI albo generowania przyszłych losowań.
 [Ustalenia SDK i plan wykrycia/zasadzki/tempa](patrol-detection-and-tempo.pl.md).
+[Dokładny wybór celu, losowanie i osobna droga dojścia](patrol-selection-algorithm.pl.md)
+potwierdzają możliwość prognozowania wariantów, bez jednej pewnej trasy.
 
-**Następny HELPER:** najpierw #87 wspólny kontakt/wykrycie, potem zależne
-#88 zasadzka (konsoliduje #12/#31) i #89 marsz. Rzeczywiste starsze luki
-#10/#28/#38/#79 oraz skończony audyt #20 pozostają w #86. Zgłaszać claim
-plików i aktualnej bazy; do trzech PR, bez nieuzgodnionych edycji planerów.
+**Następny HELPER:** #88 zasadzka (konsoliduje #12/#31) na zintegrowanym #91.
+Horyzont0 #87 nie jest prognozą ruchu następnej tury. Pozostała konserwatywna
+ocena przyszłego kontaktu i footprint musi pozostać Unknown, dopóki nie uzyska
+kontraktu w #88/#89. Potem #89 oraz skoordynowane #10; #28/#38 nadal READY.
+#20 audyt source DONE, #79 reporting/audyt source DONE z jawnym parity/coverage
+DEFERRED. Szczegółowy zakres w #86. Claim plików/bazy, do trzech PR,
+bez nieuzgodnionych edycji planerów i bez osobnego polecenia buildu.
 
 ## Podział odpowiedzialności
 

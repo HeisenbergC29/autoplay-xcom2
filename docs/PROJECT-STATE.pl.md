@@ -6,7 +6,24 @@ poziom potwierdzenia działania.
 
 ## Baza kodu
 
-- Bieżąca rewizja źródeł: **`mission-report-v38`**, merge #85
+- Bieżąca rewizja źródeł: **`mission-report-v39`**, merge #91
+  `fe495616d99d9f2b3062994733a383b30ac048e2`, reviewed head
+  `02e75b4464d6628ab3357c33e71a3dc6192d7162`. Jeden snapshot kontaktu i wspólny
+  budżet wpływają na bieżącą ocenę zwykłej trasy; waypoint używa zegara AI.
+  LEAD poprawił utratę wybuchowego CoverRisk w Contact Caution fallbacku
+  i zachował Unknown dla nieobsługiwanego footprint jednostek wielopolowych.
+  Horyzont następnej tury nadal Unknown: to etap kontaktu, nie gotowa zasadzka.
+  #92 (merge8e2f246) oddziela runtime v3 provenance od offline v2 w analizatorze;
+  partial nie daje finalnego wyniku/PASS. #93 (merge7eae65d) zamyka ograniczony
+  audyt podpór z precyzyjnym unsupported pełnego forecast zawalenia.
+  Wspólne **822 prywatne testy PASS/0skip**, SDK26/31 PASS, niezależne review PASS;
+  [CI253](https://github.com/HeisenbergC29/autoplay-xcom2/actions/runs/43611665635)
+  822 run = 742 PASS/80 SKIP i 6 kroków PowerShell PASS.
+  **Windows make/game v39 NOT RUN; #4 BLOCKED do końca #86.**
+  Następny HELPER #88, potem #89/#10 oraz pozostałe #28/#38, zgodnie z
+  [aktualną skończoną kolejką](PREBUILD-QUEUE.pl.md). #79 pełne parity/coverage
+  nadal nieudowodnione. [Mechanizm i ograniczenia prognozy patrolu](patrol-selection-algorithm.pl.md).
+- Poprzednia rewizja źródeł: **`mission-report-v38`**, merge #85
   `49c73788a95692e588e40fc4a3df071736b91495` (reviewed head
   `9eca03d8164b17e3676b2f8bcbba8757e87dba65`). Replay pierwszego ukończenia
   celu odtwarza archiwalne przejścia ObjectivesList po późnym F8/load.
