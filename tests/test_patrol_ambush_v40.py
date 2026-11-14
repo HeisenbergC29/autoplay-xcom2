@@ -117,6 +117,11 @@ class PatrolAmbushSourceContracts(unittest.TestCase):
         self.assertIn("Group.m_arrMembers.Find('ObjectID',", refresh)
         self.assertIn("StartTurn = INDEX_NONE;", reset)
         self.assertIn("OrderedReactions = 0;", reset)
+        bounded_wait = function_body(self.ambush, "CanWaitForContact")
+        self.assertIn("PreparedMoves > 0", bounded_wait)
+        self.assertIn("LastTurn > StartTurn", bounded_wait)
+        self.assertIn("LastTurn - StartTurn < Clamp(MaxSetupTurns", bounded_wait)
+        self.assertIn("!bExpired", bounded_wait)
         self.assertIn("PatrolAmbushPlanner.Reset();",
                       function_body(self.controller, "StopAutoplay"))
         self.assertIn("bEnabled = false;", function_body(self.controller, "StopAutoplay"))
@@ -188,6 +193,11 @@ class PatrolAmbushSourceContracts(unittest.TestCase):
         self.assertIn("BestScore < 80.0", decision)
         self.assertIn('FocusBattle.MapData.ActiveMission.sType != "SabotageTransmitter"', decision)
         self.assertIn("PatrolApproachScore > BestScore + 6.0", decision)
+        self.assertIn("PatrolAmbushPlanner.CanWaitForContact()", decision)
+        self.assertIn('MissionRecorder.Marker("patrol_ambush_wait"', decision)
+        self.assertIn("RequestEndTurn(PC); // Native confirmed end-turn ticket", decision)
+        self.assertIn("StopWithStatus(\"No constructive action", decision)
+        self.assertIn("PatrolScout = UnitState", decision)
         self.assertIn("MaxSetupTurns=2", INI.read_text(encoding="utf-8-sig"))
         self.assertIn("MaxReactionSupport=3", INI.read_text(encoding="utf-8-sig"))
         self.assertIn("mission-report-v40",
