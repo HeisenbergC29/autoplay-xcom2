@@ -57,7 +57,16 @@ pozostaje dotychczasowy blue+OW/interaction/wycofanie.
    zwrócił **current-horizon Clear**, `ExplosiveCoverRisk=0`,
    brak niepewnego concealment oraz **każdy tile** ma
    `ExposureRisk <= StartRisk+3`. Limit kontroli exposure: 64
-   pola. To samo obejmuje nowy drugi odcinek; ryzykowny
+   pola. `BlueRouteExplosiveSafe` dodatkowo sprawdza
+   `APX_ExplosiveCoverKnowledge.RiskAtTile` dla **każdego**
+   przebywanego pola z jednej, współdzielonej między żołnierzami
+   i kandydatami puli `MaxTempoCoverChecks=48`.
+   Jej wyczerpanie (lub wyczerpanie pozostałych budżetów)
+   nie certyfikuje przyspieszenia: wynik tempo jest odrzucony.
+   Dotychczasowa kara za eksplodującą osłonę w zwykłym
+   ruchu pozostaje niezależna; nie ma mowy o zatrzymaniu
+   wszystkich legalnych standardowych tras.
+   To samo obejmuje nowy drugi odcinek; ryzykowny
    środkowy tile nie jest unieważniany przez spokojny endpoint.
    Sama historyczna `MemoryFallbackPath` z oceną Unknown nie
    nadaje prawa do drugiego ruchu. Unknown/stale/budget exhausted/unsupported footprint
