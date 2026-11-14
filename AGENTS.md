@@ -57,9 +57,11 @@ and [docs/PROJECT-STATE.pl.md](docs/PROJECT-STATE.pl.md) before changing this pr
 - Mission success for the project means native victory **and a known mission
   score > 0**. Preserve the native outcome separately. Zero/negative is not a
   successful attempt; missing/partial points cannot certify success.
-- Native mission points exclude earlier ladder missions. Keep the zero-based
-  `wotc_legacy_observed_v2` comparison and its partial marker; never invent initial
-  bonuses, a maximum, or scoring changes to turn a failed benchmark green.
+- Native mission points exclude earlier ladder missions. Preserve archived
+  `wotc_legacy_observed_v2` results. The live non-native observer uses installed
+  Legacy config rates in `wotc_legacy_config_observed_v3_partial`; keep its partial
+  marker until parity and coverage are proven. Never invent initial bonuses,
+  a maximum, or scoring changes to turn a failed benchmark green.
 - The user clarified on 13 November 2026 that a mod-calculated score is official
   when it calculates exactly like Legacy. Preserve calculation provenance, but
   do not reject official status solely because the mod calculated the value.

@@ -6,7 +6,26 @@ poziom potwierdzenia działania.
 
 ## Baza kodu
 
-- Bieżąca rewizja przygotowywanych źródeł: `mission-report-v35`.
+- Bieżąca rewizja przygotowywanych źródeł: `mission-report-v37`.
+  #83/v36 wdraża osobny licznik observed_v3 z rzeczywistych zainstalowanych
+  stawek config(Ladder): enemy/default, pełny klucz objective, pierwsza
+  rana/strata i rescue. LEAD poprawił weryfikację prawdziwego tactical start,
+  początkowej własności i dodatnich potrąceń. Nie przyznaje ordinary award
+  na podstawie niepewnego początku archiwum ani za dawnego własnego żołnierza.
+  Native Ladder/Challenge oraz latent guards pozostają pierwsze.
+  V3 jest nadal częściowy, v2 pozostaje archiwalnie niezmieniony; znany
+  spawned jest oddzielony, ale reinforcement/disabled/restart/bonusy i pełna
+  rekonstrukcja eventów po load wymagają dalszego #79.
+  #84/v37 po natywnym X4 w Blood Killer rozpoznaje aktualnie widoczne
+  źródło aktywnego, odwracalnego po śmierci źródła MindControl. Wybiera je
+  jako cel ruchu, a poprawka LEAD dodaje ograniczony bonus rzeczywistego
+  postępu w bezpiecznych kandydatach. Bleeding blokuje preferencję,
+  ostatni AP i wzrost ryzyka nie dostają bonusu. Pełne native AP/path/
+  hazard/support/opportunity guards i ochrona sojuszników zachowane.
+  **Windows WOTC make i gra v37: NOT RUN.** Dokładny SHA i jedna paczka
+  do kompilacji/testu są w #4; pośrednia v36 nie wymaga osobnego builda.
+  [Zakres i odbiór v37](integration-2026-11-14-v37.pl.md).
+- Poprzednie źródła: `mission-report-v35`.
   Integracja #69 (v34: ograniczony bonus już natywnie gotowego ciosu
   BerserkerMP w turach1–2) i #70 (v35: ocena osiągalnego wyższego
   stanowiska dla zwykłego strzału). Nie zwiększa odległości spekulacyjnej

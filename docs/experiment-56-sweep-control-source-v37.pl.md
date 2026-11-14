@@ -119,7 +119,7 @@ tej gałęzi, ale nie jest częścią różnicy PR #56.
 Bez zmiany starego observed_v2 i kryteriów.
 
 WOTC SDK compile v37: **NOT RUN**.
-Gra i autoteliczna misja Blood Killer v37:
+Gra i autonomiczna misja Blood Killer v37:
 **NOT RUN**. Po LEAD review/merge sprawdzić
 w próbie realny marker + wynik native ciosu
 w konkretne sourceID, reakcję efektu na
