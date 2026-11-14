@@ -18,8 +18,10 @@ class NativeCombatDecisionSyntaxTests(unittest.TestCase):
         end = source.index("\n        {", start)
         condition = source[start:end]
         self.assertIn("(bRangedFocusGoal ? RangedTargetID : 0)", condition)
-        # Three closures: ternary subexpression, ChooseAction(...), if (...).
-        self.assertTrue(condition.rstrip().endswith(")))"))
+        # The number of closing tokens depends on whether the final native
+        # argument is wrapped (v32) or an unwrapped logical expression (v34).
+        # Balance, not textual suffix, is the compiler-facing contract.
+        self.assertTrue(condition.rstrip().endswith(")"))
         depth = 0
         for char in condition[condition.index("("):]:
             if char == "(":

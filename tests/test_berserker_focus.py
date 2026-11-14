@@ -57,7 +57,7 @@ class BloodKillerFocusContracts(unittest.TestCase):
         # Regression: the selected group ID survives in diagnostics while the
         # objective phase is active. It must not authorize a +16 sweep bonus.
         decide=function_body(self.control,'MakeDecision')
-        self.assertIn('(bFocusedGoal ? FocusTargetID : 0), bOpeningContact',decide)
+        self.assertIn('((bFocusedGoal || (bNativeStrikeOnly',decide)
         active=self.phase(True,False,3,3,9,5,2,4,18)
         self.assertFalse(active)
         self.assertEqual(self.attack(active,False,1.0,1.0),0)
@@ -166,7 +166,7 @@ class BloodKillerFocusContracts(unittest.TestCase):
                         decide.index("class'APX_CombatPlanner'.static.ChooseAction("))
         self.assertLess(decide.index("class'APX_CombatPlanner'.static.ChooseAction("),
                         decide.index("class'APX_MissionPlanner'.static.ChooseMove("))
-        self.assertIn('(bFocusedGoal ? FocusTargetID : 0), bOpeningContact',decide)
+        self.assertIn('((bFocusedGoal || (bNativeStrikeOnly',decide)
         self.assertIn('FocusTargetID, bFocusedGoal',decide)
 
     def test_all_inspected_units_count_and_partial_centroid_is_rejected(self):

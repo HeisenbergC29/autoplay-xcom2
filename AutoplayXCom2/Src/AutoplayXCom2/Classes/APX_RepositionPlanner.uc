@@ -2,9 +2,15 @@
 // Remote visibility is native; the projected chance is a bounded heuristic.
 // Never move a history object to ask the current-position shot calculator about
 // a hypothetical tile. The controller evaluates real actions again after moving.
-class APX_RepositionPlanner extends Object
+class APX_RepositionPlanner extends Object config(AutoplayXCom2)
     dependson(X2GameRuleset, X2TacticalGameRulesetDataStructures, XComWorldData,
         X2GameRulesetVisibilityDataStructures);
+
+// An elevated tile is a forecast, not a future native hit preview.
+// Keep the historic same-floor candidate search as a reversible fallback.
+var config bool EnableElevatedShotForecast;
+var config int MaxElevationGainTiles;
+var config int HeightForecastDiscount;
 
 struct AttackForecast
 {
@@ -16,6 +22,7 @@ struct AttackForecast
     var int CoverRecovery;
     var float NativeScore;
     var bool bIgnoreCover;
+    var bool bCurrentNativeHeightAdvantage;
 };
 
 static function int RangeBandIndex(int Distance, int Length)
@@ -29,6 +36,20 @@ static function int ProjectedHitChance(int NativeChance, int RangeDelta, int Cov
 {
     // Leave uncertainty even when the simple geometric estimate reaches 100%.
     return Clamp(NativeChance + Clamp(RangeDelta + CoverRecovery, -35, 35), 0, 95);
+}
+
+// Only add an estimated *new* height benefit. The current native shot
+// breakdown already contains any existing bonus and must not be augmented
+// a second time. Special-height native state is handled in relative height;
+// modded overrides may still differ, hence a configurable discount.
+static function int ProjectedHeightAimBonus(int CurrentRelativeZ, int CandidateRelativeZ,
+    int RequiredZ, int NativeBonus, int UncertaintyDiscount, bool bNativeAlreadyHigh)
+{
+    if (bNativeAlreadyHigh || RequiredZ <= 0 || NativeBonus <= 0)
+        return 0;
+    if (CandidateRelativeZ <= CurrentRelativeZ || CurrentRelativeZ >= RequiredZ || CandidateRelativeZ < RequiredZ)
+        return 0;
+    return Max(0, NativeBonus - Max(0, UncertaintyDiscount));
 }
 
 static function float ProjectedShotScore(float NativeScore, int NativeChance, int ProjectedChance)
@@ -181,6 +202,8 @@ static function GatherForecasts(XComGameState_Unit UnitState,
             Forecast.NativeScore = class'APX_CombatPlanner'.static.ScoreAttack(Ability, Target, TargetUnit);
             if (Forecast.NativeScore <= 5.0)
                 continue;
+            Forecast.bCurrentNativeHeightAdvantage = UnitState.HasHeightAdvantageOver(
+                TargetUnit, true);
             Forecast.Ability = Ability;
             Forecast.TargetUnit = TargetUnit;
             Forecast.Weapon = X2WeaponTemplate(WeaponState.GetMyTemplate());
@@ -218,7 +241,7 @@ static function bool ProjectAtTile(XComGameState_Unit UnitState, TTile Tile,
     local GameRulesCache_VisibilityInfo Visibility, EmptyVisibility;
     local AttackForecast Forecast;
     local vector SourceLocation, TargetLocation;
-    local int Distance, RangeModifier, Chance;
+    local int Distance, RangeModifier, Chance, HeightBonus;
     local float Value;
 
     TargetID = 0;
@@ -226,10 +249,16 @@ static function bool ProjectAtTile(XComGameState_Unit UnitState, TTile Tile,
     ProjectedChance = 0;
     NativeScore = 0.0;
     ProjectedScore = -10000.0;
-    // Keep the native height bonuses unchanged; rooftop forecasts need a more
-    // complete model than raw Z comparisons, including special unit height.
-    if (UnitState == none || Tile.Z != UnitState.TileLocation.Z || `TACTICALRULES == none
+    // No downward moves or unsupported rooftop leaps in the speculative
+    // forecast. All candidates still need native LOS/target/AP/path/risk checks.
+    if (UnitState == none || `TACTICALRULES == none
         || `TACTICALRULES.VisibilityMgr == none || `XCOMHISTORY == none || `XWORLD == none)
+        return false;
+    if (Tile.Z < UnitState.TileLocation.Z
+        || (Tile.Z > UnitState.TileLocation.Z
+            && (!default.EnableElevatedShotForecast
+                || Tile.Z - UnitState.TileLocation.Z >
+                    Clamp(default.MaxElevationGainTiles, 1, 8))))
         return false;
     SourceLocation = `XWORLD.GetPositionFromTileCoordinates(Tile);
     foreach Forecasts(Forecast)
@@ -253,8 +282,18 @@ static function bool ProjectAtTile(XComGameState_Unit UnitState, TTile Tile,
         RangeModifier = 0;
         if (Forecast.Weapon.RangeAccuracy.Length > 0)
             RangeModifier = Forecast.Weapon.RangeAccuracy[RangeBandIndex(Distance, Forecast.Weapon.RangeAccuracy.Length)];
+        HeightBonus = ProjectedHeightAimBonus(
+            UnitState.TileLocation.Z + UnitState.GetHeightAdvantageBonusZ()
+                - Forecast.TargetUnit.TileLocation.Z,
+            Tile.Z + UnitState.GetHeightAdvantageBonusZ()
+                - Forecast.TargetUnit.TileLocation.Z,
+            Max(1, class'X2TacticalGameRuleset'.default.UnitHeightAdvantage),
+            class'X2TacticalGameRuleset'.default.UnitHeightAdvantageBonus,
+            Clamp(default.HeightForecastDiscount, 0, 20),
+            Forecast.bCurrentNativeHeightAdvantage);
         Chance = ProjectedHitChance(Forecast.NativeChance,
-            RangeModifier - Forecast.CurrentRangeModifier, Forecast.CoverRecovery);
+            RangeModifier - Forecast.CurrentRangeModifier + HeightBonus,
+            Forecast.CoverRecovery);
         Value = ProjectedShotScore(Forecast.NativeScore, Forecast.NativeChance, Chance);
         if (Chance - Forecast.NativeChance >= 12 && Value - Forecast.NativeScore >= 8.0
             && Value > ProjectedScore)
@@ -323,7 +362,11 @@ static function bool ChooseMove(XComGameState_Unit UnitState,
             Index = 1 + ((SampleIndex - 1) * (Tiles.Length - 2)) / Max(1, Samples - 2);
         Tile = Tiles[Index];
         PathCost = Visualizer.m_kReachableTilesCache.GetPathCostToTile(Tile);
-        if (Tile.Z != UnitState.TileLocation.Z
+        if (Tile.Z < UnitState.TileLocation.Z
+            || (Tile.Z > UnitState.TileLocation.Z
+                && (!default.EnableElevatedShotForecast
+                    || Tile.Z - UnitState.TileLocation.Z >
+                        Clamp(default.MaxElevationGainTiles, 1, 8)))
             || class'APX_MissionPlanner'.static.TileDistance(Tile, UnitState.TileLocation) < 1.0
             || PathCost < 0.0 || PathCost > Visualizer.GetMobility()
             || class'APX_HazardKnowledge'.static.HasBlockingHazard(UnitState, Tile)
