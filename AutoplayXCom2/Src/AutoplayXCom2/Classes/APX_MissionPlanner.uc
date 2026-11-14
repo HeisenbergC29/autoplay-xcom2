@@ -26,6 +26,7 @@ struct MissionGoal
     var bool bImmediateThreats;
     var bool bBerserkerSabotageGoal;
     var bool bRangedFocusGoal;
+    var bool bSweepControlSourceGoal;
     var string BerserkerSabotageGoalSource;
 };
 
@@ -598,6 +599,23 @@ static function bool ShouldPreferVerifiedSweepControlSource(bool bNativeSweep,
     return bNativeSweep && ReleasedAllies > 0 && HealthFraction >= 0.40;
 }
 
+// Combat position utility considers all current enemies. A verified control
+// source therefore needs its own bounded preference, not just a different
+// ClosestTile seed. Do not reward progress on the last AP or increased risk;
+// native move/path, support and tactical opportunity checks still apply.
+static function float SweepControlSourceProgressBonus(bool bVerifiedSourceGoal,
+    float CurrentDistance, float CandidateDistance, int StandardAP,
+    float CurrentRisk, float CandidateRisk)
+{
+    if (!bVerifiedSourceGoal || StandardAP < 2)
+        return 0.0;
+    if (CurrentDistance < 0.0 || CandidateDistance < 0.0)
+        return 0.0;
+    if (CurrentRisk < 0.0 || CandidateRisk < 0.0 || CandidateRisk > CurrentRisk)
+        return 0.0;
+    return FMin(12.0, FMax(0.0, CurrentDistance - CandidateDistance) * 2.0);
+}
+
 static function bool FindGoal(XComGameState_Unit UnitState, out MissionGoal Goal,
     out array<StateObjectReference> VisibleEnemies,
     optional int BerserkerFocusTargetID, optional bool bBerserkerFocusGoal,
@@ -656,7 +674,8 @@ static function bool FindGoal(XComGameState_Unit UnitState, out MissionGoal Goal
         // AP, support, exposure and hazard gates remain authoritative.
         HealthFraction = UnitState.GetCurrentStat(eStat_HP)
             / FMax(1.0, UnitState.GetMaxStat(eStat_HP));
-        if (bBerserkerSweep && HealthFraction >= 0.40)
+        if (bBerserkerSweep && HealthFraction >= 0.40
+            && !HasBleedingSquadmate(UnitState))
         {
             BestSourcePriority = -100000.0;
             for (SweepScanIndex = 0;
@@ -693,6 +712,7 @@ static function bool FindGoal(XComGameState_Unit UnitState, out MissionGoal Goal
                 Goal.Value = BestSourcePriority;
                 Goal.bFound = true;
                 Goal.bCombat = true;
+                Goal.bSweepControlSourceGoal = true;
                 `log("Berserker sweep control source|unit=" $ UnitState.ObjectID
                     $ "|source=" $ BestSourceID $ "|priority=" $ BestSourcePriority
                     $ "|target_x=" $ BestSourceTile.X
@@ -2224,6 +2244,11 @@ static function bool ChooseMove(XComGameState_Unit UnitState,
             CandidateScore += class'APX_RevealedFocus'.static.FocusPositionBonus(
                 TileDistance(UnitState.TileLocation, GoalTile),
                 TileDistance(Tile, GoalTile));
+        if (Goal.bSweepControlSourceGoal && !bSabotageRush)
+            CandidateScore += SweepControlSourceProgressBonus(true,
+                TileDistance(UnitState.TileLocation, GoalTile),
+                TileDistance(Tile, GoalTile), UnitState.NumActionPoints(),
+                CurrentRisk, CandidateRisk);
         // Small travel cost breaks equivalent-position ties and reduces churn.
         CandidateScore -= PathCost * 0.25;
         if (bCombatGoal && !IsUsefulReposition(CandidateScore - CurrentScore,

@@ -32,6 +32,7 @@ immediate threat lub dowolnego znanego wroga.
 - `BerserkerMP` w `SabotageTransmitter`;
 - **natywny** `PlantBomb` z `bCompleted=true`;
 - HP aktywnej własnej jednostki >= 40% jej maksimum;
+- brak własnego żołnierza wymagającego pilnej pomocy przy wykrwawianiu;
 - wrogi source żywy, nieusunięty,
   nieincapacitated i wybrany z bieżącej
   ograniczonej `VisibleEnemies` (max24);
@@ -61,6 +62,21 @@ zdrowie spadło lub nie ma bezpiecznego ruchu,
 normalne planowanie zachowuje swoje uprawnienia;
 nie przyznano sztucznej zdolności.
 
+Przegląd LEAD wykrył, że samo ustawienie combat `Goal.Tile` zmieniało
+głównie dodatkowego kandydata ClosestTile. Przy widocznym przeciwniku
+nie działa routine route, a ogólny PositionScore ocenia wszystkich wrogów.
+Dlatego potwierdzony cel dostaje teraz lokalną flagę
+`bSweepControlSourceGoal`. W zwykłej ocenie kandydatów ruchu tylko ta
+flaga dopuszcza miękki bonus za rzeczywiste zmniejszenie odległości
+do źródła: 2 punkty użyteczności za pole, maksymalnie 12.
+Przy ruchu w bok/od źródła, mniej niż 2 AP lub wzroście ryzyka
+bonus wynosi zero. To nie jest bonus do trafienia/obrażeń.
+Kandydat nadal musi przejść native move/path, pełne hazardy,
+wsparcie, IsUsefulReposition i koszt utraconego ataku.
+Nie odblokowano routine route przy kontakcie ani ostatniego AP.
+Flaga nie jest zapamiętywana między decyzjami; ratunek blokuje nową
+preferencję jeszcze przed wyborem źródła.
+
 Odpowiedni marker w `Launch.log`:
 `Berserker sweep control source|unit=...|source=...|priority=...|target_x=...|target_y=...|target_z=...`.
 Przy kolejnym native rezultacie po śmierci
@@ -89,6 +105,10 @@ post-X4 gate, dowody aktywnego linked effect,
 bounded loops, brak niedozwolonych odczytów
 enemy AP/cooldown, natywne guards i zachowanie
 `ScoreAttack` oraz APX_Route.
+Regresje LEAD wykonują również rzeczywisty helper bonusu: dwa
+konkurencyjne stanowiska, ograniczenie 12, brak premii za oddalanie,
+nieaktywny cel, ostatnie AP i zwiększenie ekspozycji. Kontrakty
+wiążą bonus z aktualnie zweryfikowaną flagą i zachowanymi kontrolami.
 
 Integracja **stacked**: baza PR #83
 `helper/79-runtime-legacy-v36`, nowa rewizja
