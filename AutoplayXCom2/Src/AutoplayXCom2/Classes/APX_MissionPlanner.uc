@@ -2206,13 +2206,12 @@ static function bool ChooseMove(XComGameState_Unit UnitState,
     // Never spend the last AP on routine tempo when any urgent gameplay,
     // recent contact, or a genuinely staged/armed patrol ambush exists.
     bTempoCandidate = RouteTempo != none
-        && class'APX_RouteTempo'.default.EnableSequentialBlue
-        && class'APX_FullIntel'.default.EnableFullIntel
-        && bContactSnapshotComplete && bInspectContact
-        && !bConcealmentUrgent
-        && !bActivePatrolPreparation && !bRecentContact
-        && !ShouldEvacuate(UnitState)
-        && !class'APX_HazardKnowledge'.static.NeedsPoisonEscape(UnitState);
+        && class'APX_RouteTempo'.static.IsRoutineTempoContext(
+            class'APX_RouteTempo'.default.EnableSequentialBlue,
+            class'APX_FullIntel'.default.EnableFullIntel,
+            bContactSnapshotComplete, bInspectContact, bCoverUrgent,
+            bActivePatrolPreparation, bRecentContact,
+            class'APX_HazardKnowledge'.static.NeedsPoisonEscape(UnitState));
     // Reserving an AP for an already AVAILABLE objective interaction is
     // more important than making another speculative blue advance.
     if (bTempoCandidate && ChooseInteraction(UnitState,
