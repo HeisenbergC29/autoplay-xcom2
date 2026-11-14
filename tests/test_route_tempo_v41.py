@@ -169,6 +169,8 @@ class RouteSourceContracts(unittest.TestCase):
         self.assertIn("RouteTempo.SetGoal(", explore)
         self.assertIn("RouteTempo.PenaltyFor(", explore_prefix)
         self.assertIn("SelectedGoal = Goals[GoalIndex].Tile", explore)
+        self.assertIn("Score = FMax(8.0, Score - RouteTempo.PenaltyFor(", explore)
+        self.assertIn("MemoryFallbackScore = FMax(8.0, Score - MemoryPenalty)", choose)
 
     def test_active_ambush_is_real_preparation_not_just_approach(self):
         gate = function_body(self.ambush, "HasActiveStaging")
