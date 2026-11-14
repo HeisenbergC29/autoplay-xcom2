@@ -112,7 +112,7 @@ class BerserkerSabotageContracts(unittest.TestCase):
         for required in (
             'bSabotageRush = Goal.bBerserkerSabotageGoal',
             'UnitState.NumActionPoints() >= 2',
-            'ChooseRoutePrefix(UnitState, UnitVisualizer, GoalTile, Path, bCombatGoal)',
+            'ChooseRoutePrefix(UnitState, UnitVisualizer, GoalTile, Path, bCombatGoal,',
             'HasBlockingHazard(UnitState, CandidatePath[PathIndex])',
             'IsSupportedAdvanceStep(StartSupport,',
             'ScoreBerserkerObjectivePath(UnitState, Path, VisibleEnemies,',
