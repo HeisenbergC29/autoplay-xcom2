@@ -202,8 +202,10 @@ function name CurrentPhase()
 // original turn window expires; no new cycle for unchanged waypoint.
 function bool CanWaitForContact()
 {
-    return EnablePatrolAmbush && !bExpired && Phase == 'setup'
-        && PreparedMoves > 0 && LastTurn > StartTurn
+    return EnablePatrolAmbush && !bExpired
+        && (Phase == 'setup' || Phase == 'armed')
+        && (PreparedMoves > 0 || OrderedReactions > 0)
+        && LastTurn > StartTurn
         && LastTurn - StartTurn < Clamp(MaxSetupTurns, 1, 3);
 }
 
