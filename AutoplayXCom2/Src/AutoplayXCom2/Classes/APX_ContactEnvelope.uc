@@ -20,8 +20,9 @@ static function bool ConcealedContactPossible(bool bNativeLOS, bool bStationary,
     bool bDirectionCovered, float DistSq, float SightRadius,
     float DetectionRadius, bool bIgnoreDistance)
 {
-    if (!bNativeLOS || (bStationary && bDirectionCovered)
-        || DistSq > FMax(0.0, SightRadius) * FMax(0.0, SightRadius))
+    if (!bNativeLOS || (bStationary && bDirectionCovered))
+        return false;
+    if (DistSq > FMax(0.0, SightRadius) * FMax(0.0, SightRadius))
         return false;
     return bIgnoreDistance || DistSq <= FMax(0.0, DetectionRadius) * FMax(0.0, DetectionRadius);
 }
