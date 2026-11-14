@@ -78,7 +78,7 @@ class ScoreHUDContracts(unittest.TestCase):
         self.assertIn('Emit("hud_score", Fields)', record)
         self.assertIn('if (Left(DisplayText, 1) == "~")', record)
         self.assertIn('"|comparison_profile="', record)
-        self.assertIn("class'APX_ComparisonScore'.static.GetProfileID()", record)
+        self.assertIn("class'APX_LegacyObservedV3'.static.GetProfileID()", record)
         self.assertLess(record.index('DisplayText == LastHUDScore'), record.index('Emit('))
         self.assertNotIn('CumulativeScore', record)
         self.assertNotIn('AddedPoints', record)
