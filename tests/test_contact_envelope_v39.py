@@ -28,6 +28,7 @@ class ContactEnvelopeNumericContracts(unittest.TestCase):
         cls.clock = staticmethod(load_uc_function(PATROL, "StoredWaypointAge"))
         cls.detect = staticmethod(load_uc_function(CONTACT, "ConcealedContactPossible"))
         cls.budget = staticmethod(load_uc_function(CONTACT, "SnapshotBudgetsValid"))
+        cls.combine = staticmethod(load_uc_function(CONTACT, "CombineRouteStatus"))
 
     def test_native_ai_clock_not_local_xcom_turn(self):
         self.assertEqual(self.clock(8, 8), 0)
@@ -45,6 +46,18 @@ class ContactEnvelopeNumericContracts(unittest.TestCase):
         self.assertTrue(self.detect(True, False, False, 5000.0, 50.0, True))
         self.assertFalse(self.detect(False, False, False, 100.0, 50.0, True))
         self.assertFalse(self.detect(True, False, False, 5000.0, 50.0, False))
+
+    def test_threat_or_uncertainty_in_middle_is_not_erased_by_clear_endpoint(self):
+        status = 0
+        for sample in (0, 1, 0):
+            status = self.combine(status, sample)
+        self.assertEqual(status, 1)
+        status = 0
+        for sample in (0, -1, 0):
+            status = self.combine(status, sample)
+        self.assertEqual(status, -1)
+        self.assertEqual(self.combine(0, 0), 0)
+        self.assertEqual(self.combine(-1, 1), 1)
 
     def test_empty_budget_cannot_be_complete(self):
         self.assertTrue(self.budget(32, 128, 64, 128, 512))
