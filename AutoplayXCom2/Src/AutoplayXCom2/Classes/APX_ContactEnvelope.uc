@@ -17,10 +17,11 @@ var config float UnknownRoutePenalty;
 // When a DETECTOR moves to observe a stationary target, directional cover
 // matters. A moving concealed soldier does not gain that cover exception.
 static function bool ConcealedContactPossible(bool bNativeLOS, bool bStationary,
-    bool bDirectionCovered, float DistSq, float DetectionRadius,
-    bool bIgnoreDistance)
+    bool bDirectionCovered, float DistSq, float SightRadius,
+    float DetectionRadius, bool bIgnoreDistance)
 {
-    if (!bNativeLOS || (bStationary && bDirectionCovered))
+    if (!bNativeLOS || (bStationary && bDirectionCovered)
+        || DistSq > FMax(0.0, SightRadius) * FMax(0.0, SightRadius))
         return false;
     return bIgnoreDistance || DistSq <= FMax(0.0, DetectionRadius) * FMax(0.0, DetectionRadius);
 }
@@ -165,8 +166,8 @@ static function int AssessRoute(XComGameState_Unit Soldier, const out array<TTil
     local StateObjectReference Ref;
     local vector TilePosition, DetectorPosition;
     local TTile Tile;
-    local float SightRange, DetectRange, DistanceSq, CoverAngle;
-    local bool bIgnoresDistance, bLOS, bCovered;
+    local float SightRange, DetectRange, DistanceSq;
+    local bool bIgnoresDistance, bLOS;
     local int Step, Index, Status;
     local array<PathPoint> Points;
     local PathPoint Point;
@@ -180,7 +181,14 @@ static function int AssessRoute(XComGameState_Unit Soldier, const out array<TTil
             Reason = "future_patrol_route_unselected";
         return -1;
     }
-    if (RemainingDetectors <= 0 || RemainingTiles < Path.Length || RemainingLOS <= 0)
+    // Native reachable paths start on the unit's occupied tile. That tile
+    // has not been traversed; movement detection applies only to steps 1+.
+    if (Path[0] != Soldier.TileLocation)
+    {
+        Reason = "path_start_unverified";
+        return -1;
+    }
+    if (RemainingDetectors <= 0 || RemainingTiles < Path.Length - 1 || RemainingLOS <= 0)
     {
         Reason = "decision_budget";
         return -1;
@@ -206,7 +214,7 @@ static function int AssessRoute(XComGameState_Unit Soldier, const out array<TTil
         }
     }
     Status = 0;
-    for (Step = 0; Step < Path.Length; ++Step)
+    for (Step = 1; Step < Path.Length; ++Step)
     {
         if (RemainingTiles <= 0)
         {
@@ -280,6 +288,10 @@ static function int AssessRoute(XComGameState_Unit Soldier, const out array<TTil
                 Reason = "visibility_radius_unknown";
                 return -1;
             }
+            // Ignore-detection-distance never means unlimited basic sight.
+            // Keep a two-tile buffer for peeks, then check native LOS distance.
+            if (DistanceSq > Square(SightRange + 200.0))
+                continue;
             if (Soldier.IsConcealed())
             {
                 DetectRange = Soldier.GetConcealmentDetectionDistance(Detector);
@@ -288,8 +300,6 @@ static function int AssessRoute(XComGameState_Unit Soldier, const out array<TTil
                 if (!bIgnoresDistance && DistanceSq > Square(DetectRange + 200.0))
                     continue;
             }
-            else if (DistanceSq > Square(SightRange + 200.0))
-                continue;
             if (RemainingLOS <= 0)
             {
                 Reason = "los_budget";
@@ -309,10 +319,20 @@ static function int AssessRoute(XComGameState_Unit Soldier, const out array<TTil
                 Reason = "revealed_native_geometry_los";
                 return 1;
             }
-            bCovered = `XWORLD.GetCoverTypeForTarget(
-                DetectorPosition, TilePosition, CoverAngle) != CT_None;
-            if (ConcealedContactPossible(true, false, bCovered,
-                DistanceSq, DetectRange, bIgnoresDistance))
+            if (Visibility.DefaultTargetDist > Square(SightRange))
+            {
+                // A geometry ray near a sight edge is not proof that the
+                // game's directional/basic visibility would trigger.
+                Status = CombineRouteStatus(Status, -1);
+                Reason = "native_sight_edge_unverified";
+                continue;
+            }
+            // Full native LOS gives a squared distance that accounts for
+            // the actual sampled target tile. Static directional cover does
+            // not protect a SOLDIER who is moving into detection range.
+            if (ConcealedContactPossible(true, false, false,
+                Visibility.DefaultTargetDist, SightRange, DetectRange,
+                bIgnoresDistance))
             {
                 Reason = "moving_soldier_detection";
                 return 1;
