@@ -82,8 +82,12 @@ i pierwszego dopasowania w kolejności listy. Źródła SDK są wyłącznie
 lokalnym wejściem testu, nie są kopiowane do repozytorium.
 Testy kontraktu nie wykonują funkcji UnrealScript w silniku gry.
 
-Próby do Windows WOTC SDK po przeglądzie i integracji LEAD:
-1. Zbudować dokładną paczkę, sprawdzić 0 błędów, marker v38.
+Przyszłe próby do Windows WOTC SDK: dopiero po zakończeniu całej kolejki
+[#86](https://github.com/HeisenbergC29/autoplay-xcom2/issues/86), zgodnie
+z poleceniem użytkownika z 14 XI. Nie jest to prośba o osobny build v38.
+
+1. Zbudować jedną końcową paczkę zawierającą zmiany v38 i następne etapy
+   #86; sprawdzić 0 błędów i marker końcowej rewizji wskazany przez LEAD.
 2. W trybie diagnostycznym wykonać cel przed uruchomieniem HUD/F8,
    potem uruchomić autoplay. Sprawdzić, czy wcześniejsza **pierwsza**
    zmiana celu daje dokładnie jeden marker `Legacy objective history replay`,
