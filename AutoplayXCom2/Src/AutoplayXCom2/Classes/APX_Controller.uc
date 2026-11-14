@@ -1124,7 +1124,8 @@ function MakeDecision(XComTacticalController PC)
     local array<vector> CandidateLocations, BestLocations;
     local vector CandidateAim, BestAim;
     local int TargetIndex, BestTargetIndex, ChosenTargetID, AmbushTargetIndex, RescuePatientID;
-    local int PatrolReactionIndex;
+    local int PatrolReactionIndex, PatrolApproachUnitID;
+    local TTile PatrolApproachDestination;
     local int RemainingConcealmentChecks, RemainingCoverChecks;
     local int RemainingContactGroups, RemainingContactMembers;
     local int RemainingContactDetectors, RemainingContactTiles, RemainingContactLOS;
@@ -1366,8 +1367,7 @@ function MakeDecision(XComTacticalController PC)
                 bContactSnapshotComplete,
                 class'APX_MissionPlanner'.static.HasActiveMissionDeadline()
                 || class'APX_MissionPlanner'.static.HasBleedingSquadmate(UnitState)
-                || class'APX_MissionPlanner'.static.ShouldEvacuate(UnitState)
-                || bVisibleThreats || bContactSearch,
+                || class'APX_MissionPlanner'.static.ShouldEvacuate(UnitState),
                 PatrolReason);
             if (MissionRecorder != none)
                 MissionRecorder.Marker("patrol_ambush_state",
@@ -1561,6 +1561,8 @@ function MakeDecision(XComTacticalController PC)
             BestLocations.Length = 0;
             bHavePlan = true;
             bSelectedPatrolMove = true;
+            PatrolApproachUnitID = UnitState.ObjectID;
+            PatrolApproachDestination = PatrolApproachPath[PatrolApproachPath.Length - 1];
             if (MissionRecorder != none)
                 MissionRecorder.Marker("patrol_ambush_approach",
                     "unit=" $ UnitState.ObjectID
@@ -1786,7 +1788,10 @@ function MakeDecision(XComTacticalController PC)
         ++NativeOpeningStrikesThisTurn;
     if (bPatrolActive && PatrolAmbushPlanner != none)
         PatrolAmbushPlanner.NoteSubmitted(
-            bMove && bSelectedPatrolMove,
+            bMove && bSelectedPatrolMove && BestUnit != none
+                && BestUnit.ObjectID == PatrolApproachUnitID
+                && BestPath.Length > 1
+                && BestPath[BestPath.Length - 1] == PatrolApproachDestination,
             !bMove && bSelectedPatrolReaction,
             !bMove && !bSelectedPatrolReaction
                 && PatrolAmbushPlanner.IsActualOpener(
