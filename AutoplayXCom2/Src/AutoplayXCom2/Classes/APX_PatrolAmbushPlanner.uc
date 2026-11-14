@@ -295,6 +295,8 @@ function bool ChooseApproach(XComGameState_Unit Soldier,
     local array<StateObjectReference> VisibleEnemies;
     local array<float> MeleeThreatReaches, ThreatWeights;
     local AvailableAction OW;
+    local XComGameState_Ability OverwatchAbility;
+    local array<name> AfterBluePoints;
     local TTile Tile;
     local vector Source, Destination;
     local float Cost, Progress, NowDistance, NextDistance;
@@ -323,6 +325,17 @@ function bool ChooseApproach(XComGameState_Unit Soldier,
         Clamp(MaxSetupTurns, 1, 3))
         || !class'APX_SquadPlanner'.static.CanStageMove(
             Soldier.NumActionPoints(), OWCost, false))
+        return false;
+    // Two ordinary AP is not proof that a specific OW template can still
+    // afford its allowed AP types AFTER the real blue-move cost. This
+    // source-only projection is conservative; dispatch still revalidates.
+    OverwatchAbility = XComGameState_Ability(
+        `XCOMHISTORY.GetGameStateForObjectID(OW.AbilityObjectRef.ObjectID));
+    if (OverwatchAbility == none
+        || !class'APX_MissionPlanner'.static.ActionPointsAfterBlueMove(
+            Soldier, AfterBluePoints)
+        || !class'APX_MissionPlanner'.static.CanAttackWithActionPoints(
+            OverwatchAbility, Soldier, AfterBluePoints))
         return false;
 
     Visualizer = XGUnit(Soldier.GetVisualizer());
