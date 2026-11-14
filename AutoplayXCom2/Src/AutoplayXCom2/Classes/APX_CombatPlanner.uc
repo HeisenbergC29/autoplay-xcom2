@@ -61,6 +61,30 @@ static function bool ChooseAction(XComGameState_Unit UnitState,
             continue;
         AbilityName = Ability.GetMyTemplateName();
 
+        // #38b: stock Faceoff has a NATIVE, non-cursor, enemy-primary
+        // plus additional-enemy target list. It must never use the
+        // unvalidated free-aim/radius/cone solver. The helper checks the
+        // ENTIRE list including any friendly, civilian or controlled target;
+        // dispatch uses the untouched current native AvailableAction.
+        if (AbilityName == 'Faceoff')
+        {
+            for (Index = 0; Index < Candidate.AvailableTargets.Length
+                && Index < 16; ++Index)
+            {
+                CandidateScore = class'APX_NativeMultiTarget'.static.ScoreFaceoff(
+                    UnitState, Ability, Candidate.AvailableTargets[Index],
+                    VisibleEnemies);
+                if (CandidateScore > Score && CandidateScore > -1000.0)
+                {
+                    Action = Candidate;
+                    TargetIndex = Index;
+                    Score = CandidateScore;
+                    bFound = true;
+                }
+            }
+            continue;
+        }
+
         // Free-aim/radius/cone attacks need a separate collateral-damage solver.
         if (AbilityTemplate.AbilityMultiTargetStyle != none
             && !AbilityTemplate.AbilityMultiTargetStyle.IsA('X2AbilityMultiTarget_Volt')

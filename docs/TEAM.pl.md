@@ -18,16 +18,23 @@ przekazaniem. Jedna końcowa paczka powstanie po integracji skończonej
 [kolejki #86](https://github.com/HeisenbergC29/autoplay-xcom2/issues/86).
 [Zakres, zależności i kryteria końca](PREBUILD-QUEUE.pl.md).
 
-PR #95 wdraża v40: ograniczone przygotowanie pozycji względem zweryfikowanego
-waypointu i natywne wsparcie OW przed rzeczywiście legalnym openerem.
-LEAD poprawił brak oceny wybuchowych osłon i skan wsparcia, którego limit
-obejmował wcześniej wszystkich wrogów/cywilów zamiast lokalnej drużyny.
-Źródłowy head `134eac9eb00b504868b58500f992330b56d77952` przeszedł
-**834 prywatne testy PASS/0skip**, SDK27/31 i niezależne review PASS.
-CI300: 752 PASS/82 SKIP, 6 kroków PowerShell PASS. Aktualizacja tej sekcji
-nie zmienia runtime względem wskazanego head. **Windows make/game v40: NOT RUN.**
-Punktacja/native-first/v2/v3 pozostają niezmienione; observed_v3 nadal partial.
-[Zakres, limity i przyszła próba #95](experiment-88-patrol-ambush-v40.pl.md).
+Odbiór 15 XI: #96 wdraża v41 (sekwencyjny marsz i pamięć tras), #97 dodaje
+v42 z wąskim natywnym Faceoff oraz macierzą pozostałych rodzin AoE.
+Dwa ruchy blue są osobnymi zaakceptowanymi akcjami z oceną po pierwszej;
+nie jest to dowolny długi dash. LEAD ograniczył emergency revisit do faktycznej
+propozycji ratunku/ucieczki/celu misji i naprawił źródłowy false-NoPlan dla
+ujawnionej jednostki bez osłony, której konieczny powrót dostał karę pamięci.
+Faceoff używa niezmienionej legalnej listy wrogów; precyzyjny kontrakt pistoletu,
+effect/style/aim odrzuca dodatkowe ammo, upgrade i stosowane bonus effects.
+To nie certyfikuje wtórnego zniszczenia otoczenia ani wszystkich innych AoE.
+
+Źródłowy head `b781ce476c6215e6e77f3142db971d0f31e970c9` uwzględnia scalony
+#96 (`2800a84d1433d0e26992b6dddec06b8eb09edd5e`) i przeszedł **858 private
+PASS/0skip**, SDK29/31 oraz niezależne review PASS. CI352: 774 PASS/84 SKIP,
+6 kroków PowerShell PASS. Ta aktualizacja dokumentów nie zmienia runtime.
+**Windows make/game v41 i v42 NOT RUN; #4 nadal BLOCKED.**
+[Zakres marszu/pamięci](experiment-89-10-sequential-blue-route-memory-v41.pl.md),
+[Faceoff i rozstrzygnięcia pozostałych AoE](experiment-38b-aoe-family-disposition.pl.md).
 
 Użytkownik rozszerzył zgodę na wszystkie dostępne zapisane dane patroli,
 w tym pełną trasę, jeśli faktycznie istnieje. Typowy stock patrol nie ma
@@ -38,14 +45,18 @@ i niepewności; brak mutowania AI albo generowania przyszłych losowań.
 [Dokładny wybór celu, losowanie i osobna droga dojścia](patrol-selection-algorithm.pl.md)
 potwierdzają możliwość prognozowania wariantów, bez jednej pewnej trasy.
 
-**Następny HELPER:** #89 i skoordynowane #10, potem pozostałe #28/#38.
-#88/#12/#31 mają źródłowy etap staging/native OW z limitem oczekiwania,
-ale nie dowód perfekcyjnej zasadzki. Horyzont0 #87 nie certyfikuje przyszłej
-tury: przyszły kontakt/footprint nadal Unknown do kontraktu albo precyzyjnego
-source disposition w #89. Niepewność nie włącza długiego dash.
-#20 audit i #79 reporting/source disposition DONE, ich wymagane dowody z gry
-nadal odroczone. Claim aktualnej bazy/plików, do trzech PR, bez konfliktujących
-edycji planerów. #4 BLOCKED do końca całej skończonej kolejki #86.
+**Następny HELPER: #28 — podejście do pilnego leczenia/detoksu.** To jedyny
+pozostały READY zakres źródłowy bieżącej skończonej kolejki #86, po integracji
+#96/#97. #10/#89 mają wdrożony wariant sekwencyjny; ogólny pojedynczy dash,
+pełna przyszła trasa i nieobsługiwany footprint pozostają Unsupported/Unknown,
+a nie rzekomo ukończoną prognozą. #38 ma Faceoff i skończoną macierz rodzin,
+pozostałe kształty/status/secondary chains nadal unsupported. #20/#79 nie
+wracają jako nowe zadania bez konkretnego kontraktu/dowodu.
+
+HELPER claimuje aktualną bazę i pliki #28 (CombatPlanner/MissionPlanner/testy).
+Po wykonaniu #28 LEAD przegląda, poprawia i integruje. Dopiero po braku otwartych
+claimów i nieprzejrzanych PR powstanie jedna końcowa paczka dla użytkownika.
+Żadnego osobnego buildu po v41/v42; testy w grze i kompilację wykonuje użytkownik.
 
 ## Podział odpowiedzialności
 
