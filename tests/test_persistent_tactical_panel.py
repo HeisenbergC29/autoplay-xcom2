@@ -89,7 +89,7 @@ class PermanentTacticalPanelContracts(unittest.TestCase):
         self.assertIn('Controller.StopAutoplay("HUD removed");', removed)
         self.assertIn('ScoreCounter.Cleanup();', removed)
         self.assertIn('super.Removed();', removed)
-        self.assertIn('mission-report-v34', RECORDER.read_text())
+        self.assertIn('mission-report-v35', RECORDER.read_text())
 
 
 if __name__=='__main__':

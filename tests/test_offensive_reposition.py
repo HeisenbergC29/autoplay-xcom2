@@ -113,7 +113,9 @@ class OffensiveRepositionTests(unittest.TestCase):
 
     def test_remote_preview_respects_native_conditions_and_has_no_fake_history_tile(self):
         project = function_body(self.source, 'ProjectAtTile')
-        for guard in ('Tile.Z != UnitState.TileLocation.Z', 'Visibility = EmptyVisibility',
+        for guard in ('Tile.Z < UnitState.TileLocation.Z', 'EnableElevatedShotForecast',
+                      'MaxElevationGainTiles', 'ProjectedHeightAimBonus(',
+                      'Visibility = EmptyVisibility',
                       'GetVisibilityInfoFromRemoteLocation(', '!Visibility.bClearLOS',
                       'VisibilityMgr.EvaluateConditions(', 'LivingHostileGameplayVisibleFilter',
                       'Visibility.TargetCover != CT_None', 'ValidatePrimaryTargetOptionFromRemoteLocation('):
