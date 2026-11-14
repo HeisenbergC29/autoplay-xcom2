@@ -108,7 +108,7 @@ class ObjectiveReplayV38SourceContracts(unittest.TestCase):
         # The same revision appears in runtime logs and no staged version
         # may be mistaken for a Windows/game tested release.
         for marker_file in (REC, UI, DLC):
-            self.assertIn("mission-report-v39", marker_file.read_text(encoding="utf-8-sig"))
+            self.assertIn("mission-report-v40", marker_file.read_text(encoding="utf-8-sig"))
 
 
 @unittest.skipUnless(os.environ.get("APX_SDK_SOURCE_ROOT"),
