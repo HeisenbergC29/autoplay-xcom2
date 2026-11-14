@@ -294,7 +294,9 @@ function bool ChooseApproach(XComGameState_Unit Soldier,
     if (!CanStage(EnablePatrolAmbush, false, false, true,
         Soldier.NumActionPoints(), PreparedMoves,
         Clamp(MaxSetupActions, 1, 8), LastTurn - StartTurn,
-        Clamp(MaxSetupTurns, 1, 3)))
+        Clamp(MaxSetupTurns, 1, 3))
+        || !class'APX_SquadPlanner'.static.CanStageMove(
+            Soldier.NumActionPoints(), OWCost, false))
         return false;
 
     Visualizer = XGUnit(Soldier.GetVisualizer());
