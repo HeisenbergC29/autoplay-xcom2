@@ -1,12 +1,10 @@
 # #38b — kontrakty natywnego AoE i wąskie rozszerzenie Faceoff
 
-Dane bazowe: `main e3d9c6af356286baf46f8fe357c4dbd4fa3947d1`
-(`mission-report-v40`), oddzielne od gotowego do przeglądu PR #96
-(`mission-report-v41`). Ta gałąź dotyka tylko `APX_CombatPlanner.uc`,
-nowego `APX_NativeMultiTarget.uc`, testów i tej dokumentacji; **nie**
-nadpisuje równolegle plików `Controller/MissionPlanner/ExplorationPlanner`
-claimowanych w #96. Wersję reportu uzgodnić **po** integracji poprzedniego
-PR, zanim nowy PR będzie uznany za ready do scalenia.
+Aktualna baza po integracji #96: `main 2800a84d1433d0e26992b6dddec06b8eb09edd5e`
+(`mission-report-v41`). Wcześniejszy audyt rozpoczęto od v40; #97 uwzględnia już
+scaloną bazę i marker **`mission-report-v42`**. Runtime Faceoff jest odrębnym
+etapem po sekwencyjnym marszu/pamięci; nie zastępuje jego kontroli Controller/
+MissionPlanner/ExplorationPlanner. Marker i bieżące testy rewizji są zsynchronizowane.
 
 Użytkownik chce wybierać ofensywne AoE maksymalizując korzyść z wielu
 legalnych celów i zachowując bezpieczeństwo sojuszników, cywili,
