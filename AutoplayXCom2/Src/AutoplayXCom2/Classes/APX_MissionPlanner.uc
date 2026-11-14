@@ -588,6 +588,16 @@ static function bool ShouldSeekMonumentPlantAnchor(bool bSabotageCC,
         && !bBleeding && bOwnPlantAbility;
 }
 
+// The source bonus in APX_CombatPlanner only affects an ALREADY legal
+// attack; the post-PlantBomb movement goal must also recognize an active
+// death-removable mind-control source. Never use the Priest archetype or
+// historical success alone as proof of an active link.
+static function bool ShouldPreferVerifiedSweepControlSource(bool bNativeSweep,
+    int ReleasedAllies, float HealthFraction)
+{
+    return bNativeSweep && ReleasedAllies > 0 && HealthFraction >= 0.40;
+}
+
 static function bool FindGoal(XComGameState_Unit UnitState, out MissionGoal Goal,
     out array<StateObjectReference> VisibleEnemies,
     optional int BerserkerFocusTargetID, optional bool bBerserkerFocusGoal,
@@ -603,6 +613,9 @@ static function bool FindGoal(XComGameState_Unit UnitState, out MissionGoal Goal
     local TTile SabotageGoalTile;
     local string SabotageGoalSource;
     local int PlantObjectivePhase, MonumentNativeGoalStatus;
+    local int SweepScanIndex, ReleasedAllies, LinkedEnemies, BestSourceID;
+    local float HealthFraction, CandidatePriority, BestSourcePriority;
+    local TTile BestSourceTile;
     local bool bCompletedStrategyObjective, bBerserkerSweep, bSkipUnverifiedPlantMarker;
 
     Goal = EmptyGoal;
@@ -633,6 +646,61 @@ static function bool FindGoal(XComGameState_Unit UnitState, out MissionGoal Goal
             && UnitState.GetMyTemplateName() == 'BerserkerMP'
             && BattleData.MapData.ActiveMission.sType == "SabotageTransmitter"
             && bCompletedStrategyObjective;
+
+        // When a LIVE, native-visible controller is currently holding one
+        // of our formerly XCOM-owned units, prioritize reaching the controller
+        // during Sweep rather than marching toward a generic distant contact.
+        // This reuses the exact source-effect and original-owner evidence
+        // already needed by ScoreAttack; no Priest template inference, enemy
+        // AP, cooldown or hidden AI intent is consulted. The normal move path,
+        // AP, support, exposure and hazard gates remain authoritative.
+        HealthFraction = UnitState.GetCurrentStat(eStat_HP)
+            / FMax(1.0, UnitState.GetMaxStat(eStat_HP));
+        if (bBerserkerSweep && HealthFraction >= 0.40)
+        {
+            BestSourcePriority = -100000.0;
+            for (SweepScanIndex = 0;
+                 SweepScanIndex < Min(24, VisibleEnemies.Length); ++SweepScanIndex)
+            {
+                OtherUnit = XComGameState_Unit(`XCOMHISTORY.GetGameStateForObjectID(
+                    VisibleEnemies[SweepScanIndex].ObjectID));
+                if (OtherUnit == none || !OtherUnit.IsAlive()
+                    || OtherUnit.IsIncapacitated() || OtherUnit.bRemovedFromPlay
+                    || OtherUnit.GetMyTemplate() == none
+                    || OtherUnit.GetMyTemplate().bIsCosmetic
+                    || !UnitState.IsEnemyUnit(OtherUnit)
+                    || class'APX_CombatPlanner'.static.IsReclaimableControlledSquadmate(
+                        UnitState, OtherUnit))
+                    continue;
+                ReleasedAllies = 0;
+                LinkedEnemies = 0;
+                class'APX_CombatPlanner'.static.GetKnownSourceBenefits(
+                    UnitState, OtherUnit, ReleasedAllies, LinkedEnemies);
+                if (!ShouldPreferVerifiedSweepControlSource(bBerserkerSweep,
+                    ReleasedAllies, HealthFraction))
+                    continue;
+                CandidatePriority = 95.0 + float(Min(3, ReleasedAllies)) * 12.0
+                    - TileDistance(UnitState.TileLocation, OtherUnit.TileLocation) * 0.5;
+                if (CandidatePriority <= BestSourcePriority)
+                    continue;
+                BestSourcePriority = CandidatePriority;
+                BestSourceTile = OtherUnit.TileLocation;
+                BestSourceID = OtherUnit.ObjectID;
+            }
+            if (BestSourceID > 0)
+            {
+                Goal.Tile = BestSourceTile;
+                Goal.Value = BestSourcePriority;
+                Goal.bFound = true;
+                Goal.bCombat = true;
+                `log("Berserker sweep control source|unit=" $ UnitState.ObjectID
+                    $ "|source=" $ BestSourceID $ "|priority=" $ BestSourcePriority
+                    $ "|target_x=" $ BestSourceTile.X
+                    $ "|target_y=" $ BestSourceTile.Y
+                    $ "|target_z=" $ BestSourceTile.Z, true, 'AutoplayXCom2');
+                return true;
+            }
+        }
 
         // One verified member of one retained AIGroup is the squad's shared
         // destination during the short opening or mandatory post-X4 sweep.
