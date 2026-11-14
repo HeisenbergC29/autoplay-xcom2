@@ -29,7 +29,7 @@ fallbackiem do niepoprawnych stawek ze stock structdefaultproperties.
 
 Nowe **naprawdę liczone** zdarzenia:
 - potwierdzony normalny wróg, którego stan `ObjectID` występuje
-  już w oryginalnym taktycznym `StartIndex`: nadana stawka
+  już w zweryfikowanym `TacticalGameStart` i był tam wrogi XCOM: nadana stawka
   `StartingPoints/MinPoints/DecreasePerTurn/TurnOffset`;
 - wróg z jawnym `GetUnitValue('NewSpawnedUnit')`:
   tylko tabelaryczne `SpawnedPoints`;
@@ -38,11 +38,11 @@ Nowe **naprawdę liczone** zdarzenia:
   tylko `bUnknownEnemyOrigin` i częściowość (może być
   reinforcement, summon albo inną jednostką);
 - pierwsza obserwowana rana własnego kwalifikującego się żołnierza:
-  `-DefaultSoldierScoring.UninjuredBonus`;
+  `-DefaultSoldierScoring.UninjuredBonus`, tylko gdy stawka jest dodatnia;
 - utrata żołnierza w obserwowanej historii:
   `-DefaultSoldierScoring.WoundedBonus`,
   w stock `LadderProgress.OnUnitDamage/OnUnitKilled`
-  rzeczywiście takie potrącenia występują;
+  rzeczywiście takie potrącenia występują; zero/ujemna stawka nie daje premii;
 - prawidłowo zidentyfikowany `MissionObjectiveMarkedCompleted`
   według konkretnego override celu misji i czasu;
 - `CivilianRescued` przez aktualnie kontrolowanego gracza:
@@ -66,6 +66,7 @@ zostają poza zakresem dowodowym.
 V3 to **wynik częściowy**:
 `GetCoverageStatus()` zwraca m.in.
 `partial_unknown_enemy_origin`,
+`partial_unverified_tactical_start`,
 `partial_objective_civilian_listener_started_late` lub
 `partial_native_disabled_restart_bonus_unverified`.
 Rejestrator oznacza `hud_score` jako
@@ -89,12 +90,36 @@ i zachowuje swój status.
 
 ## Dowód i odbiór
 
+Przegląd LEAD doprecyzował kwalifikację startu: sam `FindStartStateIndex`
+i obecność obiektu w archiwum nie wystarczają. Obserwator sprawdza
+`XComGameStateContext_TacticalGameRule/eGameRule_TacticalGameStart`
+i początkową własność. Pierwsza widoczna wersja przejętego dawnego XCOM
+nie staje się przez to zwykłym wrogiem do naliczenia kill points.
+Natywne previous-team XCOM blokuje enemy award także przy niepewnym starcie.
+Przy takim starcie zachowujemy tylko składniki możliwe do kwalifikacji,
+np. obserwowane kary aktualnie własnego żołnierza; nie udajemy znajomości
+jego początkowej własności. Jawny native spawn pozostaje osobną klasyfikacją.
+
+Niepełne lub nadmierne tabele (powyżej512 wpisów) są odrzucane zamiast
+ucinać skan i stosować potencjalnie błędny default. Guardy dodatnich
+UninjuredBonus/WoundedBonus odpowiadają natywnym handlerom, więc ujemne
+wartości konfiguracji nie przyznają punktów za ranę/stratę.
+
+Jednorazowy na inicjalizację/zmianę misji log `Legacy observed rates`
+zawiera identyfikator profilu, długości załadowanych tabel enemy/objective
+oraz flagi verified_tactical_start/early_event_coverage. Nie wypisuje
+tabel ani jednostek. Pozwala sprawdzić faktyczne runtime config/TLE
+na podstawie zwykłego raportu z niepunktowanej misji.
+
 `tests/test_legacy_observed_v3.py` sprawdza rozdzielenie
 v2/v3, faktyczny odczyt stock `config(Ladder)`, klucz
 objective4 pól, prawidłowe przykłady minimum stawki
 Trooper/Priest/TerrorBar, jednoznaczność pochodzenia,
 first wound/death, obsługę cywilnych, latent safety,
 bez mutacji historii i niezmieniony native score provider.
+Regresje wykonują też rzeczywiste czyste helpery UC: niezweryfikowane
+archiwum, śmierć dawnego XCOM pod kontrolą, zwykły/spawned wróg,
+granice długości tabel i dodatnie/zerowe/ujemne potrącenia.
 Przy dostarczonym SDK test sprawdza również stock
 `XComGameState_LadderProgress` i deklaracje struktur.
 

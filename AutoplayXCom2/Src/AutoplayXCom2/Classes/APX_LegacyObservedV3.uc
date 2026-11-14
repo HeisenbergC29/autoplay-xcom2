@@ -5,7 +5,8 @@
 class APX_LegacyObservedV3 extends Object
     dependson(XComGameState, XComGameStateContext_Ability,
         X2StrategyGameRulesetDataStructures, X2GameRulesetVisibilityDataStructures,
-        X2ChallengeModeDataStructures, XComGameState_LadderProgress);
+        X2ChallengeModeDataStructures, XComGameState_LadderProgress,
+        X2TacticalGameRulesetDataStructures);
 
 struct ObservedUnit
 {
@@ -31,6 +32,7 @@ var private int HistoryCursor;
 var private int LastHistoryIndex;
 var private bool bInitialized;
 var private bool bEventsRegistered;
+var private bool bVerifiedTacticalStart;
 var private bool bEarlyEventCoverage;
 var private bool bUnresolvedEnemyOrigins;
 var private int UnresolvedOriginCount;
@@ -44,7 +46,8 @@ static function string GetProfileID()
     return "wotc_legacy_config_observed_v3_partial";
 }
 
-// These values mirror tools/legacy-score-rules.json, not a mode's native table.
+// Explicit observed decay convention applied to installed Legacy rates.
+// Native award qualification and exact boundary parity remain unproven.
 static function int DecayedPoints(int StartingPoints, int MinimumPoints,
     int DecreasePerTurn, int TurnOffset, int Turn)
 {
@@ -52,12 +55,20 @@ static function int DecayedPoints(int StartingPoints, int MinimumPoints,
 }
 
 
+static function bool InstalledRateCountsSupported(int EnemyCount, int ObjectiveCount)
+{
+    return EnemyCount > 0 && EnemyCount <= 512
+        && ObjectiveCount > 0 && ObjectiveCount <= 512;
+}
+
 static function bool HasInstalledRates()
 {
     // Fail closed when the installed config(Ladder) was not loaded. The
     // native SDK's structdefaults alone are the *wrong* tables for WOTC.
-    return class'XComGameState_LadderProgress'.default.DefaultEnemyScoringTable.Length > 0
-        && class'XComGameState_LadderProgress'.default.DefaultObjectiveScoringTable.Length > 0;
+    // A truncated table must not silently fall back to the wrong default.
+    return InstalledRateCountsSupported(
+        class'XComGameState_LadderProgress'.default.DefaultEnemyScoringTable.Length,
+        class'XComGameState_LadderProgress'.default.DefaultObjectiveScoringTable.Length);
 }
 
 static function ChallengeEnemyScoring FindEnemyRule(name TemplateName)
@@ -80,7 +91,7 @@ static function ChallengeEnemyScoring FindEnemyRule(name TemplateName)
 }
 
 // Source classification is deliberately evidence-gated. An enemy already in
-// tactical start history is an ordinary encounter. NewSpawnedUnit is a native
+// a verified tactical start is an ordinary encounter. NewSpawnedUnit is a native
 // explicit spawned marker. Other late arrivals may be reinforcements or
 // summons; do not misaward ordinary points when their source is unknown.
 static function int EnemyPoints(name TemplateName, int Turn, bool bConfirmedSpawned)
@@ -96,21 +107,48 @@ static function int EnemyPoints(name TemplateName, int Turn, bool bConfirmedSpaw
         Rate.DecreasePerTurn, Rate.TurnOffset, Turn);
 }
 
+static function int SoldierPenaltyPoints(bool bEligible, bool bWounded, bool bLost,
+    int UninjuredBonus, int WoundedBonus)
+{
+    local int Points;
+
+    if (!bEligible)
+        return 0;
+    Points = 0;
+    // Stock handlers only submit deductions when the configured bonus is
+    // positive. A zero/negative config must never become a positive award.
+    if (bWounded && UninjuredBonus > 0)
+        Points -= UninjuredBonus;
+    if (bLost && WoundedBonus > 0)
+        Points -= WoundedBonus;
+    return Points;
+}
+
 static function int SoldierPoints(bool bEligible, bool bWounded, bool bLost)
 {
     local ChallengeSoldierScoring Rate;
-    local int Points;
 
-    if (!bEligible || !HasInstalledRates())
+    if (!HasInstalledRates())
         return 0;
     Rate = class'XComGameState_LadderProgress'.default.DefaultSoldierScoring;
     // Stock LadderProgress.OnUnitDamage/OnUnitKilled subtract precisely
     // UninjuredBonus on FIRST wound and WoundedBonus on loss.
-    if (bWounded)
-        Points -= Rate.UninjuredBonus;
-    if (bLost)
-        Points -= Rate.WoundedBonus;
-    return Points;
+    return SoldierPenaltyPoints(bEligible, bWounded, bLost,
+        Rate.UninjuredBonus, Rate.WoundedBonus);
+}
+
+// 0 ordinary, 1 explicitly spawned, -1 unknown/protected. Merely finding
+// an object in an arbitrary archive start is not proof of enemy origin.
+static function int ClassifyEnemyOrigin(bool bExplicitSpawned, bool bVerifiedStart,
+    bool bHasStartUnit, bool bStartedXCom, bool bStartedEnemy, bool bPreviousXCom)
+{
+    if (bStartedXCom || bPreviousXCom)
+        return -1;
+    if (bExplicitSpawned)
+        return 1;
+    if (bVerifiedStart && bHasStartUnit && bStartedEnemy)
+        return 0;
+    return -1;
 }
 
 static function int CompletedObjectivePoints(int Turn, name MissionName,
@@ -144,6 +182,8 @@ function string GetCoverageStatus()
         return "unavailable_rates";
     if (bUnresolvedEnemyOrigins)
         return "partial_unknown_enemy_origin";
+    if (!bVerifiedTacticalStart)
+        return "partial_unverified_tactical_start";
     if (!bEarlyEventCoverage)
         return "partial_objective_civilian_listener_started_late";
     // Even with full observed history, the native disabled/restart/bonus
@@ -172,6 +212,7 @@ function Cleanup()
         }
     }
     bEventsRegistered = false;
+    bVerifiedTacticalStart = false;
     bEarlyEventCoverage = false;
     bUnresolvedEnemyOrigins = false;
     UnresolvedOriginCount = 0;
@@ -229,6 +270,8 @@ function bool EnsureMission()
     local XComTacticalController PC;
     local XComGameStateHistory History;
     local XComGameState_BattleData BattleData, StartingBattle;
+    local XComGameState StartState;
+    local XComGameStateContext_TacticalGameRule StartContext;
     local int CurrentIndex, CurrentStart, PlayerID;
 
     History = `XCOMHISTORY;
@@ -267,6 +310,11 @@ function bool EnsureMission()
         BattleData.ObjectID, eReturnType_Reference, CurrentStart));
     if (StartingBattle == none || StartingBattle.MapData.ActiveMission.sType != BattleData.MapData.ActiveMission.sType)
         return false;
+    StartState = History.GetGameStateFromHistory(CurrentStart);
+    if (StartState != none)
+        StartContext = XComGameStateContext_TacticalGameRule(StartState.GetContext());
+    bVerifiedTacticalStart = StartContext != none
+        && StartContext.GameRuleType == eGameRule_TacticalGameStart;
     ObservedHistory = History;
     OwnerPlayerID = PlayerID;
     BattleID = BattleData.ObjectID;
@@ -275,8 +323,13 @@ function bool EnsureMission()
     HistoryCursor = CurrentStart - 1;
     LastHistoryIndex = CurrentIndex;
     bInitialized = true;
-    bEarlyEventCoverage = CurrentIndex <= CurrentStart + 1;
+    bEarlyEventCoverage = bVerifiedTacticalStart && CurrentIndex <= CurrentStart + 1;
     RegisterEvents();
+    `log("Legacy observed rates|profile=" $ GetProfileID()
+        $ "|enemy_entries=" $ class'XComGameState_LadderProgress'.default.DefaultEnemyScoringTable.Length
+        $ "|objective_entries=" $ class'XComGameState_LadderProgress'.default.DefaultObjectiveScoringTable.Length
+        $ "|verified_tactical_start=" $ string(bVerifiedTacticalStart)
+        $ "|early_event_coverage=" $ string(bEarlyEventCoverage), true, 'AutoplayXCom2');
     return true;
 }
 
@@ -289,9 +342,11 @@ function int TurnAtHistory(int HistoryIndex)
     return PlayerState != none ? PlayerState.PlayerTurnCount : -1;
 }
 
-function int UnitIndex(XComGameState_Unit UnitState, bool bFriendly)
+function int UnitIndex(XComGameState_Unit UnitState)
 {
     local ObservedUnit Entry;
+    local XComGameState_Unit StartingUnit;
+    local UnitValue SpawnedValue;
     local int Index;
 
     Index = Units.Find('ID', UnitState.ObjectID);
@@ -299,7 +354,18 @@ function int UnitIndex(XComGameState_Unit UnitState, bool bFriendly)
         return Index;
     Entry.ID = UnitState.ObjectID;
     Entry.TemplateName = UnitState.GetMyTemplateName();
-    Entry.bOriginalFriendly = bFriendly;
+    if (bVerifiedTacticalStart)
+    {
+        StartingUnit = XComGameState_Unit(ObservedHistory.GetGameStateForObjectID(
+            UnitState.ObjectID, eReturnType_Reference, StartIndex));
+        Entry.bOriginalFriendly = StartingUnit != none
+            && StartingUnit.GetTeam() == eTeam_XCom
+            && StartingUnit.GetAssociatedPlayerID() == OwnerPlayerID;
+        if (Entry.bOriginalFriendly)
+            Entry.bEligible = StartingUnit.GetPreviousTeam() == eTeam_XCom
+                && !StartingUnit.bMissionProvided
+                && !StartingUnit.GetUnitValue('NewSpawnedUnit', SpawnedValue);
+    }
     Entry.LastHP = UnitState.GetCurrentStat(eStat_HP);
     Units.AddItem(Entry);
     return Units.Length - 1;
@@ -310,15 +376,19 @@ function ObserveUnit(XComGameState_Unit UnitState, bool bFriendly, int HistoryIn
 {
     local UnitValue SpawnedValue, KilledValue;
     local XComGameState_Unit StartingEnemy;
-    local int Index, Turn;
+    local int Index, Turn, Origin;
     local float HP;
-    local bool bExplicitSpawned;
+    local bool bExplicitSpawned, bStartedXCom, bStartedEnemy;
 
     if (UnitState == none || UnitState.GetMyTemplate() == none || UnitState.GetMyTemplate().bIsCosmetic)
         return;
-    Index = UnitIndex(UnitState, bFriendly);
+    Index = UnitIndex(UnitState);
     HP = UnitState.GetCurrentStat(eStat_HP);
-    if (Units[Index].bOriginalFriendly)
+    // A verified original soldier remains a soldier while mind-controlled.
+    // Without a verified start, current own + native previous-team metadata
+    // can qualify an observed penalty, but cannot establish original ownership.
+    if (Units[Index].bOriginalFriendly || Units[Index].bEligible
+        || (bFriendly && UnitState.GetPreviousTeam() == eTeam_XCom))
     {
         if (bFriendly)
         {
@@ -345,21 +415,32 @@ function ObserveUnit(XComGameState_Unit UnitState, bool bFriendly, int HistoryIn
             && !Units[Index].bEliminated && Turn >= 0)
         {
             bExplicitSpawned = UnitState.GetUnitValue('NewSpawnedUnit', SpawnedValue);
-            StartingEnemy = XComGameState_Unit(ObservedHistory.GetGameStateForObjectID(
-                UnitState.ObjectID, eReturnType_Reference, StartIndex));
-            Units[Index].bEliminated = true;
-            if (!bExplicitSpawned && StartingEnemy == none)
+            if (bVerifiedTacticalStart)
             {
-                // The original unit did not exist at tactical start. We
-                // cannot identify a reinforcement vs ordinary summon from
-                // public observation alone; never credit ordinary points.
+                StartingEnemy = XComGameState_Unit(ObservedHistory.GetGameStateForObjectID(
+                    UnitState.ObjectID, eReturnType_Reference, StartIndex));
+                if (StartingEnemy != none)
+                {
+                    bStartedXCom = StartingEnemy.GetTeam() == eTeam_XCom;
+                    bStartedEnemy = StartingEnemy.IsEnemyTeam(eTeam_XCom);
+                }
+            }
+            Origin = ClassifyEnemyOrigin(bExplicitSpawned, bVerifiedTacticalStart,
+                StartingEnemy != none, bStartedXCom, bStartedEnemy,
+                UnitState.GetPreviousTeam() == eTeam_XCom);
+            Units[Index].bEliminated = true;
+            if (Origin < 0)
+            {
+                // Missing/unverified start or an original XCOM/neutral unit
+                // is not proof of ordinary enemy origin. Never award it by
+                // guessing from current visibility or archive presence.
                 Units[Index].bUnknownEnemyOrigin = true;
                 bUnresolvedEnemyOrigins = true;
                 ++UnresolvedOriginCount;
             }
             else
                 Units[Index].EliminationPoints = EnemyPoints(
-                    Units[Index].TemplateName, Turn, bExplicitSpawned);
+                    Units[Index].TemplateName, Turn, Origin == 1);
         }
     }
     Units[Index].LastHP = HP;
@@ -503,7 +584,7 @@ function int GetObservedScore()
     }
     for (Index = 0; Index < Units.Length; ++Index)
     {
-        if (Units[Index].bOriginalFriendly)
+        if (Units[Index].bEligible)
             Score += SoldierPoints(Units[Index].bEligible, Units[Index].bWounded, Units[Index].bLost);
         else if (Units[Index].bEliminated)
             Score += Units[Index].EliminationPoints;
