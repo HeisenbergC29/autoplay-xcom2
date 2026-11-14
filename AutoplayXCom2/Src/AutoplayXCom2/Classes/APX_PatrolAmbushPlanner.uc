@@ -26,8 +26,7 @@ var private bool bExpired;
 static function bool CanStage(bool bEnabled, bool bUrgent, bool bCombatContact,
     bool bNativePath, int StandardAP, int Actions, int Limit, int Elapsed, int MaxTurns)
 {
-    return bEnabled && !bUrgent && !bCombatContact && bNativePath
-        && StandardAP >= 2 && Actions < Limit && Elapsed < MaxTurns;
+    return bEnabled && !bUrgent && !bCombatContact && bNativePath && StandardAP >= 2 && Actions < Limit && Elapsed >= 0 && Elapsed < MaxTurns;
 }
 
 static function bool CanDeferOpener(bool bNativeOpener, bool bUrgent,
@@ -36,7 +35,9 @@ static function bool CanDeferOpener(bool bNativeOpener, bool bUrgent,
 {
     if (!bNativeOpener || bUrgent || ReadySupport < 2 || Ordered >= MaxSupport)
         return false;
-    return !bRevealed || DirectShotScore <= WeakRevealedThreshold;
+    if (!bRevealed)
+        return true;
+    return DirectShotScore <= WeakRevealedThreshold;
 }
 
 static function float VariantPositionScore(float Progress, int CoveredLanes,
