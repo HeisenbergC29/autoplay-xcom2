@@ -1122,6 +1122,11 @@ function MakeDecision(XComTacticalController PC)
     local vector CandidateAim, BestAim;
     local int TargetIndex, BestTargetIndex, ChosenTargetID, AmbushTargetIndex, RescuePatientID;
     local int RemainingConcealmentChecks, RemainingCoverChecks;
+    local int RemainingContactGroups, RemainingContactMembers;
+    local int RemainingContactDetectors, RemainingContactTiles, RemainingContactLOS;
+    local array<StateObjectReference> ContactSnapshotUnits, ContactSnapshotInteractives;
+    local string ContactSnapshotReason;
+    local bool bContactSnapshotReady, bContactSnapshotComplete;
     local int FocusTargetID, FocusGroupMembers, FocusLiving, FocusTimer;
     local int FocusHistoryIndex, FocusStartIndex, FocusPlantPhase, FocusPreviousGroupID;
     local int NativeStrikeAttackerID;
@@ -1138,6 +1143,11 @@ function MakeDecision(XComTacticalController PC)
     RemainingConcealmentChecks = 6;
     // Prefix and local cover inspections share one decision budget across units.
     RemainingCoverChecks = 6;
+    RemainingContactGroups = Clamp(class'APX_ContactEnvelope'.default.MaxGroups, 1, 32);
+    RemainingContactMembers = Clamp(class'APX_ContactEnvelope'.default.MaxMembers, 1, 128);
+    RemainingContactDetectors = Clamp(class'APX_ContactEnvelope'.default.MaxDetectors, 1, 64);
+    RemainingContactTiles = Clamp(class'APX_ContactEnvelope'.default.MaxTiles, 2, 128);
+    RemainingContactLOS = Clamp(class'APX_ContactEnvelope'.default.MaxLOS, 1, 512);
     PlayerRef = `TACTICALRULES.GetCachedUnitActionPlayerRef();
     PlayerState = XComGameState_Player(`XCOMHISTORY.GetGameStateForObjectID(PlayerRef.ObjectID));
     if (PlayerState == none || PC.m_XGPlayer == none
@@ -1323,6 +1333,21 @@ function MakeDecision(XComTacticalController PC)
             || class'APX_MissionPlanner'.static.HasCombatThreats(UnitState);
         if (!UnitState.IsAbleToAct())
             continue;
+        if (!bContactSnapshotReady)
+        {
+            // One contact snapshot per controller decision, shared by all
+            // own units and route candidates; unknown cannot certify Clear.
+            bContactSnapshotReady = true;
+            bContactSnapshotComplete = class'APX_ContactEnvelope'.static.BuildSnapshot(
+                UnitState, ContactSnapshotUnits, ContactSnapshotInteractives,
+                ContactSnapshotReason, RemainingContactGroups, RemainingContactMembers);
+            if (MissionRecorder != none)
+                MissionRecorder.Marker("contact_snapshot",
+                    "complete=" $ string(bContactSnapshotComplete)
+                    @ "reason=" $ ContactSnapshotReason
+                    @ "detectors=" $ ContactSnapshotUnits.Length
+                    @ "interactives=" $ ContactSnapshotInteractives.Length);
+        }
         if (class'APX_CombatPlanner'.static.ChooseAction(UnitState, Candidate,
             TargetIndex, Score, bContactSearch,
             ((bFocusedGoal || (bNativeStrikeOnly
@@ -1451,7 +1476,10 @@ function MakeDecision(XComTacticalController PC)
             bCandidateMove = class'APX_MissionPlanner'.static.ChooseMove(
                 UnitState, CandidatePath, Score, RemainingConcealmentChecks,
                 RemainingCoverChecks, FocusTargetID, bFocusedGoal,
-                RangedTargetID, bRangedFocusGoal);
+                RangedTargetID, bRangedFocusGoal,
+                ContactSnapshotUnits, ContactSnapshotInteractives,
+                bContactSnapshotComplete, ContactSnapshotReason,
+                RemainingContactDetectors, RemainingContactTiles, RemainingContactLOS);
         if (bCandidateMove
             && TraceCandidateMove(UnitState, CandidatePath, Score)
             && Score > BestScore && CanUseMove(UnitState, CandidatePath))

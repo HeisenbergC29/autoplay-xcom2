@@ -115,16 +115,23 @@ class PatrolKnowledgeContracts(unittest.TestCase):
         self.assertIn('LastPatrolObservationTurn = -1;', function_body(self.recorder, 'Start'))
 
     def test_no_additional_private_enemy_state_or_future_decision_is_inspected(self):
+        reader = function_body(self.source, 'GetCurrentPatrolWaypoint')
         scan = function_body(self.recorder, 'RecordCurrentPatrolWaypoints')
         for body in (self.source, scan):
             for forbidden in ('IsEngaged(', 'HasAbsoluteKnowledge(', 'GetCurrentStat(',
                               'GetAIUnitDataID(', 'bPendingScamper', 'bProcessedScamper',
                               'bObjective', 'bInterceptObjectiveLocation',
-                              'TurnCountForLastDestination', 'GetGroupMidpoint(',
+                              'GetGroupMidpoint(',
                               'SYNC_RAND', 'GetNextDestination(', 'ShouldMoveToIntercept(',
                               'CreateNewGameState(', 'ModifyStateObject(', 'SubmitGameState('):
                 with self.subTest(forbidden=forbidden):
                     self.assertNotIn(forbidden, body)
+        # 14 Nov: stored AI destination time is now allowed only as
+        # read-only, validated clock metadata; not a future selected route.
+        self.assertNotIn('TurnCountForLastDestination', reader)
+        self.assertNotIn('TurnCountForLastDestination', scan)
+        self.assertIn('Group.TurnCountForLastDestination',
+                      function_body(self.source, 'StoredPatrolEvidence'))
         self.assertIn('Group.CurrentTargetLocation', self.source)
         self.assertIn('is_stored_current_target=true|target_usage=unknown', scan)
         self.assertIn('next_waypoint_unknown=true', scan)

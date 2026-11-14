@@ -1,6 +1,6 @@
-// The user-authorized exception exposes only this stored CURRENT target.
-// Its current tactical use and the next AI decision remain unknown. Never
-// request a new AI decision, inspect private alert knowledge or roll RNG.
+// Read-only, user-authorized stored patrol metadata (target, native AI clock).
+// The next chosen route or action is NOT present in a usual green patrol.
+// Never request an AI decision, inspect private alert knowledge or roll RNG.
 class APX_PatrolKnowledge extends Object config(AutoplayXCom2);
 
 var config int MaxGroupsPerObservation;
@@ -91,5 +91,83 @@ static function bool GetCurrentPatrolWaypoint(XComGameState_AIGroup Group,
     if (HostileMembers <= 0)
         return false;
     Midpoint /= float(HostileMembers);
+    return true;
+}
+
+
+// Native AI clock: AIPlayerData.StatsData.TurnCount, not the local squad turn.
+// A negative/default/future/stale timestamp cannot certify a usable waypoint.
+static function int StoredWaypointAge(int AITurn, int DestinationTurn)
+{
+    if (AITurn <= 0 || DestinationTurn < 0 || DestinationTurn > AITurn || AITurn - DestinationTurn > 2)
+        return -1;
+    return AITurn - DestinationTurn;
+}
+
+// Check only actual AIPlayerData.PatrolGroupList membership; any other group
+// has no asserted current patrol route and is ignored for waypoint freshness.
+// A listed group with incomplete metadata is UNKNOWN (not an empty corridor).
+static function bool StoredPatrolEvidence(XComGameState_AIGroup Group,
+    int LocalPlayerID, out int RemainingMemberChecks, out string Reason)
+{
+    local XComGameState_AIPlayerData AIData;
+    local XComGameState_Player AIPlayer, LocalPlayer;
+    local vector Midpoint;
+    local TTile TargetTile;
+    local int Hostiles, ScannedAI;
+    local bool bFound;
+
+    Reason = "not_listed_patrol";
+    if (Group == none || `XCOMHISTORY == none || `XWORLD == none)
+    {
+        Reason = "patrol_context_missing";
+        return false;
+    }
+    foreach `XCOMHISTORY.IterateByClassType(class'XComGameState_AIPlayerData', AIData)
+    {
+        if (++ScannedAI > 8)
+        {
+            Reason = "ai_data_scan_limit";
+            return false;
+        }
+        if (AIData == none
+            || AIData.PatrolGroupList.Find('ObjectID', Group.ObjectID) == INDEX_NONE)
+            continue;
+        bFound = true;
+        break;
+    }
+    if (!bFound)
+        return false;
+    LocalPlayer = XComGameState_Player(
+        `XCOMHISTORY.GetGameStateForObjectID(LocalPlayerID));
+    AIPlayer = XComGameState_Player(
+        `XCOMHISTORY.GetGameStateForObjectID(AIData.m_iPlayerObjectID));
+    if (LocalPlayer == none || AIPlayer == none
+        || LocalPlayer.GetTeam() != eTeam_XCom
+        || !class'XGPlayerNativeBase'.static.AreEnemyTeams(
+            LocalPlayer.GetTeam(), AIPlayer.GetTeam()))
+    {
+        Reason = "patrol_owner_unknown";
+        return false;
+    }
+    if (StoredWaypointAge(AIData.StatsData.TurnCount,
+        Group.TurnCountForLastDestination) < 0)
+    {
+        Reason = "patrol_ai_clock_stale_or_unknown";
+        return false;
+    }
+    if (!GetCurrentPatrolWaypoint(Group, LocalPlayerID, TargetTile,
+        Midpoint, Hostiles, RemainingMemberChecks))
+    {
+        Reason = "patrol_members_or_waypoint_unknown";
+        return false;
+    }
+    if (VSizeSq(Midpoint - Group.CurrentTargetLocation) <=
+        FMax(0.0, Group.DESTINATION_REACHED_SIZE_SQ))
+    {
+        Reason = "patrol_waypoint_reached";
+        return false;
+    }
+    Reason = "fresh_current_waypoint_not_full_route";
     return true;
 }
