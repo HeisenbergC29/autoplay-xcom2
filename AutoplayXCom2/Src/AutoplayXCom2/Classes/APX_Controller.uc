@@ -120,6 +120,9 @@ var private int BerserkerFocusStartIndex;
 var private int BerserkerFocusLastHistory;
 var private int BerserkerFocusBattleID;
 var private int BerserkerFocusPlayerID;
+// Only one directly legal opening punch may receive the extra focus bonus
+// per player turn; ordinary native actions are never suppressed.
+var private int NativeOpeningStrikesThisTurn;
 // Separate revealed-ranged contact; never reused by BerserkerMP sabotage.
 var private int RangedFocusGroupID;
 var private XComGameStateHistory RangedFocusHistory;
@@ -443,6 +446,7 @@ function StopAutoplay(string Reason, optional bool bPreservePendingHack = false)
     LastWaitDetails = "";
     ResetWaitHeartbeat();
     ResetBerserkerFocus();
+    NativeOpeningStrikesThisTurn = 0;
     ResetRangedFocus();
     // A user pause may happen before the hack UI has even appeared. Keep only
     // the exact submitted context, so resuming cannot claim a later manual hack
@@ -1120,6 +1124,7 @@ function MakeDecision(XComTacticalController PC)
     local int RemainingConcealmentChecks, RemainingCoverChecks;
     local int FocusTargetID, FocusGroupMembers, FocusLiving, FocusTimer;
     local int FocusHistoryIndex, FocusStartIndex, FocusPlantPhase, FocusPreviousGroupID;
+    local int NativeStrikeAttackerID;
     local int RangedPreviousGroupID, RangedTargetID, RangedMembers, RangedLiving;
     local TTile FocusTile, RangedTile;
     local float FocusDistance, RangedDistance;
@@ -1127,6 +1132,7 @@ function MakeDecision(XComTacticalController PC)
     local bool bMove, bArea, bHavePlan, bSuccess, bCanExplore, bCombatThreats;
     local bool bVisibleThreats, bContactSearch, bCandidateMove, bGrenadeCandidate;
     local bool bOpeningContact, bFocusedGoal, bRangedFocusGoal, bRangedConcealed;
+    local bool bNativeStrikeOnly;
 
     // Shared by every unit and every movement/preparation/loot search below.
     RemainingConcealmentChecks = 6;
@@ -1151,6 +1157,7 @@ function MakeDecision(XComTacticalController PC)
             || EndTurnPlayerTurn != PlayerState.PlayerTurnCount)
             ResetEndTurnRequest();
         AmbushPreparationActions = 0;
+        NativeOpeningStrikesThisTurn = 0;
     }
     if (bEndTurnPending || bEndTurnRequested)
         return;
@@ -1177,7 +1184,10 @@ function MakeDecision(XComTacticalController PC)
         || (FocusBattle != none && BerserkerFocusBattleID != FocusBattle.ObjectID)
         || BerserkerFocusPlayerID != PlayerRef.ObjectID
         || FocusHistoryIndex < BerserkerFocusLastHistory)
+    {
         BerserkerFocusGroupID = 0;
+        NativeOpeningStrikesThisTurn = 0;
+    }
     BerserkerFocusHistory = `XCOMHISTORY;
     BerserkerFocusStartIndex = FocusStartIndex;
     BerserkerFocusLastHistory = FocusHistoryIndex;
@@ -1189,6 +1199,8 @@ function MakeDecision(XComTacticalController PC)
     FocusTargetID = 0;
     bOpeningContact = false;
     bFocusedGoal = false;
+    bNativeStrikeOnly = false;
+    NativeStrikeAttackerID = 0;
     if (FocusBattle != none
         && FocusBattle.MapData.ActiveMission.sType == "SabotageTransmitter")
     {
@@ -1208,6 +1220,19 @@ function MakeDecision(XComTacticalController PC)
                 Clamp(class'APX_BerserkerFocus'.default.MinimumContactTimerTurns, 2, 12),
                 FClamp(class'APX_BerserkerFocus'.default.MaximumOpeningContactDistance, 1.0, 24.0));
             bOpeningContact = bFocusedGoal && FocusPlantPhase != 1;
+            // The distance threshold limits speculative pursuit. An actual
+            // native-legal punch is distinct: it needs no projected path
+            // or reserve AP for a future strike. Never replace the X4 route
+            // or suppress a relay just because one ready punch exists.
+            if (!bFocusedGoal && FocusPlantPhase == 0
+                && class'APX_BerserkerFocus'.static.CanPreferNativeOpeningStrike(
+                    class'APX_BerserkerFocus'.default.EnableBerserkerGroupFocus,
+                    false, FocusTimer, PlayerState.PlayerTurnCount, FocusLiving,
+                    Clamp(class'APX_BerserkerFocus'.default.MinimumContactTimerTurns, 2, 12),
+                    Clamp(class'APX_BerserkerFocus'.default.OpeningContactTurns, 0, 4),
+                    true, NativeOpeningStrikesThisTurn >= 1))
+                bNativeStrikeOnly = class'APX_BerserkerFocus'.static.FindNativeOpeningStrike(
+                    PlayerRef.ObjectID, FocusTargetID, NativeStrikeAttackerID);
             if (MissionRecorder != none)
                 MissionRecorder.Marker("berserker_focus",
                     "phase=" $ (FocusPlantPhase == 1 ? "sweep" :
@@ -1217,7 +1242,9 @@ function MakeDecision(XComTacticalController PC)
                     @ "members=" $ FocusGroupMembers
                     @ "living=" $ FocusLiving
                     @ "distance=" $ FocusDistance
-                    @ "timer=" $ FocusTimer);
+                    @ "timer=" $ FocusTimer
+                    @ "native_strike_ready=" $ string(bNativeStrikeOnly)
+                    @ "native_strikes_this_turn=" $ NativeOpeningStrikesThisTurn);
         }
         else
             BerserkerFocusGroupID = 0;
@@ -1298,8 +1325,10 @@ function MakeDecision(XComTacticalController PC)
             continue;
         if (class'APX_CombatPlanner'.static.ChooseAction(UnitState, Candidate,
             TargetIndex, Score, bContactSearch,
-            (bFocusedGoal ? FocusTargetID : 0), bOpeningContact,
-            (bRangedFocusGoal ? RangedTargetID : 0)))
+            ((bFocusedGoal || (bNativeStrikeOnly
+                && UnitState.ObjectID == NativeStrikeAttackerID)) ? FocusTargetID : 0),
+            bOpeningContact, (bRangedFocusGoal ? RangedTargetID : 0),
+            bNativeStrikeOnly && UnitState.ObjectID == NativeStrikeAttackerID))
         {
             // A distant, unsupported opening shot was previously selected
             // solely by damage value. Allow safe moves/overwatch to compete
@@ -1635,6 +1664,11 @@ function MakeDecision(XComTacticalController PC)
         StopWithStatus("Engine rejected planned action", StatusRejected);
         return;
     }
+    if (!bMove && bNativeStrikeOnly && BestUnit != none
+        && BestUnit.ObjectID == NativeStrikeAttackerID
+        && ChosenTargetID == FocusTargetID && Ability != none
+        && Ability.GetMyTemplateName() == 'DevastatingPunchMP')
+        ++NativeOpeningStrikesThisTurn;
     if (bMove)
         RecordMove(BestUnit, BestPath);
     ++ActionsThisTurn;

@@ -1,7 +1,8 @@
 // Bounded, read-only squad focus for the BerserkerMP SabotageTransmitter.
 // Group membership and current active positions are full-intel observations,
 // not future AI routes or permission to attack outside the native cache.
-class APX_BerserkerFocus extends Object config(AutoplayXCom2);
+class APX_BerserkerFocus extends Object config(AutoplayXCom2)
+    dependson(X2GameRuleset, X2TacticalGameRulesetDataStructures);
 
 var config bool EnableBerserkerGroupFocus;
 var config int OpeningContactTurns;
@@ -62,7 +63,111 @@ static function float ContactRelayScore(float NativeScore, bool bOpeningContact)
     return FMin(NativeScore, 26.0);
 }
 
-// This is the stock UI timer's public remaining-turn counter, not a guessed
+// Native AA_Success is a CURRENT offer, not a prediction of a strike
+// after walking. A single ready punch can be preferred even if the squad
+// centroid is beyond the conservative 18-tile contact movement gate.
+static function bool CanPreferNativeOpeningStrike(bool bEnabled, bool bPlanted,
+    int TimerTurns, int PlayerTurn, int LivingFriendlies, int MinimumTimer,
+    int MaximumOpeningTurn, bool bNativeReady, bool bAlreadyUsed)
+{
+    return bEnabled && !bPlanted && !bAlreadyUsed && bNativeReady
+        && LivingFriendlies >= 3 && TimerTurns >= MinimumTimer
+        && PlayerTurn >= 1 && PlayerTurn <= MaximumOpeningTurn;
+}
+
+// Read only local owners and exact native available-action caches.
+// No future-path assumptions: HasRequiredMeleePath and visible/safe target
+// gates mirror CombatPlanner; that planner still scores and dispatches.
+static function bool FindNativeOpeningStrike(int PlayerID, int FocusTargetID,
+    out int AttackerID)
+{
+    local XComGameState_Unit Friend, TargetUnit;
+    local GameRulesCache_Unit Cache;
+    local AvailableAction Candidate;
+    local AvailableTarget NativeTarget;
+    local XComGameState_Ability Ability;
+    local X2AbilityTemplate Template;
+    local array<StateObjectReference> VisibleEnemies;
+    local float MeleePenalty, Value;
+    local int UnitsVisited, ActionsVisited, TargetsVisited;
+
+    AttackerID = 0;
+    if (PlayerID <= 0 || FocusTargetID <= 0 || `XCOMHISTORY == none
+        || `TACTICALRULES == none || `XWORLD == none)
+        return false;
+    TargetUnit = XComGameState_Unit(`XCOMHISTORY.GetGameStateForObjectID(FocusTargetID));
+    if (TargetUnit == none || TargetUnit.GetMyTemplate() == none
+        || !TargetUnit.IsAlive() || TargetUnit.IsIncapacitated()
+        || TargetUnit.bRemoved || TargetUnit.bRemovedFromPlay)
+        return false;
+    class'X2TacticalVisibilityHelpers'.static.GetAllVisibleEnemiesForPlayer(
+        PlayerID, VisibleEnemies);
+    if (VisibleEnemies.Length == 0 || VisibleEnemies.Length > 64
+        || VisibleEnemies.Find('ObjectID', FocusTargetID) == INDEX_NONE)
+        return false;
+
+    foreach `XCOMHISTORY.IterateByClassType(class'XComGameState_Unit', Friend)
+    {
+        // A bounded failure means no override, never a partial squad scan.
+        if (++UnitsVisited > Clamp(default.MaxUnitStatesPerDecision, 16, 256))
+            return false;
+        if (Friend == none || Friend.GetTeam() != eTeam_XCom
+            || Friend.GetAssociatedPlayerID() != PlayerID
+            || Friend.GetMyTemplateName() != 'BerserkerMP'
+            || !Friend.IsAlive() || !Friend.IsAbleToAct()
+            || Friend.IsIncapacitated() || Friend.bRemoved || Friend.bRemovedFromPlay
+            || Friend.GetCurrentStat(eStat_HP)
+                < 0.55 * FMax(1.0, Friend.GetMaxStat(eStat_HP))
+            || !Friend.IsEnemyUnit(TargetUnit)
+            || class'APX_CombatPlanner'.static.IsReclaimableControlledSquadmate(
+                Friend, TargetUnit))
+            continue;
+        if (!`TACTICALRULES.GetGameRulesCache_Unit(Friend.GetReference(), Cache))
+            continue;
+        ActionsVisited = 0;
+        foreach Cache.AvailableActions(Candidate)
+        {
+            if (++ActionsVisited > 96)
+                return false;
+            if (Candidate.AvailableCode != 'AA_Success' || !Candidate.bInputTriggered
+                || Candidate.bFreeAim || Candidate.AvailableTargets.Length > 24)
+                continue;
+            Ability = XComGameState_Ability(`XCOMHISTORY.GetGameStateForObjectID(
+                Candidate.AbilityObjectRef.ObjectID));
+            if (Ability == none || Ability.OwnerStateObject.ObjectID != Friend.ObjectID
+                || Ability.GetMyTemplateName() != 'DevastatingPunchMP')
+                continue;
+            Template = Ability.GetMyTemplate();
+            if (Template == none || Template.AbilityTargetStyle == none
+                || Template.AbilityMultiTargetStyle != none)
+                continue;
+            TargetsVisited = 0;
+            foreach Candidate.AvailableTargets(NativeTarget)
+            {
+                if (++TargetsVisited > 24)
+                    return false;
+                if (NativeTarget.PrimaryTarget.ObjectID != FocusTargetID
+                    || !class'APX_CombatPlanner'.static.IsVisibleHostile(
+                        Friend, TargetUnit, VisibleEnemies)
+                    || !class'APX_CombatPlanner'.static.AdditionalTargetsAreSafe(
+                        Friend, NativeTarget, VisibleEnemies)
+                    || !class'APX_CombatPlanner'.static.HasRequiredMeleePath(
+                        Friend, TargetUnit, Template, VisibleEnemies, MeleePenalty))
+                    continue;
+                Value = class'APX_CombatPlanner'.static.ScoreAttack(
+                    Ability, NativeTarget, TargetUnit) - MeleePenalty;
+                if (Value > 5.0)
+                {
+                    AttackerID = Friend.ObjectID;
+                    return true;
+                }
+            }
+        }
+    }
+    return false;
+}
+
+// The stock UI timer's public remaining-turn counter is not a guessed
 // deadline from a score label or a hidden enemy decision.
 static function int ReadActiveTimerTurns()
 {
