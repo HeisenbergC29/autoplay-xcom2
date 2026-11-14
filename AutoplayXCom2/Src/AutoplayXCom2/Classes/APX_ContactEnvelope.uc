@@ -3,7 +3,7 @@
 //  1 CAUTION (real known source of possible detection/fire).
 // No future movement prediction, RNG sampling, forced native LOS, or hidden AP.
 class APX_ContactEnvelope extends Object config(AutoplayXCom2)
-    dependson(X2GameRulesetVisibilityDataStructures);
+    dependson(X2GameRulesetVisibilityDataStructures, XGTacticalGameCoreNativeBase);
 
 var config int MaxGroups;
 var config int MaxMembers;
@@ -22,7 +22,7 @@ static function bool ConcealedContactPossible(bool bNativeLOS, bool bStationary,
 {
     if (!bNativeLOS || (bStationary && bDirectionCovered))
         return false;
-    return bIgnoreDistance || DistSq <= Square(FMax(0.0, DetectionRadius));
+    return bIgnoreDistance || DistSq <= FMax(0.0, DetectionRadius) * FMax(0.0, DetectionRadius);
 }
 
 static function bool SnapshotBudgetsValid(int Groups, int Members,
