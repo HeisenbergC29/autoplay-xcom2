@@ -1,4 +1,4 @@
-# Stan przekazania projektu — 14 listopada 2026
+# Stan przekazania projektu — 15 listopada 2026
 
 To punkt startowy po pierwszym przeglądzie importu pomocnika. Bieżące issue i PR-y mogą zawierać nowsze
 ustalenia; po integracji aktualizuj ten dokument, gdy zmienia się baza lub
@@ -6,7 +6,26 @@ poziom potwierdzenia działania.
 
 ## Baza kodu
 
-- Bieżąca rewizja źródeł: **`mission-report-v40`**, PR #95; źródłowy head
+- Bieżąca rewizja źródeł: **`mission-report-v42`**, PR #97; źródłowy head
+  `b781ce476c6215e6e77f3142db971d0f31e970c9`, na scalonym #96/v41
+  `2800a84d1433d0e26992b6dddec06b8eb09edd5e`. Dwa osobno zaakceptowane
+  blue moves mają świeży native cache i pełne bieżące kontrole po pierwszym;
+  miękka pamięć per unit/goal wygasa i zachowuje konieczny legalny powrót.
+  LEAD poprawił zakres emergency revisit oraz source false-NoPlan dla
+  revealed/no-cover po karze pamięci. #97 dodaje ograniczony natywny Faceoff
+  (primary hostile + additional enemies), bez zmiany native action/ref/AP.
+  Walidator sprawdza style/aim/direct damage i podzbiór pistoletów bez extra
+  ammo/upgrade/applied bonus effects. Matrix pozostałych AoE/secondary chains
+  ma jawne unsupported; nie jest to pełna certyfikacja collateral.
+  **858 private PASS/0skip**, SDK29/31 i niezależne review PASS;
+  [CI352](https://github.com/HeisenbergC29/autoplay-xcom2/actions/runs/43637804963)
+  858 run = 774 PASS/84 SKIP + 6 kroków PowerShell PASS.
+  **Windows make/game v41/v42 NOT RUN, #4 BLOCKED.** Następny i jedyny
+  pozostały READY source zakres #86 to HELPER #28, potem review/integracja LEAD.
+  [Marsz i pamięć](experiment-89-10-sequential-blue-route-memory-v41.pl.md),
+  [Faceoff/macierz AoE](experiment-38b-aoe-family-disposition.pl.md),
+  [pozostała kolejka i warunek jednego buildu](PREBUILD-QUEUE.pl.md).
+- Poprzednia rewizja źródeł: **`mission-report-v40`**, PR #95; źródłowy head
   `134eac9eb00b504868b58500f992330b56d77952`. Ograniczony staging do bieżącego
   zweryfikowanego patrolu, kilka geometrycznych wariantów, native opener/OW,
   potwierdzone dispatch i limity/reset przygotowania. Prognoza przyszłego
