@@ -2095,8 +2095,8 @@ static function bool ChooseMove(XComGameState_Unit UnitState,
     local MissionGoal Goal;
     local bool bCombatGoal, bSafe, bRequireSupport, bRoutineRoute, bSabotageRush;
     local bool bConcealmentUrgent, bCoverUrgent, bUsedLocalFallback;
-    local string ConcealmentRiskReason, ContactReason, BestContactReason;
-    local int ContactStatus, BestContactStatus;
+    local string ConcealmentRiskReason, ContactReason, BestContactReason, LocalContactReason;
+    local int ContactStatus, BestContactStatus, LocalContactStatus;
     local bool bInspectContact;
     local int Index, PathIndex, SampleIndex, SampleCount;
     local float CoverRisk, RiskyRouteCoverRisk, LocalFallbackCoverRisk, RiskyRouteScore;
@@ -2228,6 +2228,11 @@ static function bool ChooseMove(XComGameState_Unit UnitState,
                 }
                 else
                 {
+                    if (bInspectContact)
+                        `log("Contact envelope|unit=" $ UnitState.ObjectID
+                            $ "|horizon_ai_turns=0|status=" $ ContactStatus
+                            $ "|reason=" $ ContactReason
+                            $ "|source=route_prefix", true, 'AutoplayXCom2');
                     return true;
                 }
             }
@@ -2332,6 +2337,8 @@ static function bool ChooseMove(XComGameState_Unit UnitState,
                 LocalFallbackPath = CandidatePath;
                 LocalFallbackScore = CandidateScore;
                 LocalFallbackRisk = CandidateRisk;
+                LocalContactStatus = ContactStatus;
+                LocalContactReason = ContactReason;
                 LocalFallbackCoverRisk = 0.0;
             }
             // Save cover risk before either soft cost can discard the normal
@@ -2388,6 +2395,8 @@ static function bool ChooseMove(XComGameState_Unit UnitState,
         Path = LocalFallbackPath;
         BestScore = LocalFallbackScore;
         BestRisk = LocalFallbackRisk;
+        BestContactStatus = LocalContactStatus;
+        BestContactReason = LocalContactReason;
         bUsedLocalFallback = true;
     }
     if (Path.Length < 2)
