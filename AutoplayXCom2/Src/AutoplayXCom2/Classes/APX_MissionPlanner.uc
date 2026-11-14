@@ -2095,8 +2095,8 @@ static function bool ChooseMove(XComGameState_Unit UnitState,
     local MissionGoal Goal;
     local bool bCombatGoal, bSafe, bRequireSupport, bRoutineRoute, bSabotageRush;
     local bool bConcealmentUrgent, bCoverUrgent, bUsedLocalFallback;
-    local string ConcealmentRiskReason, ContactReason, BestContactReason, LocalContactReason;
-    local int ContactStatus, BestContactStatus, LocalContactStatus;
+    local string ConcealmentRiskReason, ContactReason, BestContactReason, LocalContactReason, RiskyContactReason;
+    local int ContactStatus, BestContactStatus, LocalContactStatus, RiskyContactStatus;
     local bool bInspectContact;
     local int Index, PathIndex, SampleIndex, SampleCount;
     local float CoverRisk, RiskyRouteCoverRisk, LocalFallbackCoverRisk, RiskyRouteScore;
@@ -2205,6 +2205,8 @@ static function bool ChooseMove(XComGameState_Unit UnitState,
                     // Confirmed contact is less attractive than a verified
                     // safe local alternative; it remains a legal fallback.
                     RiskyRoute = Path;
+                    RiskyContactStatus = ContactStatus;
+                    RiskyContactReason = ContactReason;
                     RiskyRouteScore = Score;
                     RiskyRouteCoverRisk = 0.0;
                     Path.Length = 0;
@@ -2214,6 +2216,8 @@ static function bool ChooseMove(XComGameState_Unit UnitState,
                     // Reconsider a car-side exposed endpoint; keep a bounded
                     // fallback if every legal approach runs through this cover.
                     RiskyRoute = Path;
+                    RiskyContactStatus = ContactStatus;
+                    RiskyContactReason = ContactReason;
                     RiskyRouteScore = Score;
                     RiskyRouteCoverRisk = CoverRisk;
                     Path.Length = 0;
@@ -2223,6 +2227,8 @@ static function bool ChooseMove(XComGameState_Unit UnitState,
                         UnitState, Path, ConcealmentRiskReason, RemainingConcealmentChecks))
                 {
                     RiskyRoute = Path;
+                    RiskyContactStatus = ContactStatus;
+                    RiskyContactReason = ContactReason;
                     RiskyRouteScore = Score;
                     Path.Length = 0;
                 }
@@ -2388,6 +2394,11 @@ static function bool ChooseMove(XComGameState_Unit UnitState,
                 UnitState.IsConcealed(), true, true,
                 class'APX_ConcealmentPlanner'.default.ConcealmentRiskPenalty)
             + FMin(18.0, RiskyRouteCoverRisk));
+        if (bInspectContact)
+            `log("Contact envelope|unit=" $ UnitState.ObjectID
+                $ "|horizon_ai_turns=0|status=" $ RiskyContactStatus
+                $ "|reason=" $ RiskyContactReason
+                $ "|source=risky_fallback", true, 'AutoplayXCom2');
         return true;
     }
     if (Path.Length < 2 && LocalFallbackPath.Length > 1)
