@@ -133,7 +133,12 @@ w `ChooseMove` oraz spokojny `ExplorationPlanner`.
 Bezpieczny powrót jest przechowywany jako
 `MemoryFallbackPath`; jeśli nie ma dostatecznie
 użytecznego legalnego alternatywnego ruchu, pozostaje
-legalny backtrack. Stary hard filter pozostaje wyłącznie
+legalny backtrack. Zarówno ten przypadek w MissionPlanner,
+jak i jedyna legalna trasa w ExplorationPlanner utrzymują
+minimalny dodatni score 8.0, aby sama kara pamięci nie
+wywoływała fałszywego `StatusNoPlan`; alternatywy nadal
+konkurują o lepsze wartości i natywna legalność pozostaje
+oddzielną bramką. Stary hard filter pozostaje wyłącznie
 w `VisitedPositions` bieżącej tury (bez wprowadzania
 odrzuconego cross-turn hard ban PR #11). Dodatkowy, wąski
 wyjątek od tego historycznego filtra dopuszcza rzeczywisty
