@@ -75,11 +75,14 @@ static function bool BuildSnapshot(XComGameState_Unit Soldier,
     local XComGameState_InteractiveObject Interactive;
     local XComGameState_AIGroup Group;
     local int Index, Scanned;
+    local float PatrolDistanceSq, BestPatrolDistanceSq;
+    local vector ScoutPosition;
     local string PatrolReason;
 
     KnownUnits.Length = 0;
     KnownInteractives.Length = 0;
     PatrolGroup.ObjectID = 0;
+    BestPatrolDistanceSq = 1000000000000.0;
     Reason = "none";
     if (Soldier == none || `XCOMHISTORY == none || `XWORLD == none
         || `TACTICALRULES == none)
@@ -135,6 +138,7 @@ static function bool BuildSnapshot(XComGameState_Unit Soldier,
 
     // Patrol lists and their clock may be stale. We check all groups once,
     // including member-ref budget. The waypoint NEVER narrows a safety radius.
+    ScoutPosition = `XWORLD.GetPositionFromTileCoordinates(Soldier.TileLocation);
     foreach `XCOMHISTORY.IterateByClassType(class'XComGameState_AIGroup', Group)
     {
         if (RemainingGroups <= 0)
@@ -156,13 +160,19 @@ static function bool BuildSnapshot(XComGameState_Unit Soldier,
                 return false;
             }
         }
-        else if (PatrolGroup.ObjectID == 0)
+        else
         {
-            // Share already-validated, actually stored current waypoint with
-            // #88. This is NOT a selected multi-turn route or a forecast.
-            PatrolGroup.ObjectID = Group.ObjectID;
-            PatrolWaypoint = `XWORLD.GetTileCoordinatesFromPosition(
-                Group.CurrentTargetLocation);
+            // Prefer the nearest VALID current waypoint, not the iteration
+            // order of arbitrary AIGroup state IDs. It remains only a
+            // snapshot ranking, never a native future route forecast.
+            PatrolDistanceSq = VSizeSq(Group.CurrentTargetLocation - ScoutPosition);
+            if (PatrolGroup.ObjectID == 0 || PatrolDistanceSq < BestPatrolDistanceSq)
+            {
+                BestPatrolDistanceSq = PatrolDistanceSq;
+                PatrolGroup.ObjectID = Group.ObjectID;
+                PatrolWaypoint = `XWORLD.GetTileCoordinatesFromPosition(
+                    Group.CurrentTargetLocation);
+            }
         }
     }
     Reason = "current_known_contacts";
