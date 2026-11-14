@@ -62,6 +62,54 @@ w #79. Pełna zgodność native award/decay wymaga dokładnego porównania
 z wynikiem silnika na tych samych zdarzeniach. Brak ujawnionych
 ciał native C++ nie jest dowodem, że punkty są równe.
 
+## Dodatkowy audyt źródeł prywatnego WOTC SDK — disposition
+
+Przeprowadziłem niezależne porównanie istniejącego
+`APX_LegacyObservedV3.OnCivilianRescued` z prawdziwym źródłem
+zdarzenia gry: `XComGame/Classes/X2AIBTDefaultActions.uc:1222`
+emituje `CivilianRescued`, przekazując w `EventData` żołnierza
+ratownika, a w `EventSource` ratowanego cywila. Tę konwencję
+potwierdza `AnalyticsManager.uc:354`. Obecny observer w
+`APX_LegacyObservedV3.uc` poprawnie przypisuje
+`Rescuer = EventData`, `Civilian = EventSource`.
+**Hipoteza o odwróconych argumentach była błędna — odrzucona,
+nie wprowadzono niepotrzebnej zmiany.** Natywny
+`XComGameState_LadderProgress.OnCivilianRescued` w
+`:1395–1412` deleguje do `XComGameState_ChallengeScore.AddCivilianRescued`,
+której ciało jest native i nie można z samej deklaracji odtworzyć
+wszystkich warunków przyznania nagrody. Brak dowodu, że samo
+`bRemovedFromPlay` cywila po wczytaniu oznacza akcję ratunku
+dokonaną przez XCOM (możliwe inne przyczyny). Dlatego **late
+civilian replay: UNSUPPORTED**, bez przyznawania punktów
+na podstawie bieżącej flagi. Potrzebny byłby dowiedziony
+historyczny event/context ze źródłem i unikalnym ID cywila
+oraz zgodność z natywną kwalifikacją.
+
+`X2ChallengeModeDataStructures.uc:350–367` posiada stawki
+`SpawnedPoints`, `ReinforcementPoints`, `DisabledPoints`,
+`MinDisabledPoints`. Istnienie pól nie dowodzi, że obecne
+`NewSpawnedUnit` odróżnia wszystkie posiłki ani że niepełne
+`GetPreviousTeam` lub koniec gry kwalifikują disabled.
+`XComGameState_ChallengeScore.uc:18–24` wystawia native
+`AddKillMail`, `AddCompletedObjective`,
+`AddCivilianRescued`, lecz nie zawiera ich ciał.
+**Reinforcement/disabled: nadal UNSUPPORTED** dla niepotwierdzonych
+przypadków; wymagana autentyczna klasyfikacja z native zdarzenia
+oraz porównanie nagrody z obserwowanym `score_delta` na tym
+samym `history` i `ObjectID`.
+
+`XComGameState_LadderProgress.uc:116` deklaruje
+`RestartScorePenalty`, a `UIPauseMenu.uc:541`
+przekazuje go do parametru menu restartu. Nie jest to
+dowód, że samo `restart_requested` może bezpiecznie odtworzyć
+przyznaną karę końcową. **Restart/bonus: UNSUPPORTED**
+bez potwierdzonego natywnego księgowania w historii
+i kompletności przed/po load. `TurnOffset` i
+`DecreasePerTurn` potwierdzają konfigurację, ale exact
+decay/qualification C++ wymaga native delta dla granicznych tur.
+To świadoma decyzja: brak nowych fikcyjnych punktów,
+zachowany v3 partial i brak automatycznej oficjalności.
+
 ## Walidacja i końcowa bramka
 
 `tests/test_runtime_v3_provenance.py` uruchamia prawdziwy analizator
