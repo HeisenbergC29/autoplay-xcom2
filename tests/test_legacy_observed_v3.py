@@ -27,6 +27,9 @@ class LegacyObservedV3Contracts(unittest.TestCase):
         cls.hud = HUD.read_text(encoding="utf-8-sig")
         cls.rec = REC.read_text(encoding="utf-8-sig")
         cls.decay = staticmethod(load_uc_function(V3, "DecayedPoints"))
+        cls.classify = staticmethod(load_uc_function(V3, "ClassifyEnemyOrigin"))
+        cls.penalty = staticmethod(load_uc_function(V3, "SoldierPenaltyPoints"))
+        cls.supported = staticmethod(load_uc_function(V3, "InstalledRateCountsSupported"))
 
     def test_historical_v2_preserved_and_new_v3_has_distinct_identity(self):
         self.assertIn('return "wotc_legacy_observed_v2";', self.v2)
@@ -80,21 +83,71 @@ class LegacyObservedV3Contracts(unittest.TestCase):
         body = function_body(self.v3, "ObserveUnit")
         self.assertIn("GetUnitValue('NewSpawnedUnit', SpawnedValue)", body)
         self.assertIn('eReturnType_Reference, StartIndex', body)
-        self.assertIn('if (!bExplicitSpawned && StartingEnemy == none)', body)
+        self.assertIn('if (bVerifiedTacticalStart)', body)
+        self.assertIn('StartingEnemy.IsEnemyTeam(eTeam_XCom)', body)
+        self.assertIn('Origin = ClassifyEnemyOrigin(', body)
+        self.assertIn('UnitState.GetPreviousTeam() == eTeam_XCom', body)
+        self.assertIn('if (Origin < 0)', body)
         self.assertIn('bUnresolvedEnemyOrigins = true', body)
         self.assertIn('++UnresolvedOriginCount', body)
-        self.assertIn('EnemyPoints(', body)
-        self.assertLess(body.index('if (!bExplicitSpawned && StartingEnemy == none)'),
+        self.assertIn('Units[Index].TemplateName, Turn, Origin == 1)', body)
+        self.assertLess(body.index('if (Origin < 0)'),
                         body.index('EnemyPoints('))
         self.assertNotIn('ReinforcementPoints', body)
         # Born after tactical start but without explicit spawn marker is UNKNOWN,
         # not evidence of normal/native reinforcement scoring.
         self.assertNotIn('Score += Rate.StartingPoints', self.v3)
 
+    def test_archive_presence_does_not_establish_ordinary_enemy_origin(self):
+        # (spawned, verified tactical start, start unit exists,
+        #  started XCOM, started enemy, native previous team XCOM)
+        self.assertEqual(self.classify(False, True, True, False, True, False), 0)
+        for facts in (
+                (False, False, True, False, True, False),  # arbitrary archive
+                (False, True, False, False, False, False),  # late unknown origin
+                (False, True, True, False, False, False),  # start neutral/ally
+                (False, False, False, False, False, False)):
+            with self.subTest(facts=facts):
+                self.assertEqual(self.classify(*facts), -1)
+
+    def test_dead_controlled_former_xcom_never_becomes_an_enemy_award(self):
+        for facts in (
+                (False, True, True, True, False, False),  # verified own at start
+                (False, False, True, False, True, True),  # archive, known previous XCOM
+                (True, False, False, False, False, True),  # own spawned unit
+                (True, True, True, True, False, False)):
+            with self.subTest(facts=facts):
+                self.assertEqual(self.classify(*facts), -1)
+        # Explicit native spawn classification does not require a start snapshot.
+        self.assertEqual(self.classify(True, False, False, False, False, False), 1)
+
+    def test_initial_owner_and_archive_guard_are_bound_to_the_observer(self):
+        ensure = function_body(self.v3, "EnsureMission")
+        self.assertIn('StartState = History.GetGameStateFromHistory(CurrentStart)', ensure)
+        self.assertIn('XComGameStateContext_TacticalGameRule(StartState.GetContext())', ensure)
+        self.assertIn('StartContext.GameRuleType == eGameRule_TacticalGameStart', ensure)
+        index = function_body(self.v3, "UnitIndex")
+        self.assertIn('if (bVerifiedTacticalStart)', index)
+        self.assertIn('StartingUnit.GetAssociatedPlayerID() == OwnerPlayerID', index)
+        self.assertIn('StartingUnit.GetTeam() == eTeam_XCom', index)
+        self.assertNotIn('Entry.bOriginalFriendly = bFriendly', index)
+        self.assertIn('if (Units[Index].bEligible)', function_body(self.v3, 'GetObservedScore'))
+        cleanup = function_body(self.v3, 'Cleanup')
+        self.assertIn('bVerifiedTacticalStart = false;', cleanup)
+
+    def test_missing_or_oversized_installed_tables_cannot_use_truncated_fallback(self):
+        for counts in ((1, 1), (134, 116), (512, 512)):
+            with self.subTest(counts=counts):
+                self.assertTrue(self.supported(*counts))
+        for counts in ((0, 116), (134, 0), (513, 116), (134, 513), (-1, 116)):
+            with self.subTest(counts=counts):
+                self.assertFalse(self.supported(*counts))
+        self.assertIn('return InstalledRateCountsSupported(', function_body(self.v3, 'HasInstalledRates'))
+
     def test_first_wound_and_loss_are_stock_negative_rates(self):
         soldier = function_body(self.v3, "SoldierPoints")
-        self.assertIn('Points -= Rate.UninjuredBonus', soldier)
-        self.assertIn('Points -= Rate.WoundedBonus', soldier)
+        self.assertIn('return SoldierPenaltyPoints(bEligible, bWounded, bLost,', soldier)
+        self.assertIn('Rate.UninjuredBonus, Rate.WoundedBonus', soldier)
         observed = function_body(self.v3, "ObserveUnit")
         self.assertIn('!UnitState.bMissionProvided', observed)
         self.assertIn('UnitState.GetPreviousTeam() == eTeam_XCom', observed)
@@ -103,11 +156,28 @@ class LegacyObservedV3Contracts(unittest.TestCase):
         rescued = function_body(self.v3, "GetObservedScore")
         self.assertIn('DefaultSoldierScoring.RescuedCivilianBonus', rescued)
 
+    def test_zero_or_negative_native_bonus_never_awards_points_for_a_wound_or_loss(self):
+        cases = (
+            ((True, True, True, 1000, 5000), -6000),
+            ((True, True, False, 1000, 5000), -1000),
+            ((True, False, True, 1000, 5000), -5000),
+            ((True, False, False, 1000, 5000), 0),
+            ((False, True, True, 1000, 5000), 0),
+            ((True, True, True, 0, 0), 0),
+            ((True, True, True, -1000, -5000), 0),
+            ((True, True, True, -1000, 5000), -5000),
+            ((True, True, True, 1000, -5000), -1000),
+        )
+        for facts, expected in cases:
+            with self.subTest(facts=facts):
+                self.assertEqual(self.penalty(*facts), expected)
+
     def test_partial_coverage_is_permanent_until_native_parity_is_proven(self):
         self.assertIn("partial_unknown_enemy_origin", self.v3)
         self.assertIn("partial_objective_civilian_listener_started_late", self.v3)
         self.assertIn("partial_native_disabled_restart_bonus_unverified", self.v3)
-        self.assertIn('bEarlyEventCoverage = CurrentIndex <= CurrentStart + 1;', self.v3)
+        self.assertIn('bEarlyEventCoverage = bVerifiedTacticalStart && CurrentIndex <= CurrentStart + 1;', self.v3)
+        self.assertIn('partial_unverified_tactical_start', self.v3)
         self.assertIn('bUnresolvedEnemyOrigins = false;', self.v3)
         self.assertIn('if (!EnsureMission() || !HasInstalledRates())', self.v3)
         self.assertIn('return "~" $ string(ComparisonPoints) $ "/" $ UnavailableText()', self.hud)
@@ -148,6 +218,8 @@ class LegacyObservedV3SDKContracts(unittest.TestCase):
         for native_fact in (
             'LadderData.CumulativeScore -= SoldierScoring.UninjuredBonus',
             'LadderData.CumulativeScore -= SoldierScoring.WoundedBonus',
+            'if (SoldierScoring.UninjuredBonus > 0)',
+            'if (SoldierScoring.WoundedBonus > 0)',
             "'NewSpawnedUnit'", "'LadderKilledScored'"
         ):
             self.assertIn(native_fact, ladder)
