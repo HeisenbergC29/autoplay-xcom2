@@ -2091,8 +2091,8 @@ static function bool ChooseMove(XComGameState_Unit UnitState,
     optional out int RemainingContactLOS,
     optional APX_RouteTempo RouteTempo, optional int CurrentTurn,
     optional bool bActivePatrolPreparation, optional bool bRecentContact,
-    optional out TTile SelectedRouteGoal, optional out bool bAcceptedRoutine,
-    optional out bool bFirstBlueClear)
+    optional out TTile SelectedRouteGoal, optional out int iAcceptedRoutine,
+    optional out int iFirstBlueClear)
 {
     local XGUnit UnitVisualizer;
     local array<TTile> Tiles, CandidatePath, RiskyRoute, LocalFallbackPath, MemoryFallbackPath;
@@ -2117,8 +2117,8 @@ static function bool ChooseMove(XComGameState_Unit UnitState,
 
     Path.Length = 0;
     Score = 0;
-    bAcceptedRoutine = false;
-    bFirstBlueClear = false;
+    iAcceptedRoutine = 0;
+    iFirstBlueClear = 0;
     if (!HasLegalMove(UnitState)
         || !FindGoal(UnitState, Goal, VisibleEnemies,
             BerserkerFocusTargetID, bBerserkerFocusGoal,
@@ -2296,8 +2296,8 @@ static function bool ChooseMove(XComGameState_Unit UnitState,
                     }
                     else
                     {
-                        bAcceptedRoutine = bInspectContact;
-                        bFirstBlueClear = bSingleBlue && ContactStatus == 0;
+                        iAcceptedRoutine = bInspectContact ? 1 : 0;
+                        iFirstBlueClear = bSingleBlue && ContactStatus == 0 ? 1 : 0;
                         if (bSecondBlue)
                             `log("Sequential blue second-leg|unit=" $ UnitState.ObjectID
                                 $ "|goal_x=" $ GoalTile.X
@@ -2497,8 +2497,8 @@ static function bool ChooseMove(XComGameState_Unit UnitState,
     {
         Path = MemoryFallbackPath;
         Score = MemoryFallbackScore;
-        bAcceptedRoutine = bInspectContact;
-        bFirstBlueClear = bSingleBlue;
+        iAcceptedRoutine = bInspectContact ? 1 : 0;
+        iFirstBlueClear = bSingleBlue ? 1 : 0;
         return true;
     }
     if (Path.Length < 2)
@@ -2525,8 +2525,8 @@ static function bool ChooseMove(XComGameState_Unit UnitState,
     {
         Path = MemoryFallbackPath;
         Score = MemoryFallbackScore;
-        bAcceptedRoutine = bInspectContact;
-        bFirstBlueClear = bSingleBlue;
+        iAcceptedRoutine = bInspectContact ? 1 : 0;
+        iFirstBlueClear = bSingleBlue ? 1 : 0;
         return true;
     }
     // Once all alternatives failed, allow necessary progress with the same
@@ -2539,7 +2539,7 @@ static function bool ChooseMove(XComGameState_Unit UnitState,
                 class'APX_ConcealmentPlanner'.default.ConcealmentRiskPenalty)
             + FMin(18.0, LocalFallbackCoverRisk));
     }
-    bAcceptedRoutine = bInspectContact && !bUsedLocalFallback;
-    bFirstBlueClear = bAcceptedRoutine && bSingleBlue && bBestBlueFullyClear;
+    iAcceptedRoutine = bInspectContact && !bUsedLocalFallback ? 1 : 0;
+    iFirstBlueClear = iAcceptedRoutine > 0 && bSingleBlue && bBestBlueFullyClear ? 1 : 0;
     return true;
 }
