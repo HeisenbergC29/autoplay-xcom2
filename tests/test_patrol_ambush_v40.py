@@ -88,6 +88,10 @@ class PatrolAmbushSourceContracts(unittest.TestCase):
                     "bExpired = true", "setup_wait_limit", "urgent_mission_preempts",
                     "patrol_evidence_unknown"):
             self.assertIn(key, refresh)
+        self.assertIn("verified_group_entered_contact", refresh)
+        self.assertIn("GetImmediateThreats(", refresh)
+        self.assertIn("CurrentEnemies.Length <= 24", refresh)
+        self.assertIn("Group.m_arrMembers.Find('ObjectID',", refresh)
         self.assertIn("StartTurn = INDEX_NONE;", reset)
         self.assertIn("OrderedReactions = 0;", reset)
         self.assertIn("PatrolAmbushPlanner.Reset();",
@@ -134,6 +138,10 @@ class PatrolAmbushSourceContracts(unittest.TestCase):
                     "CanDeferOpener(", "MaxReactionSupport",
                     "RemainingLOS <= 0", "--RemainingLOS;"):
             self.assertIn(key, support)
+        self.assertIn("Enemy.GetMyTemplate().UnitSize != 1", support)
+        self.assertIn("Soldier.GetMyTemplate().UnitSize != 1", support)
+        self.assertIn("Soldier.GetMyTemplate().UnitSize != 1",
+                      function_body(self.ambush, "ChooseApproach"))
         self.assertIn("Candidate.AvailableCode != 'AA_Success'", opener)
         self.assertIn("PatrolAmbushPlanner.ChooseReactionSupport(", decision)
         self.assertIn("CanUseAction(PatrolSupporter, PatrolReaction", decision)
@@ -153,6 +161,9 @@ class PatrolAmbushSourceContracts(unittest.TestCase):
             self.assertIn(token, decision)
         self.assertNotIn("GameStateMoveUnitSingle(", self.ambush)
         self.assertNotIn("ActivateAbility_ReturnContext(", self.ambush)
+        self.assertIn("BestScore < 80.0", decision)
+        self.assertIn('FocusBattle.MapData.ActiveMission.sType != "SabotageTransmitter"', decision)
+        self.assertIn("PatrolApproachScore > BestScore + 6.0", decision)
         self.assertIn("MaxSetupTurns=2", INI.read_text(encoding="utf-8-sig"))
         self.assertIn("MaxReactionSupport=3", INI.read_text(encoding="utf-8-sig"))
         self.assertIn("mission-report-v40",
