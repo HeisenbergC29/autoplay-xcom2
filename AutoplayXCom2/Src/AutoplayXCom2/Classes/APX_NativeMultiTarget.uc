@@ -6,7 +6,8 @@
 // AllUnits.bUseAbilitySourceAsPrimaryTarget governs relationship selection,
 // NOT the final fired primary target (see stock Faceoff_BuildVisualization).
 class APX_NativeMultiTarget extends Object
-    dependson(X2GameRuleset, X2TacticalGameRulesetDataStructures);
+    dependson(X2GameRuleset, XComGameState_Ability,
+        X2TacticalGameRulesetDataStructures);
 
 static function bool SupportedFaceoff(XComGameState_Unit Shooter,
     XComGameState_Ability Ability)
