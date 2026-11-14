@@ -195,7 +195,7 @@ class PatrolAmbushSourceContracts(unittest.TestCase):
         self.assertIn("PatrolApproachScore > BestScore + 6.0", decision)
         self.assertIn("PatrolAmbushPlanner.CanWaitForContact()", decision)
         self.assertIn('MissionRecorder.Marker("patrol_ambush_wait"', decision)
-        self.assertIn("RequestEndTurn(PC); // Native confirmed end-turn ticket", decision)
+        self.assertIn("RequestEndTurn(PC);", decision)
         self.assertIn("StopWithStatus(\"No constructive action", decision)
         self.assertIn("PatrolScout = UnitState", decision)
         self.assertIn("MaxSetupTurns=2", INI.read_text(encoding="utf-8-sig"))
