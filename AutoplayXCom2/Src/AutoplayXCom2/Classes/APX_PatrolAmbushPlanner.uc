@@ -2,7 +2,8 @@
 // next-turn paths are VARIANTS (uncertain), not predicted native AI choices.
 // State stays runtime-local and is reset at OFF, rewind and battle changes.
 class APX_PatrolAmbushPlanner extends Object config(AutoplayXCom2)
-    dependson(X2GameRulesetVisibilityDataStructures);
+    dependson(X2GameRuleset, X2TacticalGameRulesetDataStructures,
+        X2GameRulesetVisibilityDataStructures, XGTacticalGameCoreNativeBase);
 
 var config bool EnablePatrolAmbush;
 var config int MaxSetupTurns;
