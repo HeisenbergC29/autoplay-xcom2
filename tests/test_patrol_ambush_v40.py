@@ -24,6 +24,7 @@ class PatrolAmbushNumericPolicy(unittest.TestCase):
     def setUpClass(cls):
         cls.stage = staticmethod(load_uc_function(AMBUSH, "CanStage"))
         cls.defer = staticmethod(load_uc_function(AMBUSH, "CanDeferOpener"))
+        cls.rank = staticmethod(load_uc_function(AMBUSH, "VariantPositionScore"))
 
     def test_precontact_staging_requires_native_move_and_unused_blue_ap(self):
         self.assertTrue(self.stage(True, False, False, True, 2, 0, 3, 0, 2))
@@ -44,6 +45,21 @@ class PatrolAmbushNumericPolicy(unittest.TestCase):
         ):
             with self.subTest(args=args):
                 self.assertFalse(self.stage(*args))
+
+    def test_competing_lanes_unknown_contact_and_exposure_have_real_ranking(self):
+        safe_three = self.rank(6.0, 3, True, 12.0, 0.0, 0, 8.0)
+        safe_one = self.rank(6.0, 1, False, 12.0, 0.0, 0, 8.0)
+        unknown_three = self.rank(6.0, 3, True, 12.0, 0.0, -1, 8.0)
+        exposed_three = self.rank(6.0, 3, True, 12.0, 10.0, 0, 8.0)
+        self.assertEqual(safe_three, 88.0)
+        self.assertEqual(safe_one, 64.0)
+        self.assertEqual(unknown_three, 80.0)
+        self.assertEqual(exposed_three, 73.0)
+        self.assertGreater(safe_three, unknown_three)
+        self.assertGreater(unknown_three, safe_one)
+        self.assertLess(self.rank(6, 3, True, 12, 0, 1, 8), -1000)
+        self.assertLess(self.rank(0, 3, True, 12, 0, 0, 8), -1000)
+        self.assertLess(self.rank(6, 0, True, 12, 0, 0, 8), -1000)
 
     def test_only_legal_current_opener_with_support_can_delay_direct_shot(self):
         self.assertTrue(self.defer(True, False, False, 250.0, 2, 0, 3, 60.0))
