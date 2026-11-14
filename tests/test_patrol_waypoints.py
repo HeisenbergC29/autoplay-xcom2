@@ -115,6 +115,7 @@ class PatrolKnowledgeContracts(unittest.TestCase):
         self.assertIn('LastPatrolObservationTurn = -1;', function_body(self.recorder, 'Start'))
 
     def test_no_additional_private_enemy_state_or_future_decision_is_inspected(self):
+        reader = function_body(self.source, 'GetCurrentPatrolWaypoint')
         scan = function_body(self.recorder, 'RecordCurrentPatrolWaypoints')
         for body in (self.source, scan):
             for forbidden in ('IsEngaged(', 'HasAbsoluteKnowledge(', 'GetCurrentStat(',
