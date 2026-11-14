@@ -22,6 +22,19 @@ class NativeMultiTargetMath(unittest.TestCase):
     def setUpClass(cls):
         cls.score = staticmethod(load_uc_function(NATIVE, "ScoreFaceoffOutcome"))
         cls.damage = staticmethod(load_uc_function(COMBAT, "ScoreDamage"))
+        cls.weapon = staticmethod(load_uc_function(NATIVE, "SupportsFaceoffWeapon"))
+
+    def test_pistol_subset_rejects_extra_applied_effect_ammo_and_upgrade_channels(self):
+        self.assertTrue(self.weapon(True, True, 0, 0, False, False))
+        # A disabled bonus channel does not apply its template effects.
+        self.assertTrue(self.weapon(True, False, 1, 0, False, False))
+        for args in ((False, True, 0, 0, False, False),
+                     (True, True, 1, 0, False, False),
+                     (True, True, 0, 1, False, False),
+                     (True, True, 0, 0, True, False),
+                     (True, True, 0, 0, False, True)):
+            with self.subTest(args=args):
+                self.assertFalse(self.weapon(*args))
 
     def test_two_or_more_native_enemies_beats_one_and_protects_cooldown(self):
         self.assertLess(self.score(0, 0, 0), -1000)
@@ -60,6 +73,9 @@ class NativeMultiTargetSource(unittest.TestCase):
         for term in ("Ability.GetMyTemplateName() != 'Faceoff'",
                      "Template.TargetingMethod != class'X2TargetingMethod_TopDown'",
                      "Template.Hostility != eHostility_Offensive",
+                     "Template.AbilityToHitCalc.Class != class'X2AbilityToHitCalc_StandardAim'",
+                     "Template.AbilityTargetStyle.Class != class'X2AbilityTarget_Single'",
+                     "ToHitCalc.bOnlyMultiHitWithSuccess",
                      "X2AbilityMultiTarget_AllUnits(",
                      "Multi.Class != class'X2AbilityMultiTarget_AllUnits'",
                      "!Multi.bUseAbilitySourceAsPrimaryTarget",
@@ -70,8 +86,18 @@ class NativeMultiTargetSource(unittest.TestCase):
                      "Template.AbilityMultiTargetEffects.Length != 1",
                      "PrimaryDamageEffect.bExplosiveDamage",
                      "DamageEffect.bExplosiveDamage",
+                     "PrimaryDamageEffect.Class != class'X2Effect_ApplyWeaponDamage'",
+                     "DamageEffect.Class != class'X2Effect_ApplyWeaponDamage'",
+                     "PrimaryDamageEffect.EnvironmentalDamageAmount != 0",
+                     "DamageEffect.EnvironmentalDamageAmount != 0",
+                     "WeaponTemplate.WeaponCat == 'pistol'",
+                     "Template.bAllowBonusWeaponEffects",
+                     "WeaponTemplate.BonusWeaponEffects.Length",
+                     "Weapon.GetMyWeaponUpgradeTemplateNames()",
+                     "Ability.SourceAmmo.ObjectID > 0",
                      "Weapon.GetLoadedAmmoTemplate(Ability) != none"):
             self.assertIn(term, body)
+        self.assertNotIn("GetMyWeaponUpgradeTemplates(", body)
         self.assertNotIn("RocketLauncher", body)
         self.assertNotIn("VoidRift", body)
 
@@ -138,6 +164,10 @@ class NativeFaceoffSDK(unittest.TestCase):
         targets = (folder / "X2AbilityMultiTarget_AllUnits.uc").read_text(encoding="utf-8-sig")
         heavy = (folder / "X2Ability_HeavyWeapons.uc").read_text(encoding="utf-8-sig")
         template = (folder / "X2AbilityTemplate.uc").read_text(encoding="utf-8-sig")
+        ability_base = (folder / "X2Ability.uc").read_text(encoding="utf-8-sig")
+        damage = (folder / "X2Effect_ApplyWeaponDamage.uc").read_text(encoding="utf-8-sig")
+        weapon = (folder / "X2WeaponTemplate.uc").read_text(encoding="utf-8-sig")
+        item = (folder / "XComGameState_Item.uc").read_text(encoding="utf-8-sig")
         psi = (folder / "X2Ability_PsiOperativeAbilitySet.uc").read_text(encoding="utf-8-sig")
         for t in ("Faceoff()", "MultiTargetUnits.bUseAbilitySourceAsPrimaryTarget = true",
                   "MultiTargetUnits.bAcceptEnemyUnits = true",
@@ -152,6 +182,18 @@ class NativeFaceoffSDK(unittest.TestCase):
         faceoff_src = sharp.split("static function X2AbilityTemplate Faceoff()", 1)[1].split(
             "function Faceoff_BuildVisualization", 1)[0]
         self.assertNotIn("Template.TargetingMethod =", faceoff_src)
+        self.assertIn("ToHitCalc = new class'X2AbilityToHitCalc_StandardAim'", faceoff_src)
+        self.assertIn("ToHitCalc.bOnlyMultiHitWithSuccess = false", faceoff_src)
+        self.assertIn("Template.AbilityTargetStyle = default.SimpleSingleTarget", faceoff_src)
+        self.assertIn("Begin Object Class=X2AbilityTarget_Single Name=DefaultSimpleSingleTarget", ability_base)
+        self.assertIn("var int EnvironmentalDamageAmount;", damage)
+        # This property is defined here and has no base-class assignment;
+        # stock direct weapon damage therefore has the native int default0.
+        self.assertNotRegex(damage, r"\bEnvironmentalDamageAmount\s*=")
+        self.assertIn("BonusWeaponEffects", weapon)
+        self.assertIn("WeaponCat", weapon)
+        self.assertRegex(item, r"function\s+array<name>\s+GetMyWeaponUpgradeTemplateNames\(\)"
+                         r"\s*\{\s*return m_arrWeaponUpgradeNames;\s*\}")
         for t in ("bAcceptFriendlyUnits", "bDontAcceptNeutralUnits",
                   "bRandomlySelectOne", "GetMultiTargetOptions"):
             self.assertIn(t, targets)

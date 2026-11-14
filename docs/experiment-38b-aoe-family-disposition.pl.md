@@ -24,7 +24,7 @@ prywatnego kodu do publicznego repo):
 | --- | --- | --- |
 | `ThrowGrenade`, `LaunchGrenade` z `FragGrenade` / `AlienGrenade` | `X2Ability_GrenadierAbilitySet` / `X2Ability_DefaultAbilitySet`, `X2TargetingMethod_Grenade`, natywna trajektoria `XComPrecomputedPath` i `X2AbilityMultiTarget_Radius` | **Wdrożone wcześniej** w `APX_AreaAttackPlanner`: runtime free-aim legalna trajektoria, protected `BlastIsSafe`, `GetDamagePreview` per enemy, single/group score, pre-dispatch revalidation. |
 | `Throw/Launch` z `Firebomb`, `GasGrenade`, `AcidGrenade`, `FlashbangGrenade`, `SmokeGrenade`, `EMPGrenade`, `ProximityMine`, inne granaty | `X2Item_DefaultGrenades.uc:186–1269`: różne efekty fire/poison/acid/EMP, buff/debuff, mines/triggers i target immunities | **UNSUPPORTED** w obecnym grenade solver: nie wystarcza suma obrażeń `ApplyWeaponDamage`; trzeba source-safe native persistent effects/target immunity/world delta i specyficzne warunki zapalnika. `GetSupportedGrenade` nadal fail-closed. |
-| `Faceoff` | `X2Ability_SharpshooterAbilitySet.uc:989–1049`: native `X2AbilityMultiTarget_AllUnits`, `bUseAbilitySourceAsPrimaryTarget=true`, `bAcceptEnemyUnits=true`, osobne `X2Effect_ApplyWeaponDamage`, `X2AbilityToHitCalc_StandardAim`, **nie free-aim/cursor** | **Nowy, ograniczony source consumer** `APX_NativeMultiTarget.ScoreFaceoff`, w `APX_CombatPlanner.ChooseAction`. Tylko aktualne `AA_Success`, native `AvailableTargets`, co najmniej 2 native additional enemies, brak extra ammo, ścisły allowlist template i wszystkie widoczne hostile. Innych rodzin nie włączono. |
+| `Faceoff` | `X2Ability_SharpshooterAbilitySet.uc:989–1049`: native `X2AbilityMultiTarget_AllUnits`, `bUseAbilitySourceAsPrimaryTarget=true`, `bAcceptEnemyUnits=true`, osobne `X2Effect_ApplyWeaponDamage`, `X2AbilityToHitCalc_StandardAim`, **nie free-aim/cursor** | **Nowy, ograniczony source consumer** `APX_NativeMultiTarget.ScoreFaceoff`, w `APX_CombatPlanner.ChooseAction`. Tylko aktualne `AA_Success`, native `AvailableTargets`, primary hostile + co najmniej 1 additional enemy, ograniczony kontrakt pistoletu bez extra ammo/upgrade/applied bonus effects i wszystkie widoczne hostile. Innych rodzin nie włączono. |
 | `RocketLauncher`, `BlasterLauncher` | `X2Ability_HeavyWeapons.uc:23–85,314–377`: `X2AbilityTarget_Cursor` + `X2AbilityMultiTarget_Radius`, ale **odrębne** `X2TargetingMethod_RocketLauncher` / `X2TargetingMethod_BlasterLauncher`, specjalne native projectile / guided geometry | **UNSUPPORTED**: `X2TargetingMethod_Grenade` i jego `ComputeImpact` nie uzasadniają identycznej trajektorii/impact ani splash; wymagany odrębny native trajectory i pełny protected footprint/revalidation. |
 | `ShredderGun`, `ShredstormCannon`, `Flamethrower` / Mk2 | `X2Ability_HeavyWeapons.uc:87–314`: `X2TargetingMethod_Cone`, `X2AbilityMultiTarget_Cone`, flamethrower dodatkowo `X2Effect_ApplyFireToWorld` | **UNSUPPORTED**: cone sample nie jest radius/cursor; wymagane native full cone geometry/LOS, środowisko/fire i friendly/civilian/objective/chain collateral. |
 | `PlasmaBlaster`, `NullLance` | `X2Ability_HeavyWeapons.uc:380–444`, `X2Ability_PsiOperativeAbilitySet.uc:909–982`: `X2TargetingMethod_Line` + `X2AbilityMultiTarget_Line` | **UNSUPPORTED**: brak per-target full native line/penetration/cover geometry + source-safe cursor position. Nie przechodzi do Faceoff/grenade. |
@@ -55,11 +55,24 @@ ustawia domyślne `class'X2TargetingMethod_TopDown'`; nie jest
 to `none` i nie wolno z tego powodu odrzucać zdolności.
 Weryfikujemy tę dokładną klasę, a nie nieuprawniony
 `X2TargetingMethod_Grenade` lub inne free-aim cursory.
-Wymagamy osobnego nieradialnego `X2Effect_ApplyWeaponDamage`
-na `AbilityTargetEffects` oraz `AbilityMultiTargetEffects` i braku źródłowych
-custom ammo effects. Gdy template lub source weapon się różni,
-akcja pozostaje nieobsługiwana, zamiast być z automatu nazywana
-bezpieczną.
+LEAD zawęził dodatkowo sprawdzany kontrakt: dokładna klasa
+`X2AbilityToHitCalc_StandardAim` z niezależnymi multi-hit rolls
+(`bOnlyMultiHitWithSuccess=false`) i dokładny `X2AbilityTarget_Single`,
+jak `default.SimpleSingleTarget` z `X2Ability.uc:1686–1689`.
+Oba kanały muszą zawierać dokładny `X2Effect_ApplyWeaponDamage`,
+bez podklasy, `bExplosiveDamage` i jawnego `EnvironmentalDamageAmount`.
+Ten ostatni ma w stock efektu domyślną wartość int0; nie jest tym samym
+co `iEnvironmentDamage` samej broni.
+
+Źródłowa broń musi mieć `X2WeaponTemplate.WeaponCat='pistol'`.
+Nie dopuszczamy loaded/source ammo, zainstalowanych weapon upgrades
+ani niepustych `BonusWeaponEffects`, gdy zdolność stosuje tę listę.
+Liczba upgrade jest odczytywana z `GetMyWeaponUpgradeTemplateNames`
+(`XComGameState_Item.uc:647–650`), który tylko zwraca zapisane nazwy,
+bez getteru uzupełniającego cache upgrade templates. To konserwatywny
+podzbiór: również nieszkodliwy aim-only upgrade wyłącza tę gałąź.
+Sprawdzenia nie wykrywają każdej możliwej modyfikacji template albo
+niestandardowego kodu innego moda; nie są certyfikatem dowolnego Faceoff.
 
 `ScoreFaceoff` wymaga prawdziwego `PrimaryTarget` będącego wrogiem
 oraz 1–15 `AvailableTarget.AdditionalTargets` — w sumie
@@ -99,11 +112,17 @@ native stock visualization dowodzi strzału w osobnego pierwszego
 wroga. Jeśli prawdziwa bieżąca `AvailableTargets` nie zawiera
 legalnego, obecnie widocznego pierwszego wroga i co najmniej
 jednego kolejnego wroga, ta gałąź pozostanie nieaktywna. Stock `Faceoff`
-pozwala na dodatkowe weapon upgrade effects; obecna inspekcja
-nie jest pełnym solverem takich efektów w modowanych
-broniach ani zagrożeń przez dalszą chain reaction.
-Wszelkie nieznane szkody uboczne należy sklasyfikować jako
-UNSUPPORTED, a nie zaliczyć na podstawie samej listy celów.
+pozwala na bonus weapon effects; nowy guard odrzuca jawnie stosowany
+niepusty kanał oraz każdą zainstalowaną weapon upgrade. Nie jest to
+pełny solver wszystkich pasywnych efektów lub innego modowanego kodu.
+Nie odrzucamy zwykłych pistoletów za ich bazowe `iEnvironmentDamage`:
+`X2Effect_ApplyWeaponDamage.uc:214–235` może dodać bazowe obrażenia
+środowiska broni nawet przy jawnym EnvironmentalDamageAmount=0.
+Bezpośrednia lista trafianych jednostek jest sprawdzona, lecz zniszczenie
+osłony pociskiem i dalsze chain reactions **nie są certyfikowane**,
+tak samo jak w istniejącym wyborze pojedynczego strzału. Nie nazywać
+tej gałęzi pełnym collateral-safe solverem ani nie przenosić tego
+ograniczenia na granaty przez usunięcie ich dotychczasowych guardów.
 
 ## Wtórne wybuchy — konkretny brak native dowodu
 
@@ -133,7 +152,7 @@ implementacją `wysadzania samochodów`.
 prawdziwą czystą funkcję UC `ScoreFaceoffOutcome`:
 0/1/2/3/4/17 targetów, wiele mocnych kończeń,
 nieopłacalne ataki, limit bonusu. Source contracts sprawdzają
-stock dokładny template, native hit/weapon previews,
+wybrany stock kontrakt klas/efektów/broni, native hit/weapon previews,
 pełny weryfikowany current-only target list, brak
 dodania nowych `AvailableAction`, zachowane
 `BlastIsSafe/HasDangerousScenery`.

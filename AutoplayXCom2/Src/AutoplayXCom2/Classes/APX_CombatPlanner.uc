@@ -61,8 +61,8 @@ static function bool ChooseAction(XComGameState_Unit UnitState,
             continue;
         AbilityName = Ability.GetMyTemplateName();
 
-        // #38b: stock Faceoff has a NATIVE, non-cursor, self-primary
-        // ALL-ENEMY target list. It is not a grenade and must never use the
+        // #38b: stock Faceoff has a NATIVE, non-cursor, enemy-primary
+        // plus additional-enemy target list. It must never use the
         // unvalidated free-aim/radius/cone solver. The helper checks the
         // ENTIRE list including any friendly, civilian or controlled target;
         // dispatch uses the untouched current native AvailableAction.

@@ -9,12 +9,26 @@ class APX_NativeMultiTarget extends Object
     dependson(X2GameRuleset, XComGameState_Ability,
         X2TacticalGameRulesetDataStructures);
 
+// The admitted weapon subset has no extra applied effect/ammo/upgrade channel.
+// Ordinary pistol iEnvironmentDamage is separate and is NOT a zero-damage
+// certificate for indirect scenery destruction, just as with baseline shots.
+static function bool SupportsFaceoffWeapon(bool bPistol, bool bBonusEffectsEnabled,
+    int BonusEffectCount, int UpgradeCount, bool bLoadedAmmo, bool bSourceAmmo)
+{
+    return bPistol && BonusEffectCount >= 0 && UpgradeCount == 0
+        && (!bBonusEffectsEnabled || BonusEffectCount == 0)
+        && !bLoadedAmmo && !bSourceAmmo;
+}
+
 static function bool SupportedFaceoff(XComGameState_Unit Shooter,
     XComGameState_Ability Ability)
 {
     local X2AbilityTemplate Template;
     local X2AbilityMultiTarget_AllUnits Multi;
+    local X2AbilityToHitCalc_StandardAim ToHitCalc;
     local XComGameState_Item Weapon;
+    local X2WeaponTemplate WeaponTemplate;
+    local array<name> UpgradeNames;
     local X2Effect_ApplyWeaponDamage DamageEffect, PrimaryDamageEffect;
 
     if (Shooter == none || Ability == none
@@ -25,9 +39,15 @@ static function bool SupportedFaceoff(XComGameState_Unit Shooter,
     if (Template == none || Template.Hostility != eHostility_Offensive
         || Template.TargetingMethod != class'X2TargetingMethod_TopDown'
         || Template.AbilityToHitCalc == none
+        || Template.AbilityToHitCalc.Class != class'X2AbilityToHitCalc_StandardAim'
+        || Template.AbilityTargetStyle == none
+        || Template.AbilityTargetStyle.Class != class'X2AbilityTarget_Single'
         || Template.AbilityTargetEffects.Length != 1
         || Template.AbilityMultiTargetEffects.Length != 1)
         return false;
+    ToHitCalc = X2AbilityToHitCalc_StandardAim(Template.AbilityToHitCalc);
+    if (ToHitCalc.bOnlyMultiHitWithSuccess)
+        return false; // Stock Faceoff rolls independently for each enemy.
     Multi = X2AbilityMultiTarget_AllUnits(Template.AbilityMultiTargetStyle);
     if (Multi == none || Multi.Class != class'X2AbilityMultiTarget_AllUnits'
         || !Multi.bUseAbilitySourceAsPrimaryTarget || !Multi.bAcceptEnemyUnits
@@ -37,13 +57,24 @@ static function bool SupportedFaceoff(XComGameState_Unit Shooter,
     PrimaryDamageEffect = X2Effect_ApplyWeaponDamage(Template.AbilityTargetEffects[0]);
     DamageEffect = X2Effect_ApplyWeaponDamage(Template.AbilityMultiTargetEffects[0]);
     if (PrimaryDamageEffect == none || PrimaryDamageEffect.bExplosiveDamage
-        || DamageEffect == none || DamageEffect.bExplosiveDamage)
+        || PrimaryDamageEffect.Class != class'X2Effect_ApplyWeaponDamage'
+        || PrimaryDamageEffect.EnvironmentalDamageAmount != 0
+        || DamageEffect == none || DamageEffect.bExplosiveDamage
+        || DamageEffect.Class != class'X2Effect_ApplyWeaponDamage'
+        || DamageEffect.EnvironmentalDamageAmount != 0)
         return false;
     Weapon = Ability.GetSourceWeapon();
-    // Unknown ammo splash/delayed effects are not silently modeled as bullets.
-    if (Weapon == none || Weapon.GetLoadedAmmoTemplate(Ability) != none)
+    if (Weapon == none)
         return false;
-    return true;
+    WeaponTemplate = X2WeaponTemplate(Weapon.GetMyTemplate());
+    if (WeaponTemplate == none)
+        return false;
+    // Names are a direct read; resolving upgrade templates mutates a cache.
+    UpgradeNames = Weapon.GetMyWeaponUpgradeTemplateNames();
+    return SupportsFaceoffWeapon(WeaponTemplate.WeaponCat == 'pistol',
+        Template.bAllowBonusWeaponEffects, WeaponTemplate.BonusWeaponEffects.Length,
+        UpgradeNames.Length, Weapon.GetLoadedAmmoTemplate(Ability) != none,
+        Ability.SourceAmmo.ObjectID > 0);
 }
 
 // One real source-executed scoring rule, not an asserted certain kill.
