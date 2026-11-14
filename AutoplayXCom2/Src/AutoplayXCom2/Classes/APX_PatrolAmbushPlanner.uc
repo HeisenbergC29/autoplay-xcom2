@@ -322,6 +322,34 @@ function bool ChooseApproach(XComGameState_Unit Soldier,
     return Path.Length > 1;
 }
 
+// An opener MUST be the native legal shot against a member of this stored
+// current group, never merely an estimated corridor or a fake target.
+function bool IsActualOpener(AvailableAction Candidate, int TargetIndex,
+    XComGameState_Unit Soldier)
+{
+    local XComGameState_Ability Ability;
+    local XComGameState_AIGroup Group;
+    local int EnemyID;
+
+    if (GroupID <= 0 || Soldier == none
+        || Candidate.AvailableCode != 'AA_Success'
+        || TargetIndex < 0 || TargetIndex >= Candidate.AvailableTargets.Length)
+        return false;
+    Ability = XComGameState_Ability(`XCOMHISTORY.GetGameStateForObjectID(
+        Candidate.AbilityObjectRef.ObjectID));
+    Group = XComGameState_AIGroup(`XCOMHISTORY.GetGameStateForObjectID(GroupID));
+    if (Ability == none || Group == none
+        || Ability.OwnerStateObject.ObjectID != Soldier.ObjectID
+        || Ability.GetMyTemplate() == none
+        || Ability.GetMyTemplate().Hostility != eHostility_Offensive
+        || (Ability.GetMyTemplateName() != 'StandardShot'
+            && Ability.GetMyTemplateName() != 'PistolStandardShot'
+            && Ability.GetMyTemplateName() != 'SniperStandardFire'))
+        return false;
+    EnemyID = Candidate.AvailableTargets[TargetIndex].PrimaryTarget.ObjectID;
+    return Group.m_arrMembers.Find('ObjectID', EnemyID) != INDEX_NONE;
+}
+
 // Readiness is a current real native action; projected lanes are only hints.
 // This method cannot create an enemy target or bypass available-action checks.
 function bool ChooseReactionSupport(int PlayerID, XComGameState_Unit Opener,
