@@ -84,7 +84,16 @@ pozostaje dotychczasowy blue+OW/interaction/wycofanie.
    zostaje odrzucony; **stary RiskyRoute i LocalFallback
    nie mogą go przywrócić**. Następny ruch nigdy nie jest
    przewidywany i wysłany przed potwierdzeniem pierwszego.
-4. Sekwencja ustępuje każdej już legalnej natywnej
+4. Bramka `APX_RouteTempo.IsRoutineTempoContext` rozdziela
+   rzeczywistą pilność od ukrycia. Zarówno **ujawniony**, jak
+   i ukryty żołnierz może otrzymać pierwsze/dozwolone drugie
+   blue, jeżeli faktyczna obecna trasa pozostaje Clear po
+   `APX_ContactEnvelope`, exposure, explosive cover i
+   odpowiednich native sprawdzeniach. Stara flaga
+   `ConcealmentIsUrgent` obejmuje samo `!IsConcealed()`;
+   jej użycie jako tempo veto błędnie odcinało całe
+   ujawnione jednostki — naprawione i sprawdzone testem.
+5. Sekwencja ustępuje każdej już legalnej natywnej
    `ChooseInteraction`: nie wydaje AP potrzebnego na gotowe
    Interact/Hack/Plant. Jest wyłączona dla aktywnego/recent contact,
    rzeczywiście staged/armed zasadzki, wykrwawiania, ewakuacji,
