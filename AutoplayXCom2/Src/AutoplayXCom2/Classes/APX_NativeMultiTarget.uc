@@ -23,7 +23,7 @@ static function bool SupportedFaceoff(XComGameState_Unit Shooter,
         return false;
     Template = Ability.GetMyTemplate();
     if (Template == none || Template.Hostility != eHostility_Offensive
-        || Template.TargetingMethod != none
+        || Template.TargetingMethod != class'X2TargetingMethod_TopDown'
         || Template.AbilityToHitCalc == none
         || Template.AbilityTargetEffects.Length != 1
         || Template.AbilityMultiTargetEffects.Length != 1)
