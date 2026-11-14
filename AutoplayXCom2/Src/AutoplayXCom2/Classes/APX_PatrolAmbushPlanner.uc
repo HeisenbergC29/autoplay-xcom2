@@ -197,6 +197,16 @@ function name CurrentPhase()
     return Phase;
 }
 
+// One optional native turn handoff after actual, previously accepted setup.
+// Never wait for an unseen group before a concrete blue move. The same
+// original turn window expires; no new cycle for unchanged waypoint.
+function bool CanWaitForContact()
+{
+    return EnablePatrolAmbush && !bExpired && Phase == 'setup'
+        && PreparedMoves > 0 && LastTurn > StartTurn
+        && LastTurn - StartTurn < Clamp(MaxSetupTurns, 1, 3);
+}
+
 function int CurrentGroupID()
 {
     return GroupID;
