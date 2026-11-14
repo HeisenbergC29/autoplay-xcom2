@@ -74,7 +74,12 @@ read-only kopia native `AvailableTarget` do `GetShotBreakdown`
 `GetDamagePreview(..., true)` dla pierwotnego wroga oraz
 `GetDamagePreview(..., false)` dla dodatkowych, korekta pancerza i bieżącego
 HP/Shield, `APX_CombatPlanner.ScoreDamage`. `ScoreFaceoffOutcome`
-sumuje oczekiwany potencjał dwóch lub więcej osób, pobiera
+sumuje oczekiwany potencjał co najmniej dwóch **użytecznie
+trafialnych** wrogów (każdy wymaga natywnego hit chance ≥
+`APX_CombatPlanner.MinimumHitChance` i dodatniej maksymalnej
+prognozy obrażeń); wrogów z 0% / zerowym damage wciąż
+sprawdza pod kątem collateral, ale nie powiększa za nich
+wyniku. Funkcja pobiera
 niewielki koszt cooldown/zużycia AP (12) oraz maksymalnie 12
 premii za **wysoką szansę kończenia**, nigdy nazwaną
 gwarantowanym killem. Wynik bierze udział w standardowym
