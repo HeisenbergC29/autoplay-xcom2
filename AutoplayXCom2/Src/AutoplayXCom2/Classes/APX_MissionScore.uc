@@ -1,5 +1,5 @@
 // Read-only mission score for the HUD. Native points take precedence; ordinary
-// unscored missions use the separately marked, partial comparison profile.
+// unscored missions use the separately marked, partial installed-rate v3 profile.
 class APX_MissionScore extends Object
     dependson(XComGameState, X2ChallengeModeDataStructures);
 
@@ -18,7 +18,7 @@ var private int CachedBaseline;
 var private int LastHistoryIndex;
 var private bool bHasMaximum;
 var private bool bHasBaseline;
-var private APX_ComparisonScore ComparisonCounter;
+var private APX_LegacyObservedV3 ComparisonCounter;
 var private int LastNativePoints;
 var private bool bHasNativePoints;
 
@@ -241,7 +241,7 @@ function string GetText()
     if (Ladder == none && ChallengeData == none)
     {
         if (ComparisonCounter == none)
-            ComparisonCounter = new(self) class'APX_ComparisonScore';
+            ComparisonCounter = new(self) class'APX_LegacyObservedV3';
         ComparisonPoints = ComparisonCounter.GetObservedScore();
         if (!ComparisonCounter.IsReady())
             return UnavailableText();
