@@ -2077,7 +2077,14 @@ static function bool ChooseMove(XComGameState_Unit UnitState,
     optional out int RemainingConcealmentChecks,
     optional out int RemainingCoverChecks,
     optional int BerserkerFocusTargetID, optional bool bBerserkerFocusGoal,
-    optional int RangedFocusTargetID, optional bool bRangedFocusGoal)
+    optional int RangedFocusTargetID, optional bool bRangedFocusGoal,
+    optional out array<StateObjectReference> ContactUnits,
+    optional out array<StateObjectReference> ContactInteractives,
+    optional bool bContactSnapshotComplete,
+    optional string ContactSnapshotReason,
+    optional out int RemainingContactDetectors,
+    optional out int RemainingContactTiles,
+    optional out int RemainingContactLOS)
 {
     local XGUnit UnitVisualizer;
     local array<TTile> Tiles, CandidatePath, RiskyRoute, LocalFallbackPath;
@@ -2088,7 +2095,9 @@ static function bool ChooseMove(XComGameState_Unit UnitState,
     local MissionGoal Goal;
     local bool bCombatGoal, bSafe, bRequireSupport, bRoutineRoute, bSabotageRush;
     local bool bConcealmentUrgent, bCoverUrgent, bUsedLocalFallback;
-    local string ConcealmentRiskReason;
+    local string ConcealmentRiskReason, ContactReason, BestContactReason;
+    local int ContactStatus, BestContactStatus;
+    local bool bInspectContact;
     local int Index, PathIndex, SampleIndex, SampleCount;
     local float CoverRisk, RiskyRouteCoverRisk, LocalFallbackCoverRisk, RiskyRouteScore;
     local float CurrentScore, CandidateScore, BestScore, CurrentRisk, CandidateRisk, PathCost, StartSupport, BestRisk;
@@ -2121,6 +2130,10 @@ static function bool ChooseMove(XComGameState_Unit UnitState,
         HasBleedingSquadmate(UnitState), Goal.bBerserkerSabotageGoal);
     bCoverUrgent = ShouldEvacuate(UnitState) || HasBleedingSquadmate(UnitState)
         || HasActiveMissionDeadline() || Goal.bBerserkerSabotageGoal;
+    // #87 only influences routine travel. It must never displace a native
+    // rescue, timer, X4 plant/relay, combat reposition or hazard escape.
+    bInspectContact = !bCoverUrgent && !Goal.bImmediateThreats
+        && !bCombatGoal && !Goal.bBerserkerSabotageGoal;
     StartSupport = NearestSupportDistance(UnitState, UnitState.TileLocation);
     bRoutineRoute = bSabotageRush
         || CanUseRoutineRoute(Goal.bImmediateThreats,
@@ -2177,7 +2190,26 @@ static function bool ChooseMove(XComGameState_Unit UnitState,
                 if (!bCoverUrgent && UnitState.GetMyTemplate().bCanTakeCover)
                     CoverRisk = class'APX_ExplosiveCoverKnowledge'.static.InspectRiskAtTile(
                         UnitState, Path[Path.Length - 1], VisibleEnemies, RemainingCoverChecks);
-                if (CoverRisk > 0.0)
+                if (bInspectContact)
+                {
+                    ContactStatus = class'APX_ContactEnvelope'.static.AssessRoute(
+                        UnitState, Path, ContactUnits, ContactInteractives,
+                        bContactSnapshotComplete, ContactSnapshotReason, 0,
+                        RemainingContactDetectors, RemainingContactTiles,
+                        RemainingContactLOS, ContactReason);
+                    Score = ApplyConstructiveSoftPenalty(Score,
+                        class'APX_ContactEnvelope'.static.PathStatusPenalty(ContactStatus));
+                }
+                if (bInspectContact && ContactStatus == 1)
+                {
+                    // Confirmed contact is less attractive than a verified
+                    // safe local alternative; it remains a legal fallback.
+                    RiskyRoute = Path;
+                    RiskyRouteScore = Score;
+                    RiskyRouteCoverRisk = 0.0;
+                    Path.Length = 0;
+                }
+                else if (CoverRisk > 0.0)
                 {
                     // Reconsider a car-side exposed endpoint; keep a bounded
                     // fallback if every legal approach runs through this cover.
@@ -2214,6 +2246,8 @@ static function bool ChooseMove(XComGameState_Unit UnitState,
     CurrentRisk = ExposureRisk(UnitState, UnitState.TileLocation, VisibleEnemies, MeleeThreatReaches, ThreatWeights);
     HealthFraction = UnitState.GetCurrentStat(eStat_HP) / FMax(1.0, UnitState.GetMaxStat(eStat_HP));
     BestRisk = CurrentRisk;
+    BestContactStatus = -1;
+    BestContactReason = "not_inspected";
 
     // Include the closest goal tile and distribute the remaining samples over
     // the entire native list, even when tile count is just above the budget.
@@ -2278,6 +2312,16 @@ static function bool ChooseMove(XComGameState_Unit UnitState,
         }
         if (bSafe)
         {
+            if (bInspectContact)
+            {
+                ContactStatus = class'APX_ContactEnvelope'.static.AssessRoute(
+                    UnitState, CandidatePath, ContactUnits, ContactInteractives,
+                    bContactSnapshotComplete, ContactSnapshotReason, 0,
+                    RemainingContactDetectors, RemainingContactTiles,
+                    RemainingContactLOS, ContactReason);
+                CandidateScore -= class'APX_ContactEnvelope'.static.PathStatusPenalty(
+                    ContactStatus);
+            }
             // Preserve one real, legal local move BEFORE soft cover/stealth
             // penalties, including in revealed missions such as GasStation.
             // Otherwise the only path could be discarded and the squad idle.
@@ -2323,6 +2367,8 @@ static function bool ChooseMove(XComGameState_Unit UnitState,
             }
             BestScore = CandidateScore;
             BestRisk = CandidateRisk;
+            BestContactStatus = ContactStatus;
+            BestContactReason = ContactReason;
             Path = CandidatePath;
         }
     }
@@ -2346,6 +2392,14 @@ static function bool ChooseMove(XComGameState_Unit UnitState,
     }
     if (Path.Length < 2)
         return false;
+    if (bInspectContact)
+        `log("Contact envelope|unit=" $ UnitState.ObjectID
+            $ "|horizon_ai_turns=0|status=" $ BestContactStatus
+            $ "|reason=" $ BestContactReason
+            $ "|tiles_left=" $ RemainingContactTiles
+            $ "|detectors_left=" $ RemainingContactDetectors
+            $ "|los_left=" $ RemainingContactLOS,
+            true, 'AutoplayXCom2');
     if (bCombatGoal)
     {
         Score = ScoreCombatReposition(BestScore - CurrentScore, CurrentRisk, BestRisk,
