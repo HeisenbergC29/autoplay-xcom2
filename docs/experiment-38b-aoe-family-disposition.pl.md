@@ -49,6 +49,12 @@ enemy only, excluded friendly i neutral, brak random subset;
 **natywny cel główny to pierwszy wróg, nie strzelec**.
 `Faceoff_BuildVisualization` w `X2Ability_SharpshooterAbilitySet.uc:1122–1130`
 jawnie wykonuje pierwszy strzał w `PrimaryTarget`, potem pozostałe.
+**Ważna korekta kontraktu:** `Faceoff()` nie ustawia jawnie
+`Template.TargetingMethod`, ale `X2AbilityTemplate.uc:987`
+ustawia domyślne `class'X2TargetingMethod_TopDown'`; nie jest
+to `none` i nie wolno z tego powodu odrzucać zdolności.
+Weryfikujemy tę dokładną klasę, a nie nieuprawniony
+`X2TargetingMethod_Grenade` lub inne free-aim cursory.
 Wymagamy osobnego nieradialnego `X2Effect_ApplyWeaponDamage`
 na `AbilityTargetEffects` oraz `AbilityMultiTargetEffects` i braku źródłowych
 custom ammo effects. Gdy template lub source weapon się różni,
