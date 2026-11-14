@@ -6,7 +6,26 @@ poziom potwierdzenia działania.
 
 ## Baza kodu
 
-- Bieżąca rewizja przygotowywanych źródeł: `mission-report-v37`.
+- Bieżąca rewizja źródeł: **`mission-report-v38`**, merge #85
+  `49c73788a95692e588e40fc4a3df071736b91495` (reviewed head
+  `9eca03d8164b17e3676b2f8bcbba8757e87dba65`). Replay pierwszego ukończenia
+  celu odtwarza archiwalne przejścia ObjectivesList po późnym F8/load.
+  LEAD naprawił dopasowanie poprzednika publicznym stock GetObjectiveDisplay,
+  zachowując label/pełny poprawny klucz/kolejność i deduplikację nagród.
+  Granice 256 historii/odczyt oraz 128 list, wierszy i kluczy; luki pozostają
+  partial. Profil v3 nadal nie ma dowodu pełnego native parity/coverage.
+  802 prywatne testy PASS/0skip, SDK25/31 PASS, niezależny review PASS;
+  [CI229](https://github.com/HeisenbergC29/autoplay-xcom2/actions/runs/43600538339)
+  802 run = 723 PASS/79 SKIP oraz 6 kroków PowerShell PASS.
+  **Windows WOTC make i gra v38: NOT RUN.** #4 **BLOCKED** na polecenie
+  użytkownika: jeden test dopiero po całej bieżącej kolejce LEAD+HELPER #86.
+  [Skończona kolejka i następny HELPER](PREBUILD-QUEUE.pl.md),
+  [replay v38](experiment-79-objective-history-replay-v38.pl.md),
+  [rozszerzona wiedza o patrolach, wykrycie i tempo](patrol-detection-and-tempo.pl.md).
+  Nowe pozwolenie nie jest jeszcze implementacją #87/#88/#89. Typowe stock
+  patrole nie zapisują ustalonej wieloturowej trasy; nie brakuje do tego
+  kolejnego archiwum SDK. Stare instrukcje kompilacji poniżej są historyczne.
+- Poprzednia rewizja źródeł: `mission-report-v37`.
   #83/v36 wdraża osobny licznik observed_v3 z rzeczywistych zainstalowanych
   stawek config(Ladder): enemy/default, pełny klucz objective, pierwsza
   rana/strata i rescue. LEAD poprawił weryfikację prawdziwego tactical start,

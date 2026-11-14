@@ -76,19 +76,28 @@ and [docs/PROJECT-STATE.pl.md](docs/PROJECT-STATE.pl.md) before changing this pr
   grant native attack targets or make every distant contact an immediate threat.
   On 11 November 2026 the user also authorized reading the currently selected
   native patrol destination (`AIGroup.CurrentTargetLocation`) in full-intel mode.
-  This is a stored point, not a guaranteed future route or proof of engagement.
+  On 14 November 2026 the user extended this permission to all available stored
+  patrol metadata, including a full route where one actually exists, current
+  waypoints, existing path segments, patrol corridors and detection information.
+  Typical stock patrols do not store a fixed multi-turn route. Distinguish a
+  selected waypoint, an existing segment (possibly already traversed), possible
+  graph corridors and unknown data. Validate native clock, freshness and epoch;
+  incomplete/stale data cannot certify a clear corridor or a guaranteed ambush.
+  This is observational knowledge, not permission to generate future AI choices.
   Use bounded validation of active hostile members; do not read IsEngaged or
   HasAbsoluteKnowledge to classify groups. The authorized map reveal changes
   visual fog; it does not authorize other gameplay-state mutations.
 - No artificially granted AP/ammo outside normal legal ability effects, forced
   hits/victory, RNG lookahead, or enemy current AP/ammo/cooldown/charge/private-intent
-  inspection beyond the explicit current-patrol-target exception above.
+  inspection beyond the explicit stored-patrol-data exception above.
   Native bonus actions, free reloads and AP-granting abilities remain
   legitimate when available. SDK template knowledge and player observations
   remain legitimate inputs. Attacks must retain native LOS/targeting, available
   actions and AP costs, including in full-intel mode.
 - Keep runtime game-state/history reads observational. Do not move a live history
   unit temporarily to fake a shot preview. Label geometric forecasts as estimates.
+  Do not call patrol getters that mutate/refresh state or calculate a new route,
+  and do not sample future RNG. See docs/patrol-detection-and-tempo.pl.md.
 - Preserve native legality, full-route hazards, collateral/objective protection,
   rescue/loot constraints, manual OFF/pause and mission/history cache boundaries.
 - Do not remove safety checks to silence a stop. Reject/replan invalid proposals
@@ -126,3 +135,15 @@ tests actually run (including skips), limits, game test scenario and remaining
 questions. A helper marks it ready when reviewable. LEAD can merge source work
 after review/CI while explicitly tracking outstanding Windows/game validation;
 merging is not gameplay acceptance or a binary release.
+
+## Current pre-build gate — user instruction, 14 November 2026
+
+The user will compile/test only after LEAD has finished its source work and all
+currently assigned HELPER work is finished. Issue #86 and docs/PREBUILD-QUEUE.pl.md
+define this finite queue; issue #4 is BLOCKED meanwhile. Do not request another
+Windows build/game test after each individual PR. Record scenarios and NOT RUN
+evidence for the eventual combined test instead. LEAD reviews/integrates each
+topic, then supplies one final exact commit/package after the queue has no active
+claims or ready unreviewed PRs. A genuinely unavailable native/asset proof must
+have a precise documented limitation and safe fallback; it is not an implemented
+feature. Unrelated new ideas require an explicit queue change, not endless scope.

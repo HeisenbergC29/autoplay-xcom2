@@ -9,6 +9,34 @@ Gotowe zadania niezależne: [diagnostyka raportów #2](https://github.com/Heisen
 i [macierz misji #3](https://github.com/HeisenbergC29/autoplay-xcom2/issues/3).
 Osobny dowód kompilacji/gry użytkownika: [próby bieżącej wersji #4](https://github.com/HeisenbergC29/autoplay-xcom2/issues/4).
 
+## Bieżąca praca — źródła przed wspólnym testem
+
+Polecenie użytkownika z 14 XI: Windows build i próba gry dopiero po zakończeniu
+bieżących zadań LEAD oraz wszystkich przypisanych prac HELPERA. **#4 jest BLOCKED**;
+historyczne polecenia testowania poszczególnych v32–v38 poniżej nie są bieżącym
+przekazaniem. Jedna końcowa paczka powstanie po integracji skończonej
+[kolejki #86](https://github.com/HeisenbergC29/autoplay-xcom2/issues/86).
+[Zakres, zależności i kryteria końca](PREBUILD-QUEUE.pl.md).
+
+PR #85 scalony jako `49c73788a95692e588e40fc4a3df071736b91495`, runtime v38.
+LEAD poprawił natywną tożsamość celu w historycznym replay punktów: zmiana
+klucza ukończonego/failed wiersza o tym samym label nie tworzy nowej nagrody.
+802 testy z prywatnymi wejściami PASS/0skip; CI229: 723 PASS/79 SKIP,
+6 kroków PowerShell PASS. SDK25/31 i niezależny review PASS.
+**Windows make i gra v38: NOT RUN.** Licznik observed_v3 nadal partial.
+
+Użytkownik rozszerzył zgodę na wszystkie dostępne zapisane dane patroli,
+w tym pełną trasę, jeśli faktycznie istnieje. Typowy stock patrol nie ma
+ustalonej wieloturowej trasy; waypoint, cache przebytego ruchu i graf korytarzy
+mają różną wartość dowodową. Odczyt ma pozostać obserwacyjny, z oceną świeżości
+i niepewności; brak mutowania AI albo generowania przyszłych losowań.
+[Ustalenia SDK i plan wykrycia/zasadzki/tempa](patrol-detection-and-tempo.pl.md).
+
+**Następny HELPER:** najpierw #87 wspólny kontakt/wykrycie, potem zależne
+#88 zasadzka (konsoliduje #12/#31) i #89 marsz. Rzeczywiste starsze luki
+#10/#28/#38/#79 oraz skończony audyt #20 pozostają w #86. Zgłaszać claim
+plików i aktualnej bazy; do trzech PR, bez nieuzgodnionych edycji planerów.
+
 ## Podział odpowiedzialności
 
 | Obszar | Odpowiedzialny |
@@ -32,7 +60,7 @@ Obecny observed_v2 ma konkretne różnice względem konfiguracji Legacy,
 więc nie zostaje automatycznie przemianowany na oficjalny.
 [Zakres zgodności i stwierdzone różnice](scoring-policy.pl.md), issue #79.
 
-## Bieżące przekazanie — v37
+## Historyczne przekazanie — v37 (zastąpione bramką #86)
 
 LEAD przejrzał #83 i #84 oraz poprawił kwalifikację punktowanych jednostek
 i rzeczywisty wpływ celu Sweep na ocenę ruchu. Końcowe źródła mają v37;
@@ -51,7 +79,7 @@ pochodzenie/coverage w #79 oraz przeżycie/podejście w #56, z claimem,
 koordynacją wspólnych plików i następną rewizją po v37. #31 OW to dalsze P2.
 [Integracja v37](integration-2026-11-14-v37.pl.md).
 
-## Poprzednie przekazanie — v35
+## Historyczne przekazanie — v35 (zastąpione bramką #86)
 
 LEAD przejrzał i zintegrował #69 oraz #70, zachowując naprawę X4 z #78.
 Jedna końcowa paczka v35 i dokładny SHA są w #4; użytkownik wykonuje
@@ -174,6 +202,8 @@ ten punkt z ograniczoną walidacją aktywnych wrogów, tylko w pełnym
 rozpoznaniu. Usunięto IsEngaged i pozostałe prywatne filtry AI. To dane
 do oceny, jeszcze nie gotowa sekwencja zasadzki ani cała przyszła trasa.
 Zgoda nie obejmuje AP, cooldownów, RNG i innych ukrytych zamiarów.
+Opis dotyczy zgody z 11 XI; rozszerzenie zapisanych danych patrolu z 14 XI
+jest opisane na początku tego dokumentu i w AGENTS.md.
 #29 pozostaje następną pracą
 nad rzeczywistym obiektem i polem interakcji PlantBomb.
 
