@@ -2123,6 +2123,9 @@ static function bool ChooseMove(XComGameState_Unit UnitState,
 {
     local XGUnit UnitVisualizer;
     local array<TTile> Tiles, CandidatePath, RiskyRoute, LocalFallbackPath, MemoryFallbackPath;
+    local AvailableAction ReadyObjectiveAction;
+    local int ReadyObjectiveTarget;
+    local float ReadyObjectiveScore;
     local array<StateObjectReference> VisibleEnemies;
     local array<float> MeleeThreatReaches;
     local array<float> ThreatWeights;
@@ -2186,6 +2189,11 @@ static function bool ChooseMove(XComGameState_Unit UnitState,
         && !bActivePatrolPreparation && !bRecentContact
         && !ShouldEvacuate(UnitState)
         && !class'APX_HazardKnowledge'.static.NeedsPoisonEscape(UnitState);
+    // Reserving an AP for an already AVAILABLE objective interaction is
+    // more important than making another speculative blue advance.
+    if (bTempoCandidate && ChooseInteraction(UnitState,
+        ReadyObjectiveAction, ReadyObjectiveTarget, ReadyObjectiveScore))
+        bTempoCandidate = false;
     if (RouteTempo != none && bInspectContact)
         RouteTempo.SetGoal(UnitState.ObjectID, GoalTile);
     bSecondBlue = bTempoCandidate
