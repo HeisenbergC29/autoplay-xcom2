@@ -60,14 +60,23 @@ i rzeczywistych żywych członków, nie przewiduje ich przyszłego LOS.
    i resetowania zegara przez kolejne decyzje. Po wykonaniu
    **rzeczywistego zaakceptowanego** niebieskiego podejścia możliwe
    jest jedno ograniczone oczekiwanie w kolejnej własnej turze
-   poprzez zwykły `RequestEndTurn`, gdy brak konstruktywnego
+   poprzez zwykły `RequestEndTurn`. To samo okno obejmuje
+   potwierdzone natywne `Overwatch` po fazie `armed`,
+   ale nie uzbrajanie hipotetyczne; test wykonywanej funkcji
+   `CanWaitWindow` sprawdza `setup/armed`, limity
+   i `bExpired`. Oczekiwanie zachodzi tylko gdy brak konstruktywnego
    ruchu i nadal nie wystąpił timer/ratunek/evac/kontakt.
    Bez rzeczywistego podejścia lub po wyczerpaniu tego okna
    działa normalny `StatusNoPlan`/watchdog, nie sztuczne
    zawieszanie lub wymyślona akcja OW.
 3. **Podejście** tylko dla aktywnego własnego żołnierza o min. 2 AP,
-   native legal `StandardMove` i native legal affordable OW,
-   w dystansie 4–15 pól od waypointu, poza bezpośrednim kontaktem,
+   native legal `StandardMove` i native legal affordable OW.
+   Rzeczywisty `StandardMove` jest odzwierciedlany przez
+   `ActionPointsAfterBlueMove`, a konkretna wybrana zdolność
+   OW sprawdzana po przemieszczeniu przez
+   `CanAttackWithActionPoints`, łącznie z allowed AP types
+   i jej realnym kosztom — dwa standardowe AP same nie wystarczą.
+   W dystansie 4–15 pól od waypointu, poza bezpośrednim kontaktem,
    ewakuacją, timerem i ratowaniem krwawiących. Sampling max24
    z natywnych reachable tiles; koszt najwyżej native blue mobility,
    cały `BuildPathToTile` przechodzi `APX_SquadPlanner.PreparationPathIsSafe`
