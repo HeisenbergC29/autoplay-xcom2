@@ -4,7 +4,8 @@
 // Non-Ladder scoring uses those rates only for observed, qualified public events.
 class APX_LegacyObservedV3 extends Object
     dependson(XComGameState, XComGameStateContext_Ability,
-        X2StrategyGameRulesetDataStructures, X2GameRulesetVisibilityDataStructures);
+        X2StrategyGameRulesetDataStructures, X2GameRulesetVisibilityDataStructures,
+        X2ChallengeModeDataStructures, XComGameState_LadderProgress);
 
 struct ObservedUnit
 {
