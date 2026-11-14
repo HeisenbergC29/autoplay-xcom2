@@ -57,8 +57,14 @@ i rzeczywistych żywych członków, nie przewiduje ich przyszłego LOS.
    OW. Po czasie i braku możliwości kontynuacji phase=abort.
    `bExpired` uniemożliwia restart tej samej grupy/waypointu aż do
    rzeczywistej zmiany kontekstu; nie ma nieskończonego stania
-   i resetowania zegara przez kolejne decyzje. Nie wyłączono
-   no-plan watchdog ani istniejącego timeoutu end-turn.
+   i resetowania zegara przez kolejne decyzje. Po wykonaniu
+   **rzeczywistego zaakceptowanego** niebieskiego podejścia możliwe
+   jest jedno ograniczone oczekiwanie w kolejnej własnej turze
+   poprzez zwykły `RequestEndTurn`, gdy brak konstruktywnego
+   ruchu i nadal nie wystąpił timer/ratunek/evac/kontakt.
+   Bez rzeczywistego podejścia lub po wyczerpaniu tego okna
+   działa normalny `StatusNoPlan`/watchdog, nie sztuczne
+   zawieszanie lub wymyślona akcja OW.
 3. **Podejście** tylko dla aktywnego własnego żołnierza o min. 2 AP,
    native legal `StandardMove` i native legal affordable OW,
    w dystansie 4–15 pól od waypointu, poza bezpośrednim kontaktem,
