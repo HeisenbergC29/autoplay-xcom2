@@ -41,7 +41,12 @@ i rzeczywistych żywych członków, nie przewiduje ich przyszłego LOS.
    Reset: manual OFF, inny battle/player/history/start-index, rewind
    historii albo zmiana celu/grupy. Zmiana realnego kontaktu/timera
    powoduje przerwanie, a nie twierdzenie, że poprzednia prognoza
-   nadal obowiązuje.
+   nadal obowiązuje. Gdy patrol wypada z listy green-alert po
+   zaalarmowaniu, możliwe jest przejście do otwarcia **wyłącznie**
+   gdy bieżący native `GetImmediateThreats` zawiera członka
+   wcześniej zweryfikowanej grupy (skan max24 jednostki)
+   i poprzedni limit tur nadal obowiązuje. Nie jest to
+   odczyt przyszłej trasy.
 2. **Wygasanie:** `MaxSetupTurns=2` liczy *własne* tury od rozpoczęcia;
    `MaxSetupActions=3` ogranicza liczbę własnych przygotowawczych
    ruchów, `MaxReactionSupport=3` liczbę aktywnie przygotowywanych
@@ -66,12 +71,21 @@ i rzeczywistych żywych członków, nie przewiduje ich przyszłego LOS.
    (w tym AoE separation), bieżącego ExposureRisk i kosztu.
    To jedynie kandydat konkurujący z normalnym ConstructiveMove;
    nie przymusowy marsz, nie usunięcie natywnej trasy awaryjnej.
+   Normalny konstruktywny plan musi mieć wartość poniżej 80,
+   wariant staging musi poprawiać ją o >6; Blood Killer
+   `SabotageTransmitter` nie bierze udziału w tej zmianie trasy.
+   Własny wielopolowy żołnierz bez pełnego footprint
+   nigdy nie jest pozycjonowany przez anchor LOS v40.
 4. **Faktyczny opener przed OW:** tylko gdy obecnie wybrany
    `AvailableAction` jest natywnie legalnym `StandardShot`,
    `PistolStandardShot` albo `SniperStandardFire` na realnie
    widocznego membera aktualnie wybranej grupy, a inny własny
    żołnierz ma natywny `FindOverwatch`, rzeczywistą linię LOS
-   do TEGO celu i koszt affordable. Co najmniej 2 aktywne
+   do TEGO celu i koszt affordable. Dla wielopolowego
+   wroga lub jednostki wsparcia pojedynczy LOS do anchor
+   nie wystarcza: zrezygnujemy z tego dodatkowego OW,
+   pozostawiając normalny native legal direct shot.
+   Co najmniej 2 aktywne
    potencjalne reaction lanes; max3 i budget LOS dzielony
    z resztą jednej decyzji. W revealed mode dobry bezpośredni
    strzał (score>60) nie jest wstrzymywany na rzecz OW.
