@@ -1,8 +1,10 @@
 // #38b: currently native-legal single-click multi-target actions.
 // Unlike grenades, these cannot be sent through X2TargetingMethod_Grenade,
 // a precomputed projectile actor, or the AreaAttackPlanner free-aim contract.
-// Only stock Faceoff is admitted: real self-primary, native enemy list,
-// individually checked current visibility and a conservative shot preview.
+// Only stock Faceoff is admitted: real ENEMY primary, native additional
+// enemies, individually verified current visibility and shot previews.
+// AllUnits.bUseAbilitySourceAsPrimaryTarget governs relationship selection,
+// NOT the final fired primary target (see stock Faceoff_BuildVisualization).
 class APX_NativeMultiTarget extends Object
     dependson(X2GameRuleset, X2TacticalGameRulesetDataStructures);
 
@@ -12,7 +14,7 @@ static function bool SupportedFaceoff(XComGameState_Unit Shooter,
     local X2AbilityTemplate Template;
     local X2AbilityMultiTarget_AllUnits Multi;
     local XComGameState_Item Weapon;
-    local X2Effect_ApplyWeaponDamage DamageEffect;
+    local X2Effect_ApplyWeaponDamage DamageEffect, PrimaryDamageEffect;
 
     if (Shooter == none || Ability == none
         || Ability.OwnerStateObject.ObjectID != Shooter.ObjectID
@@ -22,6 +24,7 @@ static function bool SupportedFaceoff(XComGameState_Unit Shooter,
     if (Template == none || Template.Hostility != eHostility_Offensive
         || Template.TargetingMethod != none
         || Template.AbilityToHitCalc == none
+        || Template.AbilityTargetEffects.Length != 1
         || Template.AbilityMultiTargetEffects.Length != 1)
         return false;
     Multi = X2AbilityMultiTarget_AllUnits(Template.AbilityMultiTargetStyle);
@@ -30,8 +33,10 @@ static function bool SupportedFaceoff(XComGameState_Unit Shooter,
         || Multi.bAcceptFriendlyUnits || !Multi.bDontAcceptNeutralUnits
         || Multi.bRandomlySelectOne || Multi.RandomChance > 0)
         return false;
+    PrimaryDamageEffect = X2Effect_ApplyWeaponDamage(Template.AbilityTargetEffects[0]);
     DamageEffect = X2Effect_ApplyWeaponDamage(Template.AbilityMultiTargetEffects[0]);
-    if (DamageEffect == none || DamageEffect.bExplosiveDamage)
+    if (PrimaryDamageEffect == none || PrimaryDamageEffect.bExplosiveDamage
+        || DamageEffect == none || DamageEffect.bExplosiveDamage)
         return false;
     Weapon = Ability.GetSourceWeapon();
     // Unknown ammo splash/delayed effects are not silently modeled as bullets.
@@ -71,16 +76,28 @@ static function float ScoreFaceoff(XComGameState_Unit Shooter,
     local int Index, Chance, AllowsShield, StrongFinishes;
 
     if (!SupportedFaceoff(Shooter, Ability)
-        || NativeTarget.PrimaryTarget.ObjectID != Shooter.ObjectID
-        || NativeTarget.AdditionalTargets.Length < 2
-        || NativeTarget.AdditionalTargets.Length > 16)
+        || NativeTarget.PrimaryTarget.ObjectID <= 0
+        || NativeTarget.PrimaryTarget.ObjectID == Shooter.ObjectID
+        || NativeTarget.AdditionalTargets.Length < 1
+        || NativeTarget.AdditionalTargets.Length > 15)
         return -10000.0;
     Template = Ability.GetMyTemplate();
     DamageEffect = X2Effect_ApplyWeaponDamage(Template.AbilityMultiTargetEffects[0]);
 
-    for (Index = 0; Index < NativeTarget.AdditionalTargets.Length; ++Index)
+    // Stock Faceoff_BuildVisualization FIRES at the enemy PrimaryTarget
+    // first, then at AdditionalTargets. Check and score both independently.
+    for (Index = -1; Index < NativeTarget.AdditionalTargets.Length; ++Index)
     {
-        TargetRef = NativeTarget.AdditionalTargets[Index];
+        if (Index < 0)
+        {
+            TargetRef = NativeTarget.PrimaryTarget;
+            DamageEffect = X2Effect_ApplyWeaponDamage(Template.AbilityTargetEffects[0]);
+        }
+        else
+        {
+            TargetRef = NativeTarget.AdditionalTargets[Index];
+            DamageEffect = X2Effect_ApplyWeaponDamage(Template.AbilityMultiTargetEffects[0]);
+        }
         if (TargetRef.ObjectID <= 0 || Seen.Find(TargetRef.ObjectID) != INDEX_NONE)
             return -10000.0;
         Seen.AddItem(TargetRef.ObjectID);
@@ -102,7 +119,7 @@ static function float ScoreFaceoff(XComGameState_Unit Shooter,
         MinDamage = EmptyDamage;
         MaxDamage = EmptyDamage;
         AllowsShield = 0;
-        DamageEffect.GetDamagePreview(TargetRef, Ability, false,
+        DamageEffect.GetDamagePreview(TargetRef, Ability, Index < 0,
             MinDamage, MaxDamage, AllowsShield);
         Armor = Enemy.GetArmorMitigationForUnitFlag();
         if (DamageEffect.bIgnoreArmor)
