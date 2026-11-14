@@ -1144,7 +1144,7 @@ function MakeDecision(XComTacticalController PC)
     local bool bOpeningContact, bFocusedGoal, bRangedFocusGoal, bRangedConcealed;
     local bool bPatrolRefreshed, bPatrolActive, bSelectedPatrolMove, bSelectedPatrolReaction;
     local string PatrolReason, PatrolApproachReason;
-    local XComGameState_Unit PatrolSupporter;
+    local XComGameState_Unit PatrolSupporter, PatrolScout;
     local bool bNativeStrikeOnly;
 
     // Shared by every unit and every movement/preparation/loot search below.
@@ -1348,6 +1348,7 @@ function MakeDecision(XComTacticalController PC)
             // One contact snapshot per controller decision, shared by all
             // own units and route candidates; unknown cannot certify Clear.
             bContactSnapshotReady = true;
+            PatrolScout = UnitState;
             bContactSnapshotComplete = class'APX_ContactEnvelope'.static.BuildSnapshot(
                 UnitState, ContactSnapshotUnits, ContactSnapshotInteractives,
                 ContactSnapshotReason, RemainingContactGroups, RemainingContactMembers,
@@ -1700,9 +1701,9 @@ function MakeDecision(XComTacticalController PC)
         if (bPatrolActive && AutoEndTurn && PatrolAmbushPlanner != none
             && PatrolAmbushPlanner.CanWaitForContact()
             && !class'APX_MissionPlanner'.static.HasActiveMissionDeadline()
-            && BestUnit != none
-            && !class'APX_MissionPlanner'.static.HasBleedingSquadmate(BestUnit)
-            && !class'APX_MissionPlanner'.static.ShouldEvacuate(BestUnit))
+            && PatrolScout != none
+            && !class'APX_MissionPlanner'.static.HasBleedingSquadmate(PatrolScout)
+            && !class'APX_MissionPlanner'.static.ShouldEvacuate(PatrolScout))
         {
             // A finite wait is an explicit plan after a real staging order;
             // no global watchdog suspension or counterfeit action.
