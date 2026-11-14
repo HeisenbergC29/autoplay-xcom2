@@ -362,7 +362,8 @@ function bool AssignNextGoal(XComGameState_Unit UnitState, int GoalIndex)
 
 function bool BuildSafeBluePrefix(XComGameState_Unit UnitState,
     TTile GoalTile, out array<TTile> Path,
-    optional out int RemainingConcealmentChecks)
+    optional out int RemainingConcealmentChecks,
+    optional APX_RouteTempo RouteTempo, optional int CurrentTurn)
 {
     local XGUnit UnitVisualizer;
     local array<TTile> FullPath, CandidatePath;
@@ -413,6 +414,9 @@ function bool BuildSafeBluePrefix(XComGameState_Unit UnitState,
             CandidateValue = class'APX_MissionPlanner'.static.AdvanceEndpointScore(float(Index),
                 class'APX_MissionPlanner'.static.AdvanceCoverLevel(UnitState, FullPath[Index], GoalTile));
             CandidateValue += class'APX_MissionPlanner'.static.SquadPositionScore(UnitState, FullPath[Index]);
+            if (RouteTempo != none)
+                CandidateValue -= RouteTempo.PenaltyFor(
+                    UnitState.ObjectID, GoalTile, FullPath[Index], CurrentTurn);
             // Prefer safer exploration endpoints without forbidding the only
             // legal way through a detector zone.
             if (UnitState.IsConcealed())
@@ -433,7 +437,9 @@ function bool BuildSafeBluePrefix(XComGameState_Unit UnitState,
 
 function bool ChooseMove(XComGameState_Unit UnitState,
     out array<TTile> Path, out float Score,
-    optional out int RemainingConcealmentChecks)
+    optional out int RemainingConcealmentChecks,
+    optional APX_RouteTempo RouteTempo, optional int CurrentTurn,
+    optional out TTile SelectedGoal)
 {
     local int GoalIndex, Attempt;
 
@@ -458,12 +464,18 @@ function bool ChooseMove(XComGameState_Unit UnitState,
     {
         if (!Goals[GoalIndex].bActive && !AssignNextGoal(UnitState, GoalIndex))
             return false;
+        if (RouteTempo != none)
+            RouteTempo.SetGoal(UnitState.ObjectID, Goals[GoalIndex].Tile);
         if (BuildSafeBluePrefix(UnitState, Goals[GoalIndex].Tile, Path,
-            RemainingConcealmentChecks))
+            RemainingConcealmentChecks, RouteTempo, CurrentTurn))
         {
             Score = ScoreExplorationMove(
                 class'APX_MissionPlanner'.static.SquadPositionScore(UnitState, UnitState.TileLocation),
                 class'APX_MissionPlanner'.static.SquadPositionScore(UnitState, Path[Path.Length - 1]));
+            SelectedGoal = Goals[GoalIndex].Tile;
+            if (RouteTempo != none)
+                Score -= RouteTempo.PenaltyFor(UnitState.ObjectID, SelectedGoal,
+                    Path[Path.Length - 1], CurrentTurn);
             return true;
         }
         RejectGoal(UnitState.ObjectID, Goals[GoalIndex].Tile);
