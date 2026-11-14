@@ -21,6 +21,7 @@ class NativeMultiTargetMath(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.score = staticmethod(load_uc_function(NATIVE, "ScoreFaceoffOutcome"))
+        cls.damage = staticmethod(load_uc_function(COMBAT, "ScoreDamage"))
 
     def test_two_or_more_native_enemies_beats_one_and_protects_cooldown(self):
         self.assertLess(self.score(0, 0, 0), -1000)
@@ -30,6 +31,16 @@ class NativeMultiTargetMath(unittest.TestCase):
         self.assertEqual(self.score(2, 2, 75), 73)
         self.assertEqual(self.score(3, 3, 100), 100)
         self.assertLess(self.score(2, 0, 0), -1000)
+
+    def test_expected_native_multitarget_preview_competes_with_good_single_shot(self):
+        weak = self.damage(3, 4, 8, 35, 1.0, 0)
+        strong_single = self.damage(3, 4, 3, 80, 1.0, 0)
+        # Two weak 35%-hit shots are a poor use of an expensive cooldown.
+        self.assertLess(self.score(2, 0, weak * 2), strong_single)
+        # Three current strong damage shots beat a single ordinary hit,
+        # but the score remains expected-value, NOT a guaranteed outcome.
+        strong_multi = self.damage(3, 4, 3, 60, 1.0, 0)
+        self.assertGreater(self.score(3, 0, strong_multi * 3), strong_single)
 
     def test_per_enemy_finish_bonus_bounded_no_fake_guaranteed_kill(self):
         self.assertEqual(self.score(4, 100, 80), 80)
@@ -131,7 +142,9 @@ class NativeFaceoffSDK(unittest.TestCase):
                   "MultiTargetUnits.bAcceptEnemyUnits = true",
                   "Template.AddTargetEffect(new class'X2Effect_ApplyWeaponDamage')",
                   "Template.AddMultiTargetEffect(new class'X2Effect_ApplyWeaponDamage')",
-                  "//  Fire at the primary target first"):
+                  "//  Fire at the primary target first",
+                  "FireAction.SetFireParameters(Context.IsResultContextHit()",
+                  "History.GetVisualizer(AbilityContext.PrimaryTarget.ObjectID)"):
             self.assertIn(t, sharp)
         for t in ("bAcceptFriendlyUnits", "bDontAcceptNeutralUnits",
                   "bRandomlySelectOne", "GetMultiTargetOptions"):
