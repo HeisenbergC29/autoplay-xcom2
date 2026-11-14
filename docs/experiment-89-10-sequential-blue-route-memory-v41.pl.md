@@ -57,7 +57,10 @@ pozostaje dotychczasowy blue+OW/interaction/wycofanie.
    zwrócił **current-horizon Clear**, `ExplosiveCoverRisk=0`,
    brak niepewnego concealment oraz **każdy tile** ma
    `ExposureRisk <= StartRisk+3`. Limit kontroli exposure: 64
-   pola. Unknown/stale/budget exhausted/unsupported footprint
+   pola. To samo obejmuje nowy drugi odcinek; ryzykowny
+   środkowy tile nie jest unieważniany przez spokojny endpoint.
+   Sama historyczna `MemoryFallbackPath` z oceną Unknown nie
+   nadaje prawa do drugiego ruchu. Unknown/stale/budget exhausted/unsupported footprint
    nigdy nie daje biletu, nawet gdy bezpieczny jest endpoint.
 3. Po zakończeniu/zaakceptowaniu pierwszego ruchu nowa decyzja
    Controller pobiera aktualny native `UnitState` i reachable
@@ -72,7 +75,9 @@ pozostaje dotychczasowy blue+OW/interaction/wycofanie.
    zostaje odrzucony; **stary RiskyRoute i LocalFallback
    nie mogą go przywrócić**. Następny ruch nigdy nie jest
    przewidywany i wysłany przed potwierdzeniem pierwszego.
-4. Sekwencja jest wyłączona dla aktywnego/recent contact,
+4. Sekwencja ustępuje każdej już legalnej natywnej
+   `ChooseInteraction`: nie wydaje AP potrzebnego na gotowe
+   Interact/Hack/Plant. Jest wyłączona dla aktywnego/recent contact,
    rzeczywiście staged/armed zasadzki, wykrwawiania, ewakuacji,
    aktywnego timera, zatrucia wymagającego ucieczki, combat
    reposition i SabotageTransmitter/X4. `HasActiveStaging`
@@ -112,7 +117,11 @@ Bezpieczny powrót jest przechowywany jako
 użytecznego legalnego alternatywnego ruchu, pozostaje
 legalny backtrack. Stary hard filter pozostaje wyłącznie
 w `VisitedPositions` bieżącej tury (bez wprowadzania
-odrzuconego cross-turn hard ban PR #11).
+odrzuconego cross-turn hard ban PR #11). Dodatkowy, wąski
+wyjątek od tego historycznego filtra dopuszcza rzeczywisty
+powrót w sytuacji pilnej ewakuacji, wykrwawiania towarzysza,
+aktywnego timera lub koniecznego wyjścia z trucizny, nadal
+pod pełną kontrolą legalności natywnego ruchu.
 Po ewakuacji, walce, ratunku lub wejściu w hazard pamięć
 nie blokuje zachowania mechaniki; przy zmianie celu
 wspólny kontekst przestaje obowiązywać.
