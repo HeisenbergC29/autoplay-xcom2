@@ -41,11 +41,17 @@ class ContactEnvelopeNumericContracts(unittest.TestCase):
     def test_stationary_cover_is_not_assigned_to_traversing_soldier(self):
         # Native unit-concealment rule: a moving detector requires a clear
         # directional cover angle; a moving concealed soldier does not.
-        self.assertFalse(self.detect(True, True, True, 100.0, 50.0, False))
-        self.assertTrue(self.detect(True, False, True, 100.0, 50.0, False))
-        self.assertTrue(self.detect(True, False, False, 5000.0, 50.0, True))
-        self.assertFalse(self.detect(False, False, False, 100.0, 50.0, True))
-        self.assertFalse(self.detect(True, False, False, 5000.0, 50.0, False))
+        self.assertFalse(self.detect(True, True, True, 100.0, 100.0, 50.0, False))
+        self.assertTrue(self.detect(True, False, True, 100.0, 100.0, 50.0, False))
+        self.assertTrue(self.detect(True, False, False, 5000.0, 100.0, 50.0, True))
+        self.assertFalse(self.detect(False, False, False, 100.0, 100.0, 50.0, True))
+        self.assertFalse(self.detect(True, False, False, 5000.0, 100.0, 50.0, False))
+
+    def test_ignore_detection_distance_still_requires_basic_sight(self):
+        self.assertTrue(self.detect(True, False, False, 9000.0, 100.0, 50.0, True))
+        self.assertFalse(self.detect(True, False, False, 10001.0, 100.0, 50.0, True))
+        self.assertFalse(self.detect(True, False, False, 50000.0, 100.0, 50.0, True))
+        self.assertFalse(self.detect(True, False, False, 50000.0, 100.0, 50.0, False))
 
     def test_threat_or_uncertainty_in_middle_is_not_erased_by_clear_endpoint(self):
         status = 0
@@ -111,7 +117,7 @@ class ContactEnvelopeSourceContracts(unittest.TestCase):
     def test_route_uses_current_observed_native_los_and_native_detection(self):
         route = function_body(self.contact, "AssessRoute")
         for term in ("HorizonAITurns > 0", "future_patrol_route_unselected",
-                     "if (!bSnapshotComplete", "for (Step = 0; Step < Path.Length",
+                     "if (!bSnapshotComplete", "for (Step = 1; Step < Path.Length",
                      "--RemainingTiles;", "--RemainingDetectors;", "--RemainingLOS;",
                      "UnitBreaksConcealment(Detector)", "GetConcealmentDetectionDistance(Detector)",
                      "DoesUnitBreaksConcealmentIgnoringDistance",
@@ -121,6 +127,12 @@ class ContactEnvelopeSourceContracts(unittest.TestCase):
             self.assertIn(term, route)
         self.assertIn("GetAllVisibleObjectsForPlayer(", self.contact)
         self.assertIn("GetKnownEnemies(", self.contact)
+        self.assertIn("if (Path[0] != Soldier.TileLocation)", route)
+        self.assertIn("RemainingTiles < Path.Length - 1", route)
+        self.assertIn("DistanceSq > Square(SightRange + 200.0)", route)
+        self.assertIn("Visibility.DefaultTargetDist, SightRange, DetectRange", route)
+        self.assertIn('Reason = "native_sight_edge_unverified";', route)
+        self.assertNotIn("GetCoverTypeForTarget(", route)
         for forbidden in ("ModifyStateObject(", "SubmitGameState(",
                           "CreateNewGameState(", "GetTotalScore(", "Rand(", "FRand(",
                           "SetCurrentHistoryIndex("):
