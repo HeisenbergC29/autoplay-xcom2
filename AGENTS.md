@@ -98,6 +98,9 @@ and [docs/PROJECT-STATE.pl.md](docs/PROJECT-STATE.pl.md) before changing this pr
   unit temporarily to fake a shot preview. Label geometric forecasts as estimates.
   Do not call patrol getters that mutate/refresh state or calculate a new route,
   and do not sample future RNG. See docs/patrol-detection-and-tempo.pl.md.
+  docs/patrol-selection-algorithm.pl.md distinguishes selection of possible
+  destinations from a reachable path and follower formation. A bounded forecast
+  of alternatives is permitted; it does not certify one fixed future sequence.
 - Preserve native legality, full-route hazards, collateral/objective protection,
   rescue/loot constraints, manual OFF/pause and mission/history cache boundaries.
 - Do not remove safety checks to silence a stop. Reject/replan invalid proposals

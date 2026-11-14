@@ -5,10 +5,15 @@ Na polecenie użytkownika [#4](https://github.com/HeisenbergC29/autoplay-xcom2/i
 jest **BLOCKED** do końca bieżących prac źródłowych LEAD i HELPERA. Nie przekazujemy
 osobnego buildu po każdym PR. Następna kolej pracy: **HELPER**, review i integracja LEAD.
 
-Punktem startowym jest `49c73788a95692e588e40fc4a3df071736b91495` / v38, PR #85.
-802 private testy PASS/0skip; SDK25/31 PASS; CI229: 723 PASS/79 SKIP i 6 kroków
-PowerShell PASS. Native Windows make/game v38: **NOT RUN**. Dokumentacja polityki
-nie zwiększa rewizji runtime. Po każdym scaleniu nowe prace opierać na aktualnym main.
+Źródła po odbiorze #91/#92/#93: `fe495616d99d9f2b3062994733a383b30ac048e2` / v39,
+reviewed head #91 `02e75b4464d6628ab3357c33e71a3dc6192d7162`. **822 private PASS/0skip**,
+SDK26/31 PASS; CI253: 742 PASS/80 SKIP i 6 kroków PowerShell PASS.
+Native Windows make/game v39: **NOT RUN**. Po każdym scaleniu pobierać aktualne main.
+To odbiór trzech gotowych PR, nie zakończenie całej kolejki poniżej.
+
+**Następny HELPER: #88**, z wykorzystaniem #91 i jawnym pozostałym zakresem
+przyszłego kontaktu/footprint #87. Następnie #89/#10 oraz pozostałe #28/#38.
+Nie ma nowego zadania na powtórny audyt manifestu SDK albo osobny build v39.
 
 ## Lista realizacji
 
@@ -20,26 +25,27 @@ końcowy wynik misji >0. Niekompletne punkty nie certyfikują zaliczenia.
 | Zadanie | Stan / zależność | Konkretny wynik wymagany przed przekazaniem |
 | --- | --- | --- |
 | LEAD, [#85](https://github.com/HeisenbergC29/autoplay-xcom2/pull/85) | SOURCE DONE | Naprawiony replay objective identity, bounded traversal, reviewed head9eca03d, merge49c7378. Pełna punktacja nadal osobno #79. |
-| LEAD, zasady i kolejka | Dokumentacja bieżącej integracji | Aktualne AGENTS/TEAM/PROJECT-STATE, poszerzona zgoda patrolowa, zadania i bramka #4; brak polecenia buildu. |
-| HELPER [#87](https://github.com/HeisenbergC29/autoplay-xcom2/issues/87) | READY, pierwsze | Jeden snapshot/budżet kontaktu, świeżość danych patrolu na właściwym AI clock, concealment ruch/stacjonarny oraz revealed LOS; Clear/Caution/Unknown dla całej trasy i jawnego horyzontu. Musi wpływać na realną decyzję planera, nie tylko recorder. |
-| HELPER [#88](https://github.com/HeisenbergC29/autoplay-xcom2/issues/88), konsoliduje [#12](https://github.com/HeisenbergC29/autoplay-xcom2/issues/12)/[#31](https://github.com/HeisenbergC29/autoplay-xcom2/issues/31) | Po #87 | Proaktywna zasadzka z kierunkiem osłony, liniami reakcji, odstępami AoE i stanem approach/setup/armed/open/abort. Ograniczony czas oczekiwania, reset i przerwanie przez timer/ratunek/zmianę kontaktu. Native opener/OW/AP; concealed i revealed osobno. |
+| LEAD, zasady i kolejka | SOURCE DONE #90, bieżąca aktualizacja po #91–93 | Aktualne AGENTS/TEAM/PROJECT-STATE, poszerzona zgoda patrolowa, zadania i bramka #4; brak polecenia buildu. |
+| HELPER [#87](https://github.com/HeisenbergC29/autoplay-xcom2/issues/87) | Bieżący horyzont SOURCE DONE #91; przyszły/footprint pozostały | Jeden snapshot/budżet kontaktu, świeżość danych patrolu na właściwym AI clock, concealment ruch/stacjonarny oraz revealed LOS; Clear/Caution/Unknown dla całej trasy i jawnego horyzontu. Musi wpływać na realną decyzję planera, nie tylko recorder. |
+| HELPER [#88](https://github.com/HeisenbergC29/autoplay-xcom2/issues/88), konsoliduje [#12](https://github.com/HeisenbergC29/autoplay-xcom2/issues/12)/[#31](https://github.com/HeisenbergC29/autoplay-xcom2/issues/31) | READY po #91; domyka brakujące kontrakty #87 | Proaktywna zasadzka z kierunkiem osłony, liniami reakcji, odstępami AoE i stanem approach/setup/armed/open/abort. Ograniczony czas oczekiwania, reset i przerwanie przez timer/ratunek/zmianę kontaktu. Native opener/OW/AP; concealed i revealed osobno. |
 | HELPER [#89](https://github.com/HeisenbergC29/autoplay-xcom2/issues/89) | Po #87/#88, skoordynować #10 | Szybszy zwykły marsz tylko po całej rzeczywiście osiągalnej, natywnie opłacalnej i potwierdzonej Clear trasie; Unknown prowadzi do legalnego krótszego ruchu. AA_Success StandardMove i Mobility×2 nie dowodzą kosztu dowolnej trasy. |
 | HELPER [#10](https://github.com/HeisenbergC29/autoplay-xcom2/issues/10) | READY | Ograniczona wygasająca pamięć spokojnej trasy między turami, per unit/kontekst celu. Preferować postęp i alternatywę, zachować jedyną legalną drogę powrotu. Bez wpływu na ratunek, ewakuację, hazard escape i combat. |
 | HELPER [#28](https://github.com/HeisenbergC29/autoplay-xcom2/issues/28) | READY | Podejście medyka do pilnego leczenia/detoksu, także niekrwawiącego pacjenta. Potwierdzony własny native ability/range/status/AP/ładunki, bezpieczna pełna trasa i świeży skan po ruchu. Obecna stabilizacja i ucieczka pacjenta z chmury nie zastępują tego zakresu. |
 | HELPER [#38b](https://github.com/HeisenbergC29/autoplay-xcom2/issues/38) | READY | Skończona macierz rodzin player AoE w SDK oraz konkretne rozszerzenie planera o potwierdzone kontrakty poza obecnymi Frag/Alien Throw/Launch. Dla innych rodzin precyzyjny zakres unsupported. Wtórne eksplozje wymagają rzeczywistych extents/triggers i ochrony obiektów, bez zdejmowania guardów. |
-| HELPER [#20](https://github.com/HeisenbergC29/autoplay-xcom2/issues/20), audyt podpór | READY, ograniczony audyt | Rozstrzygnąć EnvironmentalDamage/ScythingClaws/podłogi/upadki: wdrożenie tylko przy wiarygodnym obserwacyjnym kontrakcie; w przeciwnym razie konkretny opis brakującego native/asset dowodu i zachowany fallback. Nie zakazywać dachów na podstawie hipotezy. Formation AoE już wdrożone. |
-| HELPER [#79](https://github.com/HeisenbergC29/autoplay-xcom2/issues/79) | READY, po #85 | Analizator raportów rozpoznaje v3 profile/rate_source/parity/coverage niezależnie od archiwalnego v2. Skończony audyt civilian replay/origins/disabled/restart/bonus/decay: implementować udowodnione kontrakty, dokładnie opisać pozostałą niepewność i wymagany dowód. Sama zgodność stawek nie dowodzi kompletności/oficjalności. |
+| HELPER [#20](https://github.com/HeisenbergC29/autoplay-xcom2/issues/20), audyt podpór | SOURCE AUDIT DONE #93; forecast UNSUPPORTED | Rozstrzygnąć EnvironmentalDamage/ScythingClaws/podłogi/upadki: wdrożenie tylko przy wiarygodnym obserwacyjnym kontrakcie; w przeciwnym razie konkretny opis brakującego native/asset dowodu i zachowany fallback. Nie zakazywać dachów na podstawie hipotezy. Formation AoE już wdrożone. |
+| HELPER [#79](https://github.com/HeisenbergC29/autoplay-xcom2/issues/79) | Reporting/audyt SOURCE DONE #92; parity/coverage DEFERRED | Analizator raportów rozpoznaje v3 profile/rate_source/parity/coverage niezależnie od archiwalnego v2. Skończony audyt civilian replay/origins/disabled/restart/bonus/decay: implementować udowodnione kontrakty, dokładnie opisać pozostałą niepewność i wymagany dowód. Sama zgodność stawek nie dowodzi kompletności/oficjalności. |
 
 ## Kolejność i granice pracy
 
-Najpierw claim i PR #87. Równolegle można prowadzić niezależne badania #28/#38/#79,
+Etap bieżącego kontaktu #87 scalony jako #91. Najpierw claim #88 na aktualnym main.
+Równolegle można prowadzić niezależne badania #28/#38,
 lecz przed edycją MissionPlanner/Controller trzeba uzgodnić właściciela plików.
-Następnie #88, #89 i skoordynowane #10; pozostałe focused zmiany po review.
+Następnie #89 i skoordynowane #10; pozostałe focused zmiany po review.
 Maksymalnie trzy aktywne implementation PR. Nie ma potrzeby czekania na zgodę
 na już przypisane odwracalne prace, ale każdy PR wymaga aktualnej bazy i review LEAD.
 
 [#48](https://github.com/HeisenbergC29/autoplay-xcom2/issues/48) ma już reader i
-potwierdzoną emisję runtime. Jego brakujący konsument jest w #87, nie w kolejnym
+potwierdzoną emisję runtime. Jego bieżący konsument jest już w #91/#87, nie w kolejnym
 reader-only PR. #12 i #31 zachowują historię, a wspólne wykonanie jest w #88.
 Nie usuwać globalnie concealed gate ani nie wymyślać przyszłych native targetów.
 
@@ -47,7 +53,19 @@ Nowa zgoda obejmuje dostępne zapisane dane patrolu, również całą trasę, je
 istnieje. Stock SDK nie daje typowej stałej trasy wieloturowej. Znany waypoint,
 cache przebytego ruchu i graf korytarzy nie są równoważne. Nie uruchamiać
 mutujących getterów, AI wyboru następnego ruchu ani przyszłego RNG.
-[Źródła mechanik i granice prognozy](patrol-detection-and-tempo.pl.md).
+[Źródła mechanik i granice prognozy](patrol-detection-and-tempo.pl.md),
+[wybór kandydatów i losowanie punktu](patrol-selection-algorithm.pl.md).
+
+#87 nadal nie ma konserwatywnego następnego horyzontu, cache segmentów ani pełnego
+multi-tile visibility contract. #91 nie zostaje uznane za ukończenie tych punktów.
+Są częścią zależnego zakresu #88/#89: obsłużony footprint/źródłowa obwiednia albo
+jawne Unknown, bez uznawania waypointu za pewny przyszły ruch. Prognoza wariantów
+może rankować miejsca zasadzki; nie zwęża konserwatywnego dowodu bezpieczeństwa.
+
+#79 po #92 ma ukończone osobne raportowanie v3 i skończony source disposition.
+Civilian history nie wynika z samego removed-from-play; kwalifikacja native
+award/decay/restart/bonus i coverage pozostają nieudowodnione. Nie ma kolejnej
+READY implementacji bez nowego konkretnego kontraktu; partial pozostaje partial.
 
 ## Wdrożone źródła, odroczone dowody z gry
 

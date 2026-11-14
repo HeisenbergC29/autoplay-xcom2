@@ -4,13 +4,19 @@ Pochodne ustalenia LEAD z 14 listopada 2026, na podstawie dostarczonego SDK
 WOTC i konfiguracji gry. Ścieżki źródeł poniżej są względne wobec SDK;
 nie publikujemy jego plików. Stan planistów sprawdzono na bazie v37.
 
+Aktualizacja po #91/v39: snapshot i bieżący konsument zwykłej trasy są już
+wdrożone. Horyzont przyszłej tury i jednostki wielopolowe pozostają Unknown;
+proaktywna zasadzka oraz szybki marsz nadal nie są ukończone.
+[Dalszy audyt sposobu wyboru celu i osobnej ścieżki](patrol-selection-algorithm.pl.md)
+wyjaśnia losowanie narożników strefy, zależność od aktualnego XCOM i override.
+
 Użytkownik zezwolił na wykorzystanie wszystkich dostępnych zapisanych danych
 patrolu, w tym pełnej trasy, jeżeli rzeczywiście istnieje. To rozszerzenie
 wcześniejszej zgody na bieżący cel patrolu. Odczyt pozostaje obserwacyjny;
 nie uruchamiamy przyszłych decyzji AI ani losowań w celu ich przewidzenia.
 `EnableFullIntel=false` zachowuje wiedzę opartą na natywnej widoczności.
 
-**To analiza i zakres implementacji, nie opis gotowej nowej zasadzki.**
+**To analiza i zakres etapów; nie opis gotowej nowej zasadzki.**
 Kolejka [#86](https://github.com/HeisenbergC29/autoplay-xcom2/issues/86)
 poprzedza jeden zbiorczy test. Windows make i próby nowych zachowań:
 **NOT RUN**; [#4](https://github.com/HeisenbergC29/autoplay-xcom2/issues/4)
