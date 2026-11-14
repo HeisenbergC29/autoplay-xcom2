@@ -110,7 +110,7 @@ function Start(int PlayerID)
     bStarted = true;
     Emit("start", "|player=" $ PlayerID $ "|mission=" $ Safe(Mission)
         $ "|difficulty=" $ `TacticalDifficultySetting $ "|history=" $ HistoryCursor
-        $ "|revision=mission-report-v35|full_intel_enabled=" $ class'APX_FullIntel'.default.EnableFullIntel
+        $ "|revision=mission-report-v36|full_intel_enabled=" $ class'APX_FullIntel'.default.EnableFullIntel
         $ "|formation_area_radius_tiles=" $ class'APX_MissionPlanner'.default.SquadAreaRiskRadiusTiles
         $ "|formation_area_weight=" $ class'APX_MissionPlanner'.default.SquadAreaRiskWeight
         $ "|concealment_risk_penalty=" $ class'APX_ConcealmentPlanner'.default.ConcealmentRiskPenalty
@@ -520,7 +520,9 @@ function RecordHUDScore(string DisplayText)
     LastHUDScore = DisplayText;
     Fields = "|display=" $ Safe(DisplayText);
     if (Left(DisplayText, 1) == "~")
-        Fields $= "|comparison_profile=" $ class'APX_ComparisonScore'.static.GetProfileID();
+        Fields $= "|comparison_profile=" $ class'APX_LegacyObservedV3'.static.GetProfileID()
+            $ "|comparison_status=partial|rate_source=installed_ladder_config"
+            $ "|native_parity_proven=false|event_coverage_proven=false";
     Emit("hud_score", Fields);
 }
 

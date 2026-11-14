@@ -79,7 +79,7 @@ class MissionScoreTests(unittest.TestCase):
         text = function_body(self.source, 'GetText')
         mode_guard = text.index('if (Ladder == none && ChallengeData == none)')
         unscored = braced_body(text, text.index('{', mode_guard))
-        self.assertIn("ComparisonCounter = new(self) class'APX_ComparisonScore'", unscored)
+        self.assertIn("ComparisonCounter = new(self) class'APX_LegacyObservedV3'", unscored)
         self.assertIn('ComparisonCounter.GetObservedScore()', unscored)
         self.assertIn('if (!ComparisonCounter.IsReady())', unscored)
         self.assertIn('return UnavailableText()', unscored)

@@ -95,7 +95,7 @@ class FullIntelContracts(unittest.TestCase):
         recorder=(CLASSES/'APX_MissionRecorder.uc').read_text()
         dlc=(CLASSES/'X2DownloadableContentInfo_AutoplayXCom2.uc').read_text()
         for source in (recorder,dlc,self.hud):
-            self.assertIn('mission-report-v35',source)
+            self.assertIn('mission-report-v36',source)
 
 
 class FullIntelPolicyScenarios(unittest.TestCase):
