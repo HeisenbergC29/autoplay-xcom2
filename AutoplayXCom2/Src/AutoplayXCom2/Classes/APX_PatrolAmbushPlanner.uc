@@ -44,14 +44,19 @@ static function float VariantPositionScore(float Progress, int CoveredLanes,
     bool bDirectionalCover, float PositionBenefit, float ExposureIncrease,
     int ContactStatus, float UnknownPenalty)
 {
+    local float Value;
+
     if (Progress <= 0.0 || CoveredLanes <= 0 || ContactStatus == 1)
         return -10000.0;
-    return 30.0 + FMin(14.0, Progress * 3.0)
+    Value = 30.0 + FMin(14.0, Progress * 3.0)
         + float(Clamp(CoveredLanes, 0, 3)) * 8.0
-        + (bDirectionalCover ? 8.0 : 0.0)
         + FClamp(PositionBenefit, -16.0, 12.0)
-        - FMax(0.0, ExposureIncrease) * 1.5
-        - (ContactStatus < 0 ? FClamp(UnknownPenalty, 0.0, 30.0) : 0.0);
+        - FMax(0.0, ExposureIncrease) * 1.5;
+    if (bDirectionalCover)
+        Value += 8.0;
+    if (ContactStatus < 0)
+        Value -= FClamp(UnknownPenalty, 0.0, 30.0);
+    return Value;
 }
 
 function Reset()
