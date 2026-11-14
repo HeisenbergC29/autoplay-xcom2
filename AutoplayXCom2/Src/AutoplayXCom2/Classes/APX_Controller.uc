@@ -109,6 +109,7 @@ var private APX_ExplorationPlanner ExplorationPlanner;
 var private APX_AreaAttackPlanner AreaPlanner;
 var private APX_MissionRecorder MissionRecorder;
 var private APX_PatrolAmbushPlanner PatrolAmbushPlanner;
+var private APX_RouteTempo RouteTempo;
 var private float UntilObservation;
 var private array<RecentContact> RecentContacts;
 var private bool bContactHistoryInitialized;
@@ -451,6 +452,8 @@ function StopAutoplay(string Reason, optional bool bPreservePendingHack = false)
     ResetRangedFocus();
     if (PatrolAmbushPlanner != none)
         PatrolAmbushPlanner.Reset();
+    if (RouteTempo != none)
+        RouteTempo.Reset();
     // A user pause may happen before the hack UI has even appeared. Keep only
     // the exact submitted context, so resuming cannot claim a later manual hack
     // that happens to reuse the same soldier and ability IDs.
@@ -1126,7 +1129,10 @@ function MakeDecision(XComTacticalController PC)
     local int TargetIndex, BestTargetIndex, ChosenTargetID, AmbushTargetIndex, RescuePatientID;
     local int PatrolReactionIndex, PatrolApproachUnitID;
     local int PatrolReactionUnitID, PatrolReactionAbilityID;
-    local TTile PatrolApproachDestination;
+    local TTile PatrolApproachDestination, CandidateRouteGoal, BestRouteGoal;
+    local TTile SelectedRouteDestination;
+    local int SelectedRouteUnitID;
+    local bool bCandidateRoutine, bCandidateFirstBlue, bSelectedRoute, bSelectedFirstBlue;
     local int RemainingConcealmentChecks, RemainingCoverChecks;
     local int RemainingContactGroups, RemainingContactMembers;
     local int RemainingContactDetectors, RemainingContactTiles, RemainingContactLOS;
@@ -1191,6 +1197,9 @@ function MakeDecision(XComTacticalController PC)
         AreaPlanner = new(self) class'APX_AreaAttackPlanner';
     if (PatrolAmbushPlanner == none)
         PatrolAmbushPlanner = new(self) class'APX_PatrolAmbushPlanner';
+    if (RouteTempo == none)
+        RouteTempo = new(self) class'APX_RouteTempo';
+    RouteTempo.Refresh(PlayerRef.ObjectID, PlayerState.PlayerTurnCount);
     if (MissionRecorder != none)
         MissionRecorder.BeginDecision();
 
@@ -1402,6 +1411,7 @@ function MakeDecision(XComTacticalController PC)
                 bArea = false;
                 BestLocations.Length = 0;
                 bHavePlan = true;
+            bSelectedRoute = false;
             }
         }
         if (class'APX_MissionPlanner'.static.ChooseInteraction(UnitState, Candidate, TargetIndex, Score)
@@ -1416,6 +1426,7 @@ function MakeDecision(XComTacticalController PC)
             bArea = false;
             BestLocations.Length = 0;
             bHavePlan = true;
+            bSelectedRoute = false;
         }
         if (class'APX_MissionPlanner'.static.ChooseLootInteraction(UnitState, Candidate, TargetIndex, Score)
             && TraceCandidateAction(UnitState, "loot", Candidate, TargetIndex, Score)
@@ -1429,6 +1440,7 @@ function MakeDecision(XComTacticalController PC)
             bArea = false;
             BestLocations.Length = 0;
             bHavePlan = true;
+            bSelectedRoute = false;
         }
         CandidateLocations.Length = 0;
         if (AutoPlaceEvac && class'APX_EvacPlanner'.static.ChoosePlacement(
@@ -1447,6 +1459,7 @@ function MakeDecision(XComTacticalController PC)
                 bMove = false;
                 bArea = false;
                 bHavePlan = true;
+            bSelectedRoute = false;
             }
         }
         CandidateLocations.Length = 0;
@@ -1472,6 +1485,7 @@ function MakeDecision(XComTacticalController PC)
             bMove = false;
             bArea = true;
             bHavePlan = true;
+            bSelectedRoute = false;
         }
         CandidatePath.Length = 0;
         if (class'APX_MissionPlanner'.static.ChoosePoisonEscape(UnitState, CandidatePath, Score)
@@ -1485,6 +1499,7 @@ function MakeDecision(XComTacticalController PC)
             bArea = false;
             BestLocations.Length = 0;
             bHavePlan = true;
+            bSelectedRoute = false;
         }
         CandidatePath.Length = 0;
         if (class'APX_RepositionPlanner'.static.ChooseMove(UnitState, CandidatePath, Score)
@@ -1498,8 +1513,11 @@ function MakeDecision(XComTacticalController PC)
             bArea = false;
             BestLocations.Length = 0;
             bHavePlan = true;
+            bSelectedRoute = false;
         }
         CandidatePath.Length = 0;
+        bCandidateRoutine = false;
+        bCandidateFirstBlue = false;
         if (bContactSearch && !class'APX_MissionPlanner'.static.ShouldEvacuate(UnitState))
             bCandidateMove = ChooseContactSearchMove(UnitState, CandidatePath, Score);
         else
@@ -1509,7 +1527,10 @@ function MakeDecision(XComTacticalController PC)
                 RangedTargetID, bRangedFocusGoal,
                 ContactSnapshotUnits, ContactSnapshotInteractives,
                 bContactSnapshotComplete, ContactSnapshotReason,
-                RemainingContactDetectors, RemainingContactTiles, RemainingContactLOS);
+                RemainingContactDetectors, RemainingContactTiles, RemainingContactLOS,
+                RouteTempo, PlayerState.PlayerTurnCount,
+                PatrolAmbushPlanner.HasActiveStaging(), bContactSearch || bVisibleThreats,
+                CandidateRouteGoal, bCandidateRoutine, bCandidateFirstBlue);
         if (bCandidateMove
             && TraceCandidateMove(UnitState, CandidatePath, Score)
             && Score > BestScore && CanUseMove(UnitState, CandidatePath))
@@ -1521,6 +1542,11 @@ function MakeDecision(XComTacticalController PC)
             bArea = false;
             BestLocations.Length = 0;
             bHavePlan = true;
+            bSelectedRoute = !bContactSearch && bCandidateRoutine;
+            bSelectedFirstBlue = bSelectedRoute && bCandidateFirstBlue;
+            BestRouteGoal = CandidateRouteGoal;
+            SelectedRouteDestination = CandidatePath[CandidatePath.Length - 1];
+            SelectedRouteUnitID = UnitState.ObjectID;
         }
         CandidatePath.Length = 0;
         if (class'APX_MissionPlanner'.static.ChooseRescueMove(UnitState, CandidatePath, Score, RescuePatientID)
@@ -1534,6 +1560,7 @@ function MakeDecision(XComTacticalController PC)
             bArea = false;
             BestLocations.Length = 0;
             bHavePlan = true;
+            bSelectedRoute = false;
             if (MissionRecorder != none)
                 MissionRecorder.Marker("rescue_candidate", "unit=" $ UnitState.ObjectID
                     @ "patient=" $ RescuePatientID @ "score=" $ Score);
@@ -1565,6 +1592,7 @@ function MakeDecision(XComTacticalController PC)
             bArea = false;
             BestLocations.Length = 0;
             bHavePlan = true;
+            bSelectedRoute = false;
             bSelectedPatrolMove = true;
             PatrolApproachUnitID = UnitState.ObjectID;
             PatrolApproachDestination = PatrolApproachPath[PatrolApproachPath.Length - 1];
@@ -1589,6 +1617,7 @@ function MakeDecision(XComTacticalController PC)
             bArea = false;
             BestLocations.Length = 0;
             bHavePlan = true;
+            bSelectedRoute = false;
             if (MissionRecorder != none)
                 MissionRecorder.Marker("loot_candidate", "unit=" $ UnitState.ObjectID @ "score=" $ Score);
         }
@@ -1610,7 +1639,8 @@ function MakeDecision(XComTacticalController PC)
             bCanExplore = true;
             CandidatePath.Length = 0;
             if (ExplorationPlanner.ChooseMove(
-                UnitState, CandidatePath, Score, RemainingConcealmentChecks)
+                UnitState, CandidatePath, Score, RemainingConcealmentChecks,
+                RouteTempo, PlayerState.PlayerTurnCount, CandidateRouteGoal)
                 && TraceCandidateMove(UnitState, CandidatePath, Score)
                 && Score > BestScore && CanUseMove(UnitState, CandidatePath))
             {
@@ -1621,6 +1651,11 @@ function MakeDecision(XComTacticalController PC)
                 bMove = true;
                 bArea = false;
                 bHavePlan = true;
+                bSelectedRoute = true;
+                bSelectedFirstBlue = false;
+                BestRouteGoal = CandidateRouteGoal;
+                SelectedRouteDestination = CandidatePath[CandidatePath.Length - 1];
+                SelectedRouteUnitID = UnitState.ObjectID;
             }
         }
         if (bCanExplore && (!bHavePlan || BestScore <= 2.0)
@@ -1686,6 +1721,7 @@ function MakeDecision(XComTacticalController PC)
                 BestPath = AmbushPath;
                 BestScore = AmbushScore;
                 BestLocations.Length = 0;
+                bSelectedRoute = false; // Planner superseded route candidate.
                 bMove = AmbushPath.Length > 1;
                 bArea = false;
                 ++AmbushPreparationActions;
@@ -1822,7 +1858,26 @@ function MakeDecision(XComTacticalController PC)
                 && PatrolAmbushPlanner.IsActualOpener(
                     BestAction, BestTargetIndex, BestUnit));
     if (bMove)
+    {
+        if (bSelectedRoute && RouteTempo != none && BestUnit != none
+            && BestPath.Length > 1
+            && BestUnit.ObjectID == SelectedRouteUnitID
+            && BestPath[BestPath.Length - 1] == SelectedRouteDestination)
+        {
+            RouteTempo.RecordAccepted(BestUnit.ObjectID, BestPath[0],
+                BestPath[BestPath.Length - 1], BestRouteGoal,
+                PlayerState.PlayerTurnCount, bSelectedFirstBlue);
+            if (MissionRecorder != none)
+                MissionRecorder.Marker("route_tempo",
+                    "unit=" $ BestUnit.ObjectID
+                    @ "first_blue_clear=" $ string(bSelectedFirstBlue)
+                    @ "goal_x=" $ BestRouteGoal.X
+                    @ "goal_y=" $ BestRouteGoal.Y
+                    @ "goal_z=" $ BestRouteGoal.Z
+                    @ "memory_entries=" $ RouteTempo.CountVisits());
+        }
         RecordMove(BestUnit, BestPath);
+    }
     ++ActionsThisTurn;
     if (BestScore > 2.0)
         ++MeaningfulActionsThisTurn;
@@ -1879,6 +1934,9 @@ simulated event Destroyed()
         AreaPlanner.Cleanup();
     ExplorationPlanner = none;
     AreaPlanner = none;
+    if (RouteTempo != none)
+        RouteTempo.Reset();
+    RouteTempo = none;
     OwnedActionContext = none;
     OwnedHackScreen = none;
     MissionRecorder = none;
