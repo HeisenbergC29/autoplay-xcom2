@@ -31,6 +31,17 @@ static function bool SnapshotBudgetsValid(int Groups, int Members,
     return Groups > 0 && Members > 0 && Detectors > 0 && Tiles > 0 && LOS > 0;
 }
 
+// A dangerous middle tile cannot be erased by a safe endpoint; an
+// unknown sample cannot certify a route as Clear.
+static function int CombineRouteStatus(int CurrentStatus, int SampleStatus)
+{
+    if (CurrentStatus == 1 || SampleStatus == 1)
+        return 1;
+    if (CurrentStatus < 0 || SampleStatus < 0)
+        return -1;
+    return 0;
+}
+
 static function float PathStatusPenalty(int Status)
 {
     if (Status == 1)
@@ -289,7 +300,7 @@ static function int AssessRoute(XComGameState_Unit Soldier, const out array<TTil
             if (!bLOS)
             {
                 // A geometric false does not prove absence of gameplay peek LOS.
-                Status = -1;
+                Status = CombineRouteStatus(Status, -1);
                 Reason = "native_peek_unverified";
                 continue;
             }
