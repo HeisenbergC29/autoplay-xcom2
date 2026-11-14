@@ -130,6 +130,11 @@ class RouteSourceContracts(unittest.TestCase):
         explore = function_body(self.exploration, "ChooseMove")
         explore_prefix = function_body(self.exploration, "BuildSafeBluePrefix")
         self.assertIn("MemoryFallbackPath", choose)
+        can_use = function_body(self.controller, "CanUseMove")
+        for emergency in ("ShouldEvacuate(UnitState)", "HasBleedingSquadmate(UnitState)",
+                          "HasActiveMissionDeadline()", "NeedsPoisonEscape(UnitState)"):
+            self.assertIn(emergency, can_use)
+        self.assertIn("VisitedPositions[Index].Tile == Path[Path.Length - 1]", can_use)
         self.assertIn("if (Path.Length < 2 && MemoryFallbackPath.Length > 1)", choose)
         self.assertIn("RouteTempo.PenaltyFor(", choose)
         self.assertIn("RouteTempo.PenaltyFor(", prefix)
