@@ -80,7 +80,10 @@ class NativeMultiTargetSource(unittest.TestCase):
                      "Ability.GetShotBreakdown(", "Chance < 0 || Chance > 100",
                      "DamageEffect.GetDamagePreview(TargetRef, Ability, Index < 0,",
                      "PreviewDamageAfterArmor(", "Health <= 0.0",
-                     "ScoreDamage(", "ScoreFaceoffOutcome("):
+                     "ScoreDamage(", "UsefulTargets",
+                     "Chance < Max(1, class'APX_CombatPlanner'.default.MinimumHitChance)",
+                     "MaxAfterArmor <= 0.0",
+                     "ScoreFaceoffOutcome(UsefulTargets, StrongFinishes, Value)"):
             self.assertIn(term, body)
         self.assertNotIn("GetAllUnits(", body)
         self.assertNotIn("SYNC_RAND", CHECKS.without_comments(body))
