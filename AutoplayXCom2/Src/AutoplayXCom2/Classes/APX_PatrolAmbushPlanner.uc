@@ -75,8 +75,9 @@ function bool Refresh(XComGameState_Unit Scout, int Turn,
     bool bSnapshotComplete, bool bUrgent, out string Reason)
 {
     local XComGameState_BattleData Battle;
-    local int HistoryIndex, StartIndex;
+    local int HistoryIndex, StartIndex, Index;
     local XComGameState_AIGroup Group;
+    local array<StateObjectReference> CurrentEnemies;
     local bool bNewEpoch;
 
     Reason = "unavailable";
@@ -109,14 +110,50 @@ function bool Refresh(XComGameState_Unit Scout, int Turn,
     LastHistory = HistoryIndex;
     LastTurn = Turn;
 
-    if (bUrgent || !bSnapshotComplete || PatrolGroup.ObjectID <= 0)
+    if (bUrgent)
     {
+        Phase = 'abort';
+        bExpired = true;
+        Reason = "urgent_mission_preempts";
+        return false;
+    }
+    if (!bSnapshotComplete || PatrolGroup.ObjectID <= 0)
+    {
+        // Green-alert membership can disappear precisely when the squad
+        // makes actual contact. Preserve ONLY a native-visible current
+        // member of the previously verified group as an opening candidate.
+        // No cached future waypoint is promoted into a new AI decision.
+        if (GroupID > 0 && !bExpired && Turn - StartTurn >= 0
+            && Turn - StartTurn < Clamp(MaxSetupTurns, 1, 3))
+        {
+            Group = XComGameState_AIGroup(
+                `XCOMHISTORY.GetGameStateForObjectID(GroupID));
+            if (Group != none && !Group.bRemoved
+                && Group.m_arrMembers.Length <= 24)
+            {
+                class'APX_MissionPlanner'.static.GetImmediateThreats(
+                    Scout, CurrentEnemies);
+                if (CurrentEnemies.Length <= 24)
+                {
+                    for (Index = 0; Index < CurrentEnemies.Length; ++Index)
+                    {
+                        if (Group.m_arrMembers.Find('ObjectID',
+                            CurrentEnemies[Index].ObjectID) != INDEX_NONE)
+                        {
+                            Phase = 'setup'; // Actual contact, not a future route.
+                            Reason = "verified_group_entered_contact";
+                            return true;
+                        }
+                    }
+                }
+            }
+        }
         if (GroupID > 0)
         {
             Phase = 'abort';
-            bExpired = true; // Do not spin on the same uncertain waypoint.
+            bExpired = true; // No rearming same uncertain waypoint.
         }
-        Reason = bUrgent ? "urgent_mission_preempts" : "patrol_evidence_unknown";
+        Reason = "patrol_evidence_unknown";
         return false;
     }
     Group = XComGameState_AIGroup(
