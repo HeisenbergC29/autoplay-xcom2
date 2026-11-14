@@ -1908,6 +1908,14 @@ function bool CanUseMove(XComGameState_Unit UnitState, const out array<TTile> Pa
     local int Index;
     if (Path.Length < 2)
         return false;
+    // #10: even the historic SAME-TURN anti-shuffle guard cannot deny a
+    // critical evacuation, rescue or hazard exit along the sole legal way
+    // back. Other paths still use native Controller/ability/path checks.
+    if (class'APX_MissionPlanner'.static.ShouldEvacuate(UnitState)
+        || class'APX_MissionPlanner'.static.HasBleedingSquadmate(UnitState)
+        || class'APX_MissionPlanner'.static.HasActiveMissionDeadline()
+        || class'APX_HazardKnowledge'.static.NeedsPoisonEscape(UnitState))
+        return true;
     for (Index = 0; Index < VisitedPositions.Length; ++Index)
     {
         if (VisitedPositions[Index].UnitID == UnitState.ObjectID
