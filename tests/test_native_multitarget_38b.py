@@ -58,7 +58,7 @@ class NativeMultiTargetSource(unittest.TestCase):
     def test_native_faceoff_template_exact_contract_not_grenade_or_blind_freeaim(self):
         body = function_body(self.native, "SupportedFaceoff")
         for term in ("Ability.GetMyTemplateName() != 'Faceoff'",
-                     "Template.TargetingMethod != none",
+                     "Template.TargetingMethod != class'X2TargetingMethod_TopDown'",
                      "Template.Hostility != eHostility_Offensive",
                      "X2AbilityMultiTarget_AllUnits(",
                      "Multi.Class != class'X2AbilityMultiTarget_AllUnits'",
@@ -137,6 +137,7 @@ class NativeFaceoffSDK(unittest.TestCase):
         sharp = (folder / "X2Ability_SharpshooterAbilitySet.uc").read_text(encoding="utf-8-sig")
         targets = (folder / "X2AbilityMultiTarget_AllUnits.uc").read_text(encoding="utf-8-sig")
         heavy = (folder / "X2Ability_HeavyWeapons.uc").read_text(encoding="utf-8-sig")
+        template = (folder / "X2AbilityTemplate.uc").read_text(encoding="utf-8-sig")
         psi = (folder / "X2Ability_PsiOperativeAbilitySet.uc").read_text(encoding="utf-8-sig")
         for t in ("Faceoff()", "MultiTargetUnits.bUseAbilitySourceAsPrimaryTarget = true",
                   "MultiTargetUnits.bAcceptEnemyUnits = true",
@@ -146,6 +147,11 @@ class NativeFaceoffSDK(unittest.TestCase):
                   "FireAction.SetFireParameters(Context.IsResultContextHit()",
                   "History.GetVisualizer(AbilityContext.PrimaryTarget.ObjectID)"):
             self.assertIn(t, sharp)
+        self.assertIn("TargetingMethod = class'X2TargetingMethod_TopDown'", template)
+        # Faceoff does NOT override the stock default with a free-aim cursor.
+        faceoff_src = sharp.split("static function X2AbilityTemplate Faceoff()", 1)[1].split(
+            "function Faceoff_BuildVisualization", 1)[0]
+        self.assertNotIn("Template.TargetingMethod =", faceoff_src)
         for t in ("bAcceptFriendlyUnits", "bDontAcceptNeutralUnits",
                   "bRandomlySelectOne", "GetMultiTargetOptions"):
             self.assertIn(t, targets)
