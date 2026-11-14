@@ -498,7 +498,7 @@ function ObserveObjectiveHistory(XComGameState Frame, int HistoryIndex)
     local ObjectiveDisplayInfo CurrentInfo, PreviousInfo;
     local string ObjectiveID;
     local bool bPreviouslySet;
-    local int Turn;
+    local int Turn, ListsVisited;
 
     if (Frame == none || HistoryIndex <= StartIndex)
         return;
@@ -509,6 +509,11 @@ function ObserveObjectiveHistory(XComGameState Frame, int HistoryIndex)
     }
     foreach Frame.IterateByClassType(class'XComGameState_ObjectivesList', CurrentList)
     {
+        if (++ListsVisited > 128)
+        {
+            bObjectiveHistoryGap = true;
+            break;
+        }
         if (CurrentList.ObjectiveDisplayInfos.Length > 128)
         {
             bObjectiveHistoryGap = true;
@@ -534,18 +539,15 @@ function ObserveObjectiveHistory(XComGameState Frame, int HistoryIndex)
                 continue;
 
             bPreviouslySet = false;
-            if (PreviousList != none)
+            // Stock identity is the first matching label OR valid full key,
+            // in list order. A completed/failed row may change its numeric
+            // keys without becoming a new native completion. The public
+            // read-only getter preserves that identity, including -1 keys.
+            if (PreviousList != none && PreviousList.GetObjectiveDisplay(
+                CurrentInfo.MissionType, CurrentInfo.DisplayLabel, PreviousInfo,
+                CurrentInfo.TextPoolIndex, CurrentInfo.LineIndex, CurrentInfo.GroupID))
             {
-                foreach PreviousList.ObjectiveDisplayInfos(PreviousInfo)
-                {
-                    if (PreviousInfo.MissionType != CurrentInfo.MissionType
-                        || PreviousInfo.TextPoolIndex != CurrentInfo.TextPoolIndex
-                        || PreviousInfo.GroupID != CurrentInfo.GroupID
-                        || PreviousInfo.LineIndex != CurrentInfo.LineIndex)
-                        continue;
-                    bPreviouslySet = PreviousInfo.ShowCompleted || PreviousInfo.ShowFailed;
-                    break;
-                }
+                bPreviouslySet = PreviousInfo.ShowCompleted || PreviousInfo.ShowFailed;
             }
             if (bPreviouslySet)
                 continue;

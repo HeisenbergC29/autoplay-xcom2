@@ -32,11 +32,14 @@ Przetwarza tylko zmienione w tej historii `XComGameState_ObjectivesList`,
 porównuje je z wersją tego samego obiektu na indeksie poprzedniej historii.
 Warunki uznania przejścia:
 - ten sam typ misji, `ShowCompleted`, `ShowCheckBox` i nie `HideInTactical`;
-- wcześniejszy ten sam pełny klucz (MissionType, TextPoolIndex, GroupID,
-  LineIndex) **nie był ukończony ani nie był failed** lub obiekt nie istniał;
+- poprzedni wiersz wskazany przez publiczny stock `GetObjectiveDisplay`
+  **nie był ukończony ani nie był failed** lub nie istniał; ten getter
+  zachowuje natywne dopasowanie po MissionType + DisplayLabel albo po
+  poprawnym pełnym kluczu, w kolejności wierszy listy;
 - nie policzono tego pełnego klucza przez działający listener;
 - rzeczywista tura odczytana z `XComGameState_Player` w momencie przejścia;
-- 128 jako górna granica długości list celów i 128 zarejestrowanych kluczy.
+- 128 jako górna granica liczby list w jednej historii, długości każdej
+  listy celów i liczby zarejestrowanych kluczy.
 
 Ukończenie obecne jedynie w samym starcie misji nie jest dowodem nowego
 zdarzenia — nie zostaje naliczone. Luka w przeglądanej historii, zbyt duża
@@ -45,6 +48,17 @@ Naliczenie rzeczywiście odtworzonego przejścia tworzy marker w Launch.log:
 `Legacy objective history replay|profile=...|history=...|recovered=...`.
 Odtwarzanie i listener używają wspólnej tablicy kluczy, co chroni przed
 podwójnym naliczeniem.
+
+Przegląd LEAD wykrył, że samo porównanie numeric key nie odtwarzało
+natywnej tożsamości celu. Ukończony lub failed wiersz z tym samym label,
+ale zmienionym GroupID/pool/line mógł zostać błędnie uznany za nowe
+ukończenie. Poprawka używa bezpośrednio publicznego, odczytowego
+`GetObjectiveDisplay(MissionType, DisplayLabel, out Info,
+TextPoolIndex, LineIndex, GroupID)`. Nie wywołuje prywatnego
+`GetObjectiveDisplayInfoIndex` i nie kopiuje jego implementacji.
+Identyfikator do deduplikacji przyznanej nagrody nadal zawiera pełny klucz.
+Niepoprawne indeksy `-1` nie stają się automatycznie poprawnym fallbackiem;
+label nadal może wskazać istniejący poprzedni wiersz, jak w stock.
 
 Po późnym starcie pozostaje status `partial_civilian_listener_started_late`,
 ponieważ ratowania cywilów nie da się równie bezpiecznie odtworzyć jedynie
@@ -61,7 +75,12 @@ punktów nie wzrośnie. **Nie wolno dopisywać sztucznego 5000.**
 Dostępne testy `tests/test_legacy_objective_history_v38.py` sprawdzają
 bounded traversal, poprzedni stan, pełny klucz, deduplikację, niepewność,
 brak mutacji i zgodność ze stock UC, jeśli `APX_SDK_SOURCE_ROOT` istnieje.
-Testy kontraktu nie wykonują funkcji UnrealScript w grze.
+Regresje LEAD wiążą replay z publicznym getterem i jego argumentami oraz
+sprawdzają rzeczywiste klauzule dopasowania z prywatnego SDK na
+przypadkach completed/failed ze zmienionym kluczem, indeksów `-1`
+i pierwszego dopasowania w kolejności listy. Źródła SDK są wyłącznie
+lokalnym wejściem testu, nie są kopiowane do repozytorium.
+Testy kontraktu nie wykonują funkcji UnrealScript w silniku gry.
 
 Próby do Windows WOTC SDK po przeglądzie i integracji LEAD:
 1. Zbudować dokładną paczkę, sprawdzić 0 błędów, marker v38.
