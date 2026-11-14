@@ -98,6 +98,7 @@ class RouteSourceContracts(unittest.TestCase):
                   "NumActionPoints('standard') >= 2", "NumActionPointsForMoving() >= 2",
                   "NeedsPoisonEscape(", "bActivePatrolPreparation",
                   "bRecentContact", "bContactSnapshotComplete",
+                  "ChooseInteraction(UnitState,", "ReadyObjectiveAction",
                   "bSecondBlue && ContactStatus != 0",
                   "bSecondBlue && CoverRisk > 0.0",
                   "bSecondBlue && bStealthRisk",
