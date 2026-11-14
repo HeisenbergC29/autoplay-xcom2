@@ -2154,6 +2154,7 @@ static function bool ChooseMove(XComGameState_Unit UnitState,
         && class'APX_RouteTempo'.default.EnableSequentialBlue
         && class'APX_FullIntel'.default.EnableFullIntel
         && bContactSnapshotComplete && bInspectContact
+        && !bConcealmentUrgent
         && !bActivePatrolPreparation && !bRecentContact
         && !ShouldEvacuate(UnitState)
         && !class'APX_HazardKnowledge'.static.NeedsPoisonEscape(UnitState);
@@ -2239,7 +2240,13 @@ static function bool ChooseMove(XComGameState_Unit UnitState,
                     Score = ApplyConstructiveSoftPenalty(Score,
                         class'APX_ContactEnvelope'.static.PathStatusPenalty(ContactStatus));
                 }
-                if (bInspectContact && ContactStatus == 1)
+                if (bSecondBlue && (ContactStatus != 0 || CoverRisk > 0.0))
+                {
+                    // Do not rescue a last-AP fast continuation from Unknown
+                    // or Caution via a historical soft-penalty fallback.
+                    Path.Length = 0;
+                }
+                else if (bInspectContact && ContactStatus == 1)
                 {
                     // Confirmed contact is less attractive than a verified
                     // safe local alternative; it remains a legal fallback.
@@ -2275,12 +2282,33 @@ static function bool ChooseMove(XComGameState_Unit UnitState,
                 }
                 else
                 {
-                    if (bInspectContact)
-                        `log("Contact envelope|unit=" $ UnitState.ObjectID
+                    MemoryPenalty = 0.0;
+                    if (RouteTempo != none && bInspectContact)
+                        MemoryPenalty = RouteTempo.PenaltyFor(
+                            UnitState.ObjectID, GoalTile,
+                            Path[Path.Length - 1], CurrentTurn);
+                    if (MemoryPenalty > 0.0 && !bSecondBlue)
+                    {
+                        MemoryFallbackPath = Path;
+                        MemoryFallbackScore = Score - MemoryPenalty;
+                        Path.Length = 0;
+                    }
+                    else
+                    {
+                        bAcceptedRoutine = bInspectContact;
+                        bFirstBlueClear = bSingleBlue && ContactStatus == 0;
+                        if (bSecondBlue)
+                            `log("Sequential blue second-leg|unit=" $ UnitState.ObjectID
+                                $ "|goal_x=" $ GoalTile.X
+                                $ "|goal_y=" $ GoalTile.Y
+                                $ "|source=native_blue_clear", true, 'AutoplayXCom2');
+                        if (bInspectContact)
+                            `log("Contact envelope|unit=" $ UnitState.ObjectID
                             $ "|horizon_ai_turns=0|status=" $ ContactStatus
                             $ "|reason=" $ ContactReason
                             $ "|source=route_prefix", true, 'AutoplayXCom2');
-                    return true;
+                        return true;
+                    }
                 }
             }
         }
@@ -2373,11 +2401,17 @@ static function bool ChooseMove(XComGameState_Unit UnitState,
                     RemainingContactLOS, ContactReason);
                 CandidateScore -= class'APX_ContactEnvelope'.static.PathStatusPenalty(
                     ContactStatus);
+                if (bSecondBlue && ContactStatus != 0)
+                    continue;
             }
+            if (RouteTempo != none && bInspectContact)
+                CandidateScore -= RouteTempo.PenaltyFor(
+                    UnitState.ObjectID, GoalTile, Tile, CurrentTurn);
             // Preserve one real, legal local move BEFORE soft cover/stealth
             // penalties, including in revealed missions such as GasStation.
             // Otherwise the only path could be discarded and the squad idle.
-            if ((!bConcealmentUrgent
+            if (!bSecondBlue
+                && (!bConcealmentUrgent
                 || (!bCoverUrgent && UnitState.GetMyTemplate().bCanTakeCover))
                 && CandidateScore > LocalFallbackScore)
             {
@@ -2419,6 +2453,8 @@ static function bool ChooseMove(XComGameState_Unit UnitState,
                 if (CandidateScore <= BestScore)
                     continue;
             }
+            if (bSecondBlue && CoverRisk > 0.0)
+                continue;
             BestScore = CandidateScore;
             BestRisk = CandidateRisk;
             BestContactStatus = ContactStatus;
@@ -2426,7 +2462,7 @@ static function bool ChooseMove(XComGameState_Unit UnitState,
             Path = CandidatePath;
         }
     }
-    if (Path.Length < 2 && RiskyRoute.Length > 1)
+    if (!bSecondBlue && Path.Length < 2 && RiskyRoute.Length > 1)
     {
         Path = RiskyRoute;
         // An unavoidable reveal is not a reason to remain indefinitely idle.
@@ -2442,7 +2478,7 @@ static function bool ChooseMove(XComGameState_Unit UnitState,
                 $ "|source=risky_fallback", true, 'AutoplayXCom2');
         return true;
     }
-    if (Path.Length < 2 && LocalFallbackPath.Length > 1)
+    if (!bSecondBlue && Path.Length < 2 && LocalFallbackPath.Length > 1)
     {
         Path = LocalFallbackPath;
         BestScore = LocalFallbackScore;
@@ -2450,6 +2486,14 @@ static function bool ChooseMove(XComGameState_Unit UnitState,
         BestContactStatus = LocalContactStatus;
         BestContactReason = LocalContactReason;
         bUsedLocalFallback = true;
+    }
+    if (Path.Length < 2 && MemoryFallbackPath.Length > 1)
+    {
+        Path = MemoryFallbackPath;
+        Score = MemoryFallbackScore;
+        bAcceptedRoutine = bInspectContact;
+        bFirstBlueClear = bSingleBlue;
+        return true;
     }
     if (Path.Length < 2)
         return false;
@@ -2471,6 +2515,14 @@ static function bool ChooseMove(XComGameState_Unit UnitState,
     }
     else
         Score = 20 + FMin(60, BestScore - CurrentScore);
+    if (MemoryFallbackPath.Length > 1 && Score <= MemoryFallbackScore)
+    {
+        Path = MemoryFallbackPath;
+        Score = MemoryFallbackScore;
+        bAcceptedRoutine = bInspectContact;
+        bFirstBlueClear = bSingleBlue;
+        return true;
+    }
     // Once all alternatives failed, allow necessary progress with the same
     // bounded unavoidable-reveal cost as the retained route prefix.
     if (bUsedLocalFallback)
@@ -2481,5 +2533,7 @@ static function bool ChooseMove(XComGameState_Unit UnitState,
                 class'APX_ConcealmentPlanner'.default.ConcealmentRiskPenalty)
             + FMin(18.0, LocalFallbackCoverRisk));
     }
+    bAcceptedRoutine = bInspectContact && !bUsedLocalFallback;
+    bFirstBlueClear = bAcceptedRoutine && bSingleBlue && BestContactStatus == 0;
     return true;
 }
