@@ -66,7 +66,8 @@ static function float PathStatusPenalty(int Status)
 static function bool BuildSnapshot(XComGameState_Unit Soldier,
     out array<StateObjectReference> KnownUnits,
     out array<StateObjectReference> KnownInteractives,
-    out string Reason, out int RemainingGroups, out int RemainingMembers)
+    out string Reason, out int RemainingGroups, out int RemainingMembers,
+    optional out StateObjectReference PatrolGroup, optional out TTile PatrolWaypoint)
 {
     local array<StateObjectReference> VisibleObjects;
     local StateObjectReference Ref;
@@ -78,6 +79,7 @@ static function bool BuildSnapshot(XComGameState_Unit Soldier,
 
     KnownUnits.Length = 0;
     KnownInteractives.Length = 0;
+    PatrolGroup.ObjectID = 0;
     Reason = "none";
     if (Soldier == none || `XCOMHISTORY == none || `XWORLD == none
         || `TACTICALRULES == none)
@@ -150,8 +152,17 @@ static function bool BuildSnapshot(XComGameState_Unit Soldier,
             if (PatrolReason != "not_listed_patrol")
             {
                 Reason = PatrolReason;
+                PatrolGroup.ObjectID = 0;
                 return false;
             }
+        }
+        else if (PatrolGroup.ObjectID == 0)
+        {
+            // Share already-validated, actually stored current waypoint with
+            // #88. This is NOT a selected multi-turn route or a forecast.
+            PatrolGroup.ObjectID = Group.ObjectID;
+            PatrolWaypoint = `XWORLD.GetTileCoordinatesFromPosition(
+                Group.CurrentTargetLocation);
         }
     }
     Reason = "current_known_contacts";
