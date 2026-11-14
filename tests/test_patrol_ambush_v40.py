@@ -25,6 +25,7 @@ class PatrolAmbushNumericPolicy(unittest.TestCase):
         cls.stage = staticmethod(load_uc_function(AMBUSH, "CanStage"))
         cls.defer = staticmethod(load_uc_function(AMBUSH, "CanDeferOpener"))
         cls.rank = staticmethod(load_uc_function(AMBUSH, "VariantPositionScore"))
+        cls.wait = staticmethod(load_uc_function(AMBUSH, "CanWaitWindow"))
 
     def test_precontact_staging_requires_native_move_and_unused_blue_ap(self):
         self.assertTrue(self.stage(True, False, False, True, 2, 0, 3, 0, 2))
@@ -45,6 +46,22 @@ class PatrolAmbushNumericPolicy(unittest.TestCase):
         ):
             with self.subTest(args=args):
                 self.assertFalse(self.stage(*args))
+
+    def test_after_actual_setup_or_armed_overwatch_one_wait_window_is_bounded(self):
+        # The same native turn clock applies whether the preparation was a
+        # blue move or a genuinely submitted affordable overwatch.
+        self.assertTrue(self.wait(True, False, True, False, 1, 0, 1, 2))
+        self.assertTrue(self.wait(True, False, False, True, 0, 2, 1, 2))
+        for args in (
+            (True, False, True, False, 0, 0, 1, 2),
+            (True, False, False, False, 1, 0, 1, 2),
+            (True, False, True, False, 1, 0, 0, 2),
+            (True, False, False, True, 0, 1, 2, 2),
+            (True, True, True, False, 1, 0, 1, 2),
+            (False, False, True, False, 1, 0, 1, 2),
+        ):
+            with self.subTest(args=args):
+                self.assertFalse(self.wait(*args))
 
     def test_competing_lanes_unknown_contact_and_exposure_have_real_ranking(self):
         safe_three = self.rank(6.0, 3, True, 12.0, 0.0, 0, 8.0)
@@ -118,10 +135,16 @@ class PatrolAmbushSourceContracts(unittest.TestCase):
         self.assertIn("StartTurn = INDEX_NONE;", reset)
         self.assertIn("OrderedReactions = 0;", reset)
         bounded_wait = function_body(self.ambush, "CanWaitForContact")
-        self.assertIn("PreparedMoves > 0", bounded_wait)
-        self.assertIn("LastTurn > StartTurn", bounded_wait)
-        self.assertIn("LastTurn - StartTurn < Clamp(MaxSetupTurns", bounded_wait)
-        self.assertIn("!bExpired", bounded_wait)
+        policy = function_body(self.ambush, "CanWaitWindow")
+        self.assertIn("CanWaitWindow(", bounded_wait)
+        self.assertIn("Phase == 'setup'", bounded_wait)
+        self.assertIn("Phase == 'armed'", bounded_wait)
+        self.assertIn("PreparedMoves, OrderedReactions", bounded_wait)
+        self.assertIn("LastTurn - StartTurn", bounded_wait)
+        self.assertIn("(Moves > 0 || Reactions > 0)", policy)
+        self.assertIn("ElapsedTurns > 0", policy)
+        self.assertIn("ElapsedTurns < Clamp(MaxTurns", policy)
+        self.assertIn("!bExpired", policy)
         self.assertIn("PatrolAmbushPlanner.Reset();",
                       function_body(self.controller, "StopAutoplay"))
         self.assertIn("bEnabled = false;", function_body(self.controller, "StopAutoplay"))
