@@ -99,8 +99,7 @@ static function bool GetCurrentPatrolWaypoint(XComGameState_AIGroup Group,
 // A negative/default/future/stale timestamp cannot certify a usable waypoint.
 static function int StoredWaypointAge(int AITurn, int DestinationTurn)
 {
-    if (AITurn <= 0 || DestinationTurn < 0 || DestinationTurn > AITurn
-        || AITurn - DestinationTurn > 2)
+    if (AITurn <= 0 || DestinationTurn < 0 || DestinationTurn > AITurn || AITurn - DestinationTurn > 2)
         return -1;
     return AITurn - DestinationTurn;
 }
