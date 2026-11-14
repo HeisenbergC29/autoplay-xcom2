@@ -14,7 +14,11 @@ polecenia oddzielnej kompilacji.
 aktualnych, natywnie zweryfikowanych członków grup i zapisane
 waypointy (`APX_PatrolKnowledge.StoredPatrolEvidence`, AI clock).
 Od v40 przekazuje z **tego samego skanu** ID jednej zweryfikowanej
-grupy i jej rzeczywiście bieżący waypoint. Nie wywołuje
+grupy i jej rzeczywiście bieżący waypoint. Gdy kilka grup ma
+takie dowody, wybiera najbliższy **zweryfikowany waypoint**
+względem aktualnej pozycji własnego scouta, bez zależności
+od kolejności indeksów `AIGroup`; budżet wspólny pozostaje
+niezmieniony. Nie wywołuje
 `ShouldMoveToIntercept`, `ComputeGroupPath`, `GetGroupMovePaths`,
 `GetNextDestination` ani RNG. Te procedury gry mogą wybierać nowe
 punkty przez native `BuildEncounterZone`, zależne od aktualnego
