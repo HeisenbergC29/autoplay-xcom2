@@ -200,6 +200,15 @@ function name CurrentPhase()
     return Phase;
 }
 
+// An observed green waypoint alone (phase=approach) must NOT block route
+// tempo. Only an actually submitted staging move or reaction does.
+function bool HasActiveStaging()
+{
+    return EnablePatrolAmbush && !bExpired && GroupID > 0
+        && (Phase == 'setup' || Phase == 'armed')
+        && (PreparedMoves > 0 || OrderedReactions > 0);
+}
+
 // One bounded native turn handoff after a submitted setup move OR reaction.
 // Native AP/trigger is not inferred: the state counters change only after
 // successful action dispatch. No wait on a fresh unarmed, speculative plan.
