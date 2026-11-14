@@ -9,7 +9,6 @@ var config int MaxSetupTurns;
 var config int MaxSetupActions;
 var config int MaxReactionSupport;
 var config int MaxPositionSamples;
-var config int MaxGroupChecks;
 var config float MaxPatrolDistanceTiles;
 var config float MinimumApproachGainTiles;
 var config float WeakRevealedOpenerThreshold;
@@ -186,15 +185,17 @@ function NoteSubmitted(bool bMove, bool bReaction, bool bOpener)
 // A directional LOS check to one possible approach tile gives one geometric
 // lane, not a selected enemy path, native reaction trigger or legal attack.
 // Shared budget is depleted for ALL candidate locations and all own soldiers.
-static function int CountVariantLanes(TTile Position, TTile Target,
-    out int RemainingLOS)
+static function int CountVariantLanes(XComGameState_Unit Soldier,
+    TTile Position, TTile Target, out int RemainingLOS)
 {
     local TTile Variant;
     local GameRulesCache_VisibilityInfo Visibility;
     local int Index, Lanes;
     local float SightSq;
 
-    SightSq = Square(`METERSTOUNITS(15.0));
+    if (Soldier == none || `XWORLD == none)
+        return 0;
+    SightSq = Square(`METERSTOUNITS(Soldier.GetVisibilityRadius()));
     for (Index = 0; Index < 3; ++Index)
     {
         Variant = Target;
@@ -308,7 +309,7 @@ function bool ChooseApproach(XComGameState_Unit Soldier,
             RemainingTiles, RemainingLOS, ContactReason);
         if (ContactStatus == 1)
             continue;
-        Lanes = CountVariantLanes(Tile, Waypoint, RemainingLOS);
+        Lanes = CountVariantLanes(Soldier, Tile, Waypoint, RemainingLOS);
         PositionGain = class'APX_MissionPlanner'.static.SquadPositionScore(Soldier, Tile)
             - class'APX_MissionPlanner'.static.SquadPositionScore(
                 Soldier, Soldier.TileLocation);
