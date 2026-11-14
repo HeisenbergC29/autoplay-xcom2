@@ -1540,6 +1540,9 @@ function MakeDecision(XComTacticalController PC)
         // Rescue/urgent timers and actual combat stay higher priority.
         PatrolApproachPath.Length = 0;
         if (bPatrolActive && !bCombatThreats
+            && BestScore < 80.0
+            && FocusBattle != none
+            && FocusBattle.MapData.ActiveMission.sType != "SabotageTransmitter"
             && !class'APX_MissionPlanner'.static.HasActiveMissionDeadline()
             && !class'APX_MissionPlanner'.static.HasBleedingSquadmate(UnitState)
             && !class'APX_MissionPlanner'.static.ShouldEvacuate(UnitState)
@@ -1550,7 +1553,7 @@ function MakeDecision(XComTacticalController PC)
                 RemainingContactLOS, PatrolApproachPath, PatrolApproachScore,
                 PatrolApproachReason, RemainingConcealmentChecks)
             && TraceCandidateMove(UnitState, PatrolApproachPath, PatrolApproachScore)
-            && PatrolApproachScore > BestScore
+            && PatrolApproachScore > BestScore + 6.0
             && CanUseMove(UnitState, PatrolApproachPath))
         {
             BestPath = PatrolApproachPath;
