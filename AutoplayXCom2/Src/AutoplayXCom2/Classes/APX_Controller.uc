@@ -1125,6 +1125,7 @@ function MakeDecision(XComTacticalController PC)
     local vector CandidateAim, BestAim;
     local int TargetIndex, BestTargetIndex, ChosenTargetID, AmbushTargetIndex, RescuePatientID;
     local int PatrolReactionIndex, PatrolApproachUnitID;
+    local int PatrolReactionUnitID, PatrolReactionAbilityID;
     local TTile PatrolApproachDestination;
     local int RemainingConcealmentChecks, RemainingCoverChecks;
     local int RemainingContactGroups, RemainingContactMembers;
@@ -1654,6 +1655,8 @@ function MakeDecision(XComTacticalController PC)
         bMove = false;
         bArea = false;
         bSelectedPatrolReaction = true;
+        PatrolReactionUnitID = PatrolSupporter.ObjectID;
+        PatrolReactionAbilityID = PatrolReaction.AbilityObjectRef.ObjectID;
         bSelectedPatrolMove = false;
     }
 
@@ -1812,7 +1815,9 @@ function MakeDecision(XComTacticalController PC)
                 && BestUnit.ObjectID == PatrolApproachUnitID
                 && BestPath.Length > 1
                 && BestPath[BestPath.Length - 1] == PatrolApproachDestination,
-            !bMove && bSelectedPatrolReaction,
+            !bMove && bSelectedPatrolReaction && BestUnit != none
+                && BestUnit.ObjectID == PatrolReactionUnitID
+                && BestAction.AbilityObjectRef.ObjectID == PatrolReactionAbilityID,
             !bMove && !bSelectedPatrolReaction
                 && PatrolAmbushPlanner.IsActualOpener(
                     BestAction, BestTargetIndex, BestUnit));
