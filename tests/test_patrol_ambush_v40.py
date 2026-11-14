@@ -164,6 +164,8 @@ class PatrolAmbushSourceContracts(unittest.TestCase):
                     "ContactStatus == 1", "CountVariantLanes(",
                     "VariantPositionScore(", "RemainingConcealmentChecks",
                     "MaxPositionSamples", "CanStageMove(", "OWCost, false",
+                    "ActionPointsAfterBlueMove(", "CanAttackWithActionPoints(",
+                    "OverwatchAbility, Soldier, AfterBluePoints",
                     "SquadPositionScore(",
                     "IsSupportedAdvance"):
             # Support is inherited from PreparationPathIsSafe, which is
