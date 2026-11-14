@@ -124,6 +124,17 @@ function SetGoal(int UnitID, TTile Tile)
     }
 }
 
+// ConcealmentIsUrgent is true for REVEALED units even on a peaceful route.
+// It must not be used as a tempo veto. Actual danger and native safety are
+// evaluated separately against the entire current path.
+static function bool IsRoutineTempoContext(bool bEnabled, bool bFullIntel,
+    bool bSnapshotComplete, bool bRoutineGoal, bool bUrgent,
+    bool bActiveAmbush, bool bRecentContact, bool bPoisonEscape)
+{
+    return bEnabled && bFullIntel && bSnapshotComplete && bRoutineGoal
+        && !bUrgent && !bActiveAmbush && !bRecentContact && !bPoisonEscape;
+}
+
 static function bool CanUseSecondBlue(bool bEnabled, bool bFullIntel,
     bool bActualFirstClear, bool bSameUnitGoalTurnAndTile,
     bool bAmbushActive, bool bRecentContact, bool bUrgent,
