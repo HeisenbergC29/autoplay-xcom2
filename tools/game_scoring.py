@@ -451,10 +451,70 @@ def comparison_score(records: list[dict], profile: dict) -> dict:
             'provenance': profile['provenance']}
 
 
+RUNTIME_V3_PROFILE = 'wotc_legacy_config_observed_v3_partial'
+RUNTIME_V3_RATE_SOURCE = 'installed_ladder_config'
+
+
+def runtime_observed_v3(records: list[dict]) -> dict:
+    """Separate the v3 HUD observations from the frozen offline v2 rules.
+
+    The runtime calls this profile partial. Installed rate tables, a native win,
+    and a positive subtotal never prove event coverage or a final native score.
+    Do not silently trust conflicting flags or incompatible rate attribution.
+    """
+    observations = [r for r in records if r.get('event') == 'hud_score'
+                    and r.get('comparison_profile') == RUNTIME_V3_PROFILE]
+    result = {
+        'profile_id': RUNTIME_V3_PROFILE,
+        'status': 'not_recorded' if not observations else 'partial',
+        'rate_source': None,
+        'native_parity_proven': False,
+        'event_coverage_proven': False,
+        'is_official_game_score': False,
+        'observed_subtotal': None,
+        'total': None,
+        'observations': len(observations),
+        'last_seq': None,
+        'last_history': None,
+        'missing_evidence': [],
+    }
+    if not observations:
+        return result
+    missing = {'native_rule_parity', 'complete_event_coverage', 'final_mission_score'}
+    valid = []
+    for entry in observations:
+        if entry.get('rate_source') != RUNTIME_V3_RATE_SOURCE:
+            missing.add('rate_source_missing_or_conflicting')
+            continue
+        if (entry.get('comparison_status') != 'partial'
+                or entry.get('native_parity_proven') is not False
+                or entry.get('event_coverage_proven') is not False):
+            missing.add('partial_status_or_proof_flags_missing_or_conflicting')
+            continue
+        display = entry.get('display')
+        value = (re.fullmatch(r'~(-?\d+)/[^\r\n|]+', display)
+                 if isinstance(display, str) else None)
+        if value is None:
+            missing.add('unreadable_mod_hud_subtotal')
+            continue
+        valid.append((entry, int(value[1])))
+    if valid and len(valid) == len(observations):
+        last, subtotal = valid[-1]
+        result.update(rate_source=RUNTIME_V3_RATE_SOURCE,
+                      observed_subtotal=subtotal,
+                      last_seq=last.get('seq'),
+                      last_history=last.get('history'))
+    else:
+        missing.add('incomplete_runtime_v3_observations')
+    result['missing_evidence'] = sorted(missing)
+    return result
+
+
 def score_session(records: list[dict], native_rules: dict | None = None,
                   profile: dict | None = None) -> dict:
     return {'official': official_observations(records),
             'comparison': comparison_score(records, profile or load_profile()),
+            'runtime_observed_v3': runtime_observed_v3(records),
             'native_rules_observed': native_rules,
             'note': 'Planner candidate/chosen score and engine initialization MaxScore are not earned game points.'}
 
@@ -535,6 +595,13 @@ def assess_attempt(records: list[dict], outcome: str, scoring: dict,
             source, score_status = 'native_hud_observation', 'partial_native_observation'
         if complete:
             score = observed_score
+    elif scoring.get('runtime_observed_v3', {}).get('status') == 'partial':
+        # Real v3 HUD provenance supersedes the archived OFFLINE v2
+        # reconstruction, but never certifies a final mission total.
+        runtime_v3 = scoring['runtime_observed_v3']
+        source, profile = 'mod_observed_v3', runtime_v3['profile_id']
+        observed_score = runtime_v3['observed_subtotal']
+        score_status = 'partial_mod_observation'
     else:
         comparison = scoring['comparison']
         source, profile = 'comparison', comparison['profile_id']
