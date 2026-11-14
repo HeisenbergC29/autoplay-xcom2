@@ -32,7 +32,26 @@ Obecny observed_v2 ma konkretne różnice względem konfiguracji Legacy,
 więc nie zostaje automatycznie przemianowany na oficjalny.
 [Zakres zgodności i stwierdzone różnice](scoring-policy.pl.md), issue #79.
 
-## Bieżące przekazanie — v35
+## Bieżące przekazanie — v37
+
+LEAD przejrzał #83 i #84 oraz poprawił kwalifikację punktowanych jednostek
+i rzeczywisty wpływ celu Sweep na ocenę ruchu. Końcowe źródła mają v37;
+użytkownik kompiluje jedną paczkę z #4 i sprawdza SabotageCC/nowy licznik
+oraz Blood Killer/Sweep. Dotychczasowe rozpoczęte testy v35 są odrębne,
+bez przypisywania im nowych zmian. Native make/game v37 pozostają NOT RUN.
+
+Runtime observed_v3 z realnych tabel jest wdrożonym pierwszym etapem #79,
+ale ma jawne braki kwalifikacji i historii/load; nie ogłaszać go jeszcze
+pełnym oficjalnym wynikiem. Native punkty mają pierwszeństwo, stary v2
+pozostaje niezmieniony. Występujący w tabeli default0 celu nie jest
+zastępowany wymyślonym5000 (np. SabotageCC nie ma własnego override).
+Jednorazowy log długości tabel i start-context pozwala sprawdzić runtime
+config bez kolejnego archiwum SDK. Dalszy HELPER: domknąć rozpoznawane
+pochodzenie/coverage w #79 oraz przeżycie/podejście w #56, z claimem,
+koordynacją wspólnych plików i następną rewizją po v37. #31 OW to dalsze P2.
+[Integracja v37](integration-2026-11-14-v37.pl.md).
+
+## Poprzednie przekazanie — v35
 
 LEAD przejrzał i zintegrował #69 oraz #70, zachowując naprawę X4 z #78.
 Jedna końcowa paczka v35 i dokładny SHA są w #4; użytkownik wykonuje
