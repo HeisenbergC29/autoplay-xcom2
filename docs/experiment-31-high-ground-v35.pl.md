@@ -22,9 +22,10 @@ Zweryfikowane źródła:
 
 ## Konkretna zmiana w #31
 
-Baza v33 z #56 PR #69. Nowy PR P2a jest **stacked na #69**,
-a nie bezpośrednio na v32, żeby nie rozminąć znaczników
-rejestratora. Nie zmienia to buildu v32 testowanego przez użytkownika.
+Baza to v34 z #56 PR #69, zawierająca również natywne pole X4 z v33.
+P2a przygotowano jako **stacked na #69**, następnie LEAD uwzględnił
+main po jego scaleniu i przekierował PR #70 na main. Nowa rewizja v35
+odróżnia wspólną paczkę od wcześniejszych prób v32/v33.
 
 1. `APX_MissionPlanner.OffensivePositionScore` nie używa
 już każdego dodatniego `Tile.Z > Enemy.Z` jako przewagi

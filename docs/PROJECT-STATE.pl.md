@@ -1,4 +1,4 @@
-# Stan przekazania projektu — 13 listopada 2026
+# Stan przekazania projektu — 14 listopada 2026
 
 To punkt startowy po pierwszym przeglądzie importu pomocnika. Bieżące issue i PR-y mogą zawierać nowsze
 ustalenia; po integracji aktualizuj ten dokument, gdy zmienia się baza lub
@@ -6,15 +6,34 @@ poziom potwierdzenia działania.
 
 ## Baza kodu
 
-- Bieżąca rewizja przygotowywanych źródeł: `mission-report-v33`, #77/PR #78.
+- Bieżąca rewizja przygotowywanych źródeł: `mission-report-v35`.
+  Integracja #69 (v34: ograniczony bonus już natywnie gotowego ciosu
+  BerserkerMP w turach1–2) i #70 (v35: ocena osiągalnego wyższego
+  stanowiska dla zwykłego strzału). Nie zwiększa odległości spekulacyjnej
+  szarży, nie obniża relaya w nowym trybie i nie nadaje przyszłej legalności
+  ataku. Wysokość korzysta z natywnego progu, a szacowany przyrost Aim
+  zachowuje discount i brak podwójnej premii. Native AA/AP/LOS, cała
+  ścieżka, hazardy, wsparcie i provider punktów v28 zachowane.
+  Naprawa natywnego pola X4 z v33 jest w tej paczce.
+  #81 dodaje tylko narzędzie audytu tabel Legacy; LEAD poprawił parser
+  przed scaleniem. Obecny observed_v2 nie został zmieniony ani uznany
+  za pełną oficjalną punktację. Runtime część #79 pozostaje do wykonania.
+  Łączne drzewo przeszło 773 testy z prywatnym SDK/configami, bez pominięć;
+  audyt referencji 24 klas/31 nazw PASS. Szczegóły CI są w #4/PR.
+  **Windows WOTC make i gra v35: NOT RUN.** Następny użytkownik kompiluje
+  jeden końcowy SHA z #4, testuje autonomiczne X4 w SabotageCC,
+  otwarcie/relay/Sweep w Blood Killer oraz strzelców w GasStation.
+  Nie wymaga to kompilowania pośredniej v34.
+  [Zakres i dowody integracji v35](integration-2026-11-14-v35.pl.md).
+- Poprzednie źródła: `mission-report-v33`, #77/PR #78.
   Po oczyszczeniu SabotageCC z wrogów i przy braku wykrwawiającego się
   własnego żołnierza planer szuka prawdziwego, osiągalnego natywnego
   punktu X4 zamiast zatrzymywać się przy przybliżonym markerze. Używa
   istniejącej obserwacyjnej inspekcji actor/socket/footprint/path; właściwe
   podłożenie nadal wymaga stock AA_Success i natywnych AP.
   LEAD nadał nową rewizję rejestratorowi i diagnostyce. Windows make v33
-  oraz autonomiczna próba SabotageCC: **NOT RUN**. #69/#70 są osobne,
-  wymagają aktualnej bazy i kolejnych rewizji, nie należą do v33.
+  oraz autonomiczna próba SabotageCC: **NOT RUN**. Późniejsze #69/#70
+  nie należały do paczki v33; są teraz zintegrowane w v35.
   [Zakres i próba v33](experiment-77-sabotagecc-plant-anchor.pl.md).
 - Przetestowana rewizja `mission-report-v32`:
   Integracja osobno przejrzanych #63 (stały panel autoplay, opt-out), #65

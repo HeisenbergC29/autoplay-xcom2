@@ -32,6 +32,23 @@ Obecny observed_v2 ma konkretne różnice względem konfiguracji Legacy,
 więc nie zostaje automatycznie przemianowany na oficjalny.
 [Zakres zgodności i stwierdzone różnice](scoring-policy.pl.md), issue #79.
 
+## Bieżące przekazanie — v35
+
+LEAD przejrzał i zintegrował #69 oraz #70, zachowując naprawę X4 z #78.
+Jedna końcowa paczka v35 i dokładny SHA są w #4; użytkownik wykonuje
+Windows make oraz testy SabotageCC/Blood Killer/GasStation. Źródła i CI
+nie są dowodem kompilacji SDK ani wyniku misji. Wcześniej rozpoczęty
+test v33 pozostaje osobnym dowodem, bez przypisywania mu zmian v35.
+
+#81 jest etapem A: audyt rzeczywistych tabel Legacy, z poprawkami parsera
+LEAD. Nie wdraża jeszcze pełnego naliczania ani nie zmienia profilu v2.
+Następny HELPER: focused runtime etap #79, claim aktualnej bazy/plików
+przed edycją i kolejna rewizja dopiero dla rzeczywistej zmiany runtime.
+Nowy profil musi rozróżniać reguły, kwalifikację i pochodzenie zdarzeń
+oraz kompletność historii; sama zgodność stawek nie wystarcza.
+Dalsze przeżycie Sweep/source-control pozostaje w #56, synchronizacja
+Overwatch w #31. [Integracja v35](integration-2026-11-14-v35.pl.md).
+
 Pomocnik może pracować częściej niż prowadzący. Samodzielnie analizuje,
 implementuje i testuje przydatne zmiany. Przegląd prowadzącego jest bramką
 integracji, a nie wymogiem pytania o zgodę przed każdą odwracalną czynnością.
