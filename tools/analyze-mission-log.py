@@ -496,6 +496,17 @@ def human_summary(report: dict) -> str:
             lines.append('  Conflicting terminal native score rollups; final score unavailable.')
         else:
             lines.append('  Native earned score was not recorded.')
+        live_v3 = scoring.get('runtime_observed_v3', {})
+        if live_v3.get('status') == 'partial':
+            lines.append(
+                f"  Runtime observed v3 ({live_v3['profile_id']}): PARTIAL; "
+                f"observed subtotal={live_v3['observed_subtotal']}; "
+                f"rate_source={live_v3['rate_source']}; "
+                f"native_parity_proven={live_v3['native_parity_proven']}; "
+                f"event_coverage_proven={live_v3['event_coverage_proven']}; "
+                "not an official final mission score.")
+            if live_v3['missing_evidence']:
+                lines.append('  Runtime v3 uncertified: ' + ', '.join(live_v3['missing_evidence']))
         comparison = scoring['comparison']
         if comparison['observed_subtotal'] is not None:
             lines.append(f"  Comparison ({comparison['profile_id']}): {comparison['status']}, "
