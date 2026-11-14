@@ -22,6 +22,8 @@ poziom potwierdzenia działania.
   postępu w bezpiecznych kandydatach. Bleeding blokuje preferencję,
   ostatni AP i wzrost ryzyka nie dostają bonusu. Pełne native AP/path/
   hazard/support/opportunity guards i ochrona sojuszników zachowane.
+  Wspólne źródła przeszły 796 testów z prywatnym SDK/configami bez pominięć;
+  audyt referencji 25 klas/31 nazw i niezależne przeglądy PASS.
   **Windows WOTC make i gra v37: NOT RUN.** Dokładny SHA i jedna paczka
   do kompilacji/testu są w #4; pośrednia v36 nie wymaga osobnego builda.
   [Zakres i odbiór v37](integration-2026-11-14-v37.pl.md).

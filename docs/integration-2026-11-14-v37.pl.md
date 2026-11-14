@@ -69,6 +69,9 @@ gwarantuje osiągalności, zabicia kontrolera ani przeżycia Sweep.
 
 Kontrole źródeł, SDK, testów i CI są zapisywane przez LEAD z dokładną
 głową w rozmowach PR. Zielone kontrole nie są natywnym make lub misją.
+Całe wspólne drzewo z poprawkami przeszło 796 prywatnych testów bez
+pominięć; audyt referencji 25 klas/31 nazw PASS. Niezależne przeglądy
+potwierdziły kwalifikację licznika, ograniczony bonus ruchu i dokumentację.
 **Windows WOTC make v37 i gra v37: NOT RUN.** Osobnego nowego raportu
 v35 także nie dostarczono. Ostatni potwierdzony raport v32 zawiera
 GasStation WIN/+6200, assisted SabotageCC, Cemetery LOSS/missionunknown
