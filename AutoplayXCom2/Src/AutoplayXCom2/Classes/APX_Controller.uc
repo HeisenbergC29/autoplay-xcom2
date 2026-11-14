@@ -108,6 +108,7 @@ var private float HackScreenAge;
 var private APX_ExplorationPlanner ExplorationPlanner;
 var private APX_AreaAttackPlanner AreaPlanner;
 var private APX_MissionRecorder MissionRecorder;
+var private APX_PatrolAmbushPlanner PatrolAmbushPlanner;
 var private float UntilObservation;
 var private array<RecentContact> RecentContacts;
 var private bool bContactHistoryInitialized;
@@ -448,6 +449,8 @@ function StopAutoplay(string Reason, optional bool bPreservePendingHack = false)
     ResetBerserkerFocus();
     NativeOpeningStrikesThisTurn = 0;
     ResetRangedFocus();
+    if (PatrolAmbushPlanner != none)
+        PatrolAmbushPlanner.Reset();
     // A user pause may happen before the hack UI has even appeared. Keep only
     // the exact submitted context, so resuming cannot claim a later manual hack
     // that happens to reuse the same soldier and ability IDs.
@@ -1115,12 +1118,15 @@ function MakeDecision(XComTacticalController PC)
     local XComGameState_BattleData FocusBattle;
     local XComGameState_Ability Ability;
     local XComGameStateContext_Ability SubmittedContext;
-    local StateObjectReference PlayerRef;
-    local AvailableAction Candidate, BestAction, AmbushAction;
-    local array<TTile> CandidatePath, BestPath, AmbushPath;
+    local StateObjectReference PlayerRef, AmbushPatrolRef;
+    local AvailableAction Candidate, BestAction, AmbushAction, PatrolReaction;
+    local array<TTile> CandidatePath, BestPath, AmbushPath, PatrolApproachPath;
     local array<vector> CandidateLocations, BestLocations;
     local vector CandidateAim, BestAim;
     local int TargetIndex, BestTargetIndex, ChosenTargetID, AmbushTargetIndex, RescuePatientID;
+    local int PatrolReactionIndex, PatrolApproachUnitID;
+    local int PatrolReactionUnitID, PatrolReactionAbilityID;
+    local TTile PatrolApproachDestination;
     local int RemainingConcealmentChecks, RemainingCoverChecks;
     local int RemainingContactGroups, RemainingContactMembers;
     local int RemainingContactDetectors, RemainingContactTiles, RemainingContactLOS;
@@ -1131,12 +1137,15 @@ function MakeDecision(XComTacticalController PC)
     local int FocusHistoryIndex, FocusStartIndex, FocusPlantPhase, FocusPreviousGroupID;
     local int NativeStrikeAttackerID;
     local int RangedPreviousGroupID, RangedTargetID, RangedMembers, RangedLiving;
-    local TTile FocusTile, RangedTile;
+    local TTile FocusTile, RangedTile, AmbushPatrolWaypoint;
     local float FocusDistance, RangedDistance;
-    local float Score, BestScore, AmbushScore;
+    local float Score, BestScore, AmbushScore, PatrolReactionScore, PatrolApproachScore;
     local bool bMove, bArea, bHavePlan, bSuccess, bCanExplore, bCombatThreats;
     local bool bVisibleThreats, bContactSearch, bCandidateMove, bGrenadeCandidate;
     local bool bOpeningContact, bFocusedGoal, bRangedFocusGoal, bRangedConcealed;
+    local bool bPatrolRefreshed, bPatrolActive, bSelectedPatrolMove, bSelectedPatrolReaction;
+    local string PatrolReason, PatrolApproachReason;
+    local XComGameState_Unit PatrolSupporter, PatrolScout;
     local bool bNativeStrikeOnly;
 
     // Shared by every unit and every movement/preparation/loot search below.
@@ -1180,6 +1189,8 @@ function MakeDecision(XComTacticalController PC)
         ExplorationPlanner = new(self) class'APX_ExplorationPlanner';
     if (UseExplosiveGrenades && AreaPlanner == none)
         AreaPlanner = new(self) class'APX_AreaAttackPlanner';
+    if (PatrolAmbushPlanner == none)
+        PatrolAmbushPlanner = new(self) class'APX_PatrolAmbushPlanner';
     if (MissionRecorder != none)
         MissionRecorder.BeginDecision();
 
@@ -1338,15 +1349,34 @@ function MakeDecision(XComTacticalController PC)
             // One contact snapshot per controller decision, shared by all
             // own units and route candidates; unknown cannot certify Clear.
             bContactSnapshotReady = true;
+            PatrolScout = UnitState;
             bContactSnapshotComplete = class'APX_ContactEnvelope'.static.BuildSnapshot(
                 UnitState, ContactSnapshotUnits, ContactSnapshotInteractives,
-                ContactSnapshotReason, RemainingContactGroups, RemainingContactMembers);
+                ContactSnapshotReason, RemainingContactGroups, RemainingContactMembers,
+                AmbushPatrolRef, AmbushPatrolWaypoint);
             if (MissionRecorder != none)
                 MissionRecorder.Marker("contact_snapshot",
                     "complete=" $ string(bContactSnapshotComplete)
                     @ "reason=" $ ContactSnapshotReason
                     @ "detectors=" $ ContactSnapshotUnits.Length
                     @ "interactives=" $ ContactSnapshotInteractives.Length);
+        }
+        if (!bPatrolRefreshed)
+        {
+            bPatrolRefreshed = true;
+            bPatrolActive = PatrolAmbushPlanner.Refresh(UnitState,
+                PlayerState.PlayerTurnCount, AmbushPatrolRef, AmbushPatrolWaypoint,
+                bContactSnapshotComplete,
+                class'APX_MissionPlanner'.static.HasActiveMissionDeadline()
+                || class'APX_MissionPlanner'.static.HasBleedingSquadmate(UnitState)
+                || class'APX_MissionPlanner'.static.ShouldEvacuate(UnitState),
+                PatrolReason);
+            if (MissionRecorder != none)
+                MissionRecorder.Marker("patrol_ambush_state",
+                    "phase=" $ string(PatrolAmbushPlanner.CurrentPhase())
+                    @ "group=" $ PatrolAmbushPlanner.CurrentGroupID()
+                    @ "reason=" $ PatrolReason
+                    @ "horizon=variants_unknown");
         }
         if (class'APX_CombatPlanner'.static.ChooseAction(UnitState, Candidate,
             TargetIndex, Score, bContactSearch,
@@ -1508,6 +1538,43 @@ function MakeDecision(XComTacticalController PC)
                 MissionRecorder.Marker("rescue_candidate", "unit=" $ UnitState.ObjectID
                     @ "patient=" $ RescuePatientID @ "score=" $ Score);
         }
+        // Patrol anticipation is a bounded candidate, not a forced order.
+        // Rescue/urgent timers and actual combat stay higher priority.
+        PatrolApproachPath.Length = 0;
+        if (bPatrolActive && !bCombatThreats
+            && BestScore < 80.0
+            && FocusBattle != none
+            && FocusBattle.MapData.ActiveMission.sType != "SabotageTransmitter"
+            && !class'APX_MissionPlanner'.static.HasActiveMissionDeadline()
+            && !class'APX_MissionPlanner'.static.HasBleedingSquadmate(UnitState)
+            && !class'APX_MissionPlanner'.static.ShouldEvacuate(UnitState)
+            && PatrolAmbushPlanner.ChooseApproach(UnitState,
+                ContactSnapshotUnits, ContactSnapshotInteractives,
+                bContactSnapshotComplete, ContactSnapshotReason,
+                RemainingContactDetectors, RemainingContactTiles,
+                RemainingContactLOS, PatrolApproachPath, PatrolApproachScore,
+                PatrolApproachReason, RemainingConcealmentChecks, RemainingCoverChecks)
+            && TraceCandidateMove(UnitState, PatrolApproachPath, PatrolApproachScore)
+            && PatrolApproachScore > BestScore + 6.0
+            && CanUseMove(UnitState, PatrolApproachPath))
+        {
+            BestPath = PatrolApproachPath;
+            BestScore = PatrolApproachScore;
+            BestUnit = UnitState;
+            bMove = true;
+            bArea = false;
+            BestLocations.Length = 0;
+            bHavePlan = true;
+            bSelectedPatrolMove = true;
+            PatrolApproachUnitID = UnitState.ObjectID;
+            PatrolApproachDestination = PatrolApproachPath[PatrolApproachPath.Length - 1];
+            if (MissionRecorder != none)
+                MissionRecorder.Marker("patrol_ambush_approach",
+                    "unit=" $ UnitState.ObjectID
+                    @ "group=" $ PatrolAmbushPlanner.CurrentGroupID()
+                    @ "score=" $ PatrolApproachScore
+                    @ "reason=" $ PatrolApproachReason);
+        }
         CandidatePath.Length = 0;
         if (!bCombatThreats
             && class'APX_MissionPlanner'.static.ChooseLootMove(
@@ -1564,6 +1631,35 @@ function MakeDecision(XComTacticalController PC)
         }
     }
 
+    // No reaction is prearmed without an actual native legal single-target
+    // ranged opener NOW. Pre-contact variants never manufacture targets.
+    if (bPatrolActive && bHavePlan && !bMove && !bArea
+        && BestUnit != none
+        && PatrolAmbushPlanner.ChooseReactionSupport(PlayerRef.ObjectID,
+            BestUnit, BestAction, BestTargetIndex, BestScore,
+            PatrolSupporter, PatrolReaction, PatrolReactionIndex,
+            PatrolReactionScore, RemainingContactLOS)
+        && CanUseAction(PatrolSupporter, PatrolReaction, PatrolReactionIndex))
+    {
+        if (MissionRecorder != none)
+            MissionRecorder.Marker("patrol_ambush_arm",
+                "group=" $ PatrolAmbushPlanner.CurrentGroupID()
+                @ "opener=" $ BestUnit.ObjectID
+                @ "supporter=" $ PatrolSupporter.ObjectID
+                @ "phase=" $ string(PatrolAmbushPlanner.CurrentPhase()));
+        BestUnit = PatrolSupporter;
+        BestAction = PatrolReaction;
+        BestTargetIndex = PatrolReactionIndex;
+        BestScore = PatrolReactionScore;
+        BestLocations.Length = 0;
+        bMove = false;
+        bArea = false;
+        bSelectedPatrolReaction = true;
+        PatrolReactionUnitID = PatrolSupporter.ObjectID;
+        PatrolReactionAbilityID = PatrolReaction.AbilityObjectRef.ObjectID;
+        bSelectedPatrolMove = false;
+    }
+
     // Reserve the chosen opener. Other concealed soldiers can establish firing
     // lanes and legal reaction shots before an individual attack reveals them.
     if (CoordinateConcealedAmbush && bHavePlan && !bMove && BestUnit != none)
@@ -1605,6 +1701,22 @@ function MakeDecision(XComTacticalController PC)
     if ((!bHavePlan || BestScore <= 2.0) && MeaningfulActionsThisTurn == 0
         && !bCombatThreats)
     {
+        if (bPatrolActive && AutoEndTurn && PatrolAmbushPlanner != none
+            && PatrolAmbushPlanner.CanWaitForContact()
+            && !class'APX_MissionPlanner'.static.HasActiveMissionDeadline()
+            && PatrolScout != none
+            && !class'APX_MissionPlanner'.static.HasBleedingSquadmate(PatrolScout)
+            && !class'APX_MissionPlanner'.static.ShouldEvacuate(PatrolScout))
+        {
+            // A finite wait is an explicit plan after a real staging order;
+            // no global watchdog suspension or counterfeit action.
+            if (MissionRecorder != none)
+                MissionRecorder.Marker("patrol_ambush_wait",
+                    "group=" $ PatrolAmbushPlanner.CurrentGroupID()
+                    @ "phase=" $ string(PatrolAmbushPlanner.CurrentPhase()));
+            RequestEndTurn(PC); // Native confirmed end-turn ticket still applies.
+            return;
+        }
         StopWithStatus("No constructive action or understood mission goal", StatusNoPlan);
         return;
     }
@@ -1697,6 +1809,18 @@ function MakeDecision(XComTacticalController PC)
         && ChosenTargetID == FocusTargetID && Ability != none
         && Ability.GetMyTemplateName() == 'DevastatingPunchMP')
         ++NativeOpeningStrikesThisTurn;
+    if (bPatrolActive && PatrolAmbushPlanner != none)
+        PatrolAmbushPlanner.NoteSubmitted(
+            bMove && bSelectedPatrolMove && BestUnit != none
+                && BestUnit.ObjectID == PatrolApproachUnitID
+                && BestPath.Length > 1
+                && BestPath[BestPath.Length - 1] == PatrolApproachDestination,
+            !bMove && bSelectedPatrolReaction && BestUnit != none
+                && BestUnit.ObjectID == PatrolReactionUnitID
+                && BestAction.AbilityObjectRef.ObjectID == PatrolReactionAbilityID,
+            !bMove && !bSelectedPatrolReaction
+                && PatrolAmbushPlanner.IsActualOpener(
+                    BestAction, BestTargetIndex, BestUnit));
     if (bMove)
         RecordMove(BestUnit, BestPath);
     ++ActionsThisTurn;
