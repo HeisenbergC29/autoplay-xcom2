@@ -123,6 +123,14 @@ class RouteSourceContracts(unittest.TestCase):
         self.assertIn("BlueRouteExposureSafe(UnitState,", choose)
         self.assertIn("bMemoryFallbackFirstClear", choose)
         self.assertIn("bTempoCurrentPathSafe", choose)
+        cover = function_body(self.mission, "BlueRouteExplosiveSafe")
+        self.assertIn("RemainingTempoCoverChecks < Path.Length - 1", cover)
+        self.assertIn("for (Index = 1; Index < Path.Length", cover)
+        self.assertIn("--RemainingTempoCoverChecks;", cover)
+        self.assertIn("APX_ExplosiveCoverKnowledge'.static.RiskAtTile(", cover)
+        self.assertIn("BlueRouteExplosiveSafe(UnitState, Path", choose)
+        self.assertIn("BlueRouteExplosiveSafe(UnitState, CandidatePath", choose)
+        self.assertIn("RemainingTempoCoverChecks", decision)
 
     def test_soft_memory_preferred_but_only_native_return_still_allowed(self):
         choose = function_body(self.mission, "ChooseMove")
@@ -157,7 +165,7 @@ class RouteSourceContracts(unittest.TestCase):
                            "ShouldMoveToIntercept("):
             self.assertNotIn(disallowed, CHECKS.without_comments(self.memory))
         for t in ("EnableSequentialBlue=true", "EnableSoftRouteMemory=true",
-                  "MaxVisitEntries=96", "MaxMemoryTurns=3"):
+                  "MaxVisitEntries=96", "MaxMemoryTurns=3", "MaxTempoCoverChecks=48"):
             self.assertIn(t, INI.read_text(encoding="utf-8-sig"))
         self.assertIn("mission-report-v41",
                       (SRC / "APX_MissionRecorder.uc").read_text(encoding="utf-8-sig"))
