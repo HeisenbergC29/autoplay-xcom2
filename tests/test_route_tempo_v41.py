@@ -23,6 +23,7 @@ class RoutePolicies(unittest.TestCase):
     def setUpClass(cls):
         cls.second = staticmethod(load_uc_function(ROUTE, "CanUseSecondBlue"))
         cls.penalty = staticmethod(load_uc_function(ROUTE, "SoftVisitPenalty"))
+        cls.risk = staticmethod(load_uc_function(MISSION, "IsRoutineBlueExposureAllowed"))
 
     def test_second_blue_needs_accepted_actual_first_and_safe_new_context(self):
         self.assertTrue(self.second(True, True, True, True, False, False,
@@ -42,6 +43,15 @@ class RoutePolicies(unittest.TestCase):
         ):
             with self.subTest(args=args):
                 self.assertFalse(self.second(*args))
+
+    def test_current_route_middle_risk_cannot_be_hidden_by_safe_endpoint(self):
+        # A = safe start, B = dangerous middle, C = safe end: B vetoes
+        # the sequential tempo ticket even when endpoint C looks Clear.
+        self.assertTrue(self.risk(10.0, 10.0))
+        self.assertTrue(self.risk(10.0, 13.0))
+        self.assertFalse(self.risk(10.0, 13.01))
+        self.assertFalse(self.risk(10.0, 24.0))
+        self.assertFalse(self.risk(0.0, 30.0))
 
     def test_cross_turn_aba_is_soft_decaying_and_expires(self):
         for turn, expected in ((10, 28), (11, 21), (12, 14), (13, 7), (14, 0)):
@@ -104,6 +114,14 @@ class RouteSourceContracts(unittest.TestCase):
                   "PatrolAmbushPlanner.HasActiveStaging()", "GameStateMoveUnitSingle("):
             self.assertIn(t, decision)
         self.assertNotIn("Mobility * 2", choose)
+        exposure = function_body(self.mission, "BlueRouteExposureSafe")
+        self.assertIn("Path.Length > 64", exposure)
+        self.assertIn("for (Index = 1; Index < Path.Length", exposure)
+        self.assertIn("IsRoutineBlueExposureAllowed(", exposure)
+        self.assertIn("BlueRouteExposureSafe(UnitState, Path", choose)
+        self.assertIn("BlueRouteExposureSafe(UnitState,", choose)
+        self.assertIn("bMemoryFallbackFirstClear", choose)
+        self.assertIn("bTempoCurrentPathSafe", choose)
 
     def test_soft_memory_preferred_but_only_native_return_still_allowed(self):
         choose = function_body(self.mission, "ChooseMove")
