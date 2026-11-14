@@ -159,12 +159,12 @@ function int CurrentGroupID()
     return GroupID;
 }
 
-function TTile CurrentWaypoint()
+function TTile GetWaypointTile()
 {
     return Waypoint;
 }
 
-function void NoteSubmitted(bool bMove, bool bReaction, bool bOpener)
+function NoteSubmitted(bool bMove, bool bReaction, bool bOpener)
 {
     if (bOpener)
     {
@@ -264,9 +264,12 @@ function bool ChooseApproach(XComGameState_Unit Soldier,
     NowDistance = class'APX_MissionPlanner'.static.TileDistance(Soldier.TileLocation, Waypoint);
     if (NowDistance < 4.0 || NowDistance > FMax(8.0, MaxPatrolDistanceTiles))
         return false;
-    class'APX_MissionPlanner'.static.GetVisibleThreats(Soldier, VisibleEnemies);
+    class'APX_MissionPlanner'.static.GetImmediateThreats(Soldier, VisibleEnemies);
     if (VisibleEnemies.Length > 0)
         return false;
+    // FullIntel can list distant hostiles. They shape risk but must not
+    // suppress all staging as though native squad-visible contact existed.
+    class'APX_MissionPlanner'.static.GetVisibleThreats(Soldier, VisibleEnemies);
     class'APX_MissionPlanner'.static.GetMeleeThreatReaches(
         Soldier, VisibleEnemies, MeleeThreatReaches);
     class'APX_MissionPlanner'.static.GetThreatWeights(
@@ -355,7 +358,7 @@ function bool IsActualOpener(AvailableAction Candidate, int TargetIndex,
 function bool ChooseReactionSupport(int PlayerID, XComGameState_Unit Opener,
     AvailableAction NativeOpener, int OpenerTarget, float DirectScore,
     out XComGameState_Unit Supporter, out AvailableAction Reaction,
-    out int ReactionTarget, out float ReactionScore)
+    out int ReactionTarget, out float ReactionScore, out int RemainingLOS)
 {
     local XComGameState_Unit Soldier, Enemy;
     local XComGameState_AIGroup Group;
@@ -364,6 +367,8 @@ function bool ChooseReactionSupport(int PlayerID, XComGameState_Unit Opener,
     local array<StateObjectReference> VisibleEnemies;
     local int Cost, TargetIndex, Checked, Eligible, AlreadyArmed;
     local bool bRevealed;
+    local GameRulesCache_VisibilityInfo Visibility;
+    local float SightRange;
 
     Supporter = none;
     ReactionTarget = INDEX_NONE;
@@ -400,15 +405,20 @@ function bool ChooseReactionSupport(int PlayerID, XComGameState_Unit Opener,
         if (!class'APX_SquadPlanner'.static.IsLocalSoldier(Soldier, PlayerID)
             || Soldier.ObjectID == Opener.ObjectID || !Soldier.IsAbleToAct())
             continue;
+        if (RemainingLOS <= 0)
+            return false;
+        --RemainingLOS;
+        SightRange = `METERSTOUNITS(Soldier.GetVisibilityRadius());
+        if (!`XWORLD.CanSeeTileToTile(Soldier.TileLocation, Enemy.TileLocation, Visibility)
+            || Visibility.DefaultTargetDist > Square(SightRange))
+            continue;
         if (class'APX_SquadPlanner'.static.HasReadyOpeningOverwatch(Soldier))
         {
             ++Eligible;
             ++AlreadyArmed;
             continue;
         }
-        if (!class'APX_SquadPlanner'.static.HasFiringLane(
-            Soldier, Soldier.TileLocation, VisibleEnemies)
-            || !class'APX_SquadPlanner'.static.FindOverwatch(
+        if (!class'APX_SquadPlanner'.static.FindOverwatch(
                 Soldier, Candidate, TargetIndex, Cost))
             continue;
         ++Eligible;
@@ -422,7 +432,7 @@ function bool ChooseReactionSupport(int PlayerID, XComGameState_Unit Opener,
     if (!CanDeferOpener(true, class'APX_MissionPlanner'.static.HasActiveMissionDeadline()
         || class'APX_MissionPlanner'.static.HasBleedingSquadmate(Opener)
         || class'APX_MissionPlanner'.static.ShouldEvacuate(Opener),
-        bRevealed, DirectScore, Eligible, OrderedReactions + AlreadyArmed,
+        bRevealed, DirectScore, Eligible, Max(OrderedReactions, AlreadyArmed),
         Clamp(MaxReactionSupport, 1, 3), WeakRevealedOpenerThreshold)
         || Supporter == none)
         return false;
