@@ -2103,7 +2103,8 @@ static function bool ChooseMove(XComGameState_Unit UnitState,
     local MissionGoal Goal;
     local bool bCombatGoal, bSafe, bRequireSupport, bRoutineRoute, bSabotageRush;
     local bool bConcealmentUrgent, bCoverUrgent, bUsedLocalFallback;
-    local bool bTempoCandidate, bSecondBlue, bSingleBlue;
+    local bool bTempoCandidate, bSecondBlue, bSingleBlue, bStealthRisk;
+    local bool bBestBlueFullyClear;
     local string ConcealmentRiskReason, ContactReason, BestContactReason, LocalContactReason, RiskyContactReason;
     local int ContactStatus, BestContactStatus, LocalContactStatus, RiskyContactStatus;
     local bool bInspectContact;
@@ -2434,14 +2435,17 @@ static function bool ChooseMove(XComGameState_Unit UnitState,
                     && LocalFallbackPath[LocalFallbackPath.Length - 1] == Tile)
                     LocalFallbackCoverRisk = CoverRisk;
             }
+            bStealthRisk = false;
             if (!bConcealmentUrgent)
             {
+                bStealthRisk = class'APX_ConcealmentPlanner'.static.InspectPathRisk(
+                    UnitState, CandidatePath, ConcealmentRiskReason,
+                    RemainingConcealmentChecks);
+                if (bSecondBlue && bStealthRisk)
+                    continue;
                 CandidateScore -= class'APX_ConcealmentPlanner'.static.RouteConcealmentPenalty(
-                    UnitState.IsConcealed(),
-                    class'APX_ConcealmentPlanner'.static.InspectPathRisk(
-                        UnitState, CandidatePath, ConcealmentRiskReason,
-                        RemainingConcealmentChecks),
-                    false, class'APX_ConcealmentPlanner'.default.ConcealmentRiskPenalty);
+                    UnitState.IsConcealed(), bStealthRisk, false,
+                    class'APX_ConcealmentPlanner'.default.ConcealmentRiskPenalty);
                 if (CandidateScore <= BestScore)
                     continue;
             }
@@ -2459,6 +2463,8 @@ static function bool ChooseMove(XComGameState_Unit UnitState,
             BestRisk = CandidateRisk;
             BestContactStatus = ContactStatus;
             BestContactReason = ContactReason;
+            bBestBlueFullyClear = bInspectContact && ContactStatus == 0
+                && CoverRisk <= 0.0 && !bStealthRisk;
             Path = CandidatePath;
         }
     }
@@ -2534,6 +2540,6 @@ static function bool ChooseMove(XComGameState_Unit UnitState,
             + FMin(18.0, LocalFallbackCoverRisk));
     }
     bAcceptedRoutine = bInspectContact && !bUsedLocalFallback;
-    bFirstBlueClear = bAcceptedRoutine && bSingleBlue && BestContactStatus == 0;
+    bFirstBlueClear = bAcceptedRoutine && bSingleBlue && bBestBlueFullyClear;
     return true;
 }
