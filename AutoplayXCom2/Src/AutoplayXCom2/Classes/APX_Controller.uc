@@ -1132,7 +1132,8 @@ function MakeDecision(XComTacticalController PC)
     local TTile PatrolApproachDestination, CandidateRouteGoal, BestRouteGoal;
     local TTile SelectedRouteDestination;
     local int SelectedRouteUnitID;
-    local bool bCandidateRoutine, bCandidateFirstBlue, bSelectedRoute, bSelectedFirstBlue;
+    local int iCandidateRoutine, iCandidateFirstBlue;
+    local bool bSelectedRoute, bSelectedFirstBlue;
     local int RemainingConcealmentChecks, RemainingCoverChecks;
     local int RemainingContactGroups, RemainingContactMembers;
     local int RemainingContactDetectors, RemainingContactTiles, RemainingContactLOS;
@@ -1516,8 +1517,8 @@ function MakeDecision(XComTacticalController PC)
             bSelectedRoute = false;
         }
         CandidatePath.Length = 0;
-        bCandidateRoutine = false;
-        bCandidateFirstBlue = false;
+        iCandidateRoutine = 0;
+        iCandidateFirstBlue = 0;
         if (bContactSearch && !class'APX_MissionPlanner'.static.ShouldEvacuate(UnitState))
             bCandidateMove = ChooseContactSearchMove(UnitState, CandidatePath, Score);
         else
@@ -1530,7 +1531,7 @@ function MakeDecision(XComTacticalController PC)
                 RemainingContactDetectors, RemainingContactTiles, RemainingContactLOS,
                 RouteTempo, PlayerState.PlayerTurnCount,
                 PatrolAmbushPlanner.HasActiveStaging(), bContactSearch || bVisibleThreats,
-                CandidateRouteGoal, bCandidateRoutine, bCandidateFirstBlue);
+                CandidateRouteGoal, iCandidateRoutine, iCandidateFirstBlue);
         if (bCandidateMove
             && TraceCandidateMove(UnitState, CandidatePath, Score)
             && Score > BestScore && CanUseMove(UnitState, CandidatePath))
@@ -1542,8 +1543,8 @@ function MakeDecision(XComTacticalController PC)
             bArea = false;
             BestLocations.Length = 0;
             bHavePlan = true;
-            bSelectedRoute = !bContactSearch && bCandidateRoutine;
-            bSelectedFirstBlue = bSelectedRoute && bCandidateFirstBlue;
+            bSelectedRoute = !bContactSearch && iCandidateRoutine > 0;
+            bSelectedFirstBlue = bSelectedRoute && iCandidateFirstBlue > 0;
             BestRouteGoal = CandidateRouteGoal;
             SelectedRouteDestination = CandidatePath[CandidatePath.Length - 1];
             SelectedRouteUnitID = UnitState.ObjectID;
