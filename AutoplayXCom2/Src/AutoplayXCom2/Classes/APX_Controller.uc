@@ -1633,7 +1633,7 @@ function MakeDecision(XComTacticalController PC)
         && PatrolAmbushPlanner.ChooseReactionSupport(PlayerRef.ObjectID,
             BestUnit, BestAction, BestTargetIndex, BestScore,
             PatrolSupporter, PatrolReaction, PatrolReactionIndex,
-            PatrolReactionScore)
+            PatrolReactionScore, RemainingContactLOS)
         && CanUseAction(PatrolSupporter, PatrolReaction, PatrolReactionIndex))
     {
         if (MissionRecorder != none)
