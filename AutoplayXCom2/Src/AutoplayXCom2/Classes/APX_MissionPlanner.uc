@@ -1906,6 +1906,7 @@ static function bool ChooseMedicalMove(XComGameState_Unit UnitState,
     local float MedicFraction, Progress, Value, AreaPenalty, CoverRisk;
     local float CurrentPositionScore, CurrentDistance;
     local int Scanned, Sample, Index, Neighbor, Step, Count, Ready, Patients;
+    local int EvaluatedCandidates;
     local bool bRelevant, bUrgentStatus, bSafe;
     local string ConcealmentReason;
 
@@ -1984,6 +1985,11 @@ static function bool ChooseMedicalMove(XComGameState_Unit UnitState,
             Count = Min(Tiles.Length + 9, 64);
             for (Sample = 0; Sample < Count; ++Sample)
             {
+                // One combined decision budget, not 64 × every patient ×
+                // all medical abilities. Preserve a fully checked safe
+                // candidate as a non-forced option when the budget ends.
+                if (++EvaluatedCandidates > 128)
+                    return Path.Length > 1;
                 if (Sample == 0)
                     Tile = Closest;
                 else if (Sample < 9)
