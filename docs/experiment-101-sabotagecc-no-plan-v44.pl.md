@@ -62,6 +62,40 @@ zaproponować żadnej akcji. Logi nie wskazują
 konkretnego kafla odrzuconego z takiego powodu,
 więc to **hipoteza** — nie zgłaszamy jej jako faktu.
 
+### Reprodukowalny konflikt progów na prostym odcinku (nie dowód geometrii mapy)
+
+W `XComAutoplayXCom2.ini` są faktyczne wartości
+`SquadSupportDistance=8`, `SquadSeparationTiles=2.5`,
+`MinimumPositionGain=4`, `SquadAreaRiskRadiusTiles=3`
+i `SquadAreaRiskWeight=6`. Dla FRONT jednostki 422 na
+(23,32,1), partnera 416 na (16,32,1) oraz markera
+(40,34,2), po idealnym poziomym kroku do (25,32,1):
+
+- poprawa `-TileDistance*3`: około `+5.95`;
+- miękka kara rozdzielenia z 7 do 9 pól względem
+  `SquadSupportDistance=8`: `-4`;
+- łączna poprawa **około +1.95**, poniżej
+  twardego progu `MinimumPositionGain=4`.
+- dalszy bezpośredni krok do X=26 zwiększa rozstaw
+  do10; kara=8, poprawa odległości≈8.9, zysk≈0.9.
+  Krok do X=27 daje rozstaw11, który jest już
+  odrzucany przez zwykłe
+  `IsSupportedAdvanceDestination(StartDistance=7,...)`.
+  Zatem soft formacja + próg + hard support mogą
+  utworzyć **matematyczną pułapkę punktacji**.
+  Nie oznacza to, że właśnie te X25–X27 to realne
+  native walkable tiles (nie mamy save ani
+  dokładnej mapy).
+
+Logi poprzednich decyzji93/94 pokazują
+`Contact envelope status=0 reason=clear_current_snapshot_only`,
+`tiles_left=121/123`; skan kontaktu nie był
+wtedy globalnie wyczerpany. Trasa nadal może
+być zablokowana przez inną ścieżkę/ocenę,
+więc jest to **silnie wsparta hipoteza progowa**,
+nie udawana znajomość dokładnej gałęzi
+`continue` w decyzji97.
+
 ## 3. Wdrożony ograniczony wariant naprawczy
 
 `APX_MissionPlanner.ChooseSabotageCCRecoveryMove`
