@@ -2106,7 +2106,7 @@ static function float ScoreSabotageRecovery(float BeforeDistance,
     local float Progress, Value;
 
     Progress = BeforeDistance - AfterDistance;
-    if (!bCurrentRouteClear || !bFullRouteSafe || BeforeDistance <= 3.0)
+    if (!bCurrentRouteClear || !bFullRouteSafe || BeforeDistance <= 0.5)
         return -10000.0;
     if (Progress < 1.0 || EndRisk > CurrentRisk + 3.0)
         return -10000.0;
@@ -2140,7 +2140,7 @@ static function bool ChooseSabotageCCRecoveryMove(XComGameState_Unit Soldier,
     local string NativePlantReason;
     local float Cost, Progress, CurrentDistance, CurrentRisk, EndRisk;
     local float StartSupport, EndSupport, FormationLoss, CandidateScore;
-    local bool bRouteSafe;
+    local bool bRouteSafe, bHaveMissionGoal;
     local string ContactReason, ConcealmentReason;
 
     Path.Length = 0;
@@ -2163,15 +2163,10 @@ static function bool ChooseSabotageCCRecoveryMove(XComGameState_Unit Soldier,
         Reason = "not_safe_or_not_ready_for_recovery";
         return false;
     }
-    if (!FindGoal(Soldier, Goal, KnownEnemies) || !Goal.bFound || Goal.bCombat)
-    {
-        Reason = "not_a_native_plant_travel_goal";
-        return false;
-    }
-    // When the actor's exact interaction point is known, prefer it over a
-    // generic high-Z ObjectiveLocation marker that cannot be walked onto.
-    // Actor discovery itself is bounded and read-only. It does not grant
-    // an AA_Success or fake completion; a consumed plant point is terminal.
+    bHaveMissionGoal = FindGoal(Soldier, Goal, KnownEnemies);
+    // The generic ObjectiveLocation "within 3 tiles" shortcut may return
+    // bFound=false despite AA_NoTargets. Consult a PROVEN native actor/socket
+    // even in that case; do not assume the marker or prior distance is legal.
     NativePlantStatus = class'APX_PlantInteractionKnowledge'.static.FindInteractionGoal(
         Soldier, VerifiedPlantTile, NativePlantReason);
     if (NativePlantStatus < 0)
@@ -2179,9 +2174,22 @@ static function bool ChooseSabotageCCRecoveryMove(XComGameState_Unit Soldier,
         Reason = "native_plant_already_consumed";
         return false;
     }
-    GoalTile = Goal.Tile;
     if (NativePlantStatus > 0)
         GoalTile = VerifiedPlantTile;
+    else
+    {
+        if (!bHaveMissionGoal || !Goal.bFound || Goal.bCombat)
+        {
+            Reason = "no_verified_actor_or_mission_marker";
+            return false;
+        }
+        GoalTile = Goal.Tile;
+        if (TileDistance(Soldier.TileLocation, GoalTile) <= 3.0)
+        {
+            Reason = "unverified_nearby_marker_no_native_target";
+            return false;
+        }
+    }
     Visualizer = XGUnit(Soldier.GetVisualizer());
     if (Visualizer == none || Visualizer.m_kReachableTilesCache == none)
         return false;
