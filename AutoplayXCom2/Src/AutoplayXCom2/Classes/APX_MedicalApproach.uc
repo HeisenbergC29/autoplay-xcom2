@@ -173,9 +173,9 @@ static function float ScoreMedicalApproach(bool bTreatAfterBlue,
     local float Value, Increase;
 
     // Never treat a guessed second-turn future medical target as legal NOW.
-    if (!bTreatAfterBlue || bBleeding || Progress < 0.5
-        || PatientHealthFraction <= 0.0
-        || (PatientHealthFraction >= 1.0 && !bRemovablePoison))
+    if (!bTreatAfterBlue || bBleeding || Progress < 0.5)
+        return -10000.0;
+    if (PatientHealthFraction <= 0.0 || (PatientHealthFraction >= 1.0 && !bRemovablePoison))
         return -10000.0;
     Increase = FMax(0.0, DestinationRisk - CurrentRisk);
     if (PatientHealthFraction <= 0.45)
