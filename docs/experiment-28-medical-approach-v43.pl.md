@@ -124,7 +124,9 @@ Skan jest skończony: max 128 weryfikacji unit,
 16 pacjentów, 64 sprawdzenia rzeczywistych
 trzech rodzin medycznych (pozostałe abilities
 nie zużywają tego budżetu), 64
-kandydaty pól/pacjenta i 48 pól/ścieżkę.
+kandydaty pól na zdolność/pacjenta, ale łącznie
+najwyżej **128 próbek endpointów na decyzję**
+(jeden budżet), oraz 48 pól/ścieżkę.
 Wyczerpany budżet/nieznane wzorce
 **odrzucają** próby, nie zatwierdzają ryzyka.
 
