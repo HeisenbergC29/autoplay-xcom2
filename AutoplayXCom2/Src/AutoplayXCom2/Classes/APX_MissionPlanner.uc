@@ -1918,7 +1918,7 @@ static function bool ChooseMedicalMove(XComGameState_Unit UnitState,
         || UnitState.NumActionPoints('standard') < 2
         || !HasLegalMove(UnitState)
         || !ActionPointsAfterBlueMove(UnitState, AfterBluePoints)
-        || class'APX_MedicalApproach'.static.HasUsefulNativeHealNow(UnitState)
+        || class'APX_MedicalApproach'.static.HasUrgentNativeHealNow(UnitState)
         || HasActiveMissionDeadline() || HasBleedingSquadmate(UnitState)
         || ShouldEvacuate(UnitState)
         || class'APX_HazardKnowledge'.static.NeedsPoisonEscape(UnitState))
