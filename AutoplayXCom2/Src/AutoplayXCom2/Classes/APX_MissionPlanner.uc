@@ -1955,10 +1955,16 @@ static function bool ChooseMedicalMove(XComGameState_Unit UnitState,
         CurrentDistance = TileDistance(UnitState.TileLocation, Patient.TileLocation);
         foreach UnitState.Abilities(AbilityRef)
         {
-            if (++Ready > 80)
-                return false;
             Heal = XComGameState_Ability(`XCOMHISTORY.GetGameStateForObjectID(
                 AbilityRef.ObjectID));
+            if (Heal == none || (Heal.GetMyTemplateName() != 'MedikitHeal'
+                && Heal.GetMyTemplateName() != 'NanoMedikitHeal'
+                && Heal.GetMyTemplateName() != 'GremlinHeal'))
+                continue;
+            // Count only the three source-audited *actual medical*
+            // abilities, not hundreds of unrelated shots/perks.
+            if (++Ready > 64)
+                return false;
             if (!class'APX_MedicalApproach'.static.IsReadyForApproach(
                 UnitState, Patient, Heal)
                 || !CanAttackWithActionPoints(Heal, UnitState, AfterBluePoints)
