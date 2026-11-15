@@ -92,7 +92,7 @@ class MedicalSource(unittest.TestCase):
         self.assertIn("Action.AvailableCode != 'AA_Success'", current)
         self.assertIn("Action.AbilityObjectRef.ObjectID != Ability.ObjectID", current)
         self.assertIn("Target.PrimaryTarget.ObjectID == Patient.ObjectID", current)
-        any_legal = function_body(self.med, "HasUsefulNativeHealNow")
+        any_legal = function_body(self.med, "HasUrgentNativeHealNow")
         self.assertIn("Action.AvailableCode != 'AA_Success'", any_legal)
         self.assertIn("HasUsefulNeed(Ability, Patient)", any_legal)
         self.assertIn("if (++Scanned > 80)", any_legal)
@@ -110,7 +110,7 @@ class MedicalSource(unittest.TestCase):
                     "CanAttackWithActionPoints(Heal, UnitState, AfterBluePoints)",
                     "HasActiveMissionDeadline()", "HasBleedingSquadmate(UnitState)",
                     "ShouldEvacuate(UnitState)", "NeedsPoisonEscape(UnitState)",
-                    "NeedsPoisonEscape(Patient)", "HasUsefulNativeHealNow(UnitState)",
+                    "NeedsPoisonEscape(Patient)", "HasUrgentNativeHealNow(UnitState)",
                     'ActiveMission.sType == "SabotageTransmitter"',
                     "GetAllPathableTiles(", "IsTileReachable(Tile)",
                     "GetPathCostToTile(Tile)", "Cost > Visualizer.GetMobility()",
