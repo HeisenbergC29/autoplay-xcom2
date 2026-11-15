@@ -15,8 +15,8 @@ static function bool IsLiveSquadPatient(XComGameState_Unit Medic,
         && !Patient.bRemoved && !Patient.bRemovedFromPlay
         && Patient.GetMyTemplate() != none
         && !Patient.GetMyTemplate().bIsCosmetic
-        && Patient.IsAlive() && !Patient.IsBleedingOut()
-        && !Patient.IsBeingCarried()
+        && Patient.IsAlive() && !Patient.IsIncapacitated()
+        && !Patient.IsBleedingOut() && !Patient.IsBeingCarried()
         && Patient.GetCurrentStat(eStat_HP) > 0.0;
 }
 
@@ -150,7 +150,8 @@ static function bool HasUsefulNativeHealNow(XComGameState_Unit Medic)
         {
             Patient = XComGameState_Unit(`XCOMHISTORY.GetGameStateForObjectID(
                 Target.PrimaryTarget.ObjectID));
-            if (Patient != none && Patient.IsAlive() && !Patient.IsBleedingOut()
+            if (Patient != none && Patient.IsAlive()
+                && !Patient.IsIncapacitated() && !Patient.IsBleedingOut()
                 && !Patient.bRemoved && !Patient.bRemovedFromPlay
                 && Patient.GetTeam() == eTeam_XCom
                 && Patient.GetAssociatedPlayerID() == Medic.GetAssociatedPlayerID()
