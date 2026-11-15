@@ -115,6 +115,53 @@ static function bool HasNativeTargetNow(XComGameState_Unit Medic,
     return false;
 }
 
+// An already legal native heal for ANY useful own squadmate should not be
+// displaced by speculative repositioning. This reads only the same current
+// action cache CombatPlanner can actually dispatch; no remote prediction.
+static function bool HasUsefulNativeHealNow(XComGameState_Unit Medic)
+{
+    local GameRulesCache_Unit Cache;
+    local AvailableAction Action;
+    local AvailableTarget Target;
+    local XComGameState_Ability Ability;
+    local XComGameState_Unit Patient;
+    local name AbilityName;
+    local int Scanned;
+
+    if (Medic == none || `TACTICALRULES == none
+        || !`TACTICALRULES.GetGameRulesCache_Unit(Medic.GetReference(), Cache))
+        return false;
+    foreach Cache.AvailableActions(Action)
+    {
+        if (++Scanned > 80)
+            return true; // Incomplete scan: do not propose a speculative move.
+        if (Action.AvailableCode != 'AA_Success' || !Action.bInputTriggered
+            || Action.bFreeAim)
+            continue;
+        Ability = XComGameState_Ability(`XCOMHISTORY.GetGameStateForObjectID(
+            Action.AbilityObjectRef.ObjectID));
+        if (Ability == none || Ability.OwnerStateObject.ObjectID != Medic.ObjectID)
+            continue;
+        AbilityName = Ability.GetMyTemplateName();
+        if (AbilityName != 'MedikitHeal' && AbilityName != 'NanoMedikitHeal'
+            && AbilityName != 'GremlinHeal')
+            continue;
+        foreach Action.AvailableTargets(Target)
+        {
+            Patient = XComGameState_Unit(`XCOMHISTORY.GetGameStateForObjectID(
+                Target.PrimaryTarget.ObjectID));
+            if (Patient != none && Patient.IsAlive() && !Patient.IsBleedingOut()
+                && !Patient.bRemoved && !Patient.bRemovedFromPlay
+                && Patient.GetTeam() == eTeam_XCom
+                && Patient.GetAssociatedPlayerID() == Medic.GetAssociatedPlayerID()
+                && Medic.IsFriendlyUnit(Patient)
+                && HasUsefulNeed(Ability, Patient))
+                return true;
+        }
+    }
+    return false;
+}
+
 // Gremlin's remote/global target style may have -1 unlimited range.
 // Without a finite range, moving towards the patient has no proven benefit:
 // reject an invented geometric goal. The game's native RemoteTile validator
