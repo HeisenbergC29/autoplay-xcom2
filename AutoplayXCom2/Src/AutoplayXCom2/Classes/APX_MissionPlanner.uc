@@ -1907,6 +1907,7 @@ static function bool ChooseMedicalMove(XComGameState_Unit UnitState,
     local float CurrentPositionScore, CurrentDistance;
     local int Scanned, Sample, Index, Neighbor, Step, Count, Ready, Patients;
     local bool bRelevant, bUrgentStatus, bSafe;
+    local string ConcealmentReason;
 
     Path.Length = 0;
     Score = -10000.0;
@@ -2019,7 +2020,7 @@ static function bool ChooseMedicalMove(XComGameState_Unit UnitState,
                     || CandidatePath[0] != UnitState.TileLocation
                     || CandidatePath[CandidatePath.Length - 1] != Tile
                     || class'APX_ConcealmentPlanner'.static.InspectPathRisk(
-                        UnitState, CandidatePath, , RemainingConcealmentChecks))
+                        UnitState, CandidatePath, ConcealmentReason, RemainingConcealmentChecks))
                     continue;
                 bSafe = true;
                 for (Step = 1; Step < CandidatePath.Length; ++Step)
