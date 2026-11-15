@@ -178,10 +178,9 @@ static function float ScoreMedicalApproach(bool bTreatAfterBlue,
     if (PatientHealthFraction <= 0.0 || (PatientHealthFraction >= 1.0 && !bRemovablePoison))
         return -10000.0;
     Increase = FMax(0.0, DestinationRisk - CurrentRisk);
+    Value = 78.0;
     if (PatientHealthFraction <= 0.45)
         Value = 210.0;
-    else
-        Value = 78.0;
     if (bRemovablePoison)
         Value += 48.0;
     Value += FMin(18.0, FMax(0.0, Progress) * 3.0)
