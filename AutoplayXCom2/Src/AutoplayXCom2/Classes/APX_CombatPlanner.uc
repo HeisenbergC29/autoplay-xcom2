@@ -164,7 +164,11 @@ static function bool ChooseAction(XComGameState_Unit UnitState,
                 CandidateScore = ScoreMedical(UnitState, TargetUnit,
                     default.StabilizeAbilities.Find(AbilityName) != INDEX_NONE);
                 if (default.HealAbilities.Find(AbilityName) != INDEX_NONE
-                    && TargetUnit != none)
+                    && TargetUnit != none && TargetUnit.IsAlive()
+                    && !TargetUnit.IsBleedingOut()
+                    && TargetUnit.GetTeam() == eTeam_XCom
+                    && UnitState.GetAssociatedPlayerID() == TargetUnit.GetAssociatedPlayerID()
+                    && UnitState.IsFriendlyUnit(TargetUnit))
                     CandidateScore = class'APX_MedicalApproach'.static.ScoreUsefulHealing(
                         CandidateScore,
                         class'APX_MedicalApproach'.static.HasRemovableEffect(
