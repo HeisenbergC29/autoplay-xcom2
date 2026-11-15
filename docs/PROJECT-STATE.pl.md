@@ -6,7 +6,23 @@ poziom potwierdzenia działania.
 
 ## Baza kodu
 
-- Bieżąca rewizja źródeł: **`mission-report-v42`**, PR #97; źródłowy head
+- Bieżąca rewizja źródeł: **`mission-report-v43`**, PR #98; źródłowy head
+  `9771d7cb60d57163e488033e210f2c23871b4ad5`. Native-qualified jeden blue
+  do pilnego heal/detox oraz rzeczywisty detoks pełnego HP. LEAD zachował
+  veto removed/removed-from-play, priorytet gotowego pilnego native heal
+  w całej drużynie i wspólny Controller-owned limit128 endpointów. Przed
+  leczeniem nadal konieczne świeże native AA/cache z faktycznej pozycji.
+  Checker binarnego instalatora uaktualniony do30 jawnych własnych klas;
+  fixture bieżącego pełnego pakietu przechodzi, nieznane klasy pozostają odrzucane.
+  **876 private PASS/0skip**, SDK30/31, niezależne source/SDK/packaging review PASS;
+  [CI373](https://github.com/HeisenbergC29/autoplay-xcom2/actions/runs/43658871509)
+  876 run = 791 PASS/85 SKIP +6 kroków PowerShell PASS.
+  **Windows make/game v43 NOT RUN.** Bieżąca skończona kolejka #86 źródłowo
+  odebrana; po końcowej weryfikacji SHA/ZIP w #4 kolej użytkownika na jedną
+  kompilację i wspólną próbę. Brak następnego READY claimu HELPERA.
+  [Zakres i odbiór v43](integration-2026-11-15-v43.pl.md),
+  [leczenie/detoks](experiment-28-medical-approach-v43.pl.md).
+- Poprzednia rewizja źródeł: **`mission-report-v42`**, PR #97; źródłowy head
   `b781ce476c6215e6e77f3142db971d0f31e970c9`, na scalonym #96/v41
   `2800a84d1433d0e26992b6dddec06b8eb09edd5e`. Dwa osobno zaakceptowane
   blue moves mają świeży native cache i pełne bieżące kontrole po pierwszym;

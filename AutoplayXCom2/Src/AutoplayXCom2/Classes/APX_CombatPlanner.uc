@@ -163,6 +163,18 @@ static function bool ChooseAction(XComGameState_Unit UnitState,
                     Candidate.AvailableTargets[Index].PrimaryTarget.ObjectID));
                 CandidateScore = ScoreMedical(UnitState, TargetUnit,
                     default.StabilizeAbilities.Find(AbilityName) != INDEX_NONE);
+                if (default.HealAbilities.Find(AbilityName) != INDEX_NONE
+                    && TargetUnit != none && TargetUnit.IsAlive()
+                    && !TargetUnit.IsBleedingOut()
+                    && TargetUnit.GetTeam() == eTeam_XCom
+                    && UnitState.GetAssociatedPlayerID() == TargetUnit.GetAssociatedPlayerID()
+                    && UnitState.IsFriendlyUnit(TargetUnit))
+                    CandidateScore = class'APX_MedicalApproach'.static.ScoreUsefulHealing(
+                        CandidateScore,
+                        class'APX_MedicalApproach'.static.HasRemovableEffect(
+                            Ability, TargetUnit),
+                        TargetUnit.IsPoisoned(), TargetUnit.IsBleedingOut(),
+                        TargetUnit.bRemoved || TargetUnit.bRemovedFromPlay);
                 CandidateScore = class'APX_ActionEconomy'.static.ScoreWithRetainedAttack(
                     UnitState, Ability, CandidateScore, VisibleEnemies,
                     FollowUpAbilityID, FollowUpTargetID, RetainedAttackValue);

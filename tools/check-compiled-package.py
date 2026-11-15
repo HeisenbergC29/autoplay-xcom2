@@ -33,9 +33,33 @@ EXPECTED_CLASSES = {
     "APX_UITacticalControl": "UIPanel",
     "X2DownloadableContentInfo_AutoplayXCom2": "X2DownloadableContentInfo",
 }
-OPTIONAL_CLASSES = {"APX_MissionRecorder": "Object", "APX_SquadPlanner": "Object",
-                    "APX_MissionScore": "Object", "APX_ComparisonScore": "Object", "APX_EnemyKnowledge": "Object",
-                    "APX_HazardKnowledge": "Object", "APX_RepositionPlanner": "Object", "APX_ActionEconomy": "Object"}
+# Retain the original nine-class baseline for older installers. New owned
+# classes are explicitly reviewed here; an APX_ prefix alone is not sufficient.
+# The source-alignment regression test keeps this list current without making
+# inspection of an installer depend on a source tree being present.
+OPTIONAL_CLASSES = {
+    "APX_ActionEconomy": "Object",
+    "APX_BerserkerFocus": "Object",
+    "APX_ComparisonScore": "Object",
+    "APX_ConcealmentPlanner": "Object",
+    "APX_ContactEnvelope": "Object",
+    "APX_EnemyKnowledge": "Object",
+    "APX_ExplosiveCoverKnowledge": "Object",
+    "APX_FullIntel": "Object",
+    "APX_HazardKnowledge": "Object",
+    "APX_LegacyObservedV3": "Object",
+    "APX_MedicalApproach": "Object",
+    "APX_MissionRecorder": "Object",
+    "APX_MissionScore": "Object",
+    "APX_NativeMultiTarget": "Object",
+    "APX_PatrolAmbushPlanner": "Object",
+    "APX_PatrolKnowledge": "Object",
+    "APX_PlantInteractionKnowledge": "Object",
+    "APX_RepositionPlanner": "Object",
+    "APX_RevealedFocus": "Object",
+    "APX_RouteTempo": "Object",
+    "APX_SquadPlanner": "Object",
+}
 REQUIRED_FILES = {
     f"{ROOT}/AutoplayXCom2.XComMod",
     f"{ROOT}/INSTALL.pl.md",

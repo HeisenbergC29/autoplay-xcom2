@@ -1,20 +1,19 @@
-# Skończona kolejka przed wspólnym testem — aktualizacja 15 XI 2026
+# Skończona kolejka źródłowa — odbiór v43, 15 XI 2026
 
 Parasol wykonania: [#86](https://github.com/HeisenbergC29/autoplay-xcom2/issues/86).
-Na polecenie użytkownika [#4](https://github.com/HeisenbergC29/autoplay-xcom2/issues/4)
-jest **BLOCKED** do końca bieżących prac źródłowych LEAD i HELPERA. Nie przekazujemy
-osobnego buildu po każdym PR. Następna kolej pracy: **HELPER**, review i integracja LEAD.
+Po odbiorze #28/#98 **bieżąca kolejka źródłowa jest zakończona**: zakresy mają
+implementację albo konkretny, jawny unsupported disposition. Nie certyfikuje
+to Windows builda, skuteczności w grze ani ukończenia całego projektu.
 
-Źródła po odbiorze #96/#97: v42, source head `b781ce476c6215e6e77f3142db971d0f31e970c9`,
-na scalonym #96/v41 `2800a84d1433d0e26992b6dddec06b8eb09edd5e`.
-**858 private PASS/0skip**, SDK29/31 i niezależne review PASS;
-CI352: 774 PASS/84 SKIP i 6 kroków PowerShell PASS.
-Native Windows make/game v41/v42: **NOT RUN**. Pobierać aktualne main po integracji.
+Źródłowy head v43 `9771d7cb60d57163e488033e210f2c23871b4ad5`:
+**876 private PASS/0skip**, SDK30/31 i niezależne review PASS;
+CI373: 791 PASS/85 SKIP +6 kroków PowerShell PASS. Native Windows make/game v43:
+**NOT RUN**. Końcowe SHA/ZIP/CRC/SHA256/exact-tree i macierz odbioru są w
+[#4](https://github.com/HeisenbergC29/autoplay-xcom2/issues/4), po sprawdzeniu LEAD.
 
-**Następny HELPER: #28 — legalne podejście do pilnego leczenia i detoksu.**
-To jedyny pozostały READY zakres źródłowy z bieżącej listy. Następnie review,
-ewentualne poprawki i integracja LEAD; dopiero wtedy jedna paczka Windows/game.
-Nie dopisujemy nowych tematów ani osobnego buildu po v41/v42.
+**Następna kolej użytkownika: jedna kompilacja i wspólna próba v43.**
+Nie ma następnego przypisanego READY source zadania HELPERA przed tym testem.
+Nie budować osobno v33–v42. [Odbiór i instrukcje](integration-2026-11-15-v43.pl.md).
 
 ## Lista realizacji
 
@@ -31,7 +30,7 @@ końcowy wynik misji >0. Niekompletne punkty nie certyfikują zaliczenia.
 | HELPER [#88](https://github.com/HeisenbergC29/autoplay-xcom2/issues/88), konsoliduje [#12](https://github.com/HeisenbergC29/autoplay-xcom2/issues/12)/[#31](https://github.com/HeisenbergC29/autoplay-xcom2/issues/31) | SOURCE STAGE DONE #95; przyszła pewność nieudowodniona | Proaktywna zasadzka z kierunkiem osłony, liniami reakcji, odstępami AoE i stanem approach/setup/armed/open/abort. Ograniczony czas oczekiwania, reset i przerwanie przez timer/ratunek/zmianę kontaktu. Native opener/OW/AP; concealed i revealed osobno. |
 | HELPER [#89](https://github.com/HeisenbergC29/autoplay-xcom2/issues/89) | SOURCE DONE #96 — wariant sekwencyjny | Dwa osobne native blue z aktualnym cache/AP i ponowną oceną całej trasy. Ogólny pojedynczy dash oraz przyszłe wybory wroga pozostają unsupported/Unknown; niepewność nie przywraca drugiego ruchu przez fallback. |
 | HELPER [#10](https://github.com/HeisenbergC29/autoplay-xcom2/issues/10) | SOURCE DONE #96 | Ograniczona wygasająca pamięć spokojnej trasy między turami, per unit/kontekst celu. Preferować postęp i alternatywę, zachować jedyną legalną drogę powrotu. Bez wpływu na ratunek, ewakuację, hazard escape i combat. |
-| HELPER [#28](https://github.com/HeisenbergC29/autoplay-xcom2/issues/28) | READY | Podejście medyka do pilnego leczenia/detoksu, także niekrwawiącego pacjenta. Potwierdzony własny native ability/range/status/AP/ładunki, bezpieczna pełna trasa i świeży skan po ruchu. Obecna stabilizacja i ucieczka pacjenta z chmury nie zastępują tego zakresu. |
+| HELPER [#28](https://github.com/HeisenbergC29/autoplay-xcom2/issues/28) | SOURCE DONE #98; GAME DEFERRED | Podejście medyka do pilnego leczenia/detoksu, także niekrwawiącego pacjenta. Potwierdzony własny native ability/range/status/AP/ładunki, bezpieczna pełna trasa i świeży skan po ruchu. Obecna stabilizacja i ucieczka pacjenta z chmury nie zastępują tego zakresu. |
 | HELPER [#38b](https://github.com/HeisenbergC29/autoplay-xcom2/issues/38) | SOURCE STAGE DONE #97, inne rodziny UNSUPPORTED | Skończona macierz rodzin player AoE w SDK oraz konkretne rozszerzenie planera o potwierdzone kontrakty poza obecnymi Frag/Alien Throw/Launch. Dla innych rodzin precyzyjny zakres unsupported. Wtórne eksplozje wymagają rzeczywistych extents/triggers i ochrony obiektów, bez zdejmowania guardów. |
 | HELPER [#20](https://github.com/HeisenbergC29/autoplay-xcom2/issues/20), audyt podpór | SOURCE AUDIT DONE #93; forecast UNSUPPORTED | Rozstrzygnąć EnvironmentalDamage/ScythingClaws/podłogi/upadki: wdrożenie tylko przy wiarygodnym obserwacyjnym kontrakcie; w przeciwnym razie konkretny opis brakującego native/asset dowodu i zachowany fallback. Nie zakazywać dachów na podstawie hipotezy. Formation AoE już wdrożone. |
 | HELPER [#79](https://github.com/HeisenbergC29/autoplay-xcom2/issues/79) | Reporting/audyt SOURCE DONE #92; parity/coverage DEFERRED | Analizator raportów rozpoznaje v3 profile/rate_source/parity/coverage niezależnie od archiwalnego v2. Skończony audyt civilian replay/origins/disabled/restart/bonus/decay: implementować udowodnione kontrakty, dokładnie opisać pozostałą niepewność i wymagany dowód. Sama zgodność stawek nie dowodzi kompletności/oficjalności. |
@@ -39,10 +38,9 @@ końcowy wynik misji >0. Niekompletne punkty nie certyfikują zaliczenia.
 ## Kolejność i granice pracy
 
 Etapy bieżącego kontaktu #87/#91 i staging/OW #88/#95 są wdrożone.
-Etapy #89/#10 są w #96, a Faceoff/macierz #38b w #97. Następny claim #28 na aktualnym main.
-HELPER implementuje #28,
-lecz przed edycją MissionPlanner/Controller trzeba uzgodnić właściciela plików.
-Po #28 końcowy review/integracja LEAD; koordynować wspólne pliki.
+Etapy #89/#10 są w #96, a Faceoff/macierz #38b w #97. Ostatni zakres #28 jest w #98; brak następnego claimu przed wspólnym testem.
+LEAD finalizuje dokładny SHA/ZIP i przekazanie #4; ewentualne nowe konkretne
+błędy rozpatrujemy z raportu, bez otwierania przypadkowych nowych implementacji.
 Maksymalnie trzy aktywne implementation PR. Nie ma potrzeby czekania na zgodę
 na już przypisane odwracalne prace, ale każdy PR wymaga aktualnej bazy i review LEAD.
 

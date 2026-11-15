@@ -236,7 +236,7 @@ class PatrolAmbushSourceContracts(unittest.TestCase):
         self.assertIn("PatrolScout = UnitState", decision)
         self.assertIn("MaxSetupTurns=2", INI.read_text(encoding="utf-8-sig"))
         self.assertIn("MaxReactionSupport=3", INI.read_text(encoding="utf-8-sig"))
-        self.assertIn("mission-report-v42",
+        self.assertIn("mission-report-v43",
                       (SRC / "APX_MissionRecorder.uc").read_text(encoding="utf-8-sig"))
 
 
