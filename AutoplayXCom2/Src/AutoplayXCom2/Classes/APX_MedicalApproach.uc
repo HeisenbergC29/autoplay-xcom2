@@ -115,10 +115,11 @@ static function bool HasNativeTargetNow(XComGameState_Unit Medic,
     return false;
 }
 
-// An already legal native heal for ANY useful own squadmate should not be
-// displaced by speculative repositioning. This reads only the same current
-// action cache CombatPlanner can actually dispatch; no remote prediction.
-static function bool HasUsefulNativeHealNow(XComGameState_Unit Medic)
+// An already legal URGENT heal for any own squadmate should not be
+// displaced by speculative repositioning. Minor scratches still compete
+// fairly with an approach to a dying teammate instead of vetoing it.
+// Read only the native actions CombatPlanner can actually dispatch.
+static function bool HasUrgentNativeHealNow(XComGameState_Unit Medic)
 {
     local GameRulesCache_Unit Cache;
     local AvailableAction Action;
@@ -156,7 +157,11 @@ static function bool HasUsefulNativeHealNow(XComGameState_Unit Medic)
                 && Patient.GetTeam() == eTeam_XCom
                 && Patient.GetAssociatedPlayerID() == Medic.GetAssociatedPlayerID()
                 && Medic.IsFriendlyUnit(Patient)
-                && HasUsefulNeed(Ability, Patient))
+                && HasUsefulNeed(Ability, Patient)
+                && (Patient.GetCurrentStat(eStat_HP)
+                    <= Patient.GetMaxStat(eStat_HP) * 0.45
+                    || (Patient.IsPoisoned()
+                        && HasRemovableEffect(Ability, Patient))))
                 return true;
         }
     }
