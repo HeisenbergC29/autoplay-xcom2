@@ -126,7 +126,10 @@ static function bool CanTreatFromTile(XComGameState_Unit Medic,
     local float HitRange;
     local vector Proposed, PatientLocation;
 
-    if (!IsReadyForApproach(Medic, Patient, Ability) || `XWORLD == none)
+    // Caller has already checked real shooter charges/cooldown/AP and
+    // patient target conditions once before bounded reachable sampling.
+    if (!IsLiveSquadPatient(Medic, Patient) || Ability == none
+        || Ability.OwnerStateObject.ObjectID != Medic.ObjectID || `XWORLD == none)
         return false;
     Single = X2AbilityTarget_Single(Ability.GetMyTemplate().AbilityTargetStyle);
     if (Single == none)
@@ -152,8 +155,14 @@ static function float ScoreUsefulHealing(float BaseHealthScore, bool bRelevantEf
     if (!bRelevantEffect)
         return BaseHealthScore;
     if (BaseHealthScore <= -1000.0)
-        return bPoisoned ? 170.0 : 105.0;
-    return BaseHealthScore + (bPoisoned ? 55.0 : 25.0);
+    {
+        if (bPoisoned)
+            return 170.0;
+        return 105.0;
+    }
+    if (bPoisoned)
+        return BaseHealthScore + 55.0;
+    return BaseHealthScore + 25.0;
 }
 
 static function float ScoreMedicalApproach(bool bTreatAfterBlue,
@@ -165,11 +174,14 @@ static function float ScoreMedicalApproach(bool bTreatAfterBlue,
 
     // Never treat a guessed second-turn future medical target as legal NOW.
     if (!bTreatAfterBlue || bBleeding || Progress < 0.5
-        || PatientHealthFraction <= 0.0 || PatientHealthFraction >= 1.0
-            && !bRemovablePoison)
+        || PatientHealthFraction <= 0.0
+        || (PatientHealthFraction >= 1.0 && !bRemovablePoison))
         return -10000.0;
     Increase = FMax(0.0, DestinationRisk - CurrentRisk);
-    Value = (PatientHealthFraction <= 0.45 ? 210.0 : 78.0);
+    if (PatientHealthFraction <= 0.45)
+        Value = 210.0;
+    else
+        Value = 78.0;
     if (bRemovablePoison)
         Value += 48.0;
     Value += FMin(18.0, FMax(0.0, Progress) * 3.0)
