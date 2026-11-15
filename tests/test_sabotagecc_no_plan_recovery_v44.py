@@ -79,7 +79,10 @@ class NativeObjectiveRecoveryPolicy(unittest.TestCase):
         self.assertLess(self.score(17, 17, 0, 0, 0, True, True), -1000)
         self.assertLess(self.score(17, 18, 0, 0, 0, True, True), -1000)
         self.assertLess(self.score(17, 16, 0, 4.0, 0, True, True), -1000)
-        self.assertLess(self.score(3, 2, 0, 0, 0, True, True), -1000)
+        self.assertLess(self.score(0.5, 0.1, 0, 0, 0, True, True), -1000)
+        # A native-verified actor can be nearer than 3 tiles while the
+        # generic map marker wrongly reports the objective as "arrived".
+        self.assertGreater(self.score(2.5, 1.2, 0, 0, 0, True, True), 2)
         self.assertGreater(self.score(17, 16, 0, 3.0, 30, True, True), 2)
         self.assertGreater(self.score(17, 15, 0, 0, 12, True, True),
                            self.score(17, 16, 0, 0, 12, True, True))
@@ -99,6 +102,9 @@ class NativeRecoverySourceSafety(unittest.TestCase):
             "Soldier.FindAbility('Interact_PlantBomb').ObjectID > 0",
             "GetImmediateThreats(Soldier, Immediate)",
             "FindGoal(Soldier, Goal, KnownEnemies)",
+            "bHaveMissionGoal = FindGoal(Soldier, Goal, KnownEnemies)",
+            "if (NativePlantStatus > 0)",
+            'Reason = "unverified_nearby_marker_no_native_target"',
             "class'APX_PlantInteractionKnowledge'.static.FindInteractionGoal(",
             "NativePlantStatus < 0", "if (NativePlantStatus > 0)",
             "GoalTile = VerifiedPlantTile", "GoalTile = Goal.Tile",
