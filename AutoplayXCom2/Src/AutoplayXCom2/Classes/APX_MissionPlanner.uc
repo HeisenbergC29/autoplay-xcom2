@@ -1882,6 +1882,181 @@ static function bool ChooseRescueMove(XComGameState_Unit UnitState,
     return Path.Length > 1;
 }
 
+// Non-bleeding urgent healing (NOT stabilization). A current native target
+// still goes through CombatPlanner; only lack of an in-range target may
+// produce one safe, native-blue reposition, with a *new* AA/cache on the
+// following Controller decision. Remote Gremlin -1 range never induces a
+// guessed "move closer" goal.
+static function bool ChooseMedicalMove(XComGameState_Unit UnitState,
+    out array<TTile> Path, out float Score, out int PatientID,
+    optional out int RemainingCoverChecks,
+    optional out int RemainingConcealmentChecks)
+{
+    local XComGameState_Unit Patient;
+    local StateObjectReference AbilityRef;
+    local XComGameState_Ability Heal;
+    local XComGameState_BattleData Battle;
+    local XGUnit Visualizer;
+    local array<TTile> Tiles, CandidatePath;
+    local array<name> AfterBluePoints;
+    local array<StateObjectReference> Enemies;
+    local array<float> Reaches, Weights;
+    local TTile Tile, Closest;
+    local float Cost, CurrentRisk, Risk, StartSupport, PatientFraction;
+    local float MedicFraction, Progress, Value, AreaPenalty, CoverRisk;
+    local float CurrentPositionScore, CurrentDistance;
+    local int Scanned, Sample, Index, Neighbor, Step, Count, Ready, Patients;
+    local bool bRelevant, bUrgentStatus, bSafe;
+
+    Path.Length = 0;
+    Score = -10000.0;
+    PatientID = 0;
+    if (UnitState == none || !UnitState.IsAbleToAct()
+        || UnitState.NumActionPoints() < 2
+        || UnitState.NumActionPoints('standard') < 2
+        || !HasLegalMove(UnitState)
+        || !ActionPointsAfterBlueMove(UnitState, AfterBluePoints)
+        || HasActiveMissionDeadline() || HasBleedingSquadmate(UnitState)
+        || ShouldEvacuate(UnitState)
+        || class'APX_HazardKnowledge'.static.NeedsPoisonEscape(UnitState))
+        return false;
+    Battle = XComGameState_BattleData(`XCOMHISTORY.GetSingleGameStateObjectForClass(
+        class'XComGameState_BattleData', true));
+    if (Battle == none || Battle.MapData.ActiveMission.sType == "SabotageTransmitter")
+        return false;
+    Visualizer = XGUnit(UnitState.GetVisualizer());
+    if (Visualizer == none || Visualizer.m_kReachableTilesCache == none)
+        return false;
+    Visualizer.m_kReachableTilesCache.UpdateTileCacheIfNeeded();
+    Visualizer.m_kReachableTilesCache.GetAllPathableTiles(Tiles, Visualizer.GetMobility());
+    if (Tiles.Length == 0)
+        return false;
+    GetVisibleThreats(UnitState, Enemies);
+    GetMeleeThreatReaches(UnitState, Enemies, Reaches);
+    GetThreatWeights(UnitState, Enemies, Weights);
+    CurrentRisk = ExposureRisk(UnitState, UnitState.TileLocation,
+        Enemies, Reaches, Weights);
+    CurrentPositionScore = SquadPositionScore(UnitState, UnitState.TileLocation);
+    StartSupport = NearestSupportDistance(UnitState, UnitState.TileLocation);
+    MedicFraction = UnitState.GetCurrentStat(eStat_HP)
+        / FMax(1.0, UnitState.GetMaxStat(eStat_HP));
+    foreach `XCOMHISTORY.IterateByClassType(class'XComGameState_Unit', Patient)
+    {
+        if (++Scanned > 128)
+            return false;
+        if (!class'APX_MedicalApproach'.static.IsLiveSquadPatient(UnitState, Patient))
+            continue;
+        if (++Patients > 16)
+            return false;
+        PatientFraction = Patient.GetCurrentStat(eStat_HP)
+            / FMax(1.0, Patient.GetMaxStat(eStat_HP));
+        CurrentDistance = TileDistance(UnitState.TileLocation, Patient.TileLocation);
+        foreach UnitState.Abilities(AbilityRef)
+        {
+            if (++Ready > 80)
+                return false;
+            Heal = XComGameState_Ability(`XCOMHISTORY.GetGameStateForObjectID(
+                AbilityRef.ObjectID));
+            if (!class'APX_MedicalApproach'.static.IsReadyForApproach(
+                UnitState, Patient, Heal)
+                || !CanAttackWithActionPoints(Heal, UnitState, AfterBluePoints)
+                || class'APX_MedicalApproach'.static.HasNativeTargetNow(
+                    UnitState, Patient, Heal))
+                continue;
+            bRelevant = class'APX_MedicalApproach'.static.HasRemovableEffect(
+                Heal, Patient);
+            bUrgentStatus = bRelevant && Patient.IsPoisoned();
+            if (PatientFraction > 0.45 && !bUrgentStatus)
+                continue;
+            Closest = Visualizer.m_kReachableTilesCache.GetClosestReachableDestination(
+                Patient.TileLocation);
+            Count = Min(Tiles.Length + 9, 64);
+            for (Sample = 0; Sample < Count; ++Sample)
+            {
+                if (Sample == 0)
+                    Tile = Closest;
+                else if (Sample < 9)
+                {
+                    Neighbor = Sample - 1;
+                    if (Neighbor >= 4)
+                        ++Neighbor;
+                    Tile = Patient.TileLocation;
+                    Tile.X += Neighbor % 3 - 1;
+                    Tile.Y += Neighbor / 3 - 1;
+                }
+                else
+                {
+                    Index = (Sample - 9) * Max(0, Tiles.Length - 1) / Max(1, Count - 10);
+                    Tile = Tiles[Index];
+                }
+                if (Tile == UnitState.TileLocation
+                    || !Visualizer.m_kReachableTilesCache.IsTileReachable(Tile))
+                    continue;
+                Cost = Visualizer.m_kReachableTilesCache.GetPathCostToTile(Tile);
+                if (Cost < 0.0 || Cost > Visualizer.GetMobility()
+                    || !IsKnownCombatTile(Tile)
+                    || !class'X2TacticalVisibilityHelpers'.static.CanSquadSeeLocation(
+                        UnitState.ControllingPlayer.ObjectID, Tile)
+                    || !IsSupportedAdvanceDestination(StartSupport,
+                        NearestSupportDistance(UnitState, Tile))
+                    || !class'APX_MedicalApproach'.static.CanTreatFromTile(
+                        UnitState, Patient, Heal, Tile))
+                    continue;
+                Risk = ExposureRisk(UnitState, Tile, Enemies, Reaches, Weights);
+                if (Risk > CurrentRisk + 3.0)
+                    continue;
+                AreaPenalty = FMax(0.0, CurrentPositionScore
+                    - SquadPositionScore(UnitState, Tile));
+                Progress = CurrentDistance - TileDistance(Tile, Patient.TileLocation);
+                Value = class'APX_MedicalApproach'.static.ScoreMedicalApproach(
+                    true, Patient.IsBleedingOut(), PatientFraction, bUrgentStatus,
+                    Progress, CurrentRisk, Risk, MedicFraction, Cost, AreaPenalty);
+                if (Value <= Score)
+                    continue;
+                CandidatePath.Length = 0;
+                if (!Visualizer.m_kReachableTilesCache.BuildPathToTile(Tile, CandidatePath)
+                    || CandidatePath.Length < 2 || CandidatePath.Length > 48
+                    || CandidatePath[0] != UnitState.TileLocation
+                    || CandidatePath[CandidatePath.Length - 1] != Tile
+                    || class'APX_ConcealmentPlanner'.static.InspectPathRisk(
+                        UnitState, CandidatePath, , RemainingConcealmentChecks))
+                    continue;
+                bSafe = true;
+                for (Step = 1; Step < CandidatePath.Length; ++Step)
+                {
+                    if (class'APX_HazardKnowledge'.static.HasBlockingHazard(
+                            UnitState, CandidatePath[Step])
+                        || !IsKnownCombatTile(CandidatePath[Step])
+                        || !class'X2TacticalVisibilityHelpers'.static.CanSquadSeeLocation(
+                            UnitState.ControllingPlayer.ObjectID, CandidatePath[Step])
+                        || !IsSupportedAdvanceStep(StartSupport,
+                            NearestSupportDistance(UnitState, CandidatePath[Step]))
+                        || ExposureRisk(UnitState, CandidatePath[Step],
+                            Enemies, Reaches, Weights) > CurrentRisk + 3.0)
+                    {
+                        bSafe = false;
+                        break;
+                    }
+                    CoverRisk = class'APX_ExplosiveCoverKnowledge'.static.InspectRiskAtTile(
+                        UnitState, CandidatePath[Step], Enemies, RemainingCoverChecks);
+                    if (CoverRisk > 0.0)
+                    {
+                        bSafe = false;
+                        break;
+                    }
+                }
+                if (bSafe)
+                {
+                    Path = CandidatePath;
+                    Score = Value;
+                    PatientID = Patient.ObjectID;
+                }
+            }
+        }
+    }
+    return Path.Length > 1;
+}
+
 static function bool HasLegalMove(XComGameState_Unit UnitState)
 {
     local GameRulesCache_Unit UnitCache;
