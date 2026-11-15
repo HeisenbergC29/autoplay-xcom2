@@ -59,7 +59,8 @@ class MedicalSource(unittest.TestCase):
         for key in ("Medic.GetTeam() == eTeam_XCom", "Patient.GetTeam() == eTeam_XCom",
                     "Medic.GetAssociatedPlayerID() == Patient.GetAssociatedPlayerID()",
                     "Medic.IsFriendlyUnit(Patient)", "Patient.IsAlive()",
-                    "!Patient.IsBleedingOut()", "!Patient.IsBeingCarried()",
+                    "!Patient.IsIncapacitated()", "!Patient.IsBleedingOut()",
+                    "!Patient.IsBeingCarried()",
                     "Patient.GetCurrentStat(eStat_HP) > 0.0"):
             self.assertIn(key, patient)
 
@@ -91,6 +92,11 @@ class MedicalSource(unittest.TestCase):
         self.assertIn("Action.AvailableCode != 'AA_Success'", current)
         self.assertIn("Action.AbilityObjectRef.ObjectID != Ability.ObjectID", current)
         self.assertIn("Target.PrimaryTarget.ObjectID == Patient.ObjectID", current)
+        any_legal = function_body(self.med, "HasUsefulNativeHealNow")
+        self.assertIn("Action.AvailableCode != 'AA_Success'", any_legal)
+        self.assertIn("HasUsefulNeed(Ability, Patient)", any_legal)
+        self.assertIn("if (++Scanned > 80)", any_legal)
+        self.assertIn("return true;", any_legal)
         position = function_body(self.med, "CanTreatFromTile")
         self.assertIn("Single.GetHitRange(Ability)", position)
         self.assertIn("HitRange < 0.0", position)
@@ -104,6 +110,7 @@ class MedicalSource(unittest.TestCase):
                     "CanAttackWithActionPoints(Heal, UnitState, AfterBluePoints)",
                     "HasActiveMissionDeadline()", "HasBleedingSquadmate(UnitState)",
                     "ShouldEvacuate(UnitState)", "NeedsPoisonEscape(UnitState)",
+                    "NeedsPoisonEscape(Patient)", "HasUsefulNativeHealNow(UnitState)",
                     'ActiveMission.sType == "SabotageTransmitter"',
                     "GetAllPathableTiles(", "IsTileReachable(Tile)",
                     "GetPathCostToTile(Tile)", "Cost > Visualizer.GetMobility()",
@@ -111,7 +118,8 @@ class MedicalSource(unittest.TestCase):
                     "CandidatePath[0] != UnitState.TileLocation",
                     "CandidatePath.Length > 48",
                     "HasBlockingHazard(", "IsKnownCombatTile(",
-                    "CanSquadSeeLocation(", "IsSupportedAdvanceStep(",
+                    "CanSquadSeeLocation(", "IsSupportedCombatDestination(",
+                    "IsSupportedAdvanceStep(",
                     "IsSupportedAdvanceDestination(", "ExposureRisk(",
                     "SquadPositionScore(", "InspectPathRisk(",
                     "InspectRiskAtTile(", "RemainingCoverChecks",
