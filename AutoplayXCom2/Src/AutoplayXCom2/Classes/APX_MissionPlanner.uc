@@ -2131,7 +2131,7 @@ static function bool ChooseSabotageCCRecoveryMove(XComGameState_Unit Soldier,
     local XComGameState_BattleData BattleData;
     local XGUnit Visualizer;
     local MissionGoal Goal;
-    local array<StateObjectReference> KnownEnemies, Immediate, Threats;
+    local array<StateObjectReference> KnownEnemies, Immediate;
     local array<float> Reaches, Weights;
     local array<TTile> Tiles, CandidatePath;
     local TTile Tile, GoalTile, Closest, VerifiedPlantTile;
