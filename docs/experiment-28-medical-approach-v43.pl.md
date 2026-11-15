@@ -77,7 +77,7 @@ sama nie dowodzi braku medikitu — `CanActivateAbility`
 może być legalne, a `CheckTargetConditions` pacjenta
 pomyślne, choć zasięg/LOS nie pozwalają leczyć z
 obecnego pola. **Jeżeli obecna natywna lista zawiera
-jakiekolwiek sensowne leczenie własnej drużyny, planner
+pilne leczenie własnej drużyny (niski HP lub realnie usuwalny poison), planner
 nie przemieszcza medyka zamiast wykonania tej akcji.**
 Gremlin z nielimitowanym `GetHitRange=-1`
 nie otrzymuje fikcyjnego celu podejścia;
