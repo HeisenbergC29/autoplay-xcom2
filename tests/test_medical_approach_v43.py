@@ -127,7 +127,10 @@ class MedicalSource(unittest.TestCase):
                     "HasNativeTargetNow(", "CanTreatFromTile("):
             self.assertIn(key, move)
         self.assertIn("if (++Scanned > 128)", move)
-        self.assertIn("if (++Ready > 80)", move)
+        self.assertIn("if (++Ready > 64)", move)
+        self.assertIn("Heal.GetMyTemplateName() != 'MedikitHeal'", move)
+        self.assertIn("Heal.GetMyTemplateName() != 'NanoMedikitHeal'", move)
+        self.assertIn("Heal.GetMyTemplateName() != 'GremlinHeal'", move)
         self.assertIn("if (++Patients > 16)", move)
         self.assertIn("Count = Min(Tiles.Length + 9, 64)", move)
         for key in ("SubmitGameState(", "ModifyStateObject(", "ApplyCost(",
