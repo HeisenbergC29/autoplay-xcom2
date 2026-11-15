@@ -2133,8 +2133,10 @@ static function bool ChooseSabotageCCRecoveryMove(XComGameState_Unit Soldier,
     local array<StateObjectReference> KnownEnemies, Immediate, Threats;
     local array<float> Reaches, Weights;
     local array<TTile> Tiles, CandidatePath;
-    local TTile Tile, GoalTile, Closest;
+    local TTile Tile, GoalTile, Closest, VerifiedPlantTile;
     local int Index, Sample, Count, PathIndex, Cleared, Rejected, ContactStatus;
+    local int NativePlantStatus;
+    local string NativePlantReason;
     local float Cost, Progress, CurrentDistance, CurrentRisk, EndRisk;
     local float StartSupport, EndSupport, FormationLoss, CandidateScore;
     local bool bRouteSafe;
@@ -2165,7 +2167,20 @@ static function bool ChooseSabotageCCRecoveryMove(XComGameState_Unit Soldier,
         Reason = "not_a_native_plant_travel_goal";
         return false;
     }
+    // When the actor's exact interaction point is known, prefer it over a
+    // generic high-Z ObjectiveLocation marker that cannot be walked onto.
+    // Actor discovery itself is bounded and read-only. It does not grant
+    // an AA_Success or fake completion; a consumed plant point is terminal.
+    NativePlantStatus = class'APX_PlantInteractionKnowledge'.static.FindInteractionGoal(
+        Soldier, VerifiedPlantTile, NativePlantReason);
+    if (NativePlantStatus < 0)
+    {
+        Reason = "native_plant_already_consumed";
+        return false;
+    }
     GoalTile = Goal.Tile;
+    if (NativePlantStatus > 0)
+        GoalTile = VerifiedPlantTile;
     Visualizer = XGUnit(Soldier.GetVisualizer());
     if (Visualizer == none || Visualizer.m_kReachableTilesCache == none)
         return false;
@@ -2180,7 +2195,6 @@ static function bool ChooseSabotageCCRecoveryMove(XComGameState_Unit Soldier,
     Tiles.InsertItem(0, Closest);
     Count = Min(48, Tiles.Length);
     CurrentDistance = TileDistance(Soldier.TileLocation, GoalTile);
-    CurrentRisk = ExposureRisk(Soldier, Soldier.TileLocation, KnownEnemies);
     GetMeleeThreatReaches(Soldier, KnownEnemies, Reaches);
     GetThreatWeights(Soldier, KnownEnemies, Weights);
     CurrentRisk = ExposureRisk(Soldier, Soldier.TileLocation,
@@ -2271,7 +2285,10 @@ static function bool ChooseSabotageCCRecoveryMove(XComGameState_Unit Soldier,
     }
     `log("SabotageCC objective recovery|unit=" $ Soldier.ObjectID
         $ "|goal_x=" $ GoalTile.X $ "|goal_y=" $ GoalTile.Y
-        $ "|goal_z=" $ GoalTile.Z $ "|native_samples=" $ Count
+        $ "|goal_z=" $ GoalTile.Z
+        $ "|native_plant_status=" $ NativePlantStatus
+        $ "|native_plant_reason=" $ NativePlantReason
+        $ "|native_samples=" $ Count
         $ "|clear_routes=" $ Cleared $ "|rejected_routes=" $ Rejected
         $ "|chosen=" $ (Path.Length > 1) $ "|reason=" $ Reason,
         true, 'AutoplayXCom2');
