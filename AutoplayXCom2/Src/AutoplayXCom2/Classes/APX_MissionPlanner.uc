@@ -1967,7 +1967,10 @@ static function bool ChooseMedicalMove(XComGameState_Unit UnitState,
                 continue;
             bRelevant = class'APX_MedicalApproach'.static.HasRemovableEffect(
                 Heal, Patient);
-            bUrgentStatus = bRelevant && Patient.IsPoisoned();
+            // Removal in a still-poisonous cloud is not durable: the
+            // patient's own native escape must preempt a detox-only trip.
+            bUrgentStatus = bRelevant && Patient.IsPoisoned()
+                && !class'APX_HazardKnowledge'.static.NeedsPoisonEscape(Patient);
             if (PatientFraction > 0.45 && !bUrgentStatus)
                 continue;
             Closest = Visualizer.m_kReachableTilesCache.GetClosestReachableDestination(
@@ -1997,6 +2000,7 @@ static function bool ChooseMedicalMove(XComGameState_Unit UnitState,
                 Cost = Visualizer.m_kReachableTilesCache.GetPathCostToTile(Tile);
                 if (Cost < 0.0 || Cost > Visualizer.GetMobility()
                     || !IsKnownCombatTile(Tile)
+                    || !IsSupportedCombatDestination(UnitState, Tile)
                     || !class'X2TacticalVisibilityHelpers'.static.CanSquadSeeLocation(
                         UnitState.ControllingPlayer.ObjectID, Tile)
                     || !IsSupportedAdvanceDestination(StartSupport,
