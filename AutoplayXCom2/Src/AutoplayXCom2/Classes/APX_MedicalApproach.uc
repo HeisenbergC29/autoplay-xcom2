@@ -127,11 +127,11 @@ static function bool HasUrgentNativeHealNow(XComGameState_Unit Medic)
     local XComGameState_Ability Ability;
     local XComGameState_Unit Patient;
     local name AbilityName;
-    local int Scanned;
+    local int Scanned, TargetChecks;
 
     if (Medic == none || `TACTICALRULES == none
         || !`TACTICALRULES.GetGameRulesCache_Unit(Medic.GetReference(), Cache))
-        return false;
+        return true; // Incomplete native data cannot justify speculative movement.
     foreach Cache.AvailableActions(Action)
     {
         if (++Scanned > 80)
@@ -149,6 +149,8 @@ static function bool HasUrgentNativeHealNow(XComGameState_Unit Medic)
             continue;
         foreach Action.AvailableTargets(Target)
         {
+            if (++TargetChecks > 128)
+                return true;
             Patient = XComGameState_Unit(`XCOMHISTORY.GetGameStateForObjectID(
                 Target.PrimaryTarget.ObjectID));
             if (Patient != none && Patient.IsAlive()
@@ -164,6 +166,65 @@ static function bool HasUrgentNativeHealNow(XComGameState_Unit Medic)
                         && HasRemovableEffect(Ability, Patient))))
                 return true;
         }
+    }
+    return false;
+}
+
+// The budget lives in Controller.MakeDecision and is passed by reference
+// through every medic. It is never replenished for another soldier.
+static function int RemainingApproachSamples(int RemainingSamples)
+{
+    return Max(0, RemainingSamples - 1);
+}
+
+static function bool CanProposeApproach(bool bUrgentSquadHealAvailable,
+    int RemainingSamples)
+{
+    return !bUrgentSquadHealAvailable && RemainingSamples > 0;
+}
+
+// Read the existing local roster once per decision, without updating it.
+// Missing/truncated data conservatively keeps normal native action selection.
+static function bool HasUrgentSquadHealNow(int PlayerID)
+{
+    local XComGameState_Player PlayerState;
+    local XGPlayer PlayerVisualizer;
+    local XGSquad Squad;
+    local XGUnit Member;
+    local XComGameState_Unit Medic;
+    local int Count, Index;
+
+    if (`XCOMHISTORY == none || `TACTICALRULES == none
+        || PlayerID != `TACTICALRULES.GetLocalClientPlayerObjectID())
+        return true;
+    PlayerState = XComGameState_Player(`XCOMHISTORY.GetGameStateForObjectID(PlayerID));
+    if (PlayerState == none || PlayerState.GetTeam() != eTeam_XCom)
+        return true;
+    PlayerVisualizer = XGPlayer(PlayerState.GetVisualizer());
+    if (PlayerVisualizer == none || PlayerVisualizer.ObjectID != PlayerID
+        || PlayerVisualizer.m_kSquad == none)
+        return true;
+    Squad = PlayerVisualizer.m_kSquad;
+    if (Squad.m_kPlayer != PlayerVisualizer)
+        return true;
+    Count = Squad.GetNumMembers();
+    if (Count <= 0 || Count > 24)
+        return true;
+    for (Index = 0; Index < Count; ++Index)
+    {
+        Member = Squad.GetMemberAt(Index);
+        if (Member == none || Member.ObjectID <= 0)
+            return true;
+        Medic = XComGameState_Unit(`XCOMHISTORY.GetGameStateForObjectID(Member.ObjectID));
+        if (Medic == none || Medic.GetMyTemplate() == none)
+            return true;
+        if (Medic.GetAssociatedPlayerID() != PlayerID || Medic.GetTeam() != eTeam_XCom
+            || !Medic.IsAlive() || Medic.IsIncapacitated() || Medic.IsBleedingOut()
+            || Medic.bRemoved || Medic.bRemovedFromPlay || Medic.GetMyTemplate().bIsCosmetic
+            || !Medic.IsAbleToAct())
+            continue;
+        if (HasUrgentNativeHealNow(Medic))
+            return true;
     }
     return false;
 }
@@ -201,9 +262,10 @@ static function bool CanTreatFromTile(XComGameState_Unit Medic,
 // an actual removal effect installed on this ability matches the actual
 // persistent damage type. Native AA_Success was checked by CombatPlanner.
 static function float ScoreUsefulHealing(float BaseHealthScore, bool bRelevantEffect,
-    bool bPoisoned, bool bBleeding)
+    bool bPoisoned, bool bBleeding, optional bool bInvalidPatient)
 {
-    if (bBleeding)
+    // Effect removal must never revive ScoreMedical's hard patient vetoes.
+    if (bBleeding || bInvalidPatient)
         return -10000.0;
     if (!bRelevantEffect)
         return BaseHealthScore;

@@ -136,7 +136,9 @@ class MedicalSource(unittest.TestCase):
         self.assertIn("Heal.GetMyTemplateName() != 'NanoMedikitHeal'", move)
         self.assertIn("Heal.GetMyTemplateName() != 'GremlinHeal'", move)
         self.assertIn("if (++Patients > 16)", move)
-        self.assertIn("if (++EvaluatedCandidates > 128)", move)
+        self.assertIn("RemainingMedicalSamples <= 0", move)
+        self.assertIn("RemainingApproachSamples(", move)
+        self.assertNotIn("local int EvaluatedCandidates", move)
         self.assertIn("return Path.Length > 1;", move)
         self.assertIn("Count = Min(Tiles.Length + 9, 64)", move)
         for key in ("SubmitGameState(", "ModifyStateObject(", "ApplyCost(",

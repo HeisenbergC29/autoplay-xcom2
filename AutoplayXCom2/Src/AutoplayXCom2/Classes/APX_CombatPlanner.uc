@@ -173,7 +173,8 @@ static function bool ChooseAction(XComGameState_Unit UnitState,
                         CandidateScore,
                         class'APX_MedicalApproach'.static.HasRemovableEffect(
                             Ability, TargetUnit),
-                        TargetUnit.IsPoisoned(), TargetUnit.IsBleedingOut());
+                        TargetUnit.IsPoisoned(), TargetUnit.IsBleedingOut(),
+                        TargetUnit.bRemoved || TargetUnit.bRemovedFromPlay);
                 CandidateScore = class'APX_ActionEconomy'.static.ScoreWithRetainedAttack(
                     UnitState, Ability, CandidateScore, VisibleEnemies,
                     FollowUpAbilityID, FollowUpTargetID, RetainedAttackValue);

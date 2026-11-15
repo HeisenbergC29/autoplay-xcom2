@@ -9,6 +9,7 @@ import hashlib
 from io import BytesIO
 import json
 from pathlib import Path
+import re
 import stat
 import struct
 import subprocess
@@ -22,6 +23,20 @@ ROOT = Path(__file__).resolve().parents[1]
 SPEC = importlib.util.spec_from_file_location("compiled_checks", ROOT / "tools/check-compiled-package.py")
 CHECKS = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(CHECKS)
+
+
+def owned_source_classes():
+    """Inventory owned declarations independently of the installer's allowlist."""
+    classes = {}
+    for path in sorted((ROOT / "AutoplayXCom2/Src/AutoplayXCom2/Classes").glob("*.uc")):
+        source = re.sub(r"/\*.*?\*/|//[^\n]*", "", path.read_text(encoding="utf-8"), flags=re.S)
+        declarations = re.findall(r"^\s*class\s+(\w+)\s+extends\s+(\w+)\b", source, flags=re.M | re.I)
+        if len(declarations) != 1 or declarations[0][0] != path.stem or path.stem in classes:
+            raise AssertionError(f"Expected one matching owned class declaration in {path.name}")
+        classes.update(declarations)
+    if not classes:
+        raise AssertionError("Owned class source inventory is empty")
+    return classes
 
 
 def i32(*values):
@@ -82,6 +97,10 @@ def archive_fixture(package, extra=()):
 
 
 class CompiledTableTests(unittest.TestCase):
+    def test_explicit_class_allowlist_matches_current_owned_source(self):
+        self.assertTrue(set(CHECKS.EXPECTED_CLASSES).isdisjoint(CHECKS.OPTIONAL_CLASSES))
+        self.assertEqual(CHECKS.EXPECTED_CLASSES | CHECKS.OPTIONAL_CLASSES, owned_source_classes())
+
     def test_require_recorder_cli_distinguishes_new_installer_from_legacy(self):
         with tempfile.TemporaryDirectory() as temporary:
             archive = Path(temporary) / 'mod.zip'
@@ -127,9 +146,18 @@ class CompiledTableTests(unittest.TestCase):
         self.assertEqual(set(report["import_roots"]), {'Core', 'Engine', 'XComGame'})
 
     def test_rejects_unknown_additional_class(self):
-        data, _ = table_fixture(extra_classes={"UnrelatedClass": "Object"})
-        with self.assertRaisesRegex(CHECKS.InvalidPackage, "unexpected mod classes"):
-            CHECKS.parse_ue3_package(data)
+        for name in ("UnrelatedClass", "APX_UnreviewedFutureHelper"):
+            with self.subTest(name=name):
+                data, _ = table_fixture(extra_classes={name: "Object"})
+                with self.assertRaisesRegex(CHECKS.InvalidPackage, "unexpected mod classes"):
+                    CHECKS.parse_ue3_package(data)
+
+    def test_rejects_wrong_superclass_for_required_and_optional_classes(self):
+        for name, superclass in (("APX_Controller", "Object"), ("APX_MedicalApproach", "Actor")):
+            with self.subTest(name=name):
+                data, _ = table_fixture(extra_classes={name: superclass})
+                with self.assertRaisesRegex(CHECKS.InvalidPackage, f"Unexpected superclass for {name}"):
+                    CHECKS.parse_ue3_package(data)
 
     def test_accepts_v15_planning_helpers_without_external_packages(self):
         helpers = {name: 'Object' for name in
@@ -193,6 +221,14 @@ class ArchiveTests(unittest.TestCase):
         package, _ = table_fixture()
         report = self.inspect_bytes(archive_fixture(package))
         self.assertIn("AutoplayXCom2/Script/AutoplayXCom2.u", report["files"])
+
+    def test_accepts_installer_with_current_full_source_class_set(self):
+        current_classes = owned_source_classes()
+        package, _ = table_fixture(extra_classes=current_classes)
+        report = self.inspect_bytes(archive_fixture(package))
+        self.assertEqual(set(report["own_classes"]), set(current_classes))
+        self.assertEqual(set(report["import_roots"]), {"Core", "Engine", "XComGame"})
+        self.assertFalse(report["exact_source_revision_verified"])
 
     def test_rejects_unsafe_or_wrong_root_paths(self):
         for name in ("../escape", "AutoplayXCom2\\..\\escape", "/AutoplayXCom2/file",

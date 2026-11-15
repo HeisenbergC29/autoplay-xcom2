@@ -1890,7 +1890,8 @@ static function bool ChooseRescueMove(XComGameState_Unit UnitState,
 static function bool ChooseMedicalMove(XComGameState_Unit UnitState,
     out array<TTile> Path, out float Score, out int PatientID,
     optional out int RemainingCoverChecks,
-    optional out int RemainingConcealmentChecks)
+    optional out int RemainingConcealmentChecks,
+    optional out int RemainingMedicalSamples)
 {
     local XComGameState_Unit Patient;
     local StateObjectReference AbilityRef;
@@ -1906,7 +1907,6 @@ static function bool ChooseMedicalMove(XComGameState_Unit UnitState,
     local float MedicFraction, Progress, Value, AreaPenalty, CoverRisk;
     local float CurrentPositionScore, CurrentDistance;
     local int Scanned, Sample, Index, Neighbor, Step, Count, Ready, Patients;
-    local int EvaluatedCandidates;
     local bool bRelevant, bUrgentStatus, bSafe;
     local string ConcealmentReason;
 
@@ -1988,8 +1988,10 @@ static function bool ChooseMedicalMove(XComGameState_Unit UnitState,
                 // One combined decision budget, not 64 × every patient ×
                 // all medical abilities. Preserve a fully checked safe
                 // candidate as a non-forced option when the budget ends.
-                if (++EvaluatedCandidates > 128)
+                if (RemainingMedicalSamples <= 0)
                     return Path.Length > 1;
+                RemainingMedicalSamples = class'APX_MedicalApproach'.static.RemainingApproachSamples(
+                    RemainingMedicalSamples);
                 if (Sample == 0)
                     Tile = Closest;
                 else if (Sample < 9)

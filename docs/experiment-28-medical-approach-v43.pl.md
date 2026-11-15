@@ -68,6 +68,10 @@ przywrócić leczenia martwego/krwawiącego, obcego
 lub kontrolowanego wroga przez sam efekt.
 `APX_ActionEconomy.ScoreWithRetainedAttack` nadal
 zarządza porównaniem z zachowanym legalnym atakiem.
+Poprawka LEAD zachowuje dotychczasowe veto `bRemoved/bRemovedFromPlay`
+przez nową promocję detoksu: usuwalny status nie podnosi odrzuconego pacjenta
+z −10000 do dodatniej oceny. To regresja źródłowa, nie odtworzony przypadek
+nieaktualnego native cache w grze.
 
 **2. Pozycjonowanie niekrwawiącego:** nowy
 `APX_MedicalApproach.uc` posiada jawne kontrakty
@@ -79,6 +83,18 @@ pomyślne, choć zasięg/LOS nie pozwalają leczyć z
 obecnego pola. **Jeżeli obecna natywna lista zawiera
 pilne leczenie własnej drużyny (niski HP lub realnie usuwalny poison), planner
 nie przemieszcza medyka zamiast wykonania tej akcji.**
+
+Przegląd LEAD rozszerzył tę bramkę na całą drużynę: jeden snapshot
+przed ocenianiem kandydatów czyta istniejący lokalny `XGSquad`
+(max24 członków, publiczne niemutujące `GetNumMembers/GetMemberAt`),
+ponownie weryfikuje bieżącego właściciela i native cache.
+Skan native readiness ma max80 akcji oraz max128 targetów na medyka;
+brak/niekompletne dane zachowują zwykłe natywne akcje i blokują jedynie
+spekulacyjne podejście. Gotowy pilny heal medyka A wyprzedza teraz
+podejście medyka B, niezależnie od kolejności jednostek w historii.
+Źródłowy przykład dla pacjenta2/10HP: gotowy heal172 i podejście244,6
+wcześniej wybierały zbędny ruch. Test wykonuje rzeczywiste UC scorery
+i nową wspólną politykę; nie jest to odtworzona misja w silniku.
 Gremlin z nielimitowanym `GetHitRange=-1`
 nie otrzymuje fikcyjnego celu podejścia;
 może natomiast wykonać normalną akcję z aktualnej
@@ -120,13 +136,15 @@ brak `APX_HazardKnowledge.HasBlockingHazard`,
 `ExposureRisk(tile) <= current+3`
 **dla każdego tile**, a obszarowe skupienie
 oddziału zmniejsza ranking `SquadPositionScore`.
-Skan jest skończony: max 128 weryfikacji unit,
+Skan pojedynczego medyka jest skończony: max 128 weryfikacji unit,
 16 pacjentów, 64 sprawdzenia rzeczywistych
 trzech rodzin medycznych (pozostałe abilities
 nie zużywają tego budżetu), 64
 kandydaty pól na zdolność/pacjenta, ale łącznie
 najwyżej **128 próbek endpointów na decyzję**
-(jeden budżet), oraz 48 pól/ścieżkę.
+(jeden budżet Controller przekazywany przez referencję wszystkim medykom),
+oraz 48 pól/ścieżkę. Poprawka LEAD usuwa lokalny reset licznika dla
+kolejnego medyka; sprawdzony kandydat pozostaje opcją, gdy licznik się kończy.
 Wyczerpany budżet/nieznane wzorce
 **odrzucają** próby, nie zatwierdzają ryzyka.
 
@@ -192,3 +210,12 @@ ap cost i whole-route source contracts.
 Dostarczony SDK sprawdzany prywatnie; CI
 z pominięciem opcjonalnego private SDK testu
 nie jest natywną kompilacją WOTC.
+
+## Kontrola końcowej dystrybucji
+
+LEAD uaktualnił jawną listę klas w `tools/check-compiled-package.py`:
+9 historycznych wymaganych i 21 opcjonalnych obejmują bieżące 30 źródeł.
+Poprzednia lista odrzucałaby prawidłowy nowy pakiet jako nieznane klasy.
+Fixture pełnego instalatora i niezależne porównanie ze źródłami zapobiegają
+powrotowi tego błędu; obce klasy, błędne superclass i package roots nadal
+są odrzucane. To walidacja parsera, nie dowód natywnej kompilacji.

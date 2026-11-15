@@ -1137,7 +1137,7 @@ function MakeDecision(XComTacticalController PC)
     local int RemainingConcealmentChecks, RemainingCoverChecks;
     local int RemainingContactGroups, RemainingContactMembers;
     local int RemainingContactDetectors, RemainingContactTiles, RemainingContactLOS;
-    local int RemainingTempoCoverChecks;
+    local int RemainingTempoCoverChecks, RemainingMedicalSamples;
     local array<StateObjectReference> ContactSnapshotUnits, ContactSnapshotInteractives;
     local string ContactSnapshotReason;
     local bool bContactSnapshotReady, bContactSnapshotComplete;
@@ -1152,6 +1152,7 @@ function MakeDecision(XComTacticalController PC)
     local bool bVisibleThreats, bContactSearch, bCandidateMove, bGrenadeCandidate;
     local bool bOpeningContact, bFocusedGoal, bRangedFocusGoal, bRangedConcealed;
     local bool bPatrolRefreshed, bPatrolActive, bSelectedPatrolMove, bSelectedPatrolReaction;
+    local bool bSquadUrgentHealAvailable;
     local string PatrolReason, PatrolApproachReason;
     local XComGameState_Unit PatrolSupporter, PatrolScout;
     local bool bNativeStrikeOnly;
@@ -1160,6 +1161,7 @@ function MakeDecision(XComTacticalController PC)
     RemainingConcealmentChecks = 6;
     // Prefix and local cover inspections share one decision budget across units.
     RemainingCoverChecks = 6;
+    RemainingMedicalSamples = 128;
     RemainingContactGroups = Clamp(class'APX_ContactEnvelope'.default.MaxGroups, 1, 32);
     RemainingContactMembers = Clamp(class'APX_ContactEnvelope'.default.MaxMembers, 1, 128);
     RemainingContactDetectors = Clamp(class'APX_ContactEnvelope'.default.MaxDetectors, 1, 64);
@@ -1204,6 +1206,10 @@ function MakeDecision(XComTacticalController PC)
     if (RouteTempo == none)
         RouteTempo = new(self) class'APX_RouteTempo';
     RouteTempo.Refresh(PlayerRef.ObjectID, PlayerState.PlayerTurnCount);
+    // One squad-wide native readiness snapshot. Another medic's actual
+    // urgent heal must beat a speculative approach by this candidate medic.
+    bSquadUrgentHealAvailable = class'APX_MedicalApproach'.static.HasUrgentSquadHealNow(
+        PlayerRef.ObjectID);
     if (MissionRecorder != none)
         MissionRecorder.BeginDecision();
 
@@ -1576,9 +1582,11 @@ function MakeDecision(XComTacticalController PC)
         // fabricates a legal heal target. Only the actually submitted blue
         // move is dispatched; next decision re-reads native ability cache.
         CandidatePath.Length = 0;
-        if (class'APX_MissionPlanner'.static.ChooseMedicalMove(
+        if (class'APX_MedicalApproach'.static.CanProposeApproach(
+                bSquadUrgentHealAvailable, RemainingMedicalSamples)
+            && class'APX_MissionPlanner'.static.ChooseMedicalMove(
                 UnitState, CandidatePath, Score, MedicalPatientID,
-                RemainingCoverChecks, RemainingConcealmentChecks)
+                RemainingCoverChecks, RemainingConcealmentChecks, RemainingMedicalSamples)
             && TraceCandidateMove(UnitState, CandidatePath, Score)
             && Score > BestScore
             && CanUseMove(UnitState, CandidatePath, MedicalPatientID > 0))
