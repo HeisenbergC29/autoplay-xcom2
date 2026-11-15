@@ -1126,7 +1126,7 @@ function MakeDecision(XComTacticalController PC)
     local array<TTile> CandidatePath, BestPath, AmbushPath, PatrolApproachPath;
     local array<vector> CandidateLocations, BestLocations;
     local vector CandidateAim, BestAim;
-    local int TargetIndex, BestTargetIndex, ChosenTargetID, AmbushTargetIndex, RescuePatientID;
+    local int TargetIndex, BestTargetIndex, ChosenTargetID, AmbushTargetIndex, RescuePatientID, MedicalPatientID;
     local int PatrolReactionIndex, PatrolApproachUnitID;
     local int PatrolReactionUnitID, PatrolReactionAbilityID;
     local TTile PatrolApproachDestination, CandidateRouteGoal, BestRouteGoal;
@@ -1571,6 +1571,33 @@ function MakeDecision(XComTacticalController PC)
             if (MissionRecorder != none)
                 MissionRecorder.Marker("rescue_candidate", "unit=" $ UnitState.ObjectID
                     @ "patient=" $ RescuePatientID @ "score=" $ Score);
+        }
+        // #28: MEDICAL (nonbleeding) approach is not stabilization and never
+        // fabricates a legal heal target. Only the actually submitted blue
+        // move is dispatched; next decision re-reads native ability cache.
+        CandidatePath.Length = 0;
+        if (class'APX_MissionPlanner'.static.ChooseMedicalMove(
+                UnitState, CandidatePath, Score, MedicalPatientID,
+                RemainingCoverChecks, RemainingConcealmentChecks)
+            && TraceCandidateMove(UnitState, CandidatePath, Score)
+            && Score > BestScore
+            && CanUseMove(UnitState, CandidatePath, MedicalPatientID > 0))
+        {
+            BestPath = CandidatePath;
+            BestScore = Score;
+            BestUnit = UnitState;
+            bMove = true;
+            bArea = false;
+            BestLocations.Length = 0;
+            bHavePlan = true;
+            bSelectedRoute = false;
+            if (MissionRecorder != none)
+                MissionRecorder.Marker("medical_approach_candidate",
+                    "unit=" $ UnitState.ObjectID
+                    @ "patient=" $ MedicalPatientID
+                    @ "score=" $ Score
+                    @ "kind=heal_or_native_detox"
+                    @ "activation=next_decision_native_cache_required");
         }
         // Patrol anticipation is a bounded candidate, not a forced order.
         // Rescue/urgent timers and actual combat stay higher priority.
