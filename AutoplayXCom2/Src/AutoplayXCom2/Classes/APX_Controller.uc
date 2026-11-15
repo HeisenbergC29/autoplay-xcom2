@@ -1153,7 +1153,8 @@ function MakeDecision(XComTacticalController PC)
     local bool bOpeningContact, bFocusedGoal, bRangedFocusGoal, bRangedConcealed;
     local bool bPatrolRefreshed, bPatrolActive, bSelectedPatrolMove, bSelectedPatrolReaction;
     local bool bSquadUrgentHealAvailable;
-    local string PatrolReason, PatrolApproachReason;
+    local string PatrolReason, PatrolApproachReason, SabotageRecoveryReason;
+    local bool bSabotageRecoveryCandidate;
     local XComGameState_Unit PatrolSupporter, PatrolScout;
     local bool bNativeStrikeOnly;
 
@@ -1561,6 +1562,52 @@ function MakeDecision(XComTacticalController PC)
             SelectedRouteDestination = CandidatePath[CandidatePath.Length - 1];
             SelectedRouteUnitID = UnitState.ObjectID;
         }
+        // #101: actual SabotageCC v43 turn22 repro — mission marker
+        // (40,34,2) led to 8 no-plan stops at 2 native AP. Only when the
+        // normal planners have no constructive candidate, reconsider bounded
+        // current-CLEAR native blue progress instead of forcing overwatch
+        // or inventing a PlantBomb target. No extra AP, no free path.
+        if (BestScore <= 2.0 && FocusBattle != none
+            && FocusBattle.MapData.ActiveMission.sType == "SabotageCC")
+        {
+            CandidatePath.Length = 0;
+            bSabotageRecoveryCandidate =
+                class'APX_MissionPlanner'.static.ChooseSabotageCCRecoveryMove(
+                    UnitState, CandidatePath, Score, SabotageRecoveryReason,
+                    ContactSnapshotUnits, ContactSnapshotInteractives,
+                    bContactSnapshotComplete, ContactSnapshotReason,
+                    RemainingContactDetectors, RemainingContactTiles,
+                    RemainingContactLOS, RemainingCoverChecks,
+                    RemainingConcealmentChecks, RemainingTempoCoverChecks);
+            if (MissionRecorder != none)
+                MissionRecorder.Marker("objective_recovery_scan",
+                    "unit=" $ UnitState.ObjectID
+                    @ "found=" $ string(bSabotageRecoveryCandidate)
+                    @ "reason=" $ SabotageRecoveryReason
+                    @ "native_blue_only=True"
+                    @ "horizon_ai_turns=0");
+            if (bSabotageRecoveryCandidate
+                && TraceCandidateMove(UnitState, CandidatePath, Score)
+                && Score > BestScore && CanUseMove(UnitState, CandidatePath))
+            {
+                BestPath = CandidatePath;
+                BestScore = Score;
+                BestUnit = UnitState;
+                bMove = true;
+                bArea = false;
+                BestLocations.Length = 0;
+                bHavePlan = true;
+                bSelectedRoute = false;
+                if (MissionRecorder != none)
+                    MissionRecorder.Marker("objective_recovery_candidate",
+                        "unit=" $ UnitState.ObjectID
+                        @ "score=" $ Score
+                        @ "end_x=" $ CandidatePath[CandidatePath.Length - 1].X
+                        @ "end_y=" $ CandidatePath[CandidatePath.Length - 1].Y
+                        @ "end_z=" $ CandidatePath[CandidatePath.Length - 1].Z
+                        @ "source=verified_native_blue_route");
+            }
+        }
         CandidatePath.Length = 0;
         if (class'APX_MissionPlanner'.static.ChooseRescueMove(UnitState, CandidatePath, Score, RescuePatientID)
             && TraceCandidateMove(UnitState, CandidatePath, Score)
@@ -1795,7 +1842,12 @@ function MakeDecision(XComTacticalController PC)
             RequestEndTurn(PC); // Native confirmed end-turn ticket still applies.
             return;
         }
-        StopWithStatus("No constructive action or understood mission goal", StatusNoPlan);
+        if (FocusBattle != none
+            && FocusBattle.MapData.ActiveMission.sType == "SabotageCC")
+            StopWithStatus("SabotageCC: no currently verified native X4 route; see objective_recovery_scan",
+                StatusNoPlan);
+        else
+            StopWithStatus("No constructive action or understood mission goal", StatusNoPlan);
         return;
     }
     if (!bHavePlan)
