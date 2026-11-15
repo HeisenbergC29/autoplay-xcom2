@@ -2106,8 +2106,9 @@ static function float ScoreSabotageRecovery(float BeforeDistance,
     local float Progress, Value;
 
     Progress = BeforeDistance - AfterDistance;
-    if (!bCurrentRouteClear || !bFullRouteSafe || BeforeDistance <= 3.0
-        || Progress < 1.0 || EndRisk > CurrentRisk + 3.0)
+    if (!bCurrentRouteClear || !bFullRouteSafe || BeforeDistance <= 3.0)
+        return -10000.0;
+    if (Progress < 1.0 || EndRisk > CurrentRisk + 3.0)
         return -10000.0;
     Value = 24.0 + FMin(14.0, Progress * 3.0);
     Value -= FMax(0.0, EndRisk - CurrentRisk) * 0.5;
