@@ -113,7 +113,16 @@ z weryfikacją actor/socket/query/pełnej
 ścieżki. Gdy punkt istnieje, zastępuje
 niezweryfikowany wysoki marker; gdy natywny
 aktor już skonsumowano — nie ściga starego
-celu. Jeśli native actor nadal jest nieznany,
+celu. Jeśli `FindGoal` odrzucił stary marker
+na dystansie ≤3 (mimo `AA_NoTargets`),
+**weryfikowany socket nadal jest badany**:
+to dodatkowy test regresyjny `2.5→1.2`
+pola. Bez natywnego aktora bliski marker
+bez rzeczywistego celu zostaje
+**niezweryfikowany**, nie generujemy
+przypadkowego chodu na już osiągnięty
+znacznik. Jeśli native actor nadal jest
+nieznany, ale marker jest daleki,
 dopuszcza dotychczasowy cel misji jako
 **wyłącznie cel ruchu**, nigdy potwierdzoną
 akcję `PlantBomb`.
