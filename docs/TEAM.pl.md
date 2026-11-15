@@ -9,32 +9,29 @@ Gotowe zadania niezależne: [diagnostyka raportów #2](https://github.com/Heisen
 i [macierz misji #3](https://github.com/HeisenbergC29/autoplay-xcom2/issues/3).
 Osobny dowód kompilacji/gry użytkownika: [próby bieżącej wersji #4](https://github.com/HeisenbergC29/autoplay-xcom2/issues/4).
 
-## Bieżąca praca — źródła przed wspólnym testem
+## Bieżące przekazanie — jedna wspólna próba v43
 
-Polecenie użytkownika z 14 XI: Windows build i próba gry dopiero po zakończeniu
-bieżących zadań LEAD oraz wszystkich przypisanych prac HELPERA. **#4 jest BLOCKED**;
-historyczne polecenia testowania poszczególnych v32–v38 poniżej nie są bieżącym
-przekazaniem. Jedna końcowa paczka powstanie po integracji skończonej
-[kolejki #86](https://github.com/HeisenbergC29/autoplay-xcom2/issues/86).
-[Zakres, zależności i kryteria końca](PREBUILD-QUEUE.pl.md).
+Polecenie użytkownika z 14 XI jest spełnione dla bieżącej kolejki źródłowej
+[#86](https://github.com/HeisenbergC29/autoplay-xcom2/issues/86): #28/#98 to jej
+ostatni odebrany etap. Pozostałe zakresy mają implementację lub jawny disposition
+unsupported; nie oznacza to ukończenia całego projektu ani zaliczenia gry.
+**Następna kolej użytkownika:** jeden końcowy SHA/ZIP wskazany w
+[#4](https://github.com/HeisenbergC29/autoplay-xcom2/issues/4), kompilacja Windows
+oraz wspólna runda gry. Starsze przekazania poniżej są historyczne.
 
-Odbiór 15 XI: #96 wdraża v41 (sekwencyjny marsz i pamięć tras), #97 dodaje
-v42 z wąskim natywnym Faceoff oraz macierzą pozostałych rodzin AoE.
-Dwa ruchy blue są osobnymi zaakceptowanymi akcjami z oceną po pierwszej;
-nie jest to dowolny długi dash. LEAD ograniczył emergency revisit do faktycznej
-propozycji ratunku/ucieczki/celu misji i naprawił źródłowy false-NoPlan dla
-ujawnionej jednostki bez osłony, której konieczny powrót dostał karę pamięci.
-Faceoff używa niezmienionej legalnej listy wrogów; precyzyjny kontrakt pistoletu,
-effect/style/aim odrzuca dodatkowe ammo, upgrade i stosowane bonus effects.
-To nie certyfikuje wtórnego zniszczenia otoczenia ani wszystkich innych AoE.
+V43 dodaje native-qualified podejście do pilnego heal/detox i detoks przy pełnym
+HP tylko dla faktycznie usuwalnego statusu. LEAD poprawił globalny priorytet
+pilnego native heal innego medyka, wspólny budżet128 endpointów na decyzję
+oraz zachowanie veto usuniętego pacjenta. Roster/cost/target/range reads pozostają
+obserwacyjne; po ruchu wymagany świeży native cache/AA. Checker instalatora
+obejmuje jawnie wszystkie30 aktualnych klas, nadal odrzuca obce klasy i zależności.
 
-Źródłowy head `b781ce476c6215e6e77f3142db971d0f31e970c9` uwzględnia scalony
-#96 (`2800a84d1433d0e26992b6dddec06b8eb09edd5e`) i przeszedł **858 private
-PASS/0skip**, SDK29/31 oraz niezależne review PASS. CI352: 774 PASS/84 SKIP,
-6 kroków PowerShell PASS. Ta aktualizacja dokumentów nie zmienia runtime.
-**Windows make/game v41 i v42 NOT RUN; #4 nadal BLOCKED.**
-[Zakres marszu/pamięci](experiment-89-10-sequential-blue-route-memory-v41.pl.md),
-[Faceoff i rozstrzygnięcia pozostałych AoE](experiment-38b-aoe-family-disposition.pl.md).
+Źródłowy head `9771d7cb60d57163e488033e210f2c23871b4ad5`: **876 private PASS/0skip**,
+SDK30/31 i niezależne review PASS. CI373: 791 PASS/85 SKIP oraz 6 kroków
+PowerShell PASS. Końcowa aktualizacja dokumentów nie zmienia runtime/testów/tools.
+**Windows make/game v43 NOT RUN** do rzeczywistego raportu użytkownika.
+[Zakres i jedna runda](integration-2026-11-15-v43.pl.md),
+[szczegóły leczenia](experiment-28-medical-approach-v43.pl.md).
 
 Użytkownik rozszerzył zgodę na wszystkie dostępne zapisane dane patroli,
 w tym pełną trasę, jeśli faktycznie istnieje. Typowy stock patrol nie ma
@@ -45,18 +42,13 @@ i niepewności; brak mutowania AI albo generowania przyszłych losowań.
 [Dokładny wybór celu, losowanie i osobna droga dojścia](patrol-selection-algorithm.pl.md)
 potwierdzają możliwość prognozowania wariantów, bez jednej pewnej trasy.
 
-**Następny HELPER: #28 — podejście do pilnego leczenia/detoksu.** To jedyny
-pozostały READY zakres źródłowy bieżącej skończonej kolejki #86, po integracji
-#96/#97. #10/#89 mają wdrożony wariant sekwencyjny; ogólny pojedynczy dash,
-pełna przyszła trasa i nieobsługiwany footprint pozostają Unsupported/Unknown,
-a nie rzekomo ukończoną prognozą. #38 ma Faceoff i skończoną macierz rodzin,
-pozostałe kształty/status/secondary chains nadal unsupported. #20/#79 nie
-wracają jako nowe zadania bez konkretnego kontraktu/dowodu.
-
-HELPER claimuje aktualną bazę i pliki #28 (CombatPlanner/MissionPlanner/testy).
-Po wykonaniu #28 LEAD przegląda, poprawia i integruje. Dopiero po braku otwartych
-claimów i nieprzejrzanych PR powstanie jedna końcowa paczka dla użytkownika.
-Żadnego osobnego buildu po v41/v42; testy w grze i kompilację wykonuje użytkownik.
+HELPER nie ma kolejnego przypisanego READY zadania przed tą próbą.
+LEAD/HELPER analizują nowy raport po grze; nie dopisujemy nowych niezwiązanych
+optymalizacji do zamkniętej listy. Konkretne błędy kompilacji lub gry rozpatrujemy
+na dokładnym źródłowym SHA/markerze, bez żądania ponownego pełnego SDK.
+#10/#89 mają dwa natywne blue; pełna przyszła trasa/nieobsługiwany footprint
+pozostają Unknown. #38 ma ograniczony Faceoff i macierz rodzin; inne AoE i
+secondary chains nadal unsupported. #20/#79 zachowują jawne granice dowodów.
 
 ## Podział odpowiedzialności
 
