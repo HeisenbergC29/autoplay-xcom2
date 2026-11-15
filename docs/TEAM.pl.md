@@ -11,6 +11,13 @@ Osobny dowód kompilacji/gry użytkownika: [próby bieżącej wersji #4](https:/
 
 ## Bieżące przekazanie — jedna wspólna próba v43
 
+Nowy log użytkownika: pierwszy Windows make źródeł `1191871` zakończył się
+**FAIL: 1 error / 1 warning**. LEAD obsługuje [#99](fix-99-v43-compiler.pl.md):
+grupowanie trzech warunków przed `? :` i zmiana nazwy parametru kolidującego
+z polem klasy. Bez zmiany predykatów taktycznych i rewizji v43. Nowy dokładny
+ZIP do ponownego make jest w #4 po review/CI; HELPER nie otrzymał surowego logu
+i nie ma nowego zlecenia. Kompilacja poprawionej paczki i gra pozostają NOT RUN.
+
 Polecenie użytkownika z 14 XI jest spełnione dla bieżącej kolejki źródłowej
 [#86](https://github.com/HeisenbergC29/autoplay-xcom2/issues/86): #28/#98 to jej
 ostatni odebrany etap. Pozostałe zakresy mają implementację lub jawny disposition
@@ -29,7 +36,8 @@ obejmuje jawnie wszystkie30 aktualnych klas, nadal odrzuca obce klasy i zależno
 Źródłowy head `9771d7cb60d57163e488033e210f2c23871b4ad5`: **876 private PASS/0skip**,
 SDK30/31 i niezależne review PASS. CI373: 791 PASS/85 SKIP oraz 6 kroków
 PowerShell PASS. Końcowa aktualizacja dokumentów nie zmienia runtime/testów/tools.
-**Windows make/game v43 NOT RUN** do rzeczywistego raportu użytkownika.
+Te wyniki dotyczą źródeł przed poprawką #99; nie potwierdziły poprawności
+składni stock kompilatora. Pierwszy Windows make v43 FAIL; poprawiony make/game NOT RUN.
 [Zakres i jedna runda](integration-2026-11-15-v43.pl.md),
 [szczegóły leczenia](experiment-28-medical-approach-v43.pl.md).
 

@@ -6,7 +6,17 @@ poziom potwierdzenia działania.
 
 ## Baza kodu
 
-- Bieżąca rewizja źródeł: **`mission-report-v43`**, PR #98; źródłowy head
+- Bieżąca rewizja: **`mission-report-v43` z poprawką kompilacji #99**.
+  Pierwszy dostarczony Windows make paczki `119187162a3fe8e663f990839a81a952295b0b56`
+  to **FAIL: 1 error / 1 warning**, nie NOT RUN. Błąd `Right type is incompatible
+  with '&&'` w MissionPlanner:2596 wynika z nieujętego w nawiasy warunku przed
+  operatorem `? :`; poprawiono także dwa analogiczne miejsca i parametr
+  `CanWaitWindow` kolidujący z polem `bExpired`. [Dowody i poprawka](fix-99-v43-compiler.pl.md).
+  Marker v43 zachowany, predykaty i reguły gry bez zmian; końcowy nowy SHA/ZIP w #4.
+  Kontrole poprawionego drzewa: **882 private PASS/0skip**, SDK30/31 PASS;
+  końcowy head/CI/ZIP w #99/#4.
+  **Windows make poprawionych źródeł i gra v43 NOT RUN** do nowego logu.
+- V43 przed poprawką kompilacji: PR #98; źródłowy head
   `9771d7cb60d57163e488033e210f2c23871b4ad5`. Native-qualified jeden blue
   do pilnego heal/detox oraz rzeczywisty detoks pełnego HP. LEAD zachował
   veto removed/removed-from-play, priorytet gotowego pilnego native heal
@@ -17,7 +27,8 @@ poziom potwierdzenia działania.
   **876 private PASS/0skip**, SDK30/31, niezależne source/SDK/packaging review PASS;
   [CI373](https://github.com/HeisenbergC29/autoplay-xcom2/actions/runs/43658871509)
   876 run = 791 PASS/85 SKIP +6 kroków PowerShell PASS.
-  **Windows make/game v43 NOT RUN.** Bieżąca skończona kolejka #86 źródłowo
+  Powyższe kontrole nie wykryły później zgłoszonego błędu kompilacji #99.
+  Bieżąca skończona kolejka #86 źródłowo
   odebrana; po końcowej weryfikacji SHA/ZIP w #4 kolej użytkownika na jedną
   kompilację i wspólną próbę. Brak następnego READY claimu HELPERA.
   [Zakres i odbiór v43](integration-2026-11-15-v43.pl.md),

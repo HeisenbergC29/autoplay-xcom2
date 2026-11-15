@@ -153,7 +153,7 @@ class PatrolAmbushSourceContracts(unittest.TestCase):
         self.assertIn("(Moves > 0 || Reactions > 0)", policy)
         self.assertIn("ElapsedTurns > 0", policy)
         self.assertIn("ElapsedTurns < Clamp(MaxTurns", policy)
-        self.assertIn("!bExpired", policy)
+        self.assertIn("!bWindowExpired", policy)
         self.assertIn("PatrolAmbushPlanner.Reset();",
                       function_body(self.controller, "StopAutoplay"))
         self.assertIn("bEnabled = false;", function_body(self.controller, "StopAutoplay"))

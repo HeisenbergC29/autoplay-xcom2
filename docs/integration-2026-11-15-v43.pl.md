@@ -4,7 +4,9 @@ Ta paczka łączy bieżące prace z [kolejki #86](https://github.com/HeisenbergC
 w tym medyczny [PR #98](https://github.com/HeisenbergC29/autoplay-xcom2/pull/98).
 Dokładny końcowy commit i link do ZIP-a publikuje LEAD w
 [#4](https://github.com/HeisenbergC29/autoplay-xcom2/issues/4).
-Kompilacja Windows WOTC SDK i gra v43: **NOT RUN** do otrzymania rzeczywistych wyników.
+Pierwsza kompilacja źródeł `1191871`: **FAIL: 1 błąd / 1 ostrzeżenie**.
+[Poprawka #99](fix-99-v43-compiler.pl.md) zachowuje marker v43. Pobierz nowy
+dokładny ZIP z #4; kompilacja poprawionej paczki i gra v43: **NOT RUN**.
 
 ## Zakres źródeł
 
@@ -32,7 +34,7 @@ zachowuje wiedzę opartą na widoczności. Nie wymuszamy trafień ani zwycięstw
 
 ## Walidacja i identyfikacja paczki
 
-Sprawdzony źródłowy head: `9771d7cb60d57163e488033e210f2c23871b4ad5`.
+Sprawdzony źródłowy head przed poprawką kompilacji: `9771d7cb60d57163e488033e210f2c23871b4ad5`.
 **876 prywatnych testów PASS/0skip**, SDK30 klas/31 nazw i niezależne review PASS;
 [CI373](https://github.com/HeisenbergC29/autoplay-xcom2/actions/runs/43658871509):
 876 run =791 PASS/85 SKIP oraz6 kroków PowerShell PASS. Testy medyczne obejmują
