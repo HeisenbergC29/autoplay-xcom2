@@ -3,8 +3,10 @@
 **Bieżące przekazanie do wspólnej próby: `mission-report-v43`.**
 [Dokładny commit i ZIP źródeł do jednej kompilacji](https://github.com/HeisenbergC29/autoplay-xcom2/issues/4)
 · [Instrukcje i zakres testu](docs/integration-2026-11-15-v43.pl.md).
-Bieżąca kolejka źródłowa LEAD/HELPER jest odebrana. Kompilacja Windows i gra v43
-pozostają **NOT RUN** do nowego raportu; stara binarka w `release/` nie jest tą paczką.
+Bieżąca kolejka źródłowa LEAD/HELPER jest odebrana. Pierwszy Windows make v43
+zakończył się **FAIL: 1 błąd / 1 ostrzeżenie**; [poprawka składni #99](docs/fix-99-v43-compiler.pl.md)
+zachowuje v43 i wymaga ponownej kompilacji. Gra v43 pozostaje **NOT RUN**.
+Stara binarka w `release/` nie jest tą paczką.
 Opis wcześniejszych wersji poniżej zachowuje historyczne dowody.
 
 [Start pomocnika i komunikacja zespołu — issue #1](https://github.com/HeisenbergC29/autoplay-xcom2/issues/1) ·

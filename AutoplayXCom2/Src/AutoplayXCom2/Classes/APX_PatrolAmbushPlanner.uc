@@ -212,11 +212,11 @@ function bool HasActiveStaging()
 // One bounded native turn handoff after a submitted setup move OR reaction.
 // Native AP/trigger is not inferred: the state counters change only after
 // successful action dispatch. No wait on a fresh unarmed, speculative plan.
-static function bool CanWaitWindow(bool bEnabled, bool bExpired,
+static function bool CanWaitWindow(bool bEnabled, bool bWindowExpired,
     bool bStaged, bool bArmed, int Moves, int Reactions,
     int ElapsedTurns, int MaxTurns)
 {
-    return bEnabled && !bExpired && (bStaged || bArmed)
+    return bEnabled && !bWindowExpired && (bStaged || bArmed)
         && (Moves > 0 || Reactions > 0) && ElapsedTurns > 0
         && ElapsedTurns < Clamp(MaxTurns, 1, 3);
 }

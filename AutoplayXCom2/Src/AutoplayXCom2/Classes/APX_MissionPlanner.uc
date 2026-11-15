@@ -2592,8 +2592,8 @@ static function bool ChooseMove(XComGameState_Unit UnitState,
                     else
                     {
                         iAcceptedRoutine = bInspectContact ? 1 : 0;
-                        iFirstBlueClear = bSingleBlue && ContactStatus == 0
-                            && bTempoCurrentPathSafe ? 1 : 0;
+                        iFirstBlueClear = (bSingleBlue && ContactStatus == 0
+                            && bTempoCurrentPathSafe) ? 1 : 0;
                         if (bSecondBlue)
                             `log("Sequential blue second-leg|unit=" $ UnitState.ObjectID
                                 $ "|goal_x=" $ GoalTile.X
@@ -2873,7 +2873,7 @@ static function bool ChooseMove(XComGameState_Unit UnitState,
                 class'APX_ConcealmentPlanner'.default.ConcealmentRiskPenalty)
             + FMin(18.0, LocalFallbackCoverRisk));
     }
-    iAcceptedRoutine = bInspectContact && !bUsedLocalFallback ? 1 : 0;
-    iFirstBlueClear = iAcceptedRoutine > 0 && bSingleBlue && bBestBlueFullyClear ? 1 : 0;
+    iAcceptedRoutine = (bInspectContact && !bUsedLocalFallback) ? 1 : 0;
+    iFirstBlueClear = (iAcceptedRoutine > 0 && bSingleBlue && bBestBlueFullyClear) ? 1 : 0;
     return true;
 }
