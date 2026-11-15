@@ -121,7 +121,9 @@ brak `APX_HazardKnowledge.HasBlockingHazard`,
 **dla każdego tile**, a obszarowe skupienie
 oddziału zmniejsza ranking `SquadPositionScore`.
 Skan jest skończony: max 128 weryfikacji unit,
-16 pacjentów, 80 iteracji zdolności, 64
+16 pacjentów, 64 sprawdzenia rzeczywistych
+trzech rodzin medycznych (pozostałe abilities
+nie zużywają tego budżetu), 64
 kandydaty pól/pacjenta i 48 pól/ścieżkę.
 Wyczerpany budżet/nieznane wzorce
 **odrzucają** próby, nie zatwierdzają ryzyka.
