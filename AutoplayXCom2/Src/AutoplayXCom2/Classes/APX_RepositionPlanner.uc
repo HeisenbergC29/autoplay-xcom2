@@ -25,6 +25,7 @@ struct AttackForecast
     var bool bCurrentNativeHeightAdvantage;
 };
 
+/** Clamp a current/remote native weapon range-table index; empty tables use index zero. */
 static function int RangeBandIndex(int Distance, int Length)
 {
     if (Length <= 0)
@@ -32,6 +33,7 @@ static function int RangeBandIndex(int Distance, int Length)
     return Clamp(Distance, 0, Length - 1);
 }
 
+/** Bound a geometric aim projection to 0..95; this is not a native future hit roll. */
 static function int ProjectedHitChance(int NativeChance, int RangeDelta, int CoverRecovery)
 {
     // Leave uncertainty even when the simple geometric estimate reaches 100%.
@@ -42,6 +44,7 @@ static function int ProjectedHitChance(int NativeChance, int RangeDelta, int Cov
 // breakdown already contains any existing bonus and must not be augmented
 // a second time. Special-height native state is handled in relative height;
 // modded overrides may still differ, hence a configurable discount.
+/** Estimate a newly earned native height aim threshold without counting an existing bonus twice. */
 static function int ProjectedHeightAimBonus(int CurrentRelativeZ, int CandidateRelativeZ,
     int RequiredZ, int NativeBonus, int UncertaintyDiscount, bool bNativeAlreadyHigh)
 {
@@ -52,6 +55,7 @@ static function int ProjectedHeightAimBonus(int CurrentRelativeZ, int CandidateR
     return Max(0, NativeBonus - Max(0, UncertaintyDiscount));
 }
 
+/** Scale only the existing native basic-shot score by estimated hit probability; invalid models return -10000. */
 static function float ProjectedShotScore(float NativeScore, int NativeChance, int ProjectedChance)
 {
     if (NativeChance <= 0 || NativeScore <= 5.0)
@@ -61,6 +65,7 @@ static function float ProjectedShotScore(float NativeScore, int NativeChance, in
     return 5.0 + (NativeScore - 5.0) * float(ProjectedChance) / float(NativeChance);
 }
 
+/** Rank one legal blue move plus an uncertain future basic shot, requiring AP, material gain and no added exposure. */
 static function float MoveAndShotScore(float NativeScore, float ProjectedScore,
     int NativeChance, int ProjectedChance, float CurrentRisk, float CandidateRisk,
     float PathCost, int ActionPoints)
@@ -76,6 +81,7 @@ static function float MoveAndShotScore(float NativeScore, float ProjectedScore,
     return ProjectedScore - 6.0 - FMin(8.0, PathCost * 0.2);
 }
 
+/** Admit only source-audited single-target native StandardShot or PistolStandardShot templates. */
 static function bool SupportsForecast(XComGameState_Ability Ability)
 {
     local X2AbilityTemplate Template;
@@ -96,6 +102,7 @@ static function bool SupportsForecast(XComGameState_Ability Ability)
         && !Aim.bGuaranteedHit && Aim.FinalMultiplier == 1.0;
 }
 
+/** Check current own revealed shooter readiness, two AP and native move, rejecting terrain/status/aim-sensitive cases. */
 static function bool CanForecastUnit(XComGameState_Unit UnitState)
 {
     if (UnitState == none || `XCOMHISTORY == none || `XWORLD == none
@@ -111,6 +118,7 @@ static function bool CanForecastUnit(XComGameState_Unit UnitState)
         && UnitState.FindAbility('Aim').ObjectID <= 0;
 }
 
+/** Inspect installed native action-point costs; reject an ability with another legal retained attack after the first. */
 static function bool EndsTurnForForecast(XComGameState_Ability Ability,
     XComGameState_Unit UnitState)
 {
@@ -132,6 +140,7 @@ static function bool EndsTurnForForecast(XComGameState_Ability Ability,
     return false;
 }
 
+/** Read only an installed Ruler capability on current visible enemies; never query its current readiness. */
 static function bool HasVisibleRuler(const out array<StateObjectReference> VisibleEnemies)
 {
     local StateObjectReference EnemyRef;
@@ -147,6 +156,7 @@ static function bool HasVisibleRuler(const out array<StateObjectReference> Visib
     return false;
 }
 
+/** Enumerate bounded currently legal native basic shots, preserve target safety and projected post-blue AP; empty output means unsupported/unproven. */
 static function GatherForecasts(XComGameState_Unit UnitState,
     const out array<StateObjectReference> VisibleEnemies, out array<AttackForecast> Forecasts)
 {
@@ -234,6 +244,7 @@ static function GatherForecasts(XComGameState_Unit UnitState,
     }
 }
 
+/** Read-only remote LOS, cover and target-condition preview; outputs the strongest material basic-shot estimate or false. */
 static function bool ProjectAtTile(XComGameState_Unit UnitState, TTile Tile,
     const out array<AttackForecast> Forecasts, out int TargetID, out int NativeChance,
     out int ProjectedChance, out float NativeScore, out float ProjectedScore)
@@ -405,6 +416,7 @@ static function string ForecastScanReason(int SupportedShots,
 }
 
 // Selected-move telemetry reuses the same bounded projection, never a fake state.
+/** Record optional selected movement's estimate from current native actions; never grants a future shot. */
 static function bool EvaluateDestination(XComGameState_Unit UnitState, TTile Tile,
     out int TargetID, out int NativeChance, out int ProjectedChance,
     out float NativeAttackScore, out float ProjectedAttackScore)
