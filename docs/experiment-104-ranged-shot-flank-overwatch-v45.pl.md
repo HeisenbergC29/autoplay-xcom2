@@ -176,6 +176,10 @@ dodatkowe `out` zwracają
 `APX_Controller.MakeDecision`
 zapisuje po jednym bounded markerze
 `offensive_reposition_scan`
+(dodatkowe `outscored_by_current_squad_action`
+gdy rzeczywiście zweryfikowany
+kandydat przegrywa z już
+wybraną zwykłą akcją)
 dla własnej ujawnionej
 jednostki: `reason, score,
 current_best, supported_native_shots,
