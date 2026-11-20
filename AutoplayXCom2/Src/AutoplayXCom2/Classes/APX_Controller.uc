@@ -1239,7 +1239,9 @@ function MakeDecision(XComTacticalController PC)
     local bool bOpeningContact, bFocusedGoal, bRangedFocusGoal, bRangedConcealed;
     local bool bPatrolRefreshed, bPatrolActive, bSelectedPatrolMove, bSelectedPatrolReaction;
     local bool bSquadUrgentHealAvailable;
-    local string PatrolReason, PatrolApproachReason;
+    local string PatrolReason, PatrolApproachReason, RepositionScanReason;
+    local int RepositionSupportedShots, RepositionImprovedShots, RepositionSafeRoutes;
+    local bool bRepositionCandidate;
     local XComGameState_Unit PatrolSupporter, PatrolScout;
     local bool bNativeStrikeOnly;
 
@@ -1597,8 +1599,28 @@ function MakeDecision(XComTacticalController PC)
             bHavePlan = true;
             bSelectedRoute = false;
         }
+        // #104: a native shot with a good immediate score competes with a
+        // speculative flank; the latter must also pass every path tile's
+        // exposure and explosive-cover check. A rejection is not evidence
+        // that some uninspected alternate flank was legal or profitable.
         CandidatePath.Length = 0;
-        if (class'APX_RepositionPlanner'.static.ChooseMove(UnitState, CandidatePath, Score)
+        bRepositionCandidate = class'APX_RepositionPlanner'.static.ChooseMove(
+            UnitState, CandidatePath, Score, RemainingTempoCoverChecks,
+            RepositionScanReason, RepositionSupportedShots,
+            RepositionImprovedShots, RepositionSafeRoutes);
+        if (MissionRecorder != none && !UnitState.IsConcealed())
+            MissionRecorder.Marker("offensive_reposition_scan",
+                "unit=" $ UnitState.ObjectID
+                @ "reason=" $ RepositionScanReason
+                @ "supported_native_shots=" $ RepositionSupportedShots
+                @ "material_previews=" $ RepositionImprovedShots
+                @ "safe_native_paths=" $ RepositionSafeRoutes
+                @ "proposed=" $ string(bRepositionCandidate)
+                @ "score=" $ Score
+                @ "current_best=" $ BestScore
+                @ "cover_checks_left=" $ RemainingTempoCoverChecks
+                @ "future_native_shot=unverified");
+        if (bRepositionCandidate
             && TraceCandidateMove(UnitState, CandidatePath, Score)
             && Score > BestScore && CanUseMove(UnitState, CandidatePath))
         {
