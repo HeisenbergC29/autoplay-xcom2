@@ -1608,6 +1608,11 @@ function MakeDecision(XComTacticalController PC)
             UnitState, CandidatePath, Score, RemainingTempoCoverChecks,
             RepositionScanReason, RepositionSupportedShots,
             RepositionImprovedShots, RepositionSafeRoutes);
+        // A safe candidate can still be inferior to an immediately legal
+        // attack/urgent support by an earlier squadmate. Record that choice,
+        // rather than mislabeling it as missing geometry or native targets.
+        if (bRepositionCandidate && Score <= BestScore)
+            RepositionScanReason = "outscored_by_current_squad_action";
         if (MissionRecorder != none && !UnitState.IsConcealed())
             MissionRecorder.Marker("offensive_reposition_scan",
                 "unit=" $ UnitState.ObjectID
