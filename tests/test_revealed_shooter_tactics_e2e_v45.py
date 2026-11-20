@@ -56,6 +56,8 @@ class RangedDecisionReportEndToEnd(unittest.TestCase):
              "|score=55.0800|chance=82|accepted=True"),
             (2, "result|ability=StandardShot|source=8|source_scope=friendly"
              "|target=21|hit=eHit_Success|chance=82|history=91"),
+            (2, "objective_completed|source=mission_ui_event"
+             "|objective_name=Neutralize all hostile targets|history=98"),
             (2, "game_score|source=challenge_runtime|mission_points_known=True"
              "|mission_final=True|mission_points=120|history=99"),
             (2, "end|outcome=win|history=100|history_pending=0"),
