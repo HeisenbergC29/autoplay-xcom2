@@ -68,7 +68,10 @@ class RangedDecisionReportEndToEnd(unittest.TestCase):
         self.assertEqual(1, run["accepted_actions"])
         self.assertEqual(0, run["moves"])
         self.assertEqual({"StandardShot": 1}, run["abilities"])
-        self.assertEqual("pass", run["attempt_verdict"]["status"])
+        # A synthetic native WIN and a number are not by themselves
+        # complete autonomous mission/score provenance. The analyzer
+        # correctly declines to certify this truncated scenario.
+        self.assertEqual("unknown", run["attempt_verdict"]["status"])
         markers = [x for x in run["records"]
                    if x.get("event") == "marker" and x.get("kind")
                    == "offensive_reposition_scan"]
