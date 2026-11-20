@@ -199,6 +199,48 @@ nie sugeruje gwarantowanego
 trafienia lub przyszłej
 legalności.
 
+### Obserwowany dawny sojusznik jako cel reakcji
+
+Nowy mały `APX_CombatPlanner.GuardOverwatchForKnownAlly`
+zwraca `−10000` jedynie dla **aktualnie
+zweryfikowanego**, własnego przed
+przejęciem i teraz wrogiego
+`IsReclaimableControlledSquadmate`.
+`HasVisibleReclaimableReactionTarget`
+bada max64 bieżące
+`GetAllVisibleEnemiesForPlayer`
+i faktyczny stan z historii.
+Brak danych albo nadmiar
+kandydatów fail-closed,
+nie jest pozwoleniem
+na przypadkowy strzał
+do byłego sojusznika.
+`ScoreSelfAction` stosuje
+taką ochronę **tylko**
+przy rozważaniu
+`OverwatchAbilities`,
+nie zmienia legalnego
+strzału bezpośredniego
+ani native `OverwatchShot`
+już uzbrojonego wcześniej.
+
+Jeśli jednostka 422 została
+przejęta **dopiero po**
+uzbrojeniu reakcji 416,
+dane dostępne w chwili
+uzbrajania nie mogły
+wskazać tego przypadku
+i zmiana go nie eliminuje.
+To ograniczenie pozostaje
+do potwierdzenia w WOTC.
+Prawdziwy wybór celu
+reakcji należy do stock
+silnika. Brak prognozy
+przyszłego przejęcia
+nie jest powodem, aby
+czytać ukryte future
+AI/cooldown/RNG.
+
 Nie dodano nowego mnożnika
 Overwatch, nie wybrano
 liczby rezerwujących strzał
@@ -220,12 +262,16 @@ dane), `ForecastScanReason`
 `MoveAndShotScore`,
 `ProjectedHitChance`,
 `ProjectedShotScore`,
-`ScoreOverwatchDefense`
+`ScoreOverwatchDefense`,
+`GuardOverwatchForKnownAlly`
 (mocny strzał obecnie lepszy
 niż OW, słaby strzał może
 ustąpić legalnej flance,
 zbyt mało AP, brak lepszego
-hitu lub wzrost ryzyka).
+hitu lub wzrost ryzyka,
+native OW veto gdy obecnie
+znany przeciwnik jest
+odzyskiwalnym sojusznikiem).
 
 **Source contracts**:
 `ForecastBluePathSafe`
@@ -242,6 +288,12 @@ realne hostiles i AP;
 remote LOS i target condition;
 `ChooseMove` wiąże pełną
 ścieżkę z rankingiem;
+`APX_CombatPlanner.ScoreSelfAction`
+stosuje wąskie źródłowe
+`HasVisibleReclaimableReactionTarget`
+przed wystawieniem OW,
+bez zakładania przyszłego
+sterowania celami reakcji;
 `Controller` rejestruje
 odrzucenie i wciąż wymaga
 `TraceCandidateMove` i
