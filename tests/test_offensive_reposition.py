@@ -131,9 +131,13 @@ class OffensiveRepositionTests(unittest.TestCase):
         move = function_body(self.source, 'ChooseMove')
         for guard in ('Samples = Min(64, Tiles.Length)', 'PathCost > Visualizer.GetMobility()',
                       'CandidateRisk > CurrentRisk', 'BuildPathToTile(Tile, CandidatePath)',
-                      'for (PathIndex = 1;', 'CanSquadSeeLocation(', 'IsSupportedAdvanceStep(',
-                      'HasBlockingHazard(UnitState, CandidatePath[PathIndex])'):
+                      'ForecastBluePathSafe(UnitState, CandidatePath, VisibleEnemies,',
+                      'RemainingTempoCoverChecks'):
             self.assertIn(guard, move)
+        whole_path = function_body(self.source, 'ForecastBluePathSafe')
+        for guard in ('for (Step = 1;', 'CanSquadSeeLocation(', 'IsSupportedAdvanceStep(',
+                      'HasBlockingHazard(', 'ExposureRisk(', 'BlueRouteExplosiveSafe('):
+            self.assertIn(guard, whole_path)
         gather = function_body(self.source, 'GatherForecasts')
         self.assertIn('Forecasts.Length >= 16', gather)
         self.assertIn('Min(64, Cache.AvailableActions.Length)', gather)
