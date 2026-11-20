@@ -477,17 +477,19 @@ static function bool ShouldPrioritizeBerserkerSabotage(bool bEnabled,
     return bEnabled && bBerserker && bSabotageMission && !bObjectiveComplete;
 }
 
-// Resolve a real PlantBomb actor and occupied interaction anchor before any
-// marker fallback. Glint and proximity alone never certify interaction legality.
+/** Resolve a movement goal for either X4 mission from the native interaction or public map marker.
+ * NativeGoalStatus distinguishes a verified anchor (>0), unknown geometry (0) and a consumed object (<0).
+ * GoalSource records the evidence used. Only a subsequent native ability scan can authorize planting.
+ */
 static function bool FindBerserkerSabotageGoal(XComGameState_Unit UnitState,
     XComGameState_BattleData BattleData, out TTile GoalTile,
-    out string GoalSource)
+    out string GoalSource, optional out int NativeGoalStatus)
 {
-    local int NativeGoalStatus;
     local TTile NativeGoalTile, MarkerTile;
     local string NativeGoalReason;
 
     GoalSource = "none";
+    NativeGoalStatus = 0;
     if (UnitState == none || BattleData == none || `XWORLD == none)
         return false;
     NativeGoalStatus = class'APX_PlantInteractionKnowledge'.static.FindInteractionGoal(
@@ -2074,6 +2076,234 @@ static function bool ChooseMedicalMove(XComGameState_Unit UnitState,
             }
         }
     }
+    return Path.Length > 1;
+}
+
+/** Allow X4 route recovery for an actionable planter with two standard AP and no urgent squad duty. */
+static function bool CanAttemptSabotageRecovery(bool bSabotageCC,
+    bool bOwnedPlantAbility, bool bImmediateContact, bool bBleeding,
+    bool bEvacuating, bool bLegalBlue, int StandardAP)
+{
+    return bSabotageCC && bOwnedPlantAbility && !bImmediateContact
+        && !bBleeding && !bEvacuating && bLegalBlue && StandardAP >= 2;
+}
+
+// Only a modest, auditable cohesion expansion is permitted when there is
+// no current visible contact and the full native route is independently
+// certified Clear. Rear soldiers can catch up in their next own decision.
+static function bool IsRecoveryFormationAllowed(float StartDistance,
+    float NewDistance)
+{
+    return NewDistance <= FMin(14.0, FMax(10.0, StartDistance + 4.0));
+}
+
+/** Rank safe blue routes by objective progress, exposure and the loss of squad support. */
+static function float ScoreSabotageRecovery(float BeforeDistance,
+    float AfterDistance, float CurrentRisk, float EndRisk,
+    float FormationLoss, bool bCurrentRouteClear, bool bFullRouteSafe)
+{
+    local float Progress, Value;
+
+    Progress = BeforeDistance - AfterDistance;
+    if (!bCurrentRouteClear || !bFullRouteSafe || BeforeDistance <= 0.5)
+        return -10000.0;
+    if (Progress < 1.0 || EndRisk > CurrentRisk + 3.0)
+        return -10000.0;
+    Value = 24.0 + FMin(14.0, Progress * 3.0);
+    Value -= FMax(0.0, EndRisk - CurrentRisk) * 0.5;
+    Value -= FMin(24.0, FMax(0.0, FormationLoss)) * 0.25;
+    return Value;
+}
+
+/** Validate one tile against the known threat snapshot and measure its exposure for endpoint scoring. */
+static function bool InspectSabotageStep(XComGameState_Unit Soldier, TTile Tile,
+    float CurrentRisk, float StartSupport, const out array<StateObjectReference> KnownEnemies,
+    const out array<float> Reaches, const out array<float> Weights, out float Risk)
+{
+    if (!IsKnownCombatTile(Tile)
+        || class'APX_HazardKnowledge'.static.HasBlockingHazard(Soldier, Tile)
+        || !IsRecoveryFormationAllowed(StartSupport, NearestSupportDistance(Soldier, Tile)))
+        return false;
+    Risk = ExposureRisk(Soldier, Tile, KnownEnemies, Reaches, Weights);
+    return Risk <= CurrentRisk + 3.0;
+}
+
+/** Build an affordable native blue path with exact endpoints. Check its destination first
+ * and inspect every intervening tile before returning its exposure in EndRisk.
+ * Failed calls may leave path data, which the caller must discard.
+ */
+static function bool BuildSabotageRecoveryPath(XComGameState_Unit Soldier, XGUnit Visualizer,
+    TTile Tile, float CurrentRisk, float StartSupport, const out array<StateObjectReference> KnownEnemies,
+    const out array<float> Reaches, const out array<float> Weights, out array<TTile> CandidatePath,
+    out float EndRisk)
+{
+    local int PathIndex;
+    local float Cost, StepRisk;
+
+    CandidatePath.Length = 0;
+    if (!Visualizer.m_kReachableTilesCache.IsTileReachable(Tile))
+        return false;
+    Cost = Visualizer.m_kReachableTilesCache.GetPathCostToTile(Tile);
+    if (Cost < 0.0 || Cost > Visualizer.GetMobility()
+        || !InspectSabotageStep(Soldier, Tile, CurrentRisk, StartSupport, KnownEnemies, Reaches, Weights, EndRisk))
+        return false;
+    if (!Visualizer.m_kReachableTilesCache.BuildPathToTile(Tile, CandidatePath)
+        || CandidatePath.Length < 2 || CandidatePath.Length > 48
+        || CandidatePath[0] != Soldier.TileLocation
+        || CandidatePath[CandidatePath.Length - 1] != Tile)
+        return false;
+    for (PathIndex = 1; PathIndex < CandidatePath.Length - 1; ++PathIndex)
+    {
+        if (!InspectSabotageStep(Soldier, CandidatePath[PathIndex], CurrentRisk,
+            StartSupport, KnownEnemies, Reaches, Weights, StepRisk))
+            return false;
+    }
+    return true;
+}
+
+/** Choose one native blue move toward X4 when normal squad planning has exhausted its options.
+ * Path and Score describe the best verified proposal. Inspection budgets are shared across the decision.
+ * Only movement is proposed here. The next decision rechecks native AP and the PlantBomb target.
+ */
+static function bool ChooseSabotageCCRecoveryMove(XComGameState_Unit Soldier,
+    out array<TTile> Path, out float Score, out string Reason,
+    const out array<StateObjectReference> ContactUnits,
+    const out array<StateObjectReference> ContactInteractives,
+    bool bSnapshotComplete, string SnapshotReason,
+    out int RemainingContactDetectors, out int RemainingContactTiles,
+    out int RemainingContactLOS, out int RemainingCoverChecks,
+    out int RemainingConcealmentChecks, out int RemainingTempoCoverChecks)
+{
+    local XComGameState_BattleData BattleData;
+    local XGUnit Visualizer;
+    local array<StateObjectReference> KnownEnemies, Immediate;
+    local array<float> Reaches, Weights;
+    local array<TTile> Tiles, CandidatePath;
+    local TTile Tile, GoalTile, Closest;
+    local int Index, Sample, Count, Cleared, Rejected, ContactStatus;
+    local int NativePlantStatus;
+    local string NativePlantReason;
+    local float Progress, CurrentDistance, CurrentRisk, EndRisk;
+    local float StartSupport, FormationLoss, CandidateScore;
+    local string ContactReason, ConcealmentReason;
+
+    Path.Length = 0;
+    Score = -10000.0;
+    Reason = "missing_native_context";
+    if (Soldier == none || `XCOMHISTORY == none || `XWORLD == none)
+        return false;
+    BattleData = XComGameState_BattleData(`XCOMHISTORY.GetSingleGameStateObjectForClass(
+        class'XComGameState_BattleData', true));
+    if (BattleData == none)
+        return false;
+    GetImmediateThreats(Soldier, Immediate);
+    if (!CanAttemptSabotageRecovery(
+        BattleData.MapData.ActiveMission.sType == "SabotageCC",
+        Soldier.FindAbility('Interact_PlantBomb').ObjectID > 0,
+        Immediate.Length > 0, HasBleedingSquadmate(Soldier),
+        ShouldEvacuate(Soldier), HasLegalMove(Soldier),
+        Soldier.NumActionPoints('standard')))
+    {
+        Reason = "not_safe_or_not_ready_for_recovery";
+        return false;
+    }
+    // This resolver only considers X4 geometry or the public mission marker.
+    // A generic mission goal can instead refer to a civilian or unrelated glint.
+    if (!FindBerserkerSabotageGoal(Soldier, BattleData, GoalTile,
+        NativePlantReason, NativePlantStatus))
+    {
+        if (NativePlantStatus < 0)
+            Reason = "native_plant_already_consumed";
+        else
+            Reason = "no_verified_actor_or_mission_marker";
+        return false;
+    }
+    if (NativePlantStatus == 0 && TileDistance(Soldier.TileLocation, GoalTile) <= 3.0)
+    {
+        Reason = "unverified_nearby_marker_no_native_target";
+        return false;
+    }
+    Visualizer = XGUnit(Soldier.GetVisualizer());
+    if (Visualizer == none || Visualizer.m_kReachableTilesCache == none)
+        return false;
+    Visualizer.m_kReachableTilesCache.UpdateTileCacheIfNeeded();
+    Visualizer.m_kReachableTilesCache.GetAllPathableTiles(Tiles, Visualizer.GetMobility());
+    if (Tiles.Length == 0)
+    {
+        Reason = "native_reachable_cache_empty";
+        return false;
+    }
+    Closest = Visualizer.m_kReachableTilesCache.GetClosestReachableDestination(GoalTile);
+    Tiles.InsertItem(0, Closest);
+    Count = Min(48, Tiles.Length);
+    CurrentDistance = TileDistance(Soldier.TileLocation, GoalTile);
+    GetVisibleThreats(Soldier, KnownEnemies);
+    GetMeleeThreatReaches(Soldier, KnownEnemies, Reaches);
+    GetThreatWeights(Soldier, KnownEnemies, Weights);
+    CurrentRisk = ExposureRisk(Soldier, Soldier.TileLocation,
+        KnownEnemies, Reaches, Weights);
+    StartSupport = NearestSupportDistance(Soldier, Soldier.TileLocation);
+    Reason = "no_safe_progress_endpoint";
+
+    for (Sample = 0; Sample < Count; ++Sample)
+    {
+        Index = 0;
+        if (Sample > 0 && Count > 1)
+            Index = 1 + ((Sample - 1) * (Tiles.Length - 2)) / Max(1, Count - 2);
+        Tile = Tiles[Index];
+        Progress = CurrentDistance - TileDistance(Tile, GoalTile);
+        if (Tile == Soldier.TileLocation || Progress < 1.0)
+            continue;
+        if (!BuildSabotageRecoveryPath(Soldier, Visualizer, Tile, CurrentRisk, StartSupport,
+                KnownEnemies, Reaches, Weights, CandidatePath, EndRisk)
+            || class'APX_ConcealmentPlanner'.static.InspectPathRisk(
+                Soldier, CandidatePath, ConcealmentReason,
+                RemainingConcealmentChecks)
+            || !BlueRouteExplosiveSafe(Soldier, CandidatePath, KnownEnemies,
+                RemainingTempoCoverChecks))
+        {
+            ++Rejected;
+            continue;
+        }
+        ContactStatus = class'APX_ContactEnvelope'.static.AssessRoute(
+            Soldier, CandidatePath, ContactUnits, ContactInteractives,
+            bSnapshotComplete, SnapshotReason, 0, RemainingContactDetectors,
+            RemainingContactTiles, RemainingContactLOS, ContactReason);
+        if (ContactStatus != 0)
+        {
+            ++Rejected;
+            continue; // Unknown and Caution never become Clear.
+        }
+        // Reuse the existing explosion budget for endpoint too.
+        if (class'APX_ExplosiveCoverKnowledge'.static.InspectRiskAtTile(
+            Soldier, Tile, KnownEnemies, RemainingCoverChecks) > 0.0)
+        {
+            ++Rejected;
+            continue;
+        }
+        ++Cleared;
+        FormationLoss = FMax(0.0,
+            SquadPositionScore(Soldier, Soldier.TileLocation)
+            - SquadPositionScore(Soldier, Tile));
+        CandidateScore = ScoreSabotageRecovery(CurrentDistance,
+            TileDistance(Tile, GoalTile), CurrentRisk, EndRisk,
+            FormationLoss, ContactStatus == 0, true);
+        if (CandidateScore > Score)
+        {
+            Path = CandidatePath;
+            Score = CandidateScore;
+            Reason = "native_current_clear_objective_progress";
+        }
+    }
+    `log("SabotageCC objective recovery|unit=" $ Soldier.ObjectID
+        $ "|goal_x=" $ GoalTile.X $ "|goal_y=" $ GoalTile.Y
+        $ "|goal_z=" $ GoalTile.Z
+        $ "|native_plant_status=" $ NativePlantStatus
+        $ "|native_plant_reason=" $ NativePlantReason
+        $ "|native_samples=" $ Count
+        $ "|clear_routes=" $ Cleared $ "|rejected_routes=" $ Rejected
+        $ "|chosen=" $ (Path.Length > 1) $ "|reason=" $ Reason,
+        true, 'AutoplayXCom2');
     return Path.Length > 1;
 }
 

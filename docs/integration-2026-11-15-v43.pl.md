@@ -5,8 +5,7 @@ w tym medyczny [PR #98](https://github.com/HeisenbergC29/autoplay-xcom2/pull/98)
 Dokładny końcowy commit i link do ZIP-a publikuje LEAD w
 [#4](https://github.com/HeisenbergC29/autoplay-xcom2/issues/4).
 Pierwsza kompilacja źródeł `1191871`: **FAIL: 1 błąd / 1 ostrzeżenie**.
-[Poprawka #99](fix-99-v43-compiler.pl.md) zachowuje marker v43. Pobierz nowy
-dokładny ZIP z #4; kompilacja poprawionej paczki i gra v43: **NOT RUN**.
+[Poprawka #99](fix-99-v43-compiler.pl.md) zachowuje marker v43. Ponowna kompilacja przeszła z wynikiem **0 błędów / 0 ostrzeżeń**. [Wyniki trzech prób](report-v43-2026-11-15.pl.md). Poniżej zachowano instrukcje użyte w tej rundzie.
 
 ## Zakres źródeł
 

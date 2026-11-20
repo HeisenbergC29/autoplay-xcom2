@@ -1,13 +1,9 @@
 # Autoplay XCOM 2 — War of the Chosen
 
-**Bieżące przekazanie do wspólnej próby: `mission-report-v43`.**
-[Dokładny commit i ZIP źródeł do jednej kompilacji](https://github.com/HeisenbergC29/autoplay-xcom2/issues/4)
-· [Instrukcje i zakres testu](docs/integration-2026-11-15-v43.pl.md).
-Bieżąca kolejka źródłowa LEAD/HELPER jest odebrana. Pierwszy Windows make v43
-zakończył się **FAIL: 1 błąd / 1 ostrzeżenie**; [poprawka składni #99](docs/fix-99-v43-compiler.pl.md)
-zachowuje v43 i wymaga ponownej kompilacji. Gra v43 pozostaje **NOT RUN**.
-Stara binarka w `release/` nie jest tą paczką.
-Opis wcześniejszych wersji poniżej zachowuje historyczne dowody.
+**Aktualne źródła v44 zawierają awaryjne dojście do X4 w SabotageCC.**
+Poprawiona v43 skompilowała się z wynikiem 0 błędów i 0 ostrzeżeń. Wszystkie trzy próby z raportu zakończyły się porażką.
+Kolejny etap należy do HELPERA. Termin wspólnej próby Windows i gry prowadzi LEAD w [#4](https://github.com/HeisenbergC29/autoplay-xcom2/issues/4).
+[Raport z prób v43](docs/report-v43-2026-11-15.pl.md) · [Zadanie HELPERA](https://github.com/HeisenbergC29/autoplay-xcom2/issues/104).
 
 [Start pomocnika i komunikacja zespołu — issue #1](https://github.com/HeisenbergC29/autoplay-xcom2/issues/1) ·
 [Organizacja zespołu i import prac pomocnika](docs/TEAM.pl.md) ·
