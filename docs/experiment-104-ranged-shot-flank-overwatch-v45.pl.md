@@ -313,8 +313,13 @@ przez `subprocess` na
 odizolowanym ZIP z 3
 syntetycznymi
 APXREC sesjami:
-mocny native shot/positive win,
-blue move + odświeżone native
+mocny native shot + syntetyczne
+`end=win`, lecz raportowy
+`attempt_verdict=UNKNOWN`
+(przy niekompletnych
+dowodach, bez wymyślania
+PASS), blue move +
+odświeżone native
 `AA_Success` + losowy MISS
 + LOSS oraz brak strzału/
 niedopuszczona trasa + native
