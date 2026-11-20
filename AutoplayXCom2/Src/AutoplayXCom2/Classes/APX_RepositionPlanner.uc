@@ -390,27 +390,47 @@ static function bool ForecastBluePathSafe(XComGameState_Unit UnitState,
 }
 
 /**
- * Compresses mutually exclusive scan outcomes into one bounded log label.
- * No label claims that a rejected tile would have been native legal.
- * @param SupportedShots Current AA_Success shots meeting stock forecast rules.
- * @param Endpoints Checked native reachable endpoint count.
- * @param ImprovedShots Hypothetical candidates surviving hit/value gates.
- * @param SafeRoutes Whole-path approved native blue moves.
- * @param Selected True only if caller selected a scored movement proposal.
- * @return Diagnostic stage, not an ability result or win prediction.
+ * Return the unique numerical scan stage for executable pure UC tests.
+ * Zero=no currently supported native shot, one=no blue endpoints,
+ * two=no materially better projected shot, three=no safe whole native path,
+ * four=insufficient local score, five=candidate. Neither stage proves a
+ * future hit or legal future action.
+ */
+static function int ForecastScanStage(int SupportedShots,
+    int Endpoints, int ImprovedShots, int SafeRoutes, bool bSelected)
+{
+    if (SupportedShots <= 0)
+        return 0;
+    if (Endpoints <= 0)
+        return 1;
+    if (ImprovedShots <= 0)
+        return 2;
+    if (SafeRoutes <= 0)
+        return 3;
+    if (!bSelected)
+        return 4;
+    return 5;
+}
+
+/**
+ * Map one tested numerical stage to a stable human-readable recorder reason.
+ * @return Diagnostic stage label; never a native action availability code.
  */
 static function string ForecastScanReason(int SupportedShots,
     int Endpoints, int ImprovedShots, int SafeRoutes, bool bSelected)
 {
-    if (SupportedShots <= 0)
+    local int Stage;
+    Stage = ForecastScanStage(SupportedShots, Endpoints,
+        ImprovedShots, SafeRoutes, bSelected);
+    if (Stage == 0)
         return "no_supported_current_shot";
-    if (Endpoints <= 0)
+    if (Stage == 1)
         return "no_native_blue_endpoints";
-    if (ImprovedShots <= 0)
+    if (Stage == 2)
         return "no_material_projected_shot";
-    if (SafeRoutes <= 0)
+    if (Stage == 3)
         return "unsafe_or_unverified_blue_path";
-    if (!bSelected)
+    if (Stage == 4)
         return "outscored_by_other_local_route";
     return "safe_move_and_shot_candidate";
 }
