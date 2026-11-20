@@ -26,7 +26,7 @@ class SabotageRecoveryReportEndToEnd(unittest.TestCase):
     def test_success_and_manual_loss_keep_proposals_distinct_from_accepted_orders(self):
         """A manual plant result in the second run cannot supply the missing chosen order."""
         common = [
-            (0, 'start|revision=mission-report-v44|mission=SabotageCC'),
+            (0, 'start|revision=mission-report-v45|mission=SabotageCC'),
             (97, 'phase|phase=autoplay|turn=22'),
             (97, 'ability|unit=7|ability=Interact_PlantBomb|code=AA_NoTargets|targets=0'),
             (97, 'marker|kind=objective_recovery_scan|details=unit=7 found=True'),
