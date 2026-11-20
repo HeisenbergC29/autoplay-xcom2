@@ -51,11 +51,16 @@ class V15IntegrationTests(unittest.TestCase):
     def test_cloud_and_offensive_moves_compete_and_use_normal_dispatch(self):
         source = (CLASSES / 'APX_Controller.uc').read_text()
         decision = function_body(source, 'MakeDecision')
+        # The new bounded diagnostic marker is between forecast planning and
+        # the native dispatch guard, so no brittle 420-character window.
         for chooser in ("class'APX_MissionPlanner'.static.ChoosePoisonEscape(",
                         "class'APX_RepositionPlanner'.static.ChooseMove("):
             start = decision.index(chooser)
-            following = decision[start:start + 420]
+            following = decision[start:]
             self.assertIn('Score > BestScore && CanUseMove(', following)
+        self.assertLess(
+            decision.index("class'APX_RepositionPlanner'.static.ChooseMove("),
+            decision.index('Score > BestScore && CanUseMove(UnitState, CandidatePath)'))
         self.assertIn('PC.GameStateMoveUnitSingle(', decision)
 
     def test_diagnostics_distinguish_status_cloud_and_hypothetical_hit_chance(self):
