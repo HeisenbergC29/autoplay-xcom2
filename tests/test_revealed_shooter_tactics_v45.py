@@ -23,7 +23,7 @@ class RevealedShooterPolicyTests(unittest.TestCase):
     def setUpClass(cls):
         """Read actual installed UC source so tests fail on unreviewed policy drift."""
         cls.path_risk = staticmethod(load_uc_function(REPOSITION, "ForecastPathRiskAllowed"))
-        cls.reason = staticmethod(load_uc_function(REPOSITION, "ForecastScanReason"))
+        cls.stage = staticmethod(load_uc_function(REPOSITION, "ForecastScanStage"))
         cls.move_score = staticmethod(load_uc_function(REPOSITION, "MoveAndShotScore"))
         cls.ow_score = staticmethod(load_uc_function(COMBAT, "ScoreOverwatchDefense"))
         cls.chance = staticmethod(load_uc_function(REPOSITION, "ProjectedHitChance"))
@@ -43,16 +43,26 @@ class RevealedShooterPolicyTests(unittest.TestCase):
     def test_each_diagnostic_stage_is_explicit_and_not_a_native_legality_claim(self):
         """No supported shot is distinct from no reachable safe movement."""
         expected = [
-            ((0, 0, 0, 0, False), "no_supported_current_shot"),
-            ((2, 0, 0, 0, False), "no_native_blue_endpoints"),
-            ((2, 48, 0, 0, False), "no_material_projected_shot"),
-            ((2, 48, 3, 0, False), "unsafe_or_unverified_blue_path"),
-            ((2, 48, 3, 1, False), "outscored_by_other_local_route"),
-            ((2, 48, 3, 1, True), "safe_move_and_shot_candidate"),
+            ((0, 0, 0, 0, False), 0),
+            ((2, 0, 0, 0, False), 1),
+            ((2, 48, 0, 0, False), 2),
+            ((2, 48, 3, 0, False), 3),
+            ((2, 48, 3, 1, False), 4),
+            ((2, 48, 3, 1, True), 5),
         ]
-        for args, label in expected:
+        for args, stage in expected:
             with self.subTest(args=args):
-                self.assertEqual(self.reason(*args), label)
+                self.assertEqual(self.stage(*args), stage)
+
+    def test_string_labels_are_stable_and_tied_to_tested_numeric_stages(self):
+        """Each diagnostic reason is mapped from one numeric policy branch."""
+        source = REPOSITION.read_text(encoding="utf-8-sig")
+        mapping = function_body(source, "ForecastScanReason")
+        self.assertIn("Stage = ForecastScanStage(", mapping)
+        for label in ("no_supported_current_shot", "no_native_blue_endpoints",
+                      "no_material_projected_shot", "unsafe_or_unverified_blue_path",
+                      "outscored_by_other_local_route", "safe_move_and_shot_candidate"):
+            self.assertIn(f'return "{label}";', mapping)
 
     def test_good_immediate_shot_and_overwatch_must_not_be_downgraded(self):
         """Observed GasStation good 70-85% legal shots should remain competitive."""
