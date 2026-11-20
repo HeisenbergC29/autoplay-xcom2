@@ -157,6 +157,7 @@ class RevealedShooterSourceContracts(unittest.TestCase):
                     "RemainingTempoCoverChecks", "ChooseMove(",
                     'MissionRecorder.Marker("offensive_reposition_scan"',
                     "safe_native_paths=", "current_best=", "future_native_shot=unverified",
+                    'RepositionScanReason = "outscored_by_current_squad_action";',
                     "TraceCandidateMove(UnitState, CandidatePath, Score)",
                     "Score > BestScore && CanUseMove(UnitState, CandidatePath)",
                     "GameStateMoveUnitSingle("):
