@@ -26,6 +26,7 @@ class RevealedShooterPolicyTests(unittest.TestCase):
         cls.stage = staticmethod(load_uc_function(REPOSITION, "ForecastScanStage"))
         cls.move_score = staticmethod(load_uc_function(REPOSITION, "MoveAndShotScore"))
         cls.ow_score = staticmethod(load_uc_function(COMBAT, "ScoreOverwatchDefense"))
+        cls.ow_guard = staticmethod(load_uc_function(COMBAT, "GuardOverwatchForKnownAlly"))
         cls.chance = staticmethod(load_uc_function(REPOSITION, "ProjectedHitChance"))
         cls.projected = staticmethod(load_uc_function(REPOSITION, "ProjectedShotScore"))
 
@@ -80,6 +81,15 @@ class RevealedShooterPolicyTests(unittest.TestCase):
         self.assertGreater(self.move_score(30, projected, 35, chance, 20, 14, 4, 2), 30)
         self.assertLess(self.move_score(30, projected, 35, chance, 20, 14, 4, 1), -1000)
         self.assertLess(self.move_score(30, projected, 35, chance, 20, 21, 4, 2), -1000)
+
+    def test_known_mind_controlled_squadmate_vetoes_speculative_overwatch(self):
+        """Only current verified original-owner evidence warrants an OW veto."""
+        self.assertEqual(self.ow_guard(17, True), -10000)
+        self.assertEqual(self.ow_guard(22, True), -10000)
+        self.assertEqual(self.ow_guard(17, False), 17)
+        self.assertEqual(self.ow_guard(2, False), 2)
+        # A mind-control event not yet observed at arming cannot be predicted;
+        # the False case leaves the stock reaction heuristic unchanged.
 
     def test_overwatch_reaction_is_not_projected_as_a_certain_future_hit(self):
         """Native engine, not the planner, selects reaction target and roll."""
@@ -157,6 +167,20 @@ class RevealedShooterSourceContracts(unittest.TestCase):
                         main.index("class'APX_MissionPlanner'.static.ChooseMove("))
         self.assertIn("StopAutoplay", self.controller)
         self.assertNotIn("GetEnemyActionPoints(", self.reposition)
+
+    def test_visible_mind_control_ow_veto_uses_original_ownership_evidence(self):
+        """The native future reaction target cannot be selected by our score."""
+        finder = function_body(self.combat, "HasVisibleReclaimableReactionTarget")
+        score = function_body(self.combat, "ScoreSelfAction")
+        for token in ("VisibleEnemies.Length > 64", "if (++Checked > 64)",
+                      "IsVisibleHostile(", "IsReclaimableControlledSquadmate(",
+                      "return true;"):
+            self.assertIn(token, finder)
+        self.assertIn("GuardOverwatchForKnownAlly(", score)
+        self.assertIn("HasVisibleReclaimableReactionTarget(", score)
+        self.assertIn("ScoreOverwatchDefense(", score)
+        self.assertNotIn("GetEnemyActionPoints(", finder)
+        self.assertNotIn("GetGroupMovePaths(", finder)
 
     def test_guarded_own_ap_and_ally_protection_do_not_depend_on_reaction_guess(self):
         """No unsupported rifle target, no converted ally, no special AP grant."""
