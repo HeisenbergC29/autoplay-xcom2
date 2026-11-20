@@ -112,6 +112,8 @@ var private APX_PatrolAmbushPlanner PatrolAmbushPlanner;
 var private APX_RouteTempo RouteTempo;
 var private float UntilObservation;
 var private array<RecentContact> RecentContacts;
+/** Squad-wide permission to arm native reactions during the current decision. */
+var private bool bSquadOverwatchSafe;
 var private bool bContactHistoryInitialized;
 var private int ContactHistoryCursor;
 var private int AmbushPreparationActions;
@@ -202,6 +204,7 @@ static function bool IsContactFresh(int CurrentTurn, int SeenTurn, int MemoryTur
     return CurrentTurn >= SeenTurn && CurrentTurn - SeenTurn <= MemoryTurns;
 }
 
+/** Refresh squad-visible contacts and Overwatch safety before comparing any soldier's actions. */
 function bool RefreshContacts(int PlayerID, int CurrentTurn)
 {
     local XComGameState_Unit SourceUnit, Enemy;
@@ -211,10 +214,12 @@ function bool RefreshContacts(int PlayerID, int CurrentTurn)
     local int Index;
     local bool bVisible, bFoundSource;
 
+    bSquadOverwatchSafe = false;
     foreach `XCOMHISTORY.IterateByClassType(class'XComGameState_Unit', SourceUnit)
     {
         if (SourceUnit.GetAssociatedPlayerID() == PlayerID && SourceUnit.IsAlive()
-            && SourceUnit.GetTeam() == eTeam_XCom && !SourceUnit.GetMyTemplate().bIsCosmetic)
+            && SourceUnit.GetTeam() == eTeam_XCom && !SourceUnit.bRemovedFromPlay
+            && SourceUnit.GetMyTemplate() != none && !SourceUnit.GetMyTemplate().bIsCosmetic)
         {
             bFoundSource = true;
             break;
@@ -224,6 +229,8 @@ function bool RefreshContacts(int PlayerID, int CurrentTurn)
         return false;
     // Distant known units are navigation knowledge, not active contact search.
     class'APX_MissionPlanner'.static.GetImmediateThreats(SourceUnit, VisibleEnemies);
+    bSquadOverwatchSafe = !class'APX_CombatPlanner'.static.HasVisibleReclaimableReactionTarget(
+        SourceUnit, VisibleEnemies);
     foreach VisibleEnemies(EnemyRef)
     {
         Enemy = XComGameState_Unit(`XCOMHISTORY.GetGameStateForObjectID(EnemyRef.ObjectID));
@@ -1199,6 +1206,41 @@ function bool SelectSquadSabotageRecovery(XGPlayer SquadPlayer,
     return bSelected;
 }
 
+/**
+ * Compare this soldier's best verified blue route with the best squad proposal
+ * seen so far. Return the path and score only as a provisional choice. Later
+ * soldiers and planners still compete before dispatch. The trace distinguishes
+ * a losing score from a same-turn revisit without running the planner twice.
+ */
+function bool ChooseCompetitiveReposition(XComGameState_Unit UnitState, float BestScore,
+    out array<TTile> CandidatePath, out float Score, out int RemainingTempoCoverChecks)
+{
+    local int SupportedShots, ImprovedShots, SafeRoutes;
+    local bool bProposed, bCompetitive;
+    local string ScanReason;
+
+    CandidatePath.Length = 0;
+    bProposed = class'APX_RepositionPlanner'.static.ChooseMove(UnitState, CandidatePath,
+        Score, RemainingTempoCoverChecks, ScanReason, SupportedShots, ImprovedShots, SafeRoutes);
+    if (bProposed)
+    {
+        TraceCandidateMove(UnitState, CandidatePath, Score);
+        if (Score <= BestScore)
+            ScanReason = "outscored_by_current_squad_action";
+        else if (!CanUseMove(UnitState, CandidatePath))
+            ScanReason = "destination_already_visited";
+        else
+            bCompetitive = true;
+    }
+    if (MissionRecorder != none && !UnitState.IsConcealed())
+        MissionRecorder.Marker("offensive_reposition_scan", "unit=" $ UnitState.ObjectID
+            @ "reason=" $ ScanReason @ "supported_native_shots=" $ SupportedShots
+            @ "material_previews=" $ ImprovedShots @ "safe_native_paths=" $ SafeRoutes
+            @ "proposed=" $ string(bProposed) @ "score=" $ Score @ "current_best=" $ BestScore
+            @ "cover_checks_left=" $ RemainingTempoCoverChecks @ "future_native_shot=unverified");
+    return bCompetitive;
+}
+
 /** Compare legal squad actions for the current decision, then submit one action through the native controller. */
 function MakeDecision(XComTacticalController PC)
 {
@@ -1239,9 +1281,7 @@ function MakeDecision(XComTacticalController PC)
     local bool bOpeningContact, bFocusedGoal, bRangedFocusGoal, bRangedConcealed;
     local bool bPatrolRefreshed, bPatrolActive, bSelectedPatrolMove, bSelectedPatrolReaction;
     local bool bSquadUrgentHealAvailable;
-    local string PatrolReason, PatrolApproachReason, RepositionScanReason;
-    local int RepositionSupportedShots, RepositionImprovedShots, RepositionSafeRoutes;
-    local bool bRepositionCandidate;
+    local string PatrolReason, PatrolApproachReason, BestMovePlanner, MissionMovePlanner;
     local XComGameState_Unit PatrolSupporter, PatrolScout;
     local bool bNativeStrikeOnly;
 
@@ -1486,7 +1526,7 @@ function MakeDecision(XComTacticalController PC)
                     @ "horizon=variants_unknown");
         }
         if (class'APX_CombatPlanner'.static.ChooseAction(UnitState, Candidate,
-            TargetIndex, Score, bContactSearch,
+            TargetIndex, Score, bSquadOverwatchSafe, bContactSearch,
             ((bFocusedGoal || (bNativeStrikeOnly
                 && UnitState.ObjectID == NativeStrikeAttackerID)) ? FocusTargetID : 0),
             bOpeningContact, (bRangedFocusGoal ? RangedTargetID : 0),
@@ -1591,6 +1631,7 @@ function MakeDecision(XComTacticalController PC)
             && Score > BestScore && CanUseMove(UnitState, CandidatePath, true))
         {
             BestPath = CandidatePath;
+            BestMovePlanner = "poison_escape";
             BestScore = Score;
             BestUnit = UnitState;
             bMove = true;
@@ -1599,37 +1640,11 @@ function MakeDecision(XComTacticalController PC)
             bHavePlan = true;
             bSelectedRoute = false;
         }
-        // #104: a native shot with a good immediate score competes with a
-        // speculative flank; the latter must also pass every path tile's
-        // exposure and explosive-cover check. A rejection is not evidence
-        // that some uninspected alternate flank was legal or profitable.
-        CandidatePath.Length = 0;
-        bRepositionCandidate = class'APX_RepositionPlanner'.static.ChooseMove(
-            UnitState, CandidatePath, Score, RemainingTempoCoverChecks,
-            RepositionScanReason, RepositionSupportedShots,
-            RepositionImprovedShots, RepositionSafeRoutes);
-        // A safe candidate can still be inferior to an immediately legal
-        // attack/urgent support by an earlier squadmate. Record that choice,
-        // rather than mislabeling it as missing geometry or native targets.
-        if (bRepositionCandidate && Score <= BestScore)
-            RepositionScanReason = "outscored_by_current_squad_action";
-        if (MissionRecorder != none && !UnitState.IsConcealed())
-            MissionRecorder.Marker("offensive_reposition_scan",
-                "unit=" $ UnitState.ObjectID
-                @ "reason=" $ RepositionScanReason
-                @ "supported_native_shots=" $ RepositionSupportedShots
-                @ "material_previews=" $ RepositionImprovedShots
-                @ "safe_native_paths=" $ RepositionSafeRoutes
-                @ "proposed=" $ string(bRepositionCandidate)
-                @ "score=" $ Score
-                @ "current_best=" $ BestScore
-                @ "cover_checks_left=" $ RemainingTempoCoverChecks
-                @ "future_native_shot=unverified");
-        if (bRepositionCandidate
-            && TraceCandidateMove(UnitState, CandidatePath, Score)
-            && Score > BestScore && CanUseMove(UnitState, CandidatePath))
+        if (ChooseCompetitiveReposition(UnitState, BestScore,
+            CandidatePath, Score, RemainingTempoCoverChecks))
         {
             BestPath = CandidatePath;
+            BestMovePlanner = "offensive_reposition";
             BestScore = Score;
             BestUnit = UnitState;
             bMove = true;
@@ -1643,8 +1658,13 @@ function MakeDecision(XComTacticalController PC)
         iCandidateFirstBlue = 0;
         iCandidateEmergencyRoute = 0;
         if (bContactSearch && !class'APX_MissionPlanner'.static.ShouldEvacuate(UnitState))
+        {
+            MissionMovePlanner = "contact_search";
             bCandidateMove = ChooseContactSearchMove(UnitState, CandidatePath, Score);
+        }
         else
+        {
+            MissionMovePlanner = "mission";
             bCandidateMove = class'APX_MissionPlanner'.static.ChooseMove(
                 UnitState, CandidatePath, Score, RemainingConcealmentChecks,
                 RemainingCoverChecks, FocusTargetID, bFocusedGoal,
@@ -1656,12 +1676,14 @@ function MakeDecision(XComTacticalController PC)
                 PatrolAmbushPlanner.HasActiveStaging(), bContactSearch || bVisibleThreats,
                 CandidateRouteGoal, iCandidateRoutine, iCandidateFirstBlue,
                 RemainingTempoCoverChecks, iCandidateEmergencyRoute);
+        }
         if (bCandidateMove
             && TraceCandidateMove(UnitState, CandidatePath, Score)
             && Score > BestScore && CanUseMove(UnitState, CandidatePath,
                 iCandidateEmergencyRoute > 0))
         {
             BestPath = CandidatePath;
+            BestMovePlanner = MissionMovePlanner;
             BestScore = Score;
             BestUnit = UnitState;
             bMove = true;
@@ -1680,6 +1702,7 @@ function MakeDecision(XComTacticalController PC)
             && Score > BestScore && CanUseMove(UnitState, CandidatePath, RescuePatientID > 0))
         {
             BestPath = CandidatePath;
+            BestMovePlanner = "rescue";
             BestScore = Score;
             BestUnit = UnitState;
             bMove = true;
@@ -1705,6 +1728,7 @@ function MakeDecision(XComTacticalController PC)
             && CanUseMove(UnitState, CandidatePath, MedicalPatientID > 0))
         {
             BestPath = CandidatePath;
+            BestMovePlanner = "medical_approach";
             BestScore = Score;
             BestUnit = UnitState;
             bMove = true;
@@ -1741,6 +1765,7 @@ function MakeDecision(XComTacticalController PC)
             && CanUseMove(UnitState, PatrolApproachPath))
         {
             BestPath = PatrolApproachPath;
+            BestMovePlanner = "patrol_approach";
             BestScore = PatrolApproachScore;
             BestUnit = UnitState;
             bMove = true;
@@ -1766,6 +1791,7 @@ function MakeDecision(XComTacticalController PC)
             && Score > BestScore && CanUseMove(UnitState, CandidatePath))
         {
             BestPath = CandidatePath;
+            BestMovePlanner = "loot";
             BestScore = Score;
             BestUnit = UnitState;
             bMove = true;
@@ -1800,6 +1826,7 @@ function MakeDecision(XComTacticalController PC)
                 && Score > BestScore && CanUseMove(UnitState, CandidatePath))
             {
                 BestPath = CandidatePath;
+                BestMovePlanner = "exploration";
                 BestScore = Score;
                 BestUnit = UnitState;
                 BestLocations.Length = 0;
@@ -1823,7 +1850,7 @@ function MakeDecision(XComTacticalController PC)
 
     // No reaction is prearmed without an actual native legal single-target
     // ranged opener NOW. Pre-contact variants never manufacture targets.
-    if (bPatrolActive && bHavePlan && !bMove && !bArea
+    if (bSquadOverwatchSafe && bPatrolActive && bHavePlan && !bMove && !bArea
         && BestUnit != none
         && PatrolAmbushPlanner.ChooseReactionSupport(PlayerRef.ObjectID,
             BestUnit, BestAction, BestTargetIndex, BestScore,
@@ -1863,7 +1890,7 @@ function MakeDecision(XComTacticalController PC)
         {
             if (class'APX_SquadPlanner'.static.ChoosePreparation(PlayerRef.ObjectID, BestUnit,
                 AmbushUnit, AmbushAction, AmbushTargetIndex, AmbushPath, AmbushScore,
-                RemainingConcealmentChecks)
+                bSquadOverwatchSafe, RemainingConcealmentChecks)
                 && ((AmbushPath.Length > 1 && CanUseMove(AmbushUnit, AmbushPath))
                     || (AmbushPath.Length == 0 && CanUseAction(AmbushUnit, AmbushAction, AmbushTargetIndex))))
             {
@@ -1874,6 +1901,7 @@ function MakeDecision(XComTacticalController PC)
                 BestAction = AmbushAction;
                 BestTargetIndex = AmbushTargetIndex;
                 BestPath = AmbushPath;
+                BestMovePlanner = "ambush_preparation";
                 BestScore = AmbushScore;
                 BestLocations.Length = 0;
                 bSelectedRoute = false; // Planner superseded route candidate.
@@ -1897,6 +1925,7 @@ function MakeDecision(XComTacticalController PC)
             RemainingContactLOS, RemainingCoverChecks, RemainingConcealmentChecks,
             RemainingTempoCoverChecks))
     {
+        BestMovePlanner = "objective_recovery";
         bMove = true;
         bArea = false;
         BestLocations.Length = 0;
@@ -2010,7 +2039,7 @@ function MakeDecision(XComTacticalController PC)
     if (MissionRecorder != none)
     {
         if (bMove)
-            MissionRecorder.ChosenMove(BestUnit, BestPath, BestScore, bSuccess);
+            MissionRecorder.ChosenMove(BestUnit, BestPath, BestScore, bSuccess, BestMovePlanner);
         else
             MissionRecorder.ChosenAction(BestUnit, BestAction, BestTargetIndex, BestScore, bSuccess);
     }
@@ -2128,6 +2157,7 @@ simulated event Destroyed()
     super.Destroyed();
 }
 
+/** Verify ownership, Overwatch safety, native availability, and the per-target submission budget. */
 function bool CanUseAction(XComGameState_Unit UnitState, AvailableAction Action, int TargetIndex)
 {
     local XComGameState_Ability Ability;
@@ -2142,6 +2172,9 @@ function bool CanUseAction(XComGameState_Unit UnitState, AvailableAction Action,
     Ability = XComGameState_Ability(`XCOMHISTORY.GetGameStateForObjectID(
         Action.AbilityObjectRef.ObjectID));
     if (Ability == none || Ability.OwnerStateObject.ObjectID != UnitState.ObjectID)
+        return false;
+    if (!bSquadOverwatchSafe
+        && class'APX_CombatPlanner'.default.OverwatchAbilities.Find(Ability.GetMyTemplateName()) != INDEX_NONE)
         return false;
 
     if (TargetIndex != INDEX_NONE)

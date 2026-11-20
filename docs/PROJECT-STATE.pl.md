@@ -6,7 +6,7 @@ poziom potwierdzenia działania.
 
 ## Baza kodu
 
-- **v44, PR #102.** Awaryjne dojście do X4 w SabotageCC jest oceniane po zwykłych propozycjach członków drużyny. Windows make i próba tej wersji czekają na wspólną rundę. HELPER otrzymał [#104](https://github.com/HeisenbergC29/autoplay-xcom2/issues/104).
+- **v45, wspólna paczka z #102 i #105.** W SabotageCC oddział może awaryjnie poszukać dojścia do X4. GasStation służy do sprawdzenia wyboru między dostępnym strzałem, ruchem na flankę z zachowaniem AP i Overwatch. Raport zapisuje pochodzenie wybranego ruchu. Ochrona widocznego przejętego sojusznika obejmuje też przygotowanie zasadzki. Użytkownik wykonuje kompilację Windows i próbę obu zmian. [Próba #4](https://github.com/HeisenbergC29/autoplay-xcom2/issues/4) · [Eksperyment strzelców](experiment-104-ranged-shot-flank-overwatch-v45.pl.md) · [Scenariusz X4](e2e-sabotagecc-v44.pl.md)
 - **v43 po poprawce kompilacji #99.**
   Pierwszy dostarczony Windows make paczki `119187162a3fe8e663f990839a81a952295b0b56`
   to **FAIL: 1 error / 1 warning**, nie NOT RUN. Błąd `Right type is incompatible

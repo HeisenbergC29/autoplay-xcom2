@@ -29,11 +29,13 @@ static function bool CanStageMove(int StandardAP, int ReactionCost, bool bUseful
     return StandardAP >= 2 && StandardAP > ReactionCost && !bUsefulShot;
 }
 
-static function float PreparationScore(bool bMove, bool bUsefulShot, bool bFiringLane)
+/** Keep legal preparation moves eligible when a controlled ally prevents arming a reaction. */
+static function float PreparationScore(bool bMove, bool bUsefulShot, bool bFiringLane,
+    optional bool bCannotArmOverwatch)
 {
     if (bMove)
         return 30.0;
-    if (bUsefulShot || bFiringLane)
+    if (!bCannotArmOverwatch && (bUsefulShot || bFiringLane))
         return 25.0;
     return -10000.0;
 }
@@ -247,6 +249,7 @@ static function float UnsupportedOpeningPenaltyForAction(
         true, false, Cover == CT_None);
 }
 
+/** Select a native, currently available, self-targeted Overwatch ability owned by this soldier. */
 static function bool FindOverwatch(XComGameState_Unit Soldier,
     out AvailableAction Action, out int TargetIndex, out int PointCost)
 {
@@ -266,7 +269,8 @@ static function bool FindOverwatch(XComGameState_Unit Soldier,
         if (Candidate.AvailableCode != 'AA_Success' || !Candidate.bInputTriggered || Candidate.bFreeAim)
             continue;
         Ability = XComGameState_Ability(`XCOMHISTORY.GetGameStateForObjectID(Candidate.AbilityObjectRef.ObjectID));
-        if (Ability == none || Ability.GetMyTemplate() == none
+        if (Ability == none || Ability.OwnerStateObject.ObjectID != Soldier.ObjectID
+            || Ability.GetMyTemplate() == none
             || class'APX_CombatPlanner'.default.OverwatchAbilities.Find(Ability.GetMyTemplateName()) == INDEX_NONE)
             continue;
         SelfIndex = class'APX_CombatPlanner'.static.FindSelfTarget(Candidate, Soldier.ObjectID);
@@ -444,10 +448,11 @@ static function bool ChoosePreparationMove(XComGameState_Unit Soldier, XComGameS
 // Keep the result struct private to this class's compilation boundary. The
 // controller uses stock types, as the other planners do, so it does not need
 // a DependsOn edge to another mod class just to parse a local declaration.
+/** Select another soldier's preparation move or permitted Overwatch without consuming the opener. */
 static function bool ChoosePreparation(int PlayerID, XComGameState_Unit Opener,
     out XComGameState_Unit PreparedUnit, out AvailableAction PreparedAction,
     out int PreparedTargetIndex, out array<TTile> PreparedPath, out float PreparedScore,
-    optional out int RemainingConcealmentChecks)
+    bool bSquadOverwatchSafe, optional out int RemainingConcealmentChecks)
 {
     local XComGameState_Unit Soldier;
     local array<StateObjectReference> VisibleEnemies;
@@ -489,7 +494,7 @@ static function bool ChoosePreparation(int PlayerID, XComGameState_Unit Opener,
             Candidate.bMove = true;
         }
         Candidate.Score = PreparationScore(Candidate.bMove, bUsefulShot,
-            HasFiringLane(Soldier, Soldier.TileLocation, VisibleEnemies));
+            HasFiringLane(Soldier, Soldier.TileLocation, VisibleEnemies), !bSquadOverwatchSafe);
         if (Candidate.Score < 0.0)
             continue;
         Candidate.bFound = true;

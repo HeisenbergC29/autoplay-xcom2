@@ -49,19 +49,17 @@ class V15IntegrationTests(unittest.TestCase):
             self.assertNotIn("class'XComPath'.static.TileContainsHazard(", source)
 
     def test_cloud_and_offensive_moves_compete_and_use_normal_dispatch(self):
+        """Both proposals pass anti-shuffle and score comparison before the engine receives one move."""
         source = (CLASSES / 'APX_Controller.uc').read_text()
         decision = function_body(source, 'MakeDecision')
-        # The new bounded diagnostic marker is between forecast planning and
-        # the native dispatch guard, so no brittle 420-character window.
-        for chooser in ("class'APX_MissionPlanner'.static.ChoosePoisonEscape(",
-                        "class'APX_RepositionPlanner'.static.ChooseMove("):
-            start = decision.index(chooser)
-            following = decision[start:]
-            self.assertIn('Score > BestScore && CanUseMove(', following)
-        self.assertLess(
-            decision.index("class'APX_RepositionPlanner'.static.ChooseMove("),
-            decision.index('Score > BestScore && CanUseMove(UnitState, CandidatePath)'))
-        self.assertIn('PC.GameStateMoveUnitSingle(', decision)
+        cloud = decision[decision.index("class'APX_MissionPlanner'.static.ChoosePoisonEscape("):
+                         decision.index("if (ChooseCompetitiveReposition(")]
+        self.assertIn('Score > BestScore && CanUseMove(UnitState, CandidatePath, true)', cloud)
+        flank = function_body(source, 'ChooseCompetitiveReposition')
+        self.assertIn("class'APX_RepositionPlanner'.static.ChooseMove(", flank)
+        self.assertLess(flank.index('if (Score <= BestScore)'), flank.index('!CanUseMove('))
+        self.assertLess(decision.index('if (ChooseCompetitiveReposition('),
+                        decision.index('PC.GameStateMoveUnitSingle('))
 
     def test_diagnostics_distinguish_status_cloud_and_hypothetical_hit_chance(self):
         source = RECORDER.read_text()

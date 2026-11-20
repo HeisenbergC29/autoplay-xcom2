@@ -1435,13 +1435,14 @@ function ChosenAction(XComGameState_Unit UnitState, AvailableAction Action,
     Emit("chosen", PreparedChoiceFields $ "|accepted=" $ bAccepted);
 }
 
+/** Record the planner that won squad selection and whether the native move was accepted. */
 function ChosenMove(XComGameState_Unit UnitState, const out array<TTile> Path,
-    float Score, bool bAccepted)
+    float Score, bool bAccepted, string MovePlanner)
 {
     if (PreparedChoiceFields == "")
         PreparedChoiceFields = "|kind=move|unit=" $ UnitState.ObjectID
             $ "|score=" $ Score $ "|preview_missing=true";
-    Emit("chosen", PreparedChoiceFields $ "|accepted=" $ bAccepted);
+    Emit("chosen", PreparedChoiceFields $ "|move_planner=" $ MovePlanner $ "|accepted=" $ bAccepted);
 }
 
 function Finish(string Reason)

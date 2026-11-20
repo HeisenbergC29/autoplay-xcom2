@@ -331,6 +331,13 @@ static function bool ForecastPathRiskAllowed(float OriginRisk, float StepRisk)
     return OriginRisk >= 0.0 && StepRisk >= 0.0 && StepRisk <= OriginRisk;
 }
 
+/** Count a distinct non-origin endpoint only when the native cache puts it within one move. */
+static function bool IsNativeBlueEndpoint(bool bOrigin, bool bRepeatedHint,
+    float PathCost, float Mobility)
+{
+    return !bOrigin && !bRepeatedHint && PathCost >= 0.0 && PathCost <= Mobility;
+}
+
 /**
  * Validates every actual native blue-path tile, not just the endpoint.
  * Shares the controller's bounded explosive-cover budget; when exhausted,
@@ -342,7 +349,7 @@ static function bool ForecastPathRiskAllowed(float OriginRisk, float StepRisk)
  * @param Weights Current bounded threat weights.
  * @param OriginRisk Already computed risk of this unit's current tile.
  * @param OriginSupport Initial nearest active squadmate distance, in tiles.
- * @param RemainingTempoCoverChecks Shared read-only cover inspection budget.
+ * @param RemainingTempoCoverChecks Shared remaining tile inspections across squad searches.
  * @return False if any tile is unknown, hazardous, unsupported, risky or
  *         lacks a complete explosive-cover inspection.
  */
@@ -356,7 +363,10 @@ static function bool ForecastBluePathSafe(XComGameState_Unit UnitState,
     local int Step;
     local TTile Destination;
 
-    if (UnitState == none || CandidatePath.Length < 2
+    if (UnitState == none || `XWORLD == none || `XCOMHISTORY == none
+        || VisibleEnemies.Length == 0 || VisibleEnemies.Length > 64
+        || Reaches.Length != VisibleEnemies.Length || Weights.Length != VisibleEnemies.Length
+        || CandidatePath.Length < 2
         || CandidatePath.Length > 64
         || CandidatePath[0] != UnitState.TileLocation
         || RemainingTempoCoverChecks < CandidatePath.Length - 1)
@@ -374,6 +384,9 @@ static function bool ForecastBluePathSafe(XComGameState_Unit UnitState,
             || (!class'APX_FullIntel'.default.EnableFullIntel
                 && !class'X2TacticalVisibilityHelpers'.static.CanSquadSeeLocation(
                     UnitState.ControllingPlayer.ObjectID, CandidatePath[Step]))
+            // Inspect and charge each visited step before the per-contact LOS queries.
+            || class'APX_ExplosiveCoverKnowledge'.static.InspectRiskAtTile(
+                UnitState, CandidatePath[Step], VisibleEnemies, RemainingTempoCoverChecks) > 0.0
             || !class'APX_MissionPlanner'.static.IsSupportedAdvanceStep(
                 OriginSupport, class'APX_MissionPlanner'.static.NearestSupportDistance(
                     UnitState, CandidatePath[Step]))
@@ -383,10 +396,7 @@ static function bool ForecastBluePathSafe(XComGameState_Unit UnitState,
                     VisibleEnemies, Reaches, Weights)))
             return false;
     }
-    // Use the exact native current-state cover estimate already employed by
-    // the second-blue route; its method consumes a shared per-tile budget.
-    return class'APX_MissionPlanner'.static.BlueRouteExplosiveSafe(
-        UnitState, CandidatePath, VisibleEnemies, RemainingTempoCoverChecks);
+    return true;
 }
 
 /**
@@ -431,7 +441,7 @@ static function string ForecastScanReason(int SupportedShots,
     if (Stage == 3)
         return "unsafe_or_unverified_blue_path";
     if (Stage == 4)
-        return "outscored_by_other_local_route";
+        return "nonpositive_move_and_shot_score";
     return "safe_move_and_shot_candidate";
 }
 
@@ -505,6 +515,11 @@ static function bool ChooseMove(XComGameState_Unit UnitState,
     }
     Visualizer.m_kReachableTilesCache.UpdateTileCacheIfNeeded();
     Visualizer.m_kReachableTilesCache.GetAllPathableTiles(Tiles, Visualizer.GetMobility());
+    if (Tiles.Length == 0)
+    {
+        ScanReason = ForecastScanReason(SupportedShots, 0, 0, 0, false);
+        return false;
+    }
     Tiles.InsertItem(0, Visualizer.m_kReachableTilesCache.GetClosestReachableDestination(Forecasts[0].TargetUnit.TileLocation));
     Samples = Min(64, Tiles.Length);
     class'APX_MissionPlanner'.static.GetMeleeThreatReaches(UnitState, VisibleEnemies, Reaches);
@@ -518,15 +533,17 @@ static function bool ChooseMove(XComGameState_Unit UnitState,
         if (SampleIndex > 0 && Samples > 1)
             Index = 1 + ((SampleIndex - 1) * (Tiles.Length - 2)) / Max(1, Samples - 2);
         Tile = Tiles[Index];
-        ++InspectedEndpoints;
         PathCost = Visualizer.m_kReachableTilesCache.GetPathCostToTile(Tile);
+        if (!IsNativeBlueEndpoint(Tile == UnitState.TileLocation,
+            SampleIndex > 0 && Tile == Tiles[0], PathCost, Visualizer.GetMobility()))
+            continue;
+        ++InspectedEndpoints;
         if (Tile.Z < UnitState.TileLocation.Z
             || (Tile.Z > UnitState.TileLocation.Z
                 && (!default.EnableElevatedShotForecast
                     || Tile.Z - UnitState.TileLocation.Z >
                         Clamp(default.MaxElevationGainTiles, 1, 8)))
             || class'APX_MissionPlanner'.static.TileDistance(Tile, UnitState.TileLocation) < 1.0
-            || PathCost < 0.0 || PathCost > Visualizer.GetMobility()
             || class'APX_HazardKnowledge'.static.HasBlockingHazard(UnitState, Tile)
             || !class'APX_MissionPlanner'.static.IsKnownCombatTile(Tile)
             || !class'APX_MissionPlanner'.static.IsSupportedCombatDestination(UnitState, Tile)
@@ -548,7 +565,7 @@ static function bool ChooseMove(XComGameState_Unit UnitState,
             continue;
         CandidatePath.Length = 0;
         if (!Visualizer.m_kReachableTilesCache.BuildPathToTile(Tile, CandidatePath)
-            || CandidatePath.Length < 2)
+            || CandidatePath.Length < 2 || CandidatePath[CandidatePath.Length - 1] != Tile)
             continue;
         if (!ForecastBluePathSafe(UnitState, CandidatePath, VisibleEnemies,
             Reaches, Weights, CurrentRisk, CurrentSupport,

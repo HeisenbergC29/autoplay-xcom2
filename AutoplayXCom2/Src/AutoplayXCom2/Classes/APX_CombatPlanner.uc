@@ -12,8 +12,10 @@ var config array<name> SupportAbilities;
 var config int MinimumHitChance;
 var config float EmergencyHealthFraction;
 
+/** Rank legal actions for this unit using the squad's current permission to arm reactions. */
 static function bool ChooseAction(XComGameState_Unit UnitState,
     out AvailableAction Action, out int TargetIndex, out float Score,
+    bool bSquadOverwatchSafe,
     optional bool bRecentContact, optional int BerserkerFocusTargetID,
     optional bool bBerserkerOpeningContact, optional int RangedFocusTargetID,
     optional bool bNativeBerserkerStrikeOnly)
@@ -211,7 +213,8 @@ static function bool ChooseAction(XComGameState_Unit UnitState,
             SelfIndex = FindSelfTarget(Candidate, UnitState.ObjectID);
             if (Candidate.AvailableTargets.Length > 0 && SelfIndex == INDEX_NONE)
                 continue;
-            CandidateScore = ScoreSelfAction(UnitState, Ability, AbilityName, VisibleEnemies, bRecentContact);
+            CandidateScore = ScoreSelfAction(UnitState, Ability, AbilityName, VisibleEnemies,
+                bSquadOverwatchSafe, bRecentContact);
             if (CandidateScore > Score)
             {
                 Action = Candidate;
@@ -921,15 +924,12 @@ static function bool HasVisibleReclaimableReactionTarget(
 {
     local StateObjectReference EnemyRef;
     local XComGameState_Unit Enemy;
-    local int Checked;
 
     if (UnitState == none || `XCOMHISTORY == none
         || VisibleEnemies.Length > 64)
         return true; // Unknown/overflow: fail closed on speculative OW.
     foreach VisibleEnemies(EnemyRef)
     {
-        if (++Checked > 64)
-            return true;
         Enemy = XComGameState_Unit(`XCOMHISTORY.GetGameStateForObjectID(
             EnemyRef.ObjectID));
         if (Enemy != none
@@ -940,9 +940,11 @@ static function bool HasVisibleReclaimableReactionTarget(
     return false;
 }
 
+/** Score self-targeted actions and veto Overwatch before choosing this unit's best alternative. */
 static function float ScoreSelfAction(XComGameState_Unit UnitState,
     XComGameState_Ability Ability, name AbilityName,
-    array<StateObjectReference> VisibleEnemies, optional bool bRecentContact)
+    array<StateObjectReference> VisibleEnemies, bool bSquadOverwatchSafe,
+    optional bool bRecentContact)
 {
     local XComGameState_Item Weapon;
     local int RangedThreats, NearbyMelee;
@@ -970,7 +972,7 @@ static function float ScoreSelfAction(XComGameState_Unit UnitState,
         return GuardOverwatchForKnownAlly(
             ScoreOverwatchDefense(VisibleEnemies.Length > 0 || bRecentContact,
                 UnitState.IsConcealed(), HealthFraction, RangedRisk, NearbyMelee),
-            HasVisibleReclaimableReactionTarget(UnitState, VisibleEnemies));
+            !bSquadOverwatchSafe);
     return ScoreHunkerDefense(HealthFraction, RangedRisk, RangedThreats,
         NearbyMelee, UnitState.IsBurning(), UnitState.IsConcealed());
 }

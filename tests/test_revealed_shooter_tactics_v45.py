@@ -23,6 +23,7 @@ class RevealedShooterPolicyTests(unittest.TestCase):
     def setUpClass(cls):
         """Read actual installed UC source so tests fail on unreviewed policy drift."""
         cls.path_risk = staticmethod(load_uc_function(REPOSITION, "ForecastPathRiskAllowed"))
+        cls.blue_endpoint = staticmethod(load_uc_function(REPOSITION, "IsNativeBlueEndpoint"))
         cls.stage = staticmethod(load_uc_function(REPOSITION, "ForecastScanStage"))
         cls.move_score = staticmethod(load_uc_function(REPOSITION, "MoveAndShotScore"))
         cls.ow_score = staticmethod(load_uc_function(COMBAT, "ScoreOverwatchDefense"))
@@ -55,6 +56,19 @@ class RevealedShooterPolicyTests(unittest.TestCase):
             with self.subTest(args=args):
                 self.assertEqual(self.stage(*args), stage)
 
+    def test_only_distinct_native_blue_endpoints_advance_the_scan_stage(self):
+        """Score native empty, origin-only, unreachable, dash and duplicate-hint samples."""
+        missing = [(True, False, 0), (False, False, -1), (False, False, 13)]
+        blue_hint = [(False, False, 12), (False, True, 12)]
+        for samples, expected_count, expected_stage in (
+            ([], 0, 1), (missing, 0, 1), (missing + blue_hint, 1, 2),
+            ([(False, False, 0)], 1, 2),
+        ):
+            with self.subTest(samples=samples):
+                count = sum(self.blue_endpoint(*sample, 12) for sample in samples)
+                self.assertEqual(count, expected_count)
+                self.assertEqual(self.stage(1, count, 0, 0, False), expected_stage)
+
     def test_string_labels_are_stable_and_tied_to_tested_numeric_stages(self):
         """Each diagnostic reason is mapped from one numeric policy branch."""
         source = REPOSITION.read_text(encoding="utf-8-sig")
@@ -62,7 +76,7 @@ class RevealedShooterPolicyTests(unittest.TestCase):
         self.assertIn("Stage = ForecastScanStage(", mapping)
         for label in ("no_supported_current_shot", "no_native_blue_endpoints",
                       "no_material_projected_shot", "unsafe_or_unverified_blue_path",
-                      "outscored_by_other_local_route", "safe_move_and_shot_candidate"):
+                      "nonpositive_move_and_shot_score", "safe_move_and_shot_candidate"):
             self.assertIn(f'return "{label}";', mapping)
 
     def test_good_immediate_shot_and_overwatch_must_not_be_downgraded(self):
@@ -118,11 +132,20 @@ class RevealedShooterSourceContracts(unittest.TestCase):
             "IsKnownCombatTile(", "HasBlockingHazard(", "CanSquadSeeLocation(",
             "IsSupportedAdvanceStep(", "ForecastPathRiskAllowed(OriginRisk,",
             "ExposureRisk(", "IsSupportedCombatDestination(",
-            "BlueRouteExplosiveSafe(", "RemainingTempoCoverChecks",
+            "VisibleEnemies.Length == 0", "VisibleEnemies.Length > 64",
+            "Reaches.Length != VisibleEnemies.Length", "Weights.Length != VisibleEnemies.Length",
+            "InspectRiskAtTile(", "VisibleEnemies, RemainingTempoCoverChecks)",
         ):
             self.assertIn(token, f)
-        self.assertLess(f.index("for (Step = 1;"),
-                        f.index("BlueRouteExplosiveSafe("))
+        order = [f.index(token) for token in (
+            "RemainingTempoCoverChecks < CandidatePath.Length - 1", "for (Step = 1;",
+            "InspectRiskAtTile(", "NearestSupportDistance(", "ExposureRisk(",
+        )]
+        self.assertEqual(sorted(order), order)
+        inspection = function_body((SRC / "APX_ExplosiveCoverKnowledge.uc").read_text(),
+                                   "InspectRiskAtTile")
+        self.assertLess(inspection.index("RemainingCoverChecks = RemainingInspectionBudget("),
+                        inspection.index("return RiskAtTile("))
         for forbidden in ("ModifyStateObject(", "SubmitGameState(", "SYNC_RAND(",
                           "ActivateAbility_ReturnContext(", "GameStateMoveUnitSingle("):
             self.assertNotIn(forbidden, CHECKS.without_comments(f))
@@ -149,36 +172,68 @@ class RevealedShooterSourceContracts(unittest.TestCase):
         self.assertNotIn("UnitState.TileLocation =", self.reposition)
         self.assertNotIn("GetAllUnits(", self.reposition)
 
+    def test_scan_checks_cache_before_counting_and_requires_matching_path(self):
+        """Stage counters reflect native costs even when a suggested endpoint is a duplicate."""
+        choose = function_body(self.reposition, "ChooseMove")
+        order = [choose.index(token) for token in (
+            "GetAllPathableTiles(", "if (Tiles.Length == 0)",
+            "ForecastScanReason(SupportedShots, 0, 0, 0, false)",
+            "GetClosestReachableDestination(", "GetPathCostToTile(",
+            "IsNativeBlueEndpoint(Tile == UnitState.TileLocation,",
+            "SampleIndex > 0 && Tile == Tiles[0], PathCost, Visualizer.GetMobility()",
+            "++InspectedEndpoints", "IsSupportedCombatDestination(",
+            "ProjectAtTile(", "BuildPathToTile(", "CandidatePath[CandidatePath.Length - 1] != Tile",
+            "ForecastBluePathSafe(", "++SafeRoutes",
+        )]
+        self.assertEqual(sorted(order), order)
+
     def test_controller_logs_bounded_diagnostic_and_keeps_actual_native_dispatch(self):
-        """Only accepted native move is submitted, all other abilities still compete."""
+        """The scan compares a proposal to the current leader before normal native dispatch."""
         main = function_body(self.controller, "MakeDecision")
-        for key in ("RepositionScanReason", "RepositionSupportedShots",
-                    "RepositionImprovedShots", "RepositionSafeRoutes",
-                    "RemainingTempoCoverChecks", "ChooseMove(",
-                    'MissionRecorder.Marker("offensive_reposition_scan"',
-                    "safe_native_paths=", "current_best=", "future_native_shot=unverified",
-                    'RepositionScanReason = "outscored_by_current_squad_action";',
-                    "TraceCandidateMove(UnitState, CandidatePath, Score)",
-                    "Score > BestScore && CanUseMove(UnitState, CandidatePath)",
-                    "GameStateMoveUnitSingle("):
-            self.assertIn(key, main)
+        scan = function_body(self.controller, "ChooseCompetitiveReposition")
+        for key in ("SupportedShots", "ImprovedShots", "SafeRoutes", "RemainingTempoCoverChecks",
+                    'MissionRecorder.Marker("offensive_reposition_scan"', "safe_native_paths=",
+                    "current_best=", "future_native_shot=unverified", "return bCompetitive;"):
+            self.assertIn(key, scan)
+        ordered = ["static.ChooseMove(", "if (bProposed)", "TraceCandidateMove(",
+                   "if (Score <= BestScore)", '"outscored_by_current_squad_action"',
+                   "else if (!CanUseMove(", '"destination_already_visited"', "bCompetitive = true;"]
+        self.assertEqual([scan.index(token) for token in ordered],
+                         sorted(scan.index(token) for token in ordered))
         self.assertLess(main.index("class'APX_CombatPlanner'.static.ChooseAction("),
-                        main.index("class'APX_RepositionPlanner'.static.ChooseMove("))
-        self.assertLess(main.index("class'APX_RepositionPlanner'.static.ChooseMove("),
+                        main.index("if (ChooseCompetitiveReposition("))
+        self.assertLess(main.index("if (ChooseCompetitiveReposition("),
                         main.index("class'APX_MissionPlanner'.static.ChooseMove("))
+        self.assertIn("GameStateMoveUnitSingle(", main)
         self.assertIn("StopAutoplay", self.controller)
         self.assertNotIn("GetEnemyActionPoints(", self.reposition)
+
+    def test_chosen_move_records_winning_planner_after_every_replacement(self):
+        """Each path replacement supplies provenance, including same-tile plans and the X4 fallback."""
+        main = function_body(self.controller, "MakeDecision")
+        for statement in main.split("BestPath = ")[1:]:
+            self.assertTrue(statement.split(";", 1)[1].lstrip().startswith("BestMovePlanner = "))
+        labels = ["poison_escape", "offensive_reposition", "mission", "contact_search", "rescue",
+                  "medical_approach", "patrol_approach", "loot", "exploration", "ambush_preparation",
+                  "objective_recovery"]
+        for label in labels:
+            self.assertIn(f' = "{label}";', main)
+        fallback = main[main.index("&& SelectSquadSabotageRecovery("):]
+        self.assertIn('BestMovePlanner = "objective_recovery";', fallback.split("}", 1)[0])
+        self.assertIn("ChosenMove(BestUnit, BestPath, BestScore, bSuccess, BestMovePlanner)", main)
+        chosen = function_body((SRC / "APX_MissionRecorder.uc").read_text(), "ChosenMove")
+        self.assertIn('"|move_planner=" $ MovePlanner $ "|accepted=" $ bAccepted', chosen)
 
     def test_visible_mind_control_ow_veto_uses_original_ownership_evidence(self):
         """The native future reaction target cannot be selected by our score."""
         finder = function_body(self.combat, "HasVisibleReclaimableReactionTarget")
         score = function_body(self.combat, "ScoreSelfAction")
-        for token in ("VisibleEnemies.Length > 64", "if (++Checked > 64)",
+        for token in ("VisibleEnemies.Length > 64", "foreach VisibleEnemies(EnemyRef)",
                       "IsVisibleHostile(", "IsReclaimableControlledSquadmate(",
                       "return true;"):
             self.assertIn(token, finder)
         self.assertIn("GuardOverwatchForKnownAlly(", score)
-        self.assertIn("HasVisibleReclaimableReactionTarget(", score)
+        self.assertIn("!bSquadOverwatchSafe", score)
         self.assertIn("ScoreOverwatchDefense(", score)
         self.assertNotIn("GetEnemyActionPoints(", finder)
         self.assertNotIn("GetGroupMovePaths(", finder)

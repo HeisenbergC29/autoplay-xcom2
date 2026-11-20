@@ -84,7 +84,7 @@ class HighGroundForecastContracts(unittest.TestCase):
         # actual caller and the bounded native whole-path callee.
         whole_path=function_body(self.source,'ForecastBluePathSafe')
         for required in ('IsSupportedAdvanceStep(', 'HasBlockingHazard(',
-                         'BlueRouteExplosiveSafe(', 'ForecastPathRiskAllowed(',
+                         'InspectRiskAtTile(', 'ForecastPathRiskAllowed(',
                          'for (Step = 1; Step < CandidatePath.Length; ++Step)'):
             with self.subTest(required=required):
                 self.assertIn(required, whole_path)
