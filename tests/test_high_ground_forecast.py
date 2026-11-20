@@ -76,10 +76,18 @@ class HighGroundForecastContracts(unittest.TestCase):
         for required in ('GetAllPathableTiles(', 'GetPathCostToTile(',
                          'IsSupportedCombatDestination(', 'IsSupportedAdvanceDestination(',
                          'CandidateRisk > CurrentRisk', 'BuildPathToTile(',
-                         'IsSupportedAdvanceStep(', 'HasBlockingHazard(UnitState, CandidatePath[PathIndex])',
-                         'bSafe', 'MaxElevationGainTiles'):
+                         'ForecastBluePathSafe(UnitState, CandidatePath, VisibleEnemies,',
+                         'MaxElevationGainTiles'):
             with self.subTest(required=required):
                 self.assertIn(required,move)
+        # #104 decomposed this validator. Verify the same behavior at the
+        # actual caller and the bounded native whole-path callee.
+        whole_path=function_body(self.source,'ForecastBluePathSafe')
+        for required in ('IsSupportedAdvanceStep(', 'HasBlockingHazard(',
+                         'BlueRouteExplosiveSafe(', 'ForecastPathRiskAllowed(',
+                         'for (Step = 1; Step < CandidatePath.Length; ++Step)'):
+            with self.subTest(required=required):
+                self.assertIn(required, whole_path)
         self.assertIn('!Aim.bMeleeAttack',function_body(self.source,'SupportsForecast'))
         for forbidden in ('ModifyStateObject(', 'SubmitGameState(', 'CreateNewGameState(',
                           'ActivateAbility_ReturnContext(', 'Rand(', 'FRand('):
