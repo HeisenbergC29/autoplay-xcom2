@@ -1,4 +1,4 @@
-# Stan przekazania projektu — 15 listopada 2026
+# Stan przekazania projektu — 20 listopada 2026
 
 To punkt startowy po pierwszym przeglądzie importu pomocnika. Bieżące issue i PR-y mogą zawierać nowsze
 ustalenia; po integracji aktualizuj ten dokument, gdy zmienia się baza lub
@@ -6,7 +6,8 @@ poziom potwierdzenia działania.
 
 ## Baza kodu
 
-- Bieżąca rewizja: **`mission-report-v43` z poprawką kompilacji #99**.
+- **v44, PR #102.** Awaryjne dojście do X4 w SabotageCC jest oceniane po zwykłych propozycjach członków drużyny. Windows make i próba tej wersji czekają na wspólną rundę. HELPER otrzymał [#104](https://github.com/HeisenbergC29/autoplay-xcom2/issues/104).
+- **v43 po poprawce kompilacji #99.**
   Pierwszy dostarczony Windows make paczki `119187162a3fe8e663f990839a81a952295b0b56`
   to **FAIL: 1 error / 1 warning**, nie NOT RUN. Błąd `Right type is incompatible
   with '&&'` w MissionPlanner:2596 wynika z nieujętego w nawiasy warunku przed
@@ -15,7 +16,7 @@ poziom potwierdzenia działania.
   Marker v43 zachowany, predykaty i reguły gry bez zmian; końcowy nowy SHA/ZIP w #4.
   Kontrole poprawionego drzewa: **882 private PASS/0skip**, SDK30/31 PASS;
   końcowy head/CI/ZIP w #99/#4.
-  **Windows make poprawionych źródeł i gra v43 NOT RUN** do nowego logu.
+  Ponowny Windows make zakończony z wynikiem **0 błędów / 0 ostrzeżeń**. Wszystkie trzy misje v43 zakończyły się porażką. [Wyniki i przykłady decyzji](report-v43-2026-11-15.pl.md).
 - V43 przed poprawką kompilacji: PR #98; źródłowy head
   `9771d7cb60d57163e488033e210f2c23871b4ad5`. Native-qualified jeden blue
   do pilnego heal/detox oraz rzeczywisty detoks pełnego HP. LEAD zachował

@@ -108,6 +108,13 @@ and [docs/PROJECT-STATE.pl.md](docs/PROJECT-STATE.pl.md) before changing this pr
   distinguishable. A false stock end-turn return alone is not rejection evidence.
 - Failure of this planner does not establish that a scenario is impossible.
 
+## Code documentation, decomposition and testing
+
+- Add JavaDoc or the language equivalent to all code. Use UnrealScript documentation comments, Python docstrings and PowerShell comment-based help. Describe the caller's contract, relevant units, return values, state changes and failure cases where they matter.
+- Decompose complex methods into simpler reusable methods with one responsibility. Keep native target selection, read-only planning and actual action submission distinguishable.
+- Write unit tests for each method and end-to-end tests for complex methods. Exercise the normal entry point, including unavailable inputs and failure paths. Identify which layers run in each test. For behavior that requires the game, provide a repeatable Windows scenario and record its outcome once the user runs it.
+- Apply these standards in every implementation PR. Bring existing code into line as the relevant area is worked on, and identify remaining coverage honestly in review.
+
 ## Validation and evidence
 
 - Public baseline command: `python -m unittest discover -s tests -p 'test_*.py' -v`.
@@ -139,14 +146,11 @@ questions. A helper marks it ready when reviewable. LEAD can merge source work
 after review/CI while explicitly tracking outstanding Windows/game validation;
 merging is not gameplay acceptance or a binary release.
 
-## Current pre-build gate — user instruction, 14 November 2026
+## Combined game testing
 
-The user will compile/test only after LEAD has finished its source work and all
-currently assigned HELPER work is finished. Issue #86 and docs/PREBUILD-QUEUE.pl.md
-define this finite queue; issue #4 is BLOCKED meanwhile. Do not request another
-Windows build/game test after each individual PR. Record scenarios and NOT RUN
-evidence for the eventual combined test instead. LEAD reviews/integrates each
-topic, then supplies one final exact commit/package after the queue has no active
-claims or ready unreviewed PRs. A genuinely unavailable native/asset proof must
-have a precise documented limitation and safe fallback; it is not an implemented
-feature. Unrelated new ideas require an explicit queue change, not endless scope.
+The user compiles and tests once LEAD has integrated the currently assigned source work.
+The completed queue in #86 documents the first such round. Check #1 for the current
+assignment and #4 for the next Windows/game handoff. For a clean Windows compile
+(0 errors and 0 warnings), the user can report success without sending mod-make.log.
+Record an explicit user confirmation as reported evidence. A missing log by itself
+does not establish a result. The user supplies the build log when diagnostics occur.

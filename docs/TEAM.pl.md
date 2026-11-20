@@ -9,54 +9,13 @@ Gotowe zadania niezależne: [diagnostyka raportów #2](https://github.com/Heisen
 i [macierz misji #3](https://github.com/HeisenbergC29/autoplay-xcom2/issues/3).
 Osobny dowód kompilacji/gry użytkownika: [próby bieżącej wersji #4](https://github.com/HeisenbergC29/autoplay-xcom2/issues/4).
 
-## Bieżące przekazanie — jedna wspólna próba v43
+## Przekazanie po próbach v43
 
-Nowy log użytkownika: pierwszy Windows make źródeł `1191871` zakończył się
-**FAIL: 1 error / 1 warning**. LEAD obsługuje [#99](fix-99-v43-compiler.pl.md):
-grupowanie trzech warunków przed `? :` i zmiana nazwy parametru kolidującego
-z polem klasy. Bez zmiany predykatów taktycznych i rewizji v43. Nowy dokładny
-ZIP do ponownego make jest w #4 po review/CI; HELPER nie otrzymał surowego logu
-i nie ma nowego zlecenia. Kompilacja poprawionej paczki i gra pozostają NOT RUN.
+HELPER odpowiada za analizę i PR dotyczący doboru akcji strzelców po rozpoczęciu walki. LEAD integruje zmiany i po zakończeniu przydzielonych prac przekazuje jedną paczkę użytkownikowi. [Zadanie #104](https://github.com/HeisenbergC29/autoplay-xcom2/issues/104)
 
-Polecenie użytkownika z 14 XI jest spełnione dla bieżącej kolejki źródłowej
-[#86](https://github.com/HeisenbergC29/autoplay-xcom2/issues/86): #28/#98 to jej
-ostatni odebrany etap. Pozostałe zakresy mają implementację lub jawny disposition
-unsupported; nie oznacza to ukończenia całego projektu ani zaliczenia gry.
-**Następna kolej użytkownika:** jeden końcowy SHA/ZIP wskazany w
-[#4](https://github.com/HeisenbergC29/autoplay-xcom2/issues/4), kompilacja Windows
-oraz wspólna runda gry. Starsze przekazania poniżej są historyczne.
+Wersja v43 po poprawce #100 przeszła Windows make z wynikiem 0 błędów i 0 ostrzeżeń. Przy takim wyniku w przyszłości wystarcza potwierdzenie użytkownika. Log kompilacji jest potrzebny przy błędach lub ostrzeżeniach. Raport z gry nadal służy do oceny działań drużyny.
 
-V43 dodaje native-qualified podejście do pilnego heal/detox i detoks przy pełnym
-HP tylko dla faktycznie usuwalnego statusu. LEAD poprawił globalny priorytet
-pilnego native heal innego medyka, wspólny budżet128 endpointów na decyzję
-oraz zachowanie veto usuniętego pacjenta. Roster/cost/target/range reads pozostają
-obserwacyjne; po ruchu wymagany świeży native cache/AA. Checker instalatora
-obejmuje jawnie wszystkie30 aktualnych klas, nadal odrzuca obce klasy i zależności.
-
-Źródłowy head `9771d7cb60d57163e488033e210f2c23871b4ad5`: **876 private PASS/0skip**,
-SDK30/31 i niezależne review PASS. CI373: 791 PASS/85 SKIP oraz 6 kroków
-PowerShell PASS. Końcowa aktualizacja dokumentów nie zmienia runtime/testów/tools.
-Te wyniki dotyczą źródeł przed poprawką #99; nie potwierdziły poprawności
-składni stock kompilatora. Pierwszy Windows make v43 FAIL; poprawiony make/game NOT RUN.
-[Zakres i jedna runda](integration-2026-11-15-v43.pl.md),
-[szczegóły leczenia](experiment-28-medical-approach-v43.pl.md).
-
-Użytkownik rozszerzył zgodę na wszystkie dostępne zapisane dane patroli,
-w tym pełną trasę, jeśli faktycznie istnieje. Typowy stock patrol nie ma
-ustalonej wieloturowej trasy; waypoint, cache przebytego ruchu i graf korytarzy
-mają różną wartość dowodową. Odczyt ma pozostać obserwacyjny, z oceną świeżości
-i niepewności; brak mutowania AI albo generowania przyszłych losowań.
-[Ustalenia SDK i plan wykrycia/zasadzki/tempa](patrol-detection-and-tempo.pl.md).
-[Dokładny wybór celu, losowanie i osobna droga dojścia](patrol-selection-algorithm.pl.md)
-potwierdzają możliwość prognozowania wariantów, bez jednej pewnej trasy.
-
-HELPER nie ma kolejnego przypisanego READY zadania przed tą próbą.
-LEAD/HELPER analizują nowy raport po grze; nie dopisujemy nowych niezwiązanych
-optymalizacji do zamkniętej listy. Konkretne błędy kompilacji lub gry rozpatrujemy
-na dokładnym źródłowym SHA/markerze, bez żądania ponownego pełnego SDK.
-#10/#89 mają dwa natywne blue; pełna przyszła trasa/nieobsługiwany footprint
-pozostają Unknown. #38 ma ograniczony Faceoff i macierz rodzin; inne AoE i
-secondary chains nadal unsupported. #20/#79 zachowują jawne granice dowodów.
+Przegląd każdego PR obejmuje komentarze dokumentacyjne właściwe dla języka, podział złożonych metod, testy jednostkowe metod i testy E2E złożonych przebiegów. [Zasady dla obu agentów](../AGENTS.md)
 
 ## Podział odpowiedzialności
 

@@ -1114,6 +1114,92 @@ function bool HandleOwnedHack(float DeltaTime)
     return true;
 }
 
+/** Permit X4 route recovery only when the best ordinary squad action is no better than idle Overwatch. */
+static function bool ShouldSearchSabotageRecovery(float BestNormalScore, bool bMonumentMission)
+{
+    return bMonumentMission && BestNormalScore <= 2.0;
+}
+
+/** Resolve a native squad member against current history and return an actionable, player-owned soldier. */
+static function XComGameState_Unit ResolveRecoverySoldier(XGUnit Member, int PlayerID)
+{
+    local XComGameState_Unit Soldier;
+
+    if (Member == none || Member.ObjectID <= 0)
+        return none;
+    Soldier = XComGameState_Unit(`XCOMHISTORY.GetGameStateForObjectID(Member.ObjectID));
+    if (Soldier == none || Soldier.GetMyTemplate() == none
+        || Soldier.GetAssociatedPlayerID() != PlayerID || Soldier.GetTeam() != eTeam_XCom
+        || !Soldier.IsAlive() || !Soldier.IsAbleToAct() || Soldier.IsCivilian()
+        || Soldier.bRemoved || Soldier.bRemovedFromPlay || Soldier.GetMyTemplate().bIsCosmetic)
+        return none;
+    return Soldier;
+}
+
+/**
+ * Select the best executable recovery move found on the local squad's roster.
+ * The callers' remaining route-inspection budgets are consumed across all soldiers.
+ * On success update BestUnit, BestPath and BestScore together. On failure retain
+ * the caller's previous plan. MakeDecision owns final native movement dispatch.
+ */
+function bool SelectSquadSabotageRecovery(XGPlayer SquadPlayer,
+    out XComGameState_Unit BestUnit, out array<TTile> BestPath, out float BestScore,
+    const out array<StateObjectReference> ContactUnits,
+    const out array<StateObjectReference> ContactInteractives,
+    bool bSnapshotComplete, string SnapshotReason, out int RemainingContactDetectors,
+    out int RemainingContactTiles, out int RemainingContactLOS, out int RemainingCoverChecks,
+    out int RemainingConcealmentChecks, out int RemainingTempoCoverChecks)
+{
+    local XGSquad Squad;
+    local XComGameState_Unit Soldier;
+    local array<TTile> CandidatePath;
+    local float Score;
+    local string Reason;
+    local int Index, Count;
+    local bool bFound, bSelected;
+
+    if (SquadPlayer == none || SquadPlayer.m_kSquad == none)
+        return false;
+    Squad = SquadPlayer.m_kSquad;
+    if (Squad.m_kPlayer != SquadPlayer)
+        return false;
+    Count = Squad.GetNumMembers();
+    if (Count <= 0 || Count > 24)
+        return false;
+
+    for (Index = 0; Index < Count; ++Index)
+    {
+        Soldier = ResolveRecoverySoldier(Squad.GetMemberAt(Index), SquadPlayer.ObjectID);
+        if (Soldier == none)
+            continue;
+        bFound = class'APX_MissionPlanner'.static.ChooseSabotageCCRecoveryMove(
+            Soldier, CandidatePath, Score, Reason, ContactUnits, ContactInteractives,
+            bSnapshotComplete, SnapshotReason, RemainingContactDetectors, RemainingContactTiles,
+            RemainingContactLOS, RemainingCoverChecks, RemainingConcealmentChecks,
+            RemainingTempoCoverChecks);
+        if (MissionRecorder != none)
+            MissionRecorder.Marker("objective_recovery_scan", "unit=" $ Soldier.ObjectID
+                @ "found=" $ string(bFound) @ "reason=" $ Reason
+                @ "native_blue_only=True" @ "horizon_ai_turns=0");
+        if (!bFound || !TraceCandidateMove(Soldier, CandidatePath, Score)
+            || Score <= BestScore || !CanUseMove(Soldier, CandidatePath))
+            continue;
+        BestPath = CandidatePath;
+        BestScore = Score;
+        BestUnit = Soldier;
+        bSelected = true;
+    }
+    if (bSelected && MissionRecorder != none)
+        MissionRecorder.Marker("objective_recovery_candidate", "unit=" $ BestUnit.ObjectID
+            @ "score=" $ BestScore
+            @ "end_x=" $ BestPath[BestPath.Length - 1].X
+            @ "end_y=" $ BestPath[BestPath.Length - 1].Y
+            @ "end_z=" $ BestPath[BestPath.Length - 1].Z
+            @ "source=verified_native_blue_route");
+    return bSelected;
+}
+
+/** Compare legal squad actions for the current decision, then submit one action through the native controller. */
 function MakeDecision(XComTacticalController PC)
 {
     local XComGameState_Unit UnitState, BestUnit, AmbushUnit;
@@ -1153,8 +1239,7 @@ function MakeDecision(XComTacticalController PC)
     local bool bOpeningContact, bFocusedGoal, bRangedFocusGoal, bRangedConcealed;
     local bool bPatrolRefreshed, bPatrolActive, bSelectedPatrolMove, bSelectedPatrolReaction;
     local bool bSquadUrgentHealAvailable;
-    local string PatrolReason, PatrolApproachReason, SabotageRecoveryReason;
-    local bool bSabotageRecoveryCandidate;
+    local string PatrolReason, PatrolApproachReason;
     local XComGameState_Unit PatrolSupporter, PatrolScout;
     local bool bNativeStrikeOnly;
 
@@ -1562,52 +1647,6 @@ function MakeDecision(XComTacticalController PC)
             SelectedRouteDestination = CandidatePath[CandidatePath.Length - 1];
             SelectedRouteUnitID = UnitState.ObjectID;
         }
-        // #101: actual SabotageCC v43 turn22 repro — mission marker
-        // (40,34,2) led to 8 no-plan stops at 2 native AP. Only when the
-        // normal planners have no constructive candidate, reconsider bounded
-        // current-CLEAR native blue progress instead of forcing overwatch
-        // or inventing a PlantBomb target. No extra AP, no free path.
-        if (BestScore <= 2.0 && FocusBattle != none
-            && FocusBattle.MapData.ActiveMission.sType == "SabotageCC")
-        {
-            CandidatePath.Length = 0;
-            bSabotageRecoveryCandidate =
-                class'APX_MissionPlanner'.static.ChooseSabotageCCRecoveryMove(
-                    UnitState, CandidatePath, Score, SabotageRecoveryReason,
-                    ContactSnapshotUnits, ContactSnapshotInteractives,
-                    bContactSnapshotComplete, ContactSnapshotReason,
-                    RemainingContactDetectors, RemainingContactTiles,
-                    RemainingContactLOS, RemainingCoverChecks,
-                    RemainingConcealmentChecks, RemainingTempoCoverChecks);
-            if (MissionRecorder != none)
-                MissionRecorder.Marker("objective_recovery_scan",
-                    "unit=" $ UnitState.ObjectID
-                    @ "found=" $ string(bSabotageRecoveryCandidate)
-                    @ "reason=" $ SabotageRecoveryReason
-                    @ "native_blue_only=True"
-                    @ "horizon_ai_turns=0");
-            if (bSabotageRecoveryCandidate
-                && TraceCandidateMove(UnitState, CandidatePath, Score)
-                && Score > BestScore && CanUseMove(UnitState, CandidatePath))
-            {
-                BestPath = CandidatePath;
-                BestScore = Score;
-                BestUnit = UnitState;
-                bMove = true;
-                bArea = false;
-                BestLocations.Length = 0;
-                bHavePlan = true;
-                bSelectedRoute = false;
-                if (MissionRecorder != none)
-                    MissionRecorder.Marker("objective_recovery_candidate",
-                        "unit=" $ UnitState.ObjectID
-                        @ "score=" $ Score
-                        @ "end_x=" $ CandidatePath[CandidatePath.Length - 1].X
-                        @ "end_y=" $ CandidatePath[CandidatePath.Length - 1].Y
-                        @ "end_z=" $ CandidatePath[CandidatePath.Length - 1].Z
-                        @ "source=verified_native_blue_route");
-            }
-        }
         CandidatePath.Length = 0;
         if (class'APX_MissionPlanner'.static.ChooseRescueMove(UnitState, CandidatePath, Score, RescuePatientID)
             && TraceCandidateMove(UnitState, CandidatePath, Score)
@@ -1819,6 +1858,25 @@ function MakeDecision(XComTacticalController PC)
                 MissionRecorder.Marker("ambush_opening", "unit=" $ BestUnit.ObjectID
                     @ "preparations=" $ AmbushPreparationActions);
         }
+    }
+
+    // Evaluate the fallback once, after the whole squad's ordinary plans and
+    // opener preparation. A score from the fallback cannot mask a later plan.
+    if (FocusBattle != none && ShouldSearchSabotageRecovery(BestScore,
+            FocusBattle.MapData.ActiveMission.sType == "SabotageCC")
+        && SelectSquadSabotageRecovery(PC.m_XGPlayer, BestUnit, BestPath, BestScore,
+            ContactSnapshotUnits, ContactSnapshotInteractives, bContactSnapshotComplete,
+            ContactSnapshotReason, RemainingContactDetectors, RemainingContactTiles,
+            RemainingContactLOS, RemainingCoverChecks, RemainingConcealmentChecks,
+            RemainingTempoCoverChecks))
+    {
+        bMove = true;
+        bArea = false;
+        BestLocations.Length = 0;
+        bHavePlan = true;
+        bSelectedRoute = false;
+        bSelectedPatrolMove = false;
+        bSelectedPatrolReaction = false;
     }
 
     // Avoid burning whole turns on overwatch forever when no objective, attack

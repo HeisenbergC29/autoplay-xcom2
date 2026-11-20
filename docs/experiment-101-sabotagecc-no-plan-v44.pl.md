@@ -127,7 +127,7 @@ dopuszcza dotychczasowy cel misji jako
 **wyłącznie cel ruchu**, nigdy potwierdzoną
 akcję `PlantBomb`.
 
-Następnie skanuje maks. 48 rzeczywistych
+Po ocenie zwykłych akcji całego oddziału kontroler sprawdza kwalifikujących się żołnierzy. Dla każdego z nich planer skanuje maks. 48 rzeczywistych
 natywnych endpointów z istniejącego blue-range
 `m_kReachableTilesCache`, włącznie z
 `GetClosestReachableDestination`.
@@ -157,9 +157,7 @@ formacja przy jasno potwierdzonej obecnej
 drodze, bez bieżącego kontaktu.** Native
 dystans wsparcia w takim wyjątkowym
 ruchu może przejściowo wzrosnąć
-o max4 pola, nie dalej niż 14, zamiast
-odrzucenia wszystkich podejść z
-powodu samej preferencji spójności.
+do wartości `min(14, max(10, początkowy_dystans + 4))`. Przy początkowym dystansie 5 pól dopuszcza więc 10, a przy 9 dopuszcza 13.
 `SquadPositionScore` pozostaje karą,
 a nie globalnym zakazem. Niczego
 nie zmienia w walkach, leczeniu, AoE,
@@ -177,7 +175,7 @@ force-plant, fabrykowania native
 targetu ani oszukiwania kosztu
 odległości 2×Mobility.
 
-**Diagnostyka:** 
+**Diagnostyka:**
 `APXREC marker kind=objective_recovery_scan`
 z `found, reason, native_blue_only,
 horizon_ai_turns=0`;
@@ -215,30 +213,8 @@ poprawnego ownera Controller.
 Kompilacja Windows i ponowna rozgrywka
 nie były wykonywane na v44.
 
-**Po review LEAD i integracji**
-jeden test ponowny: SabotageCC,
-punkt przed turą22 (jeśli save
-istnieje; bez save nowa próba),
-z aktywnym autoresume: 
-- zamiast stopu #97: w logu
-  `objective_recovery_scan`
-  z określonym statusem i,
-  gdy native geometry jest legalna,
-  `objective_recovery_candidate` →
-  natywnie zaakceptowany
-  `StandardMove`;
-- jeśli znany marker na Z2
-  jest nieosiągalny, odczytać
-  `native_plant_reason` i
-  w razie blokady wymusić dopiero
-  dodatkowy **source-safe**
-  wariant detour, a nie ręczny
-  ruch albo fikcyjną akcję;
-- dojście do realnego
-  `Interact_PlantBomb AA_Success`,
-  ukończenie X4, pozostałe
-  cele i rezultat `native win`
-  z rzeczywistym final score>0.
+W przeglądzie LEAD wydzielił sprawdzenie całego oddziału po zwykłych akcjach, eksploracji i przygotowaniu zasadzki. Wcześniej kandydat awaryjny o wartości 38 mógł wyprzedzić zwykłą akcję za 33 tylko dlatego, że jego żołnierz był sprawdzany pierwszy. Nowy warunek wymaga, żeby najlepsza zwykła akcja całej drużyny miała co najwyżej 2. Wśród legalnych sprawdzonych rozwiązań awaryjnych wybierane jest najlepsze.
 
-Nie deklarujemy, że samo rozwiązanie
-stopu gwarantuje zwycięstwo.
+Przy nieznanej geometrii X4 planer odczytuje publiczny znacznik misji. Pozwala to odróżnić cel X4 od dowolnego innego interaktywnego obiektu lub cywila. Brakujące dane, zużyty obiekt i odrzucona trasa zachowują zarejestrowany powód. Test CLI analizatora obejmuje przyjęty rozkaz oraz ręczną interakcję w dwóch syntetycznych sesjach. Dla samego planera przygotowano próbę w silniku. [Scenariusz E2E](e2e-sabotagecc-v44.pl.md)
+
+Następną wspólną kompilację LEAD przekaże po odbiorze [pracy HELPERA #104](https://github.com/HeisenbergC29/autoplay-xcom2/issues/104).
