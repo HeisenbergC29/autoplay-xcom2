@@ -129,11 +129,15 @@ class OffensiveRepositionTests(unittest.TestCase):
 
     def test_candidate_and_entire_native_blue_path_keep_safety_and_bounded_work(self):
         move = function_body(self.source, 'ChooseMove')
-        for guard in ('Samples = Min(64, Tiles.Length)', 'PathCost > Visualizer.GetMobility()',
+        for guard in ('Samples = Min(64, Tiles.Length)', 'IsNativeBlueEndpoint(',
                       'CandidateRisk > CurrentRisk', 'BuildPathToTile(Tile, CandidatePath)',
-                      'for (PathIndex = 1;', 'CanSquadSeeLocation(', 'IsSupportedAdvanceStep(',
-                      'HasBlockingHazard(UnitState, CandidatePath[PathIndex])'):
+                      'ForecastBluePathSafe(UnitState, CandidatePath, VisibleEnemies,',
+                      'RemainingTempoCoverChecks'):
             self.assertIn(guard, move)
+        whole_path = function_body(self.source, 'ForecastBluePathSafe')
+        for guard in ('for (Step = 1;', 'CanSquadSeeLocation(', 'IsSupportedAdvanceStep(',
+                      'HasBlockingHazard(', 'ExposureRisk(', 'InspectRiskAtTile('):
+            self.assertIn(guard, whole_path)
         gather = function_body(self.source, 'GatherForecasts')
         self.assertIn('Forecasts.Length >= 16', gather)
         self.assertIn('Min(64, Cache.AvailableActions.Length)', gather)

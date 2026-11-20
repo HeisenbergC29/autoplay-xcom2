@@ -12,8 +12,10 @@ var config array<name> SupportAbilities;
 var config int MinimumHitChance;
 var config float EmergencyHealthFraction;
 
+/** Rank legal actions for this unit using the squad's current permission to arm reactions. */
 static function bool ChooseAction(XComGameState_Unit UnitState,
     out AvailableAction Action, out int TargetIndex, out float Score,
+    bool bSquadOverwatchSafe,
     optional bool bRecentContact, optional int BerserkerFocusTargetID,
     optional bool bBerserkerOpeningContact, optional int RangedFocusTargetID,
     optional bool bNativeBerserkerStrikeOnly)
@@ -211,7 +213,8 @@ static function bool ChooseAction(XComGameState_Unit UnitState,
             SelfIndex = FindSelfTarget(Candidate, UnitState.ObjectID);
             if (Candidate.AvailableTargets.Length > 0 && SelfIndex == INDEX_NONE)
                 continue;
-            CandidateScore = ScoreSelfAction(UnitState, Ability, AbilityName, VisibleEnemies, bRecentContact);
+            CandidateScore = ScoreSelfAction(UnitState, Ability, AbilityName, VisibleEnemies,
+                bSquadOverwatchSafe, bRecentContact);
             if (CandidateScore > Score)
             {
                 Action = Candidate;
@@ -894,9 +897,54 @@ static function int FindSelfTarget(AvailableAction Action, int UnitID)
     return INDEX_NONE;
 }
 
+/**
+ * Veto a speculative native Overwatch while a currently visible opponent is
+ * provably an originally owned, reclaimable squadmate under foreign control.
+ * The engine chooses future reaction targets; we cannot remove a specific
+ * target from its native trigger list or predict future mind control.
+ * @param bReclaimableVisible Verified CURRENT target, not future speculation.
+ * @return Negative disabled score on risk to an ally; else original utility.
+ */
+static function float GuardOverwatchForKnownAlly(float Score,
+    bool bReclaimableVisible)
+{
+    if (bReclaimableVisible)
+        return -10000.0;
+    return Score;
+}
+
+/**
+ * Scan at most 64 current squad-visible hostile references for an actually
+ * reclaimable controlled ally. Does not read hidden enemies, AI intentions
+ * or a possible future control action, and has no gameplay state effects.
+ */
+static function bool HasVisibleReclaimableReactionTarget(
+    XComGameState_Unit UnitState,
+    const out array<StateObjectReference> VisibleEnemies)
+{
+    local StateObjectReference EnemyRef;
+    local XComGameState_Unit Enemy;
+
+    if (UnitState == none || `XCOMHISTORY == none
+        || VisibleEnemies.Length > 64)
+        return true; // Unknown/overflow: fail closed on speculative OW.
+    foreach VisibleEnemies(EnemyRef)
+    {
+        Enemy = XComGameState_Unit(`XCOMHISTORY.GetGameStateForObjectID(
+            EnemyRef.ObjectID));
+        if (Enemy != none
+            && IsVisibleHostile(UnitState, Enemy, VisibleEnemies)
+            && IsReclaimableControlledSquadmate(UnitState, Enemy))
+            return true;
+    }
+    return false;
+}
+
+/** Score self-targeted actions and veto Overwatch before choosing this unit's best alternative. */
 static function float ScoreSelfAction(XComGameState_Unit UnitState,
     XComGameState_Ability Ability, name AbilityName,
-    array<StateObjectReference> VisibleEnemies, optional bool bRecentContact)
+    array<StateObjectReference> VisibleEnemies, bool bSquadOverwatchSafe,
+    optional bool bRecentContact)
 {
     local XComGameState_Item Weapon;
     local int RangedThreats, NearbyMelee;
@@ -921,8 +969,10 @@ static function float ScoreSelfAction(XComGameState_Unit UnitState,
     HealthFraction = UnitState.GetCurrentStat(eStat_HP)
         / FMax(1.0, UnitState.GetMaxStat(eStat_HP));
     if (default.OverwatchAbilities.Find(AbilityName) != INDEX_NONE)
-        return ScoreOverwatchDefense(VisibleEnemies.Length > 0 || bRecentContact,
-            UnitState.IsConcealed(), HealthFraction, RangedRisk, NearbyMelee);
+        return GuardOverwatchForKnownAlly(
+            ScoreOverwatchDefense(VisibleEnemies.Length > 0 || bRecentContact,
+                UnitState.IsConcealed(), HealthFraction, RangedRisk, NearbyMelee),
+            !bSquadOverwatchSafe);
     return ScoreHunkerDefense(HealthFraction, RangedRisk, RangedThreats,
         NearbyMelee, UnitState.IsBurning(), UnitState.IsConcealed());
 }

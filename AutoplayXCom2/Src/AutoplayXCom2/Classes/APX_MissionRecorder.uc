@@ -110,7 +110,7 @@ function Start(int PlayerID)
     bStarted = true;
     Emit("start", "|player=" $ PlayerID $ "|mission=" $ Safe(Mission)
         $ "|difficulty=" $ `TacticalDifficultySetting $ "|history=" $ HistoryCursor
-        $ "|revision=mission-report-v44|full_intel_enabled=" $ class'APX_FullIntel'.default.EnableFullIntel
+        $ "|revision=mission-report-v45|full_intel_enabled=" $ class'APX_FullIntel'.default.EnableFullIntel
         $ "|formation_area_radius_tiles=" $ class'APX_MissionPlanner'.default.SquadAreaRiskRadiusTiles
         $ "|formation_area_weight=" $ class'APX_MissionPlanner'.default.SquadAreaRiskWeight
         $ "|concealment_risk_penalty=" $ class'APX_ConcealmentPlanner'.default.ConcealmentRiskPenalty
@@ -1435,13 +1435,14 @@ function ChosenAction(XComGameState_Unit UnitState, AvailableAction Action,
     Emit("chosen", PreparedChoiceFields $ "|accepted=" $ bAccepted);
 }
 
+/** Record the planner that won squad selection and whether the native move was accepted. */
 function ChosenMove(XComGameState_Unit UnitState, const out array<TTile> Path,
-    float Score, bool bAccepted)
+    float Score, bool bAccepted, string MovePlanner)
 {
     if (PreparedChoiceFields == "")
         PreparedChoiceFields = "|kind=move|unit=" $ UnitState.ObjectID
             $ "|score=" $ Score $ "|preview_missing=true";
-    Emit("chosen", PreparedChoiceFields $ "|accepted=" $ bAccepted);
+    Emit("chosen", PreparedChoiceFields $ "|move_planner=" $ MovePlanner $ "|accepted=" $ bAccepted);
 }
 
 function Finish(string Reason)

@@ -25,6 +25,7 @@ struct AttackForecast
     var bool bCurrentNativeHeightAdvantage;
 };
 
+/** Clamp a current/remote native weapon range-table index; empty tables use index zero. */
 static function int RangeBandIndex(int Distance, int Length)
 {
     if (Length <= 0)
@@ -32,6 +33,7 @@ static function int RangeBandIndex(int Distance, int Length)
     return Clamp(Distance, 0, Length - 1);
 }
 
+/** Bound a geometric aim projection to 0..95; this is not a native future hit roll. */
 static function int ProjectedHitChance(int NativeChance, int RangeDelta, int CoverRecovery)
 {
     // Leave uncertainty even when the simple geometric estimate reaches 100%.
@@ -42,6 +44,7 @@ static function int ProjectedHitChance(int NativeChance, int RangeDelta, int Cov
 // breakdown already contains any existing bonus and must not be augmented
 // a second time. Special-height native state is handled in relative height;
 // modded overrides may still differ, hence a configurable discount.
+/** Estimate a newly earned native height aim threshold without counting an existing bonus twice. */
 static function int ProjectedHeightAimBonus(int CurrentRelativeZ, int CandidateRelativeZ,
     int RequiredZ, int NativeBonus, int UncertaintyDiscount, bool bNativeAlreadyHigh)
 {
@@ -52,6 +55,7 @@ static function int ProjectedHeightAimBonus(int CurrentRelativeZ, int CandidateR
     return Max(0, NativeBonus - Max(0, UncertaintyDiscount));
 }
 
+/** Scale only the existing native basic-shot score by estimated hit probability; invalid models return -10000. */
 static function float ProjectedShotScore(float NativeScore, int NativeChance, int ProjectedChance)
 {
     if (NativeChance <= 0 || NativeScore <= 5.0)
@@ -61,6 +65,7 @@ static function float ProjectedShotScore(float NativeScore, int NativeChance, in
     return 5.0 + (NativeScore - 5.0) * float(ProjectedChance) / float(NativeChance);
 }
 
+/** Rank one legal blue move plus an uncertain future basic shot, requiring AP, material gain and no added exposure. */
 static function float MoveAndShotScore(float NativeScore, float ProjectedScore,
     int NativeChance, int ProjectedChance, float CurrentRisk, float CandidateRisk,
     float PathCost, int ActionPoints)
@@ -76,6 +81,7 @@ static function float MoveAndShotScore(float NativeScore, float ProjectedScore,
     return ProjectedScore - 6.0 - FMin(8.0, PathCost * 0.2);
 }
 
+/** Admit only source-audited single-target native StandardShot or PistolStandardShot templates. */
 static function bool SupportsForecast(XComGameState_Ability Ability)
 {
     local X2AbilityTemplate Template;
@@ -96,6 +102,7 @@ static function bool SupportsForecast(XComGameState_Ability Ability)
         && !Aim.bGuaranteedHit && Aim.FinalMultiplier == 1.0;
 }
 
+/** Check current own revealed shooter readiness, two AP and native move, rejecting terrain/status/aim-sensitive cases. */
 static function bool CanForecastUnit(XComGameState_Unit UnitState)
 {
     if (UnitState == none || `XCOMHISTORY == none || `XWORLD == none
@@ -111,6 +118,7 @@ static function bool CanForecastUnit(XComGameState_Unit UnitState)
         && UnitState.FindAbility('Aim').ObjectID <= 0;
 }
 
+/** Inspect installed native action-point costs; reject an ability with another legal retained attack after the first. */
 static function bool EndsTurnForForecast(XComGameState_Ability Ability,
     XComGameState_Unit UnitState)
 {
@@ -132,6 +140,7 @@ static function bool EndsTurnForForecast(XComGameState_Ability Ability,
     return false;
 }
 
+/** Read only an installed Ruler capability on current visible enemies; never query its current readiness. */
 static function bool HasVisibleRuler(const out array<StateObjectReference> VisibleEnemies)
 {
     local StateObjectReference EnemyRef;
@@ -147,6 +156,7 @@ static function bool HasVisibleRuler(const out array<StateObjectReference> Visib
     return false;
 }
 
+/** Enumerate bounded currently legal native basic shots, preserve target safety and projected post-blue AP; empty output means unsupported/unproven. */
 static function GatherForecasts(XComGameState_Unit UnitState,
     const out array<StateObjectReference> VisibleEnemies, out array<AttackForecast> Forecasts)
 {
@@ -234,6 +244,7 @@ static function GatherForecasts(XComGameState_Unit UnitState,
     }
 }
 
+/** Read-only remote LOS, cover and target-condition preview; outputs the strongest material basic-shot estimate or false. */
 static function bool ProjectAtTile(XComGameState_Unit UnitState, TTile Tile,
     const out array<AttackForecast> Forecasts, out int TargetID, out int NativeChance,
     out int ProjectedChance, out float NativeScore, out float ProjectedScore)
@@ -308,7 +319,134 @@ static function bool ProjectAtTile(XComGameState_Unit UnitState, TTile Tile,
     return TargetID > 0;
 }
 
+/**
+ * Rejects a speculative flank crossing a tile with greater CURRENT exposure
+ * than the origin. This is not a prediction of future movement or reaction.
+ * @param OriginRisk Same-unit risk in native current tactical snapshot.
+ * @param StepRisk Risk at a proposed native path step (same score units).
+ * @return True only if the step does not increase recorded exposure.
+ */
+static function bool ForecastPathRiskAllowed(float OriginRisk, float StepRisk)
+{
+    return OriginRisk >= 0.0 && StepRisk >= 0.0 && StepRisk <= OriginRisk;
+}
+
+/** Count a distinct non-origin endpoint only when the native cache puts it within one move. */
+static function bool IsNativeBlueEndpoint(bool bOrigin, bool bRepeatedHint,
+    float PathCost, float Mobility)
+{
+    return !bOrigin && !bRepeatedHint && PathCost >= 0.0 && PathCost <= Mobility;
+}
+
+/**
+ * Validates every actual native blue-path tile, not just the endpoint.
+ * Shares the controller's bounded explosive-cover budget; when exhausted,
+ * fail closed. Does not move units, preview hidden AI actions or grant LOS.
+ * @param UnitState Current own unit, not a fabricated future state.
+ * @param CandidatePath Actual native cache path, starting at current tile.
+ * @param VisibleEnemies Current authorized enemy references.
+ * @param Reaches Native current melee estimates aligned to VisibleEnemies.
+ * @param Weights Current bounded threat weights.
+ * @param OriginRisk Already computed risk of this unit's current tile.
+ * @param OriginSupport Initial nearest active squadmate distance, in tiles.
+ * @param RemainingTempoCoverChecks Shared remaining tile inspections across squad searches.
+ * @return False if any tile is unknown, hazardous, unsupported, risky or
+ *         lacks a complete explosive-cover inspection.
+ */
+static function bool ForecastBluePathSafe(XComGameState_Unit UnitState,
+    const out array<TTile> CandidatePath,
+    const out array<StateObjectReference> VisibleEnemies,
+    const out array<float> Reaches, const out array<float> Weights,
+    float OriginRisk, float OriginSupport,
+    out int RemainingTempoCoverChecks)
+{
+    local int Step;
+    local TTile Destination;
+
+    if (UnitState == none || `XWORLD == none || `XCOMHISTORY == none
+        || VisibleEnemies.Length == 0 || VisibleEnemies.Length > 64
+        || Reaches.Length != VisibleEnemies.Length || Weights.Length != VisibleEnemies.Length
+        || CandidatePath.Length < 2
+        || CandidatePath.Length > 64
+        || CandidatePath[0] != UnitState.TileLocation
+        || RemainingTempoCoverChecks < CandidatePath.Length - 1)
+        return false;
+    Destination = CandidatePath[CandidatePath.Length - 1];
+    if (!class'APX_MissionPlanner'.static.IsSupportedCombatDestination(
+            UnitState, Destination))
+        return false;
+    for (Step = 1; Step < CandidatePath.Length; ++Step)
+    {
+        if (class'APX_HazardKnowledge'.static.HasBlockingHazard(
+                UnitState, CandidatePath[Step])
+            || !class'APX_MissionPlanner'.static.IsKnownCombatTile(
+                CandidatePath[Step])
+            || (!class'APX_FullIntel'.default.EnableFullIntel
+                && !class'X2TacticalVisibilityHelpers'.static.CanSquadSeeLocation(
+                    UnitState.ControllingPlayer.ObjectID, CandidatePath[Step]))
+            // Inspect and charge each visited step before the per-contact LOS queries.
+            || class'APX_ExplosiveCoverKnowledge'.static.InspectRiskAtTile(
+                UnitState, CandidatePath[Step], VisibleEnemies, RemainingTempoCoverChecks) > 0.0
+            || !class'APX_MissionPlanner'.static.IsSupportedAdvanceStep(
+                OriginSupport, class'APX_MissionPlanner'.static.NearestSupportDistance(
+                    UnitState, CandidatePath[Step]))
+            || !ForecastPathRiskAllowed(OriginRisk,
+                class'APX_MissionPlanner'.static.ExposureRisk(
+                    UnitState, CandidatePath[Step],
+                    VisibleEnemies, Reaches, Weights)))
+            return false;
+    }
+    return true;
+}
+
+/**
+ * Return the unique numerical scan stage for executable pure UC tests.
+ * Zero=no currently supported native shot, one=no blue endpoints,
+ * two=no materially better projected shot, three=no safe whole native path,
+ * four=insufficient local score, five=candidate. Neither stage proves a
+ * future hit or legal future action.
+ */
+static function int ForecastScanStage(int SupportedShots,
+    int Endpoints, int ImprovedShots, int SafeRoutes, bool bSelected)
+{
+    if (SupportedShots <= 0)
+        return 0;
+    if (Endpoints <= 0)
+        return 1;
+    if (ImprovedShots <= 0)
+        return 2;
+    if (SafeRoutes <= 0)
+        return 3;
+    if (!bSelected)
+        return 4;
+    return 5;
+}
+
+/**
+ * Map one tested numerical stage to a stable human-readable recorder reason.
+ * @return Diagnostic stage label; never a native action availability code.
+ */
+static function string ForecastScanReason(int SupportedShots,
+    int Endpoints, int ImprovedShots, int SafeRoutes, bool bSelected)
+{
+    local int Stage;
+    Stage = ForecastScanStage(SupportedShots, Endpoints,
+        ImprovedShots, SafeRoutes, bSelected);
+    if (Stage == 0)
+        return "no_supported_current_shot";
+    if (Stage == 1)
+        return "no_native_blue_endpoints";
+    if (Stage == 2)
+        return "no_material_projected_shot";
+    if (Stage == 3)
+        return "unsafe_or_unverified_blue_path";
+    if (Stage == 4)
+        return "nonpositive_move_and_shot_score";
+    return "safe_move_and_shot_candidate";
+}
+
 // Selected-move telemetry reuses the same bounded projection, never a fake state.
+/** Record optional selected movement's estimate from current native actions; never grants a future shot. */
 static function bool EvaluateDestination(XComGameState_Unit UnitState, TTile Tile,
     out int TargetID, out int NativeChance, out int ProjectedChance,
     out float NativeAttackScore, out float ProjectedAttackScore)
@@ -321,8 +459,25 @@ static function bool EvaluateDestination(XComGameState_Unit UnitState, TTile Til
         ProjectedChance, NativeAttackScore, ProjectedAttackScore);
 }
 
+/**
+ * Scans native first-blue movement endpoints for a future basic shot.
+ * No shot is granted: Controller must re-read legal native actions after
+ * the actual movement. Shared cover budget is consumed for full paths;
+ * diagnostics are advisory and cannot certify native gameplay.
+ * @param UnitState Own current revealed 2AP shooter.
+ * @param Path Best currently native-reachable blue path or empty.
+ * @param Score Heuristic score, -10000 on failure.
+ * @param RemainingTempoCoverChecks Shared per-decision cover budget.
+ * @param ScanReason Aggregated rejection stage for recorder.
+ * @param SupportedShots Current legal basic target models inspected.
+ * @param ImprovedShots Future previews clearing material gain gates.
+ * @param SafeRoutes Native complete paths passing all safety checks.
+ */
 static function bool ChooseMove(XComGameState_Unit UnitState,
-    out array<TTile> Path, out float Score)
+    out array<TTile> Path, out float Score,
+    optional out int RemainingTempoCoverChecks,
+    optional out string ScanReason, optional out int SupportedShots,
+    optional out int ImprovedShots, optional out int SafeRoutes)
 {
     local XGUnit Visualizer;
     local array<TTile> Tiles, CandidatePath;
@@ -332,22 +487,39 @@ static function bool ChooseMove(XComGameState_Unit UnitState,
     local TTile Tile;
     local float CurrentRisk, CandidateRisk, CurrentSupport, PathCost, Value;
     local float NativeScore, ProjectedScore;
-    local int SampleIndex, Index, Samples, PathIndex, TargetID, NativeChance, ProjectedChance;
-    local bool bSafe;
+    local int SampleIndex, Index, Samples, TargetID, NativeChance, ProjectedChance;
+    local int InspectedEndpoints;
+    local bool bSelected;
 
     Path.Length = 0;
     Score = -10000.0;
+    SupportedShots = 0;
+    ImprovedShots = 0;
+    SafeRoutes = 0;
+    ScanReason = "not_ready_for_forecast";
     if (!CanForecastUnit(UnitState))
         return false;
     class'APX_MissionPlanner'.static.GetVisibleThreats(UnitState, VisibleEnemies);
     GatherForecasts(UnitState, VisibleEnemies, Forecasts);
+    SupportedShots = Forecasts.Length;
     if (Forecasts.Length == 0)
+    {
+        ScanReason = ForecastScanReason(0, 0, 0, 0, false);
         return false;
+    }
     Visualizer = XGUnit(UnitState.GetVisualizer());
     if (Visualizer == none || Visualizer.m_kReachableTilesCache == none)
+    {
+        ScanReason = "native_reachable_cache_missing";
         return false;
+    }
     Visualizer.m_kReachableTilesCache.UpdateTileCacheIfNeeded();
     Visualizer.m_kReachableTilesCache.GetAllPathableTiles(Tiles, Visualizer.GetMobility());
+    if (Tiles.Length == 0)
+    {
+        ScanReason = ForecastScanReason(SupportedShots, 0, 0, 0, false);
+        return false;
+    }
     Tiles.InsertItem(0, Visualizer.m_kReachableTilesCache.GetClosestReachableDestination(Forecasts[0].TargetUnit.TileLocation));
     Samples = Min(64, Tiles.Length);
     class'APX_MissionPlanner'.static.GetMeleeThreatReaches(UnitState, VisibleEnemies, Reaches);
@@ -362,13 +534,16 @@ static function bool ChooseMove(XComGameState_Unit UnitState,
             Index = 1 + ((SampleIndex - 1) * (Tiles.Length - 2)) / Max(1, Samples - 2);
         Tile = Tiles[Index];
         PathCost = Visualizer.m_kReachableTilesCache.GetPathCostToTile(Tile);
+        if (!IsNativeBlueEndpoint(Tile == UnitState.TileLocation,
+            SampleIndex > 0 && Tile == Tiles[0], PathCost, Visualizer.GetMobility()))
+            continue;
+        ++InspectedEndpoints;
         if (Tile.Z < UnitState.TileLocation.Z
             || (Tile.Z > UnitState.TileLocation.Z
                 && (!default.EnableElevatedShotForecast
                     || Tile.Z - UnitState.TileLocation.Z >
                         Clamp(default.MaxElevationGainTiles, 1, 8)))
             || class'APX_MissionPlanner'.static.TileDistance(Tile, UnitState.TileLocation) < 1.0
-            || PathCost < 0.0 || PathCost > Visualizer.GetMobility()
             || class'APX_HazardKnowledge'.static.HasBlockingHazard(UnitState, Tile)
             || !class'APX_MissionPlanner'.static.IsKnownCombatTile(Tile)
             || !class'APX_MissionPlanner'.static.IsSupportedCombatDestination(UnitState, Tile)
@@ -383,32 +558,25 @@ static function bool ChooseMove(XComGameState_Unit UnitState,
             continue;
         Value = MoveAndShotScore(NativeScore, ProjectedScore, NativeChance, ProjectedChance,
             CurrentRisk, CandidateRisk, PathCost, UnitState.NumActionPoints());
+        if (Value <= -1000.0)
+            continue;
+        ++ImprovedShots;
         if (Value <= Score)
             continue;
         CandidatePath.Length = 0;
-        if (!Visualizer.m_kReachableTilesCache.BuildPathToTile(Tile, CandidatePath) || CandidatePath.Length < 2)
+        if (!Visualizer.m_kReachableTilesCache.BuildPathToTile(Tile, CandidatePath)
+            || CandidatePath.Length < 2 || CandidatePath[CandidatePath.Length - 1] != Tile)
             continue;
-        bSafe = true;
-        // The current tile may be dangerous; every step after it must be safe.
-        for (PathIndex = 1; PathIndex < CandidatePath.Length; ++PathIndex)
-        {
-            if (class'APX_HazardKnowledge'.static.HasBlockingHazard(UnitState, CandidatePath[PathIndex])
-                || !class'APX_MissionPlanner'.static.IsKnownCombatTile(CandidatePath[PathIndex])
-                || (!class'APX_FullIntel'.default.EnableFullIntel
-                    && !class'X2TacticalVisibilityHelpers'.static.CanSquadSeeLocation(
-                        UnitState.ControllingPlayer.ObjectID, CandidatePath[PathIndex]))
-                || !class'APX_MissionPlanner'.static.IsSupportedAdvanceStep(CurrentSupport,
-                    class'APX_MissionPlanner'.static.NearestSupportDistance(UnitState, CandidatePath[PathIndex])))
-            {
-                bSafe = false;
-                break;
-            }
-        }
-        if (bSafe)
-        {
-            Path = CandidatePath;
-            Score = Value;
-        }
+        if (!ForecastBluePathSafe(UnitState, CandidatePath, VisibleEnemies,
+            Reaches, Weights, CurrentRisk, CurrentSupport,
+            RemainingTempoCoverChecks))
+            continue;
+        ++SafeRoutes;
+        Path = CandidatePath;
+        Score = Value;
     }
-    return Path.Length >= 2 && Score > 0.0;
+    bSelected = Path.Length >= 2 && Score > 0.0;
+    ScanReason = ForecastScanReason(SupportedShots, InspectedEndpoints,
+        ImprovedShots, SafeRoutes, bSelected);
+    return bSelected;
 }

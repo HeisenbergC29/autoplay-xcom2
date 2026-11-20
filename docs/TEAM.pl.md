@@ -9,9 +9,9 @@ Gotowe zadania niezależne: [diagnostyka raportów #2](https://github.com/Heisen
 i [macierz misji #3](https://github.com/HeisenbergC29/autoplay-xcom2/issues/3).
 Osobny dowód kompilacji/gry użytkownika: [próby bieżącej wersji #4](https://github.com/HeisenbergC29/autoplay-xcom2/issues/4).
 
-## Przekazanie po próbach v43
+## Wspólna próba v45
 
-HELPER odpowiada za analizę i PR dotyczący doboru akcji strzelców po rozpoczęciu walki. LEAD integruje zmiany i po zakończeniu przydzielonych prac przekazuje jedną paczkę użytkownikowi. [Zadanie #104](https://github.com/HeisenbergC29/autoplay-xcom2/issues/104)
+HELPER zakończył zadanie #104, a LEAD odpowiada za integrację #105. Następny etap należy do użytkownika. Jedna kompilacja w Windows WOTC SDK obejmuje też poprawkę X4 z #102. Po próbach w grze wynik i raport posłużą do ustalenia kolejnego zadania dla HELPERA. [Paczka i stan próby #4](https://github.com/HeisenbergC29/autoplay-xcom2/issues/4)
 
 Wersja v43 po poprawce #100 przeszła Windows make z wynikiem 0 błędów i 0 ostrzeżeń. Przy takim wyniku w przyszłości wystarcza potwierdzenie użytkownika. Log kompilacji jest potrzebny przy błędach lub ostrzeżeniach. Raport z gry nadal służy do oceny działań drużyny.
 
