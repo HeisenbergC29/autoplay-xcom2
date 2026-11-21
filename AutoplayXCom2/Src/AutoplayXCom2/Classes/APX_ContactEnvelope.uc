@@ -67,14 +67,15 @@ static function bool BuildSnapshot(XComGameState_Unit Soldier,
     out array<StateObjectReference> KnownUnits,
     out array<StateObjectReference> KnownInteractives,
     out string Reason, out int RemainingGroups, out int RemainingMembers,
-    optional out StateObjectReference PatrolGroup, optional out TTile PatrolWaypoint)
+    optional out StateObjectReference PatrolGroup, optional out TTile PatrolWaypoint,
+    optional out string PatrolSelectionEvidence)
 {
     local array<StateObjectReference> VisibleObjects;
     local StateObjectReference Ref;
     local XComGameState_Unit UnitState;
     local XComGameState_InteractiveObject Interactive;
     local XComGameState_AIGroup Group;
-    local int Index, Scanned;
+    local int Index, Scanned, UnlistedPatrols;
     local float PatrolDistanceSq, BestPatrolDistanceSq;
     local vector ScoutPosition;
     local string PatrolReason;
@@ -82,6 +83,7 @@ static function bool BuildSnapshot(XComGameState_Unit Soldier,
     KnownUnits.Length = 0;
     KnownInteractives.Length = 0;
     PatrolGroup.ObjectID = 0;
+    PatrolSelectionEvidence = "not_observed";
     BestPatrolDistanceSq = 1000000000000.0;
     Reason = "none";
     if (Soldier == none || `XCOMHISTORY == none || `XWORLD == none
@@ -155,10 +157,14 @@ static function bool BuildSnapshot(XComGameState_Unit Soldier,
         {
             if (PatrolReason != "not_listed_patrol")
             {
+                // Incomplete stored metadata fails closed; do not silently
+                // promote a group observed by the recorder to a real patrol.
+                PatrolSelectionEvidence = PatrolReason;
                 Reason = PatrolReason;
                 PatrolGroup.ObjectID = 0;
                 return false;
             }
+            ++UnlistedPatrols;
         }
         else
         {
@@ -175,6 +181,13 @@ static function bool BuildSnapshot(XComGameState_Unit Soldier,
             }
         }
     }
+    // The waypoint recorder logs AIGroup coordinates, not native
+    // AIPlayerData.PatrolGroupList membership. Report both separately.
+    if (PatrolGroup.ObjectID > 0)
+        PatrolSelectionEvidence = "verified_stored_patrol";
+    else
+        PatrolSelectionEvidence = "no_listed_eligible_patrol groups=" $ Scanned
+            @ "not_listed=" $ UnlistedPatrols;
     Reason = "current_known_contacts";
     return true;
 }
