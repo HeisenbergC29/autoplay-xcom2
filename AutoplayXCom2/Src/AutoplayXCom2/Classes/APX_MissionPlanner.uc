@@ -2115,6 +2115,47 @@ static function float ScoreSabotageRecovery(float BeforeDistance,
     return Value;
 }
 
+/**
+ * Rank only a tile that appears on an actual bounded stock A* route to the
+ * verified X4 socket. A route may legitimately move temporarily farther
+ * from its goal in Euclidean distance to go around a wall.
+ * @param PathIndex Index of this waypoint on a stock X2PathSolver route.
+ * @param CurrentRisk Exposure on the soldier's real current tile.
+ * @param EndRisk Exposure of the currently native-reachable blue endpoint.
+ * @param FormationLoss Optional penalty; never lifts a hard support veto.
+ * @param bCurrentRouteClear Native current contact snapshot must be Clear.
+ * @param bFullRouteSafe Every tile on the *blue prefix* has passed checks.
+ * @return Estimated single-blue value, never future move/plant legality.
+ */
+static function float ScoreSabotageAStarDetour(int PathIndex,
+    float CurrentRisk, float EndRisk, float FormationLoss,
+    bool bCurrentRouteClear, bool bFullRouteSafe)
+{
+    local float Value;
+
+    if (!bCurrentRouteClear || !bFullRouteSafe || PathIndex <= 0)
+        return -10000.0;
+    if (EndRisk > CurrentRisk + 3.0)
+        return -10000.0;
+    Value = 22.0 + FMin(14.0, float(PathIndex) * 2.0);
+    Value -= FMax(0.0, EndRisk - CurrentRisk) * 0.5;
+    Value -= FMin(24.0, FMax(0.0, FormationLoss)) * 0.25;
+    return Value;
+}
+
+/**
+ * Accept an advisory stock A* path only when it matches exact current and
+ * verified socket tiles; never treat a partial or enormous path as a route.
+ * This does NOT validate future AI states or the path after the first blue.
+ * @return True only for a bounded complete geometry-to-goal trace.
+ */
+static function bool HasVerifiedX4AStarGeometry(bool bSolved,
+    int PathLength, bool bSourceIsCurrent, bool bEndIsVerified)
+{
+    return bSolved && PathLength >= 2 && PathLength <= 256
+        && bSourceIsCurrent && bEndIsVerified;
+}
+
 /** Validate one tile against the known threat snapshot and measure its exposure for endpoint scoring. */
 static function bool InspectSabotageStep(XComGameState_Unit Soldier, TTile Tile,
     float CurrentRisk, float StartSupport, const out array<StateObjectReference> KnownEnemies,
