@@ -41,9 +41,9 @@ W v46 cztery z 168 zaakceptowanych ruchów wracały na wcześniejszy endpoint te
 
 Automatyczne Python: `tests/test_ambush_overwatch_v48.py` wykonuje prawdziwe pomocnicze funkcje UC dla 0/1/2/3 potwierdzeń, niepowiązanego biletu, ponownego wywołania, braku setupu, wyboru OW 2/5/17/22; kontrakty źródłowe gwarantują brak resetu przy waypointach, native-confirmed ticket, budżet skanu i zachowanie guard sojusznika. Syntetyczny ZIP→CLI weryfikuje, że logowanie `group=0` nie zmienia się w fałszywą pełną salwę, a uzbrojenie nie jest liczone jako oddany strzał. Stare testy v40 dostosowano do odrębnego licznika i konfiguracji 3 tur.
 
-Dalszy **Windows SDK make i natywne WOTC E2E** po scaIeniu przez LEAD:
+Dalszy **Windows SDK make i natywne WOTC E2E** po scaleniu przez LEAD:
 1. Uruchomić wspólną paczkę źródłową i sprawdzić 0 błędów kompilacji, stan HUD, OFF/ON i brak nielegalnych akcji.
-2. W misji z rzeczywistym patrole-m zobaczyć `selection=verified_stored_patrol`, etap stagingowy po legalnym native blue/OW, a następnie `patrol_ambush_wait_confirmed completed=1,2,3`. Czwarte żądanie czekania **na ten sam patrol** nie może się pojawić; aktualizacja waypointu nie może wyzerować licznika.
+2. W misji z rzeczywistym patrolem zobaczyć `selection=verified_stored_patrol`, etap stagingowy po legalnym native blue/OW, a następnie `patrol_ambush_wait_confirmed completed=1,2,3`. Czwarte żądanie czekania **na ten sam patrol** nie może się pojawić; aktualizacja waypointu nie może wyzerować licznika.
 3. Sprawdzić przerwanie przez presję celu, brak ruchu patrolu i utratę okazji. Jeśli żaden patrol nie jest zweryfikowany, zebrać `selection` zamiast wymuszać sztuczną grupę.
 4. W TerrorBar t7, GasStation i Cemetery porównać wybrany Overwatch (score/źródło osobistego LOS) z rzeczywistymi dostępnymi strzałami, bezpiecznym ruchem, wsparciem i ratowaniem. Oddzielnie ocenić trafienie, pudło, brak wyzwolenia, wcześniejsze zabicie celu, ręczne uzbrojenie i ucięcie historii. **Pełna salwa do konkretnego patrolu nie jest potwierdzona**, dopóki rejestracja nie dowiedzie zarówno jego członkostwa, jak i rzeczywistych source/target reakcji.
 5. Powtórzyć uzasadniony powrót na pole oraz poszukać niepotrzebnego oscylowania w jednej turze; zachować natywne koszty AP i pełną kontrolę bezpieczeństwa ścieżki.
