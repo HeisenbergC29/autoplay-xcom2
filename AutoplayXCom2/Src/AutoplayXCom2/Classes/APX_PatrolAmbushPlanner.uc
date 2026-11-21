@@ -19,6 +19,8 @@ var private int OwnedStartIndex, OwnedBattleID, OwnedPlayerID;
 var private int LastHistory, GroupID, StartTurn, LastTurn;
 var private TTile Waypoint;
 var private int PreparedMoves, OrderedReactions;
+// Count native-confirmed whole-squad waits, not turns since the patrol was detected.
+var private int PendingWaitTurn, ConfirmedWaits;
 var private name Phase;
 var private bool bExpired;
 
@@ -75,6 +77,8 @@ function Reset()
     LastTurn = INDEX_NONE;
     PreparedMoves = 0;
     OrderedReactions = 0;
+    PendingWaitTurn = INDEX_NONE;
+    ConfirmedWaits = 0;
     Phase = 'none';
     bExpired = false;
 }
@@ -133,7 +137,7 @@ function bool Refresh(XComGameState_Unit Scout, int Turn,
         // member of the previously verified group as an opening candidate.
         // No cached future waypoint is promoted into a new AI decision.
         if (GroupID > 0 && !bExpired && Turn - StartTurn >= 0
-            && Turn - StartTurn < Clamp(MaxSetupTurns, 1, 3))
+            && ConfirmedWaits < Clamp(MaxSetupTurns, 1, 3))
         {
             Group = XComGameState_AIGroup(
                 `XCOMHISTORY.GetGameStateForObjectID(GroupID));
@@ -174,17 +178,28 @@ function bool Refresh(XComGameState_Unit Scout, int Turn,
         bExpired = true;
         return false;
     }
-    if (GroupID != Group.ObjectID || CurrentWaypoint != Waypoint)
+    if (GroupID != Group.ObjectID)
     {
+        // A different verified native group starts a different ambush episode.
         GroupID = Group.ObjectID;
         Waypoint = CurrentWaypoint;
         StartTurn = Turn;
         PreparedMoves = 0;
         OrderedReactions = 0;
+        PendingWaitTurn = INDEX_NONE;
+        ConfirmedWaits = 0;
         Phase = 'approach';
         bExpired = false;
     }
-    if (bExpired || Turn - StartTurn >= Clamp(MaxSetupTurns, 1, 3))
+    else if (CurrentWaypoint != Waypoint)
+    {
+        // A waypoint update is NOT a new patrol. Keep the squad-wide wait
+        // budget and prior accepted actions; the current route is unknown.
+        Waypoint = CurrentWaypoint;
+    }
+    if (bExpired || ConfirmedWaits >= Clamp(MaxSetupTurns, 1, 3)
+        || ((PreparedMoves == 0 && OrderedReactions == 0)
+            && Turn - StartTurn >= Clamp(MaxSetupTurns, 1, 3)))
     {
         Phase = 'abort';
         bExpired = true;
@@ -217,7 +232,7 @@ static function bool CanWaitWindow(bool bEnabled, bool bWindowExpired,
     int ElapsedTurns, int MaxTurns)
 {
     return bEnabled && !bWindowExpired && (bStaged || bArmed)
-        && (Moves > 0 || Reactions > 0) && ElapsedTurns > 0
+        && (Moves > 0 || Reactions > 0) && ElapsedTurns >= 0
         && ElapsedTurns < Clamp(MaxTurns, 1, 3);
 }
 
@@ -225,8 +240,43 @@ function bool CanWaitForContact()
 {
     return CanWaitWindow(EnablePatrolAmbush, bExpired,
         Phase == 'setup', Phase == 'armed',
-        PreparedMoves, OrderedReactions, LastTurn - StartTurn,
+        PreparedMoves, OrderedReactions, ConfirmedWaits,
         MaxSetupTurns);
+}
+
+/**
+ * Increment only when a real native end-turn ticket for THIS armed episode
+ * was confirmed. The result is capped and a repeated confirmation is ignored
+ * by NoteWaitConfirmed after clearing PendingWaitTurn.
+ */
+static function int CountConfirmedWait(int AlreadyWaited, int PendingTurn, int RequestedTurn)
+{
+    if (PendingTurn < 0 || RequestedTurn != PendingTurn)
+        return Clamp(AlreadyWaited, 0, 3);
+    return Clamp(AlreadyWaited + 1, 0, 3);
+}
+
+/** Mark a possible squad wait before submitting the native end-turn request. */
+function NoteWaitRequested(int Turn)
+{
+    if (CanWaitForContact() && Turn >= StartTurn && Turn >= 0)
+        PendingWaitTurn = Turn;
+}
+
+/** Advance the one shared patrol counter only after verified native history. */
+function bool NoteWaitConfirmed(int RequestedTurn)
+{
+    if (PendingWaitTurn < 0 || PendingWaitTurn != RequestedTurn)
+        return false;
+    ConfirmedWaits = CountConfirmedWait(ConfirmedWaits, PendingWaitTurn, RequestedTurn);
+    PendingWaitTurn = INDEX_NONE;
+    return true;
+}
+
+/** Current completed squad waits, independent of individual soldiers' actions. */
+function int ConfirmedWaitCount()
+{
+    return ConfirmedWaits;
 }
 
 function int CurrentGroupID()
