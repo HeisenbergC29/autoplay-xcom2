@@ -2285,7 +2285,10 @@ static function bool ChooseSabotageCCRecoveryMove(XComGameState_Unit Soldier,
     GoalAStarPath.Length = 0;
     bAStarSolved = class'X2PathSolver'.static.BuildPath(
         Soldier, Soldier.TileLocation, GoalTile, GoalAStarPath, false);
-    bVerifiedAStar = HasVerifiedX4AStarGeometry(
+    // Only the native actor/socket is verified X4 geometry. A generic
+    // objective marker is permitted for the old conservative distance goal,
+    // never as proof that a stock A* prefix reaches PlantBomb.
+    bVerifiedAStar = NativePlantStatus > 0 && HasVerifiedX4AStarGeometry(
         bAStarSolved, GoalAStarPath.Length,
         GoalAStarPath.Length > 0 && GoalAStarPath[0] == Soldier.TileLocation,
         GoalAStarPath.Length > 0
