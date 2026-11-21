@@ -479,21 +479,24 @@ static function bool ShouldPrioritizeBerserkerSabotage(bool bEnabled,
 
 /** Resolve a movement goal for either X4 mission from the native interaction or public map marker.
  * NativeGoalStatus distinguishes a verified anchor (>0), unknown geometry (0) and a consumed object (<0).
- * GoalSource records the evidence used. Only a subsequent native ability scan can authorize planting.
+ * GoalSource records the evidence used. VerifiedPath exposes the same native trace used to verify
+ * the exact anchor, or stays empty for a marker. Only a fresh native ability scan can authorize planting.
  */
 static function bool FindBerserkerSabotageGoal(XComGameState_Unit UnitState,
     XComGameState_BattleData BattleData, out TTile GoalTile,
-    out string GoalSource, optional out int NativeGoalStatus)
+    out string GoalSource, optional out int NativeGoalStatus,
+    optional out array<TTile> VerifiedPath)
 {
     local TTile NativeGoalTile, MarkerTile;
     local string NativeGoalReason;
 
     GoalSource = "none";
     NativeGoalStatus = 0;
+    VerifiedPath.Length = 0;
     if (UnitState == none || BattleData == none || `XWORLD == none)
         return false;
     NativeGoalStatus = class'APX_PlantInteractionKnowledge'.static.FindInteractionGoal(
-        UnitState, NativeGoalTile, NativeGoalReason);
+        UnitState, NativeGoalTile, NativeGoalReason, VerifiedPath);
     GoalSource = NativeGoalReason;
     if (NativeGoalStatus > 0)
     {
@@ -2115,6 +2118,67 @@ static function float ScoreSabotageRecovery(float BeforeDistance,
     return Value;
 }
 
+/**
+ * Rank only a tile that appears on an actual bounded stock A* route to the
+ * verified X4 socket. A route may legitimately move temporarily farther
+ * from its goal in Euclidean distance to go around a wall.
+ * @param PathIndex Index of this waypoint on a stock X2PathSolver route.
+ * @param CurrentRisk Exposure on the soldier's real current tile.
+ * @param EndRisk Exposure of the currently native-reachable blue endpoint.
+ * @param FormationLoss Optional penalty; never lifts a hard support veto.
+ * @param bCurrentRouteClear Native current contact snapshot must be Clear.
+ * @param bFullRouteSafe Every tile on the *blue prefix* has passed checks.
+ * @return Estimated single-blue value, never future move/plant legality.
+ */
+static function float ScoreSabotageAStarDetour(int PathIndex,
+    float CurrentRisk, float EndRisk, float FormationLoss,
+    bool bCurrentRouteClear, bool bFullRouteSafe)
+{
+    local float Value;
+
+    if (!bCurrentRouteClear || !bFullRouteSafe || PathIndex <= 0)
+        return -10000.0;
+    if (EndRisk > CurrentRisk + 3.0)
+        return -10000.0;
+    Value = 22.0 + FMin(14.0, PathIndex * 2.0);
+    Value -= FMax(0.0, EndRisk - CurrentRisk) * 0.5;
+    Value -= FMin(24.0, FMax(0.0, FormationLoss)) * 0.25;
+    return Value;
+}
+
+/**
+ * Accept an advisory stock A* path only when it matches exact current and
+ * verified socket tiles; never treat a partial or enormous path as a route.
+ * This does NOT validate future AI states or the path after the first blue.
+ * @return True only for a bounded complete geometry-to-goal trace.
+ */
+static function bool HasVerifiedX4AStarGeometry(int NativeGoalStatus,
+    int PathLength, bool bSourceIsCurrent, bool bEndIsVerified)
+{
+    return NativeGoalStatus > 0 && PathLength >= 2 && PathLength <= 256
+        && bSourceIsCurrent && bEndIsVerified;
+}
+
+/** Visit the deepest sampled prefix first. Index zero denotes a non-A* sample. */
+static function int SabotageAStarSampleIndex(int Sample, int PrefixTiles)
+{
+    if (Sample < 0 || Sample >= PrefixTiles)
+        return 0;
+    return PrefixTiles - Sample;
+}
+
+/**
+ * A Clear contact assessment has to inspect every detector on every moved
+ * tile. Skip impossible certifications before consuming cover/LOS checks.
+ */
+static function bool HasSabotageContactScanBudget(int MovedTiles, int DetectorsPerTile,
+    int RemainingDetectors, int RemainingTiles, int RemainingLOS)
+{
+    return MovedTiles > 0 && RemainingDetectors > 0 && RemainingLOS > 0
+        && RemainingTiles >= MovedTiles
+        && RemainingDetectors >= MovedTiles * DetectorsPerTile;
+}
+
 /** Validate one tile against the known threat snapshot and measure its exposure for endpoint scoring. */
 static function bool InspectSabotageStep(XComGameState_Unit Soldier, TTile Tile,
     float CurrentRisk, float StartSupport, const out array<StateObjectReference> KnownEnemies,
@@ -2172,15 +2236,21 @@ static function bool ChooseSabotageCCRecoveryMove(XComGameState_Unit Soldier,
     bool bSnapshotComplete, string SnapshotReason,
     out int RemainingContactDetectors, out int RemainingContactTiles,
     out int RemainingContactLOS, out int RemainingCoverChecks,
-    out int RemainingConcealmentChecks, out int RemainingTempoCoverChecks)
+    out int RemainingConcealmentChecks, out int RemainingTempoCoverChecks,
+    optional const out array<TTile> VisitedEndpoints)
 {
     local XComGameState_BattleData BattleData;
     local XGUnit Visualizer;
     local array<StateObjectReference> KnownEnemies, Immediate;
     local array<float> Reaches, Weights;
-    local array<TTile> Tiles, CandidatePath;
+    local array<TTile> Tiles, CandidatePath, GoalAStarPath, CheckedEndpoints;
     local TTile Tile, GoalTile, Closest;
     local int Index, Sample, Count, Cleared, Rejected, ContactStatus;
+    local int RouteSamples, RouteIndex, UniformSample, UniformCount;
+    local int RejectedNativePath, RejectedConcealment, RejectedExplosive;
+    local int RejectedContact, AcceptedDetours, SkippedNoProgress, SkippedVisited;
+    local int RejectedBudget, ContactDetectorsBefore, TempoCoverBefore, DetectorsPerTile;
+    local bool bVerifiedAStar;
     local int NativePlantStatus;
     local string NativePlantReason;
     local float Progress, CurrentDistance, CurrentRisk, EndRisk;
@@ -2210,7 +2280,7 @@ static function bool ChooseSabotageCCRecoveryMove(XComGameState_Unit Soldier,
     // This resolver only considers X4 geometry or the public mission marker.
     // A generic mission goal can instead refer to a civilian or unrelated glint.
     if (!FindBerserkerSabotageGoal(Soldier, BattleData, GoalTile,
-        NativePlantReason, NativePlantStatus))
+        NativePlantReason, NativePlantStatus, GoalAStarPath))
     {
         if (NativePlantStatus < 0)
             Reason = "native_plant_already_consumed";
@@ -2234,8 +2304,20 @@ static function bool ChooseSabotageCCRecoveryMove(XComGameState_Unit Soldier,
         return false;
     }
     Closest = Visualizer.m_kReachableTilesCache.GetClosestReachableDestination(GoalTile);
-    Tiles.InsertItem(0, Closest);
-    Count = Min(48, Tiles.Length);
+    // The resolver already solved the exact route to the verified socket.
+    // A public marker leaves that path empty. Rebuild any proposed blue
+    // from the current reachable cache; the rest is advisory geometry.
+    bVerifiedAStar = HasVerifiedX4AStarGeometry(NativePlantStatus, GoalAStarPath.Length,
+        GoalAStarPath.Length > 0 && GoalAStarPath[0] == Soldier.TileLocation,
+        GoalAStarPath.Length > 0
+            && GoalAStarPath[GoalAStarPath.Length - 1] == GoalTile);
+    if (bVerifiedAStar)
+        RouteSamples = Min(24, GoalAStarPath.Length - 1);
+    Count = Min(48, Tiles.Length + RouteSamples + 1);
+    UniformCount = Count - RouteSamples - 1;
+    ContactDetectorsBefore = RemainingContactDetectors;
+    TempoCoverBefore = RemainingTempoCoverChecks;
+    DetectorsPerTile = ContactUnits.Length + ContactInteractives.Length;
     CurrentDistance = TileDistance(Soldier.TileLocation, GoalTile);
     GetVisibleThreats(Soldier, KnownEnemies);
     GetMeleeThreatReaches(Soldier, KnownEnemies, Reaches);
@@ -2247,21 +2329,60 @@ static function bool ChooseSabotageCCRecoveryMove(XComGameState_Unit Soldier,
 
     for (Sample = 0; Sample < Count; ++Sample)
     {
-        Index = 0;
-        if (Sample > 0 && Count > 1)
-            Index = 1 + ((Sample - 1) * (Tiles.Length - 2)) / Max(1, Count - 2);
-        Tile = Tiles[Index];
-        Progress = CurrentDistance - TileDistance(Tile, GoalTile);
-        if (Tile == Soldier.TileLocation || Progress < 1.0)
-            continue;
-        if (!BuildSabotageRecoveryPath(Soldier, Visualizer, Tile, CurrentRisk, StartSupport,
-                KnownEnemies, Reaches, Weights, CandidatePath, EndRisk)
-            || class'APX_ConcealmentPlanner'.static.InspectPathRisk(
-                Soldier, CandidatePath, ConcealmentReason,
-                RemainingConcealmentChecks)
-            || !BlueRouteExplosiveSafe(Soldier, CandidatePath, KnownEnemies,
-                RemainingTempoCoverChecks))
+        RouteIndex = SabotageAStarSampleIndex(Sample, RouteSamples);
+        if (RouteIndex > 0)
+            Tile = GoalAStarPath[RouteIndex];
+        else if (Sample == RouteSamples)
+            Tile = Closest;
+        else
         {
+            UniformSample = Sample - RouteSamples - 1;
+            Index = (UniformSample * Max(0, Tiles.Length - 1))
+                / Max(1, UniformCount - 1);
+            Tile = Tiles[Index];
+        }
+        if (Tile == Soldier.TileLocation
+            || class'APX_PlantInteractionKnowledge'.static.ContainsTile(CheckedEndpoints, Tile))
+            continue;
+        CheckedEndpoints.AddItem(Tile);
+        if (class'APX_PlantInteractionKnowledge'.static.ContainsTile(VisitedEndpoints, Tile))
+        {
+            ++SkippedVisited;
+            continue;
+        }
+        Progress = CurrentDistance - TileDistance(Tile, GoalTile);
+        if (RouteIndex == 0 && Progress < 1.0)
+        {
+            ++SkippedNoProgress;
+            continue;
+        }
+        if (!BuildSabotageRecoveryPath(Soldier, Visualizer, Tile, CurrentRisk, StartSupport,
+                KnownEnemies, Reaches, Weights, CandidatePath, EndRisk))
+        {
+            ++RejectedNativePath;
+            ++Rejected;
+            continue;
+        }
+        if (!HasSabotageContactScanBudget(CandidatePath.Length - 1, DetectorsPerTile,
+                RemainingContactDetectors, RemainingContactTiles, RemainingContactLOS)
+            || RemainingTempoCoverChecks < CandidatePath.Length - 1)
+        {
+            ++RejectedBudget;
+            ++Rejected;
+            continue;
+        }
+        if (class'APX_ConcealmentPlanner'.static.InspectPathRisk(
+            Soldier, CandidatePath, ConcealmentReason,
+            RemainingConcealmentChecks))
+        {
+            ++RejectedConcealment;
+            ++Rejected;
+            continue;
+        }
+        if (!BlueRouteExplosiveSafe(Soldier, CandidatePath, KnownEnemies,
+            RemainingTempoCoverChecks))
+        {
+            ++RejectedExplosive;
             ++Rejected;
             continue;
         }
@@ -2271,6 +2392,7 @@ static function bool ChooseSabotageCCRecoveryMove(XComGameState_Unit Soldier,
             RemainingContactTiles, RemainingContactLOS, ContactReason);
         if (ContactStatus != 0)
         {
+            ++RejectedContact;
             ++Rejected;
             continue; // Unknown and Caution never become Clear.
         }
@@ -2278,6 +2400,7 @@ static function bool ChooseSabotageCCRecoveryMove(XComGameState_Unit Soldier,
         if (class'APX_ExplosiveCoverKnowledge'.static.InspectRiskAtTile(
             Soldier, Tile, KnownEnemies, RemainingCoverChecks) > 0.0)
         {
+            ++RejectedExplosive;
             ++Rejected;
             continue;
         }
@@ -2285,22 +2408,51 @@ static function bool ChooseSabotageCCRecoveryMove(XComGameState_Unit Soldier,
         FormationLoss = FMax(0.0,
             SquadPositionScore(Soldier, Soldier.TileLocation)
             - SquadPositionScore(Soldier, Tile));
-        CandidateScore = ScoreSabotageRecovery(CurrentDistance,
-            TileDistance(Tile, GoalTile), CurrentRisk, EndRisk,
-            FormationLoss, ContactStatus == 0, true);
+        if (RouteIndex > 0)
+        {
+            ++AcceptedDetours;
+            CandidateScore = ScoreSabotageAStarDetour(RouteIndex,
+                CurrentRisk, EndRisk, FormationLoss, ContactStatus == 0, true);
+        }
+        else
+            CandidateScore = ScoreSabotageRecovery(CurrentDistance,
+                TileDistance(Tile, GoalTile), CurrentRisk, EndRisk,
+                FormationLoss, ContactStatus == 0, true);
         if (CandidateScore > Score)
         {
             Path = CandidatePath;
             Score = CandidateScore;
-            Reason = "native_current_clear_objective_progress";
+            if (RouteIndex > 0)
+                Reason = "safe_native_blue_on_verified_x4_astar_prefix";
+            else
+                Reason = "native_current_clear_objective_progress";
         }
     }
+    if (Path.Length == 0 && RejectedBudget > 0)
+        Reason = "no_clear_x4_path_within_inspection_budget";
     `log("SabotageCC objective recovery|unit=" $ Soldier.ObjectID
         $ "|goal_x=" $ GoalTile.X $ "|goal_y=" $ GoalTile.Y
         $ "|goal_z=" $ GoalTile.Z
         $ "|native_plant_status=" $ NativePlantStatus
         $ "|native_plant_reason=" $ NativePlantReason
-        $ "|native_samples=" $ Count
+        $ "|sample_slots=" $ Count
+        $ "|native_samples=" $ CheckedEndpoints.Length
+        $ "|astar_solved=" $ (GoalAStarPath.Length > 1)
+        $ "|astar_verified=" $ bVerifiedAStar
+        $ "|astar_length=" $ GoalAStarPath.Length
+        $ "|astar_prefix_samples=" $ RouteSamples
+        $ "|skipped_no_progress=" $ SkippedNoProgress
+        $ "|skipped_visited=" $ SkippedVisited
+        $ "|rejected_budget=" $ RejectedBudget
+        $ "|contact_detectors_before=" $ ContactDetectorsBefore
+        $ "|contact_detectors_left=" $ RemainingContactDetectors
+        $ "|tempo_cover_before=" $ TempoCoverBefore
+        $ "|tempo_cover_left=" $ RemainingTempoCoverChecks
+        $ "|rejected_native_path=" $ RejectedNativePath
+        $ "|rejected_concealment=" $ RejectedConcealment
+        $ "|rejected_explosive=" $ RejectedExplosive
+        $ "|rejected_contact=" $ RejectedContact
+        $ "|native_detours_checked=" $ AcceptedDetours
         $ "|clear_routes=" $ Cleared $ "|rejected_routes=" $ Rejected
         $ "|chosen=" $ (Path.Length > 1) $ "|reason=" $ Reason,
         true, 'AutoplayXCom2');

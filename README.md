@@ -1,8 +1,6 @@
 # Autoplay XCOM 2 — War of the Chosen
 
-**v45 łączy awaryjne dojście do X4 w SabotageCC z poprawkami wyboru akcji strzelców.** Raport zapisuje, który planer wybrał ruch i czy gra przyjęła rozkaz. Użytkownik wykonuje teraz jedną kompilację Windows i próbę w grze. [Paczka i przebieg próby #4](https://github.com/HeisenbergC29/autoplay-xcom2/issues/4)
-
-Ostatnia sprawdzona w grze wersja v43 skompilowała się z wynikiem 0 błędów i 0 ostrzeżeń. Wszystkie trzy misje zakończyły się porażką. [Raport v43](docs/report-v43-2026-11-15.pl.md) · [Analiza strzału, flanki i Overwatch](docs/experiment-104-ranged-shot-flank-overwatch-v45.pl.md)
+**v46 łączy zmianę dojścia do X4 w SabotageCC z wygaszaniem panelu po zakończeniu taktyki.** W próbie v45 gra zaliczyła SabotageCC po ręcznej interwencji. Później wróciła do menu i według testera wyłączyła się. Przyczyna wyłączenia pozostaje nieustalona. [Raport v45](docs/report-v45-2026-11-21.pl.md) · [Paczka i próba Windows #4](https://github.com/HeisenbergC29/autoplay-xcom2/issues/4)
 
 [Start pomocnika i komunikacja zespołu — issue #1](https://github.com/HeisenbergC29/autoplay-xcom2/issues/1) ·
 [Organizacja zespołu i import prac pomocnika](docs/TEAM.pl.md) ·

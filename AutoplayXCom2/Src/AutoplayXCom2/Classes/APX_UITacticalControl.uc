@@ -34,7 +34,12 @@ var bool bScoreReadDeferred;
 var string CachedScoreText;
 var XComGameStateHistory CachedScoreHistory;
 var int CachedScoreHistoryIndex;
+var bool bSawTacticalInPlay;
+var bool bPostMissionQuiesced;
+/** Keeps the first full-intel reveal pending until a usable tactical world exists. */
+var bool bMapRevealInitialized;
 
+/** Build the tactical controls and reveal the map now if tactical play is ready. */
 simulated function APX_UITacticalControl InitAutoplayControl()
 {
     InitPanel('APX_AutoplayControl');
@@ -43,16 +48,24 @@ simulated function APX_UITacticalControl InitAutoplayControl()
     SetSize(ButtonWidth + 20.0, 85.0);
     DisableNavigation();
 
+    // The panel can be instantiated while tactical rule initialization is
+    // still finishing; an initial !TacticalGameIsInPlay is not mission end.
+    bSawTacticalInPlay = false;
+    bPostMissionQuiesced = false;
+    bMapRevealInitialized = false;
     Controller = class'APX_Controller'.static.GetOrCreate();
     // Reveal the map for the local squad without waiting for F8/autoplay.
-    if (class'APX_FullIntel'.static.RevealMapForPlayer())
-        `log("Full intel|revision=mission-report-v45|enabled=True|map_revealed=True", true, 'AutoplayXCom2');
+    if (CanUpdateTacticalHUD() && class'APX_FullIntel'.static.RevealMapForPlayer())
+    {
+        bMapRevealInitialized = true;
+        `log("Full intel|revision=mission-report-v46|enabled=True|map_revealed=True", true, 'AutoplayXCom2');
+    }
     ScoreCounter = new(self) class'APX_MissionScore';
     bScoreTextValid = false;
     CachedScoreHistory = none;
     CachedScoreHistoryIndex = -1;
     ScoreRefreshRemaining = 0.0;
-    `log("HUD score polling|revision=mission-report-v45|stable_interval_seconds=1.0|status_interval_seconds=0.25|history_invalidation=true", true, 'AutoplayXCom2');
+    `log("HUD score polling|revision=mission-report-v46|stable_interval_seconds=1.0|status_interval_seconds=0.25|history_invalidation=true", true, 'AutoplayXCom2');
 
     ToggleButton = Spawn(class'UIButton', self);
     ToggleButton.InitButton('APX_ToggleButton', EnableLabel, OnToggleClicked);
@@ -90,8 +103,11 @@ simulated function APX_UITacticalControl InitAutoplayControl()
     return self;
 }
 
+/** Honor input only while stock tactical play is active. */
 simulated function OnToggleClicked(UIButton Button)
 {
+    if (!CanUpdateTacticalHUD())
+        return;
     if (Controller != none)
     {
         Controller.Toggle();
@@ -101,8 +117,11 @@ simulated function OnToggleClicked(UIButton Button)
     ScheduleCollapse();
 }
 
+/** Ignore mouse callbacks delivered during startup or after tactical play ends. */
 simulated function OnControlMouseEvent(UIPanel Panel, int Cmd)
 {
+    if (!CanUpdateTacticalHUD())
+        return;
     switch (Cmd)
     {
     case class'UIUtilities_Input'.const.FXS_L_MOUSE_IN:
@@ -177,13 +196,14 @@ static function bool ShouldRefreshScoreForHUD(bool bValid, bool bHistoryChanged,
     return !bValid || bHistoryChanged || SecondsUntilRefresh <= 0.0;
 }
 
+/** Return the mission score for a live tactical HUD, with its existing history cache. */
 simulated function string GetDisplayedScoreText()
 {
     local XComGameStateHistory History;
     local int HistoryIndex;
 
     bScoreReadDeferred = false;
-    if (ScoreCounter == none)
+    if (ScoreCounter == none || !CanUpdateTacticalHUD())
         return "";
 
     History = `XCOMHISTORY;
@@ -215,10 +235,13 @@ simulated function string GetDisplayedScoreText()
     return CachedScoreText;
 }
 
+/** Refresh the text and toggle only while the tactical HUD is usable. */
 simulated function UpdateStatus()
 {
     local string ScoreText;
 
+    if (!CanUpdateTacticalHUD())
+        return;
     // UIText caches its HTML, so unchanged score/font values do not issue
     // another Flash update. Keep this independent of autoplay's run state.
     if (ScoreCounter != none && ScoreLabel != none && ToggleButton != none)
@@ -250,14 +273,103 @@ simulated function UpdateStatus()
         Controller.GetStatusText(), eUIState_Normal, 14));
 }
 
+/**
+ * Distinguish first-frame tactical startup from a completed or unloaded match.
+ * Returning true never changes gameplay state; it only stops HUD observers.
+ * @param bEverInPlay True after a stock tactical InPlay state was observed.
+ * @param bInPlay Current stock rules TacticalGameIsInPlay result.
+ * @param bEnded Current stock rules HasTacticalGameEnded result.
+ * @return True only after native end or loss of a previously active match.
+ */
+static function bool ShouldQuiesceHUD(bool bEverInPlay, bool bInPlay, bool bEnded)
+{
+    return bEnded || (bEverInPlay && !bInPlay);
+}
+
+/**
+ * Stop this HUD's score/history/FOW polling while the stock end-state owns
+ * tactical-to-strategy travel. Do not destroy Controller here: it must first
+ * finish recording the native outcome and detach its mission event listeners.
+ */
+simulated function QuiescePostMissionHUD()
+{
+    if (bPostMissionQuiesced)
+        return;
+    bPostMissionQuiesced = true;
+    if (ScoreCounter != none)
+        ScoreCounter.ResetCache();
+    CachedScoreHistory = none;
+    CachedScoreHistoryIndex = -1;
+    bScoreTextValid = false;
+    bScoreReadDeferred = false;
+    ScoreRefreshRemaining = 0.0;
+    RefreshRemaining = 0.0;
+    `log("HUD quiesced after native tactical end|revision=mission-report-v46"
+        $ "|autoplay_controller_retained_for_final_record=True",
+        true, 'AutoplayXCom2');
+}
+
+/**
+ * Determine HUD readiness at each entry point, including a callback before
+ * the first tick after mission end. Stock HasTacticalGameEnded reads both
+ * replay state and tactical history. Validate their world and owners before
+ * querying native state. Startup can be retried, while end and loss of
+ * previously active play latch.
+ */
+simulated function bool CanUpdateTacticalHUD()
+{
+    local WorldInfo RulesWorld, ReplayWorld;
+    local XComGameInfo TacticalGameInfo;
+    local X2TacticalGameRuleset Rules;
+    local XComTacticalGRI TacticalGRI;
+    local bool bInPlay, bCanReadEnd, bEnded;
+
+    if (bIsRemoved || bPostMissionQuiesced)
+        return false;
+    // The stock TACTICALRULES and REPLAY macros dereference their owners.
+    // Resolve equivalent references with checks, including during travel.
+    RulesWorld = class'Engine'.static.GetCurrentWorldInfo();
+    if (RulesWorld != none && RulesWorld == WorldInfo)
+        TacticalGameInfo = XComGameInfo(RulesWorld.Game);
+    if (TacticalGameInfo != none)
+        Rules = X2TacticalGameRuleset(TacticalGameInfo.GameRuleset);
+    bInPlay = Rules != none && Rules.TacticalGameIsInPlay();
+    if (bInPlay)
+    {
+        bSawTacticalInPlay = true;
+        ReplayWorld = class'WorldInfo'.static.GetWorldInfo();
+        if (ReplayWorld == RulesWorld)
+            TacticalGRI = XComTacticalGRI(ReplayWorld.GRI);
+        bCanReadEnd = TacticalGRI != none && TacticalGRI.ReplayMgr != none
+            && `XCOMHISTORY != none
+            && class'APX_MissionScore'.static.CanQueryScoreHistory(true,
+                Rules.BuildingLatentGameState, Rules.IsDoingLatentSubmission());
+        if (bCanReadEnd)
+            bEnded = Rules.HasTacticalGameEnded();
+    }
+    if (ShouldQuiesceHUD(bSawTacticalInPlay, bInPlay, bEnded))
+    {
+        QuiescePostMissionHUD();
+        return false;
+    }
+    return bInPlay && bCanReadEnd;
+}
+
+/** Restore deferred full intel and refresh the controls only during active tactical play. */
 simulated event Tick(float DeltaTime)
 {
-    if (bIsRemoved)
+    if (bIsRemoved || !CanUpdateTacticalHUD())
         return;
+
     // A tactical reload may reenable stock FOW; restore the user's choice.
     if (class'APX_FullIntel'.default.EnableFullIntel
-        && `XWORLD != none && `XWORLD.bEnableFOW)
-        class'APX_FullIntel'.static.RevealMapForPlayer();
+        && `XWORLD != none && (!bMapRevealInitialized || `XWORLD.bEnableFOW)
+        && class'APX_FullIntel'.static.RevealMapForPlayer())
+    {
+        if (!bMapRevealInitialized)
+            `log("Full intel|revision=mission-report-v46|enabled=True|map_revealed=True", true, 'AutoplayXCom2');
+        bMapRevealInitialized = true;
+    }
 
     if (default.AlwaysExpanded && !bExpanded)
         Expand();

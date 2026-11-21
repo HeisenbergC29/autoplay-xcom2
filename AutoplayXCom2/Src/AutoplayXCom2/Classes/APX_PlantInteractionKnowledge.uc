@@ -139,12 +139,13 @@ static function string PlantDiscoveryFailureReason(int PlantActors,
 // the stock compiler's dependency validation (as with AmbushPreparation).
 // Status: 1 = found, -1 = consumed without a goal, 0 = ordinary fallback.
 // A found goal retains precedence if a different plant object was consumed.
+/** Return the verified approach tile and, when requested, the path already used to verify it. */
 static function int FindInteractionGoal(XComGameState_Unit UnitState,
-    out TTile GoalTile, out string GoalReason)
+    out TTile GoalTile, out string GoalReason, optional out array<TTile> VerifiedPath)
 {
     local PlantGoalResult Result;
 
-    FindInteractionGoalResult(UnitState, Result);
+    FindInteractionGoalResult(UnitState, Result, VerifiedPath);
     GoalTile = Result.Tile;
     GoalReason = Result.Reason;
     if (Result.bFound)
@@ -154,8 +155,9 @@ static function int FindInteractionGoal(XComGameState_Unit UnitState,
     return 0;
 }
 
+/** Discover the stock plant interaction and forward only the path for the selected anchor. */
 static function FindInteractionGoalResult(XComGameState_Unit UnitState,
-    out PlantGoalResult Result)
+    out PlantGoalResult Result, out array<TTile> VerifiedPath)
 {
     local PlantGoalResult EmptyResult;
     local XComGameState_InteractiveObject ObjectState;
@@ -171,6 +173,7 @@ static function FindInteractionGoalResult(XComGameState_Unit UnitState,
     local int Cell, Index, BestIndex, PathChecks, Probe;
     local float Distance, BestDistance;
 
+    VerifiedPath.Length = 0;
     Result = EmptyResult;
     Result.Reason = "no_native_plant_goal";
     if (UnitState == none || `XCOMHISTORY == none || `XWORLD == none)
@@ -301,6 +304,7 @@ static function FindInteractionGoalResult(XComGameState_Unit UnitState,
                 Candidate, FullPath, false) && FullPath.Length > 1
                 && FullPath[FullPath.Length - 1] == Candidate))
         {
+            VerifiedPath = FullPath;
             Result.bFound = true;
             Result.Tile = Candidate;
             Result.ObjectID = CandidateObjectIDs[BestIndex];

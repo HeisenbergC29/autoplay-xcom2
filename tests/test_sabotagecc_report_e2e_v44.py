@@ -23,6 +23,49 @@ def session(session_id, rows):
 class SabotageRecoveryReportEndToEnd(unittest.TestCase):
     """Exercise the installed report format through the CLI and its JSON output."""
 
+    def test_v46_native_blue_detour_then_plant_and_tactical_end(self):
+        """Preserve the accepted detour and native victory across later Shell log lines."""
+        observed = session('v46-detour', [
+            (0, 'start|revision=mission-report-v46|mission=SabotageCC'),
+            (115, 'phase|phase=autoplay|turn=19'),
+            (115, 'ability|unit=415|ability=Interact_PlantBomb|code=AA_NoTargets|targets=0'),
+            (115, 'marker|kind=objective_recovery_scan|details=unit=415 found=True'
+                  ' reason=safe_native_blue_on_verified_x4_astar_prefix'),
+            (115, 'marker|kind=objective_recovery_candidate|details=unit=415 end_x=23 end_y=30 end_z=1'
+                  ' source=verified_native_blue_route'),
+            (115, 'chosen|kind=move|unit=415|x=23|y=30|z=1|ap_before=2'
+                  '|move_planner=objective_recovery|accepted=True'),
+            (116, 'result|ability=StandardMove|source=415|source_scope=friendly|history=420'),
+            (116, 'ability|unit=415|ability=Interact_PlantBomb|code=AA_Success|targets=1'),
+            (116, 'chosen|kind=action|unit=415|ability=Interact_PlantBomb|accepted=True'),
+            (117, 'result|ability=Interact_PlantBomb|source=415|source_scope=friendly|history=424'),
+            (117, 'end|reason=tactical_game_ended|outcome=win|history=425|history_pending=0'),
+        ])
+        shell_tail = (
+            '\nAutoplayXCom2: HUD quiesced after native tactical end|revision=mission-report-v46'
+            '\nLog: Bringing World Avenger_Root.TheWorld up for play'
+            '\nLog: Failed; returning to Entry'
+        )
+
+        with tempfile.TemporaryDirectory() as tmp:
+            launch = Path(tmp) / 'Launch.log'
+            report = Path(tmp) / 'analysis.json'
+            launch.write_text(observed + shell_tail, encoding='utf-8')
+            subprocess.run([sys.executable, str(TOOL), str(launch), '--json', str(report)],
+                           cwd=tmp, capture_output=True, text=True, check=True)
+            parsed = json.loads(report.read_text(encoding='utf-8'))
+
+        self.assertEqual([], parsed['malformed_records'])
+        run, = parsed['sessions']
+        self.assertEqual((2, 1, {'Interact_PlantBomb': 1}),
+                         (run['accepted_actions'], run['moves'], run['abilities']))
+        move, = (row for row in run['records'] if row.get('move_planner') == 'objective_recovery')
+        self.assertEqual((415, 23, 30, 1, True),
+                         (move['unit'], move['x'], move['y'], move['z'], move['accepted']))
+        self.assertEqual('win', run['records'][-1]['outcome'])
+        self.assertEqual('unknown', run['attempt_verdict']['status'])
+        self.assertFalse(run['mission_points']['confirmed'])
+
     def test_success_and_manual_loss_keep_proposals_distinct_from_accepted_orders(self):
         """A manual plant result in the second run cannot supply the missing chosen order."""
         common = [
