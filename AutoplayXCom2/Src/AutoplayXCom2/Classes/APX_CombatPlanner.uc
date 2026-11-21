@@ -940,6 +940,40 @@ static function bool HasVisibleReclaimableReactionTarget(
     return false;
 }
 
+/**
+ * Check a bounded, personal LOS lane to a CURRENT squad-visible hostile.
+ * Team vision or recently remembered contact does not prove this soldier can
+ * use an OW trigger. A geometric lane is only a plausibility indicator:
+ * the native engine still decides whether any future reaction is possible.
+ * No future AI route, ammo or hit roll is inspected.
+ */
+static function bool HasPlausibleLocalReactionLane(XComGameState_Unit Soldier,
+    const out array<StateObjectReference> SquadVisibleEnemies)
+{
+    local XComGameState_Unit Enemy;
+    local StateObjectReference Ref;
+    local GameRulesCache_VisibilityInfo Visibility;
+    local float SightSq;
+    local int Inspected;
+
+    if (Soldier == none || `XWORLD == none || `XCOMHISTORY == none
+        || SquadVisibleEnemies.Length > 64)
+        return false;
+    SightSq = Square(`METERSTOUNITS(Soldier.GetVisibilityRadius()));
+    foreach SquadVisibleEnemies(Ref)
+    {
+        if (++Inspected > 64)
+            return false;
+        Enemy = XComGameState_Unit(`XCOMHISTORY.GetGameStateForObjectID(Ref.ObjectID));
+        if (!IsVisibleHostile(Soldier, Enemy, SquadVisibleEnemies))
+            continue;
+        if (`XWORLD.CanSeeTileToTile(Soldier.TileLocation, Enemy.TileLocation, Visibility)
+            && Visibility.DefaultTargetDist <= SightSq)
+            return true;
+    }
+    return false;
+}
+
 /** Score self-targeted actions and veto Overwatch before choosing this unit's best alternative. */
 static function float ScoreSelfAction(XComGameState_Unit UnitState,
     XComGameState_Ability Ability, name AbilityName,
@@ -970,8 +1004,10 @@ static function float ScoreSelfAction(XComGameState_Unit UnitState,
         / FMax(1.0, UnitState.GetMaxStat(eStat_HP));
     if (default.OverwatchAbilities.Find(AbilityName) != INDEX_NONE)
         return GuardOverwatchForKnownAlly(
-            ScoreOverwatchDefense(VisibleEnemies.Length > 0 || bRecentContact,
-                UnitState.IsConcealed(), HealthFraction, RangedRisk, NearbyMelee),
+            ScoreOverwatchDefense(
+                HasPlausibleLocalReactionLane(UnitState, VisibleEnemies),
+                UnitState.IsConcealed(), HealthFraction, RangedRisk, NearbyMelee,
+                VisibleEnemies.Length > 0 || bRecentContact),
             !bSquadOverwatchSafe);
     return ScoreHunkerDefense(HealthFraction, RangedRisk, RangedThreats,
         NearbyMelee, UnitState.IsBurning(), UnitState.IsConcealed());
@@ -1029,13 +1065,23 @@ static function float DefensiveRisk(XComGameState_Unit UnitState,
 
 // Defensive values deliberately compete with poor shots, not reliable kills.
 // Out of contact overwatch stays below every useful advance/exploration score.
+/**
+ * A squad contact without personal LOS is speculative: 5 points keeps a
+ * possible reaction available but below constructive moves and support.
+ * Personal current LOS restores the existing 17/22 defensive ranking.
+ */
 static function float ScoreOverwatchDefense(bool bEnemiesVisible, bool bConcealed,
-    float HealthFraction, float RangedRisk, int NearbyMelee)
+    float HealthFraction, float RangedRisk, int NearbyMelee,
+    optional bool bSquadOnlyContact)
 {
     local float Result;
 
     if (!bEnemiesVisible)
+    {
+        if (bSquadOnlyContact)
+            return 5.0;
         return 2.0;
+    }
     Result = 17.0;
     if (bConcealed)
         Result = 22.0;
