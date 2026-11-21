@@ -1289,7 +1289,7 @@ function MakeDecision(XComTacticalController PC)
     local int RemainingContactDetectors, RemainingContactTiles, RemainingContactLOS;
     local int RemainingTempoCoverChecks, RemainingMedicalSamples;
     local array<StateObjectReference> ContactSnapshotUnits, ContactSnapshotInteractives;
-    local string ContactSnapshotReason;
+    local string ContactSnapshotReason, PatrolSelectionEvidence;
     local bool bContactSnapshotReady, bContactSnapshotComplete;
     local int FocusTargetID, FocusGroupMembers, FocusLiving, FocusTimer;
     local int FocusHistoryIndex, FocusStartIndex, FocusPlantPhase, FocusPreviousGroupID;
@@ -1522,13 +1522,14 @@ function MakeDecision(XComTacticalController PC)
             bContactSnapshotComplete = class'APX_ContactEnvelope'.static.BuildSnapshot(
                 UnitState, ContactSnapshotUnits, ContactSnapshotInteractives,
                 ContactSnapshotReason, RemainingContactGroups, RemainingContactMembers,
-                AmbushPatrolRef, AmbushPatrolWaypoint);
+                AmbushPatrolRef, AmbushPatrolWaypoint, PatrolSelectionEvidence);
             if (MissionRecorder != none)
                 MissionRecorder.Marker("contact_snapshot",
                     "complete=" $ string(bContactSnapshotComplete)
                     @ "reason=" $ ContactSnapshotReason
                     @ "detectors=" $ ContactSnapshotUnits.Length
-                    @ "interactives=" $ ContactSnapshotInteractives.Length);
+                    @ "interactives=" $ ContactSnapshotInteractives.Length
+                    @ "patrol_selection=" $ PatrolSelectionEvidence);
         }
         if (!bPatrolRefreshed)
         {
@@ -1545,6 +1546,8 @@ function MakeDecision(XComTacticalController PC)
                     "phase=" $ string(PatrolAmbushPlanner.CurrentPhase())
                     @ "group=" $ PatrolAmbushPlanner.CurrentGroupID()
                     @ "reason=" $ PatrolReason
+                    @ "selection=" $ PatrolSelectionEvidence
+                    @ "completed_waits=" $ PatrolAmbushPlanner.ConfirmedWaitCount()
                     @ "horizon=variants_unknown");
         }
         if (class'APX_CombatPlanner'.static.ChooseAction(UnitState, Candidate,
