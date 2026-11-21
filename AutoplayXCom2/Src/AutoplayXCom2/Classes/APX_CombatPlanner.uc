@@ -1,6 +1,7 @@
 // Evaluates legal, player-visible actions. Never changes unit state or grants AP.
 class APX_CombatPlanner extends Object config(AutoplayXCom2)
-    dependson(X2GameRuleset, XComGameState_Ability, X2TacticalGameRulesetDataStructures);
+    dependson(X2GameRuleset, XComGameState_Ability,
+        X2TacticalGameRulesetDataStructures, X2GameRulesetVisibilityDataStructures);
 
 var config array<name> AttackAbilities;
 var config array<name> HealAbilities;
