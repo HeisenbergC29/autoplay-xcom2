@@ -72,7 +72,8 @@ class VerifiedX4AStarIntegrationContracts(unittest.TestCase):
         for token in ("FindBerserkerSabotageGoal(Soldier, BattleData, GoalTile,",
                       "native_plant_already_consumed",
                       "X2PathSolver'.static.BuildPath(",
-                      "HasVerifiedX4AStarGeometry(", "GoalAStarPath[0] == Soldier.TileLocation",
+                      "HasVerifiedX4AStarGeometry(", "NativePlantStatus > 0 && HasVerifiedX4AStarGeometry(",
+                      "GoalAStarPath[0] == Soldier.TileLocation",
                       "GoalAStarPath[GoalAStarPath.Length - 1] == GoalTile",
                       "RouteSamples = Min(24, GoalAStarPath.Length - 1)"):
             self.assertIn(token, recovery)
