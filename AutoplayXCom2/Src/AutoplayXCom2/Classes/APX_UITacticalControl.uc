@@ -34,6 +34,8 @@ var bool bScoreReadDeferred;
 var string CachedScoreText;
 var XComGameStateHistory CachedScoreHistory;
 var int CachedScoreHistoryIndex;
+var bool bSawTacticalInPlay;
+var bool bPostMissionQuiesced;
 
 simulated function APX_UITacticalControl InitAutoplayControl()
 {
@@ -43,6 +45,10 @@ simulated function APX_UITacticalControl InitAutoplayControl()
     SetSize(ButtonWidth + 20.0, 85.0);
     DisableNavigation();
 
+    // The panel can be instantiated while tactical rule initialization is
+    // still finishing; an initial !TacticalGameIsInPlay is not mission end.
+    bSawTacticalInPlay = false;
+    bPostMissionQuiesced = false;
     Controller = class'APX_Controller'.static.GetOrCreate();
     // Reveal the map for the local squad without waiting for F8/autoplay.
     if (class'APX_FullIntel'.static.RevealMapForPlayer())
@@ -250,10 +256,63 @@ simulated function UpdateStatus()
         Controller.GetStatusText(), eUIState_Normal, 14));
 }
 
+/**
+ * Distinguish first-frame tactical startup from a completed or unloaded match.
+ * Returning true never changes gameplay state; it only stops HUD observers.
+ * @param bEverInPlay True after a stock tactical InPlay state was observed.
+ * @param bInPlay Current stock rules TacticalGameIsInPlay result.
+ * @param bEnded Current stock rules HasTacticalGameEnded result.
+ * @return True only after native end or loss of a previously active match.
+ */
+static function bool ShouldQuiesceHUD(bool bEverInPlay, bool bInPlay, bool bEnded)
+{
+    return bEnded || (bEverInPlay && !bInPlay);
+}
+
+/**
+ * Stop this HUD's score/history/FOW polling while the stock end-state owns
+ * tactical-to-strategy travel. Do not destroy Controller here: it must first
+ * finish recording native WIN and detach its mission event listeners.
+ * @return No game-state, native ability, history or scoreboard mutations.
+ */
+simulated function QuiescePostMissionHUD()
+{
+    if (bPostMissionQuiesced)
+        return;
+    bPostMissionQuiesced = true;
+    if (ScoreCounter != none)
+        ScoreCounter.ResetCache();
+    CachedScoreHistory = none;
+    CachedScoreHistoryIndex = -1;
+    bScoreTextValid = false;
+    bScoreReadDeferred = false;
+    ScoreRefreshRemaining = 0.0;
+    RefreshRemaining = 0.0;
+    `log("HUD quiesced after native tactical end|revision=mission-report-v46"
+        $ "|autoplay_controller_retained_for_final_record=True",
+        true, 'AutoplayXCom2');
+}
+
 simulated event Tick(float DeltaTime)
 {
-    if (bIsRemoved)
+    local bool bInPlay, bEnded;
+
+    if (bIsRemoved || bPostMissionQuiesced)
         return;
+    // Do not poll score/history or re-reveal the map once the stock tactical
+    // outcome is final. Controller.Tick remains alive to Finish() and log it.
+    if (`TACTICALRULES != none)
+    {
+        bInPlay = `TACTICALRULES.TacticalGameIsInPlay();
+        bEnded = `TACTICALRULES.HasTacticalGameEnded();
+    }
+    if (bInPlay)
+        bSawTacticalInPlay = true;
+    if (ShouldQuiesceHUD(bSawTacticalInPlay, bInPlay, bEnded))
+    {
+        QuiescePostMissionHUD();
+        return;
+    }
     // A tactical reload may reenable stock FOW; restore the user's choice.
     if (class'APX_FullIntel'.default.EnableFullIntel
         && `XWORLD != none && `XWORLD.bEnableFOW)
