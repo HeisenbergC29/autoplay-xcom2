@@ -177,9 +177,9 @@ class NativePlantGoalContracts(unittest.TestCase):
         self.assertNotIn('APX_PlantInteractionKnowledge', header)
         self.assertNotIn('PlantGoalResult', self.mission)
         self.assertIn('static function int FindInteractionGoal(XComGameState_Unit UnitState,\n'
-                      '    out TTile GoalTile, out string GoalReason)', self.source)
+                      '    out TTile GoalTile, out string GoalReason, optional out array<TTile> VerifiedPath)', self.source)
         api = function_body(self.source, 'FindInteractionGoal')
-        self.assertIn('FindInteractionGoalResult(UnitState, Result);', api)
+        self.assertIn('FindInteractionGoalResult(UnitState, Result, VerifiedPath);', api)
         self.assertIn('GoalTile = Result.Tile;', api)
         self.assertIn('GoalReason = Result.Reason;', api)
         self.assertRegex(api, r'if \(Result.bFound\)\s+return 1;')

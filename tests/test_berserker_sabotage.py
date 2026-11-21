@@ -77,7 +77,7 @@ class BerserkerSabotageContracts(unittest.TestCase):
         find = function_body(self.source, 'FindBerserkerSabotageGoal')
         for required in (
             "class'APX_PlantInteractionKnowledge'.static.FindInteractionGoal(",
-            'UnitState, NativeGoalTile, NativeGoalReason)',
+            'UnitState, NativeGoalTile, NativeGoalReason, VerifiedPath)',
             'if (NativeGoalStatus > 0)',
             'GoalTile = NativeGoalTile;',
             'if (NativeGoalStatus < 0)',

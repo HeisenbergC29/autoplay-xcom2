@@ -53,19 +53,37 @@ class QuiescenceIntegrationContracts(unittest.TestCase):
         cls.controller = CONTROLLER.read_text(encoding="utf-8-sig")
         cls.recorder = RECORDER.read_text(encoding="utf-8-sig")
 
-    def test_hud_tick_quiesces_before_map_write_or_score_history_poll(self):
-        """No UI tick may reveal FOW or query score after verified native end."""
+    def test_lifecycle_checks_native_dependencies_before_querying_end(self):
+        """SDK's end query needs live rules, replay and usable tactical history."""
+        lifecycle = function_body(self.hud, "CanUpdateTacticalHUD")
+        ordered = ("bIsRemoved || bPostMissionQuiesced",
+                   "RulesWorld = class'Engine'.static.GetCurrentWorldInfo()",
+                   "RulesWorld != none && RulesWorld == WorldInfo",
+                   "TacticalGameInfo = XComGameInfo(RulesWorld.Game)", "TacticalGameInfo != none",
+                   "Rules = X2TacticalGameRuleset(TacticalGameInfo.GameRuleset)",
+                   "Rules != none && Rules.TacticalGameIsInPlay()", "if (bInPlay)",
+                   "bSawTacticalInPlay = true;", "ReplayWorld = class'WorldInfo'.static.GetWorldInfo()",
+                   "if (ReplayWorld == RulesWorld)", "TacticalGRI = XComTacticalGRI(ReplayWorld.GRI)",
+                   "TacticalGRI != none && TacticalGRI.ReplayMgr != none", "`XCOMHISTORY != none",
+                   "Rules.BuildingLatentGameState, Rules.IsDoingLatentSubmission()",
+                   "if (bCanReadEnd)", "bEnded = Rules.HasTacticalGameEnded()",
+                   "ShouldQuiesceHUD(bSawTacticalInPlay, bInPlay, bEnded)",
+                   "QuiescePostMissionHUD();", "return bInPlay && bCanReadEnd;")
+        positions = [lifecycle.index(token) for token in ordered]
+        self.assertEqual(positions, sorted(positions))
+        self.assertNotIn("`TACTICALRULES", lifecycle)
+        self.assertNotIn("`REPLAY", lifecycle)
+
+    def test_hud_tick_retries_startup_reveal_and_stops_all_work_after_end(self):
+        """Tick completes a deferred reveal, then shares the lifecycle gate with callbacks."""
         tick = function_body(self.hud, "Tick")
-        for token in ("bIsRemoved || bPostMissionQuiesced", "TacticalGameIsInPlay()",
-                      "HasTacticalGameEnded()", "bSawTacticalInPlay = true;",
-                      "ShouldQuiesceHUD(", "QuiescePostMissionHUD();"):
-            self.assertIn(token, tick)
-        self.assertLess(tick.index("ShouldQuiesceHUD("),
-                        tick.index("RevealMapForPlayer("))
-        self.assertLess(tick.index("QuiescePostMissionHUD();"),
-                        tick.index("ScoreRefreshRemaining -= DeltaTime;"))
-        self.assertLess(tick.index("QuiescePostMissionHUD();"),
-                        tick.index("UpdateStatus();"))
+        gate = tick.index("if (bIsRemoved || !CanUpdateTacticalHUD())")
+        for token in ("`XWORLD.bEnableFOW", "RevealMapForPlayer()", "ScoreRefreshRemaining -= DeltaTime;",
+                      "UpdateStatus();"):
+            self.assertLess(gate, tick.index(token))
+        self.assertIn("(!bMapRevealInitialized || `XWORLD.bEnableFOW)", tick)
+        self.assertLess(tick.index("RevealMapForPlayer()"), tick.index("bMapRevealInitialized = true;"))
+        self.assertIn("map_revealed=True", tick)
 
     def test_quiesce_is_idempotent_and_releases_only_observational_caches(self):
         """Do not tear down native controller before it records terminal WIN."""
@@ -80,18 +98,15 @@ class QuiescenceIntegrationContracts(unittest.TestCase):
                           "GetTotalScore(", "RevealMapForPlayer("):
             self.assertNotIn(forbidden, cleanup)
 
-    def test_late_hud_events_are_all_idempotently_blocked(self):
-        """A queued mouse click or score refresh cannot reenter the old world."""
-        for method in ("OnToggleClicked", "OnControlMouseEvent",
-                       "UpdateStatus", "GetDisplayedScoreText"):
+    def test_late_hud_callbacks_recheck_native_lifecycle_before_first_teardown_tick(self):
+        """Queued callbacks consult native state even before the stop has latched."""
+        for method, operation in (("OnToggleClicked", "Controller.Toggle()"),
+                                  ("OnControlMouseEvent", "switch (Cmd)"),
+                                  ("UpdateStatus", "GetDisplayedScoreText()"),
+                                  ("GetDisplayedScoreText", "History = `XCOMHISTORY")):
             with self.subTest(method=method):
                 f = function_body(self.hud, method)
-                self.assertIn("bIsRemoved || bPostMissionQuiesced", f)
-                self.assertLess(f.index("bIsRemoved || bPostMissionQuiesced"),
-                                f.index("Controller.Toggle()") if method == "OnToggleClicked"
-                                else f.index("ScoreCounter.GetText()") if method == "GetDisplayedScoreText"
-                                else f.index("GetDisplayedScoreText()") if method == "UpdateStatus"
-                                else f.index("switch (Cmd)"))
+                self.assertLess(f.index("!CanUpdateTacticalHUD()"), f.index(operation))
 
     def test_real_recorder_finalizes_and_unsubscribes_after_win_not_by_hud_gate(self):
         """Final scoring and all four event unsubscriptions remain owned by recorder."""
@@ -110,11 +125,18 @@ class QuiescenceIntegrationContracts(unittest.TestCase):
         self.assertIn("Controller.Destroy();", removed)
         self.assertIn("ScoreCounter.Cleanup();", removed)
 
-    def test_startup_rearms_quiescence_and_version_marker(self):
-        """A new tactical HUD begins with clean lifecycle booleans."""
+    def test_startup_rearms_quiescence_and_guards_initial_reveal(self):
+        """A new HUD can initialize before active play without mutating fog."""
         init = function_body(self.hud, "InitAutoplayControl")
         self.assertIn("bSawTacticalInPlay = false;", init)
         self.assertIn("bPostMissionQuiesced = false;", init)
+        pending_reveal = init.index("bMapRevealInitialized = false;")
+        gate = init.index("if (CanUpdateTacticalHUD()")
+        reveal = init.index("RevealMapForPlayer()")
+        observed = init.index("bMapRevealInitialized = true;")
+        self.assertLess(pending_reveal, gate)
+        self.assertLess(gate, reveal)
+        self.assertLess(reveal, observed)
         self.assertIn("mission-report-v46", init)
         self.assertIn("mission-report-v46", self.recorder)
 

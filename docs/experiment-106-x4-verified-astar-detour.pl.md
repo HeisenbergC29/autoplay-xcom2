@@ -71,41 +71,19 @@ zakresu kandydatów**, ale nie dowód
 kafel należał do dostępnej i
 bezpiecznej trasy objazdu.
 
-## Zmiana: stock A* jako źródło kierunku, nie prawa do ruchu
+## Wykorzystanie trasy A* do punktu interakcji
 
-- `HasVerifiedX4AStarGeometry` zwraca
-  true tylko, jeśli rzeczywiste
-  `X2PathSolver.BuildPath` zwraca
-  kompletną trasę 2..256 tile
-  z `FullPath[0]` równym
-  rzeczywistej pozycji żołnierza
-  i ostatnim polem dokładnie
-  rozpoznanego przez stock
-  `APX_PlantInteractionKnowledge`
-  aktora/socketu X4.
-  **`NativePlantStatus > 0` jest
-  obowiązkowe**. Zwykły marker
-  misji nie jest „zweryfikowanym
-  X4” nawet gdy A* wyznaczy
-  do niego drogę.
-- Jeśli native A* jest w pełni
-  zgodne z tym kontraktem,
-  maks24 jego **pierwsze pola**
-  tworzą dodatkowych
-  kandydatów na jeden blue.
-  Kolejna grupa skanów jest
-  odtwarzana z natywnego
-  `XGUnit.m_kReachableTilesCache`.
-  Łączny budżet pozostaje
-  **≤48 endpointów na unit**,
-  a nie 48+24.
+- Rozpoznawanie punktu X4 wywołuje natywne `X2PathSolver.BuildPath`. Planer otrzymuje tę samą trasę bez drugiego wywołania. `HasVerifiedX4AStarGeometry` wymaga poprawnego wyniku rozpoznawania aktora, 2–256 pól, zgodności początku z pozycją żołnierza i końca z punktem interakcji. Przy publicznym markerze planer nadal używa odległości geometrycznej.
+- Spośród pierwszych 24 pól trasy planer ocenia najpierw najdalsze w kolejności przejścia. Potem sprawdza najbliższy punkt z natywnego cache i próbkę pozostałych osiągalnych pól. Próbkowanie ma łącznie do 48 pozycji na żołnierza. Powtórzone pola i pozycję początkową pomijamy. Pole odwiedzone wcześniej w tej samej turze odpada przed oceną, dzięki czemu kwalifikuje się kolejny kandydat.
+- Przed oceną wybuchowej osłony i przed sprawdzaniem kontaktu planer porównuje długość odtworzonego ruchu z pozostałym budżetem. Pełna ocena kontaktów wymaga sprawdzenia każdego znanego detektora na każdym polu ruchu. Jeśli budżetu nie starczy, krótszy kandydat nadal może zostać zweryfikowany. Budżety pozostają wspólne dla drużyny.
 - Dla takiego pojedynczego
-  `GoalAStarPath[Sample]` wolno
+  `GoalAStarPath[RouteIndex]` wolno
   dopuścić ujemny przyrost
   **euklidesowej** odległości
   do X4, ponieważ rzeczywiste
-  natywne A* dowodzi, że
-  ruch jest *segmentem* drogi.
+  pole należy do trasy A* do celu.
+  Ścieżkę do tego pola odtwarza cache
+  zasięgu dla bieżącej pozycji.
   `ScoreSabotageAStarDetour`:
   score 22+2×index (bonus max14)
   pomniejszony o obecne ryzyko
@@ -169,7 +147,9 @@ bezpiecznej trasy objazdu.
   `astar_verified`,
   `astar_length`,
   `astar_prefix_samples`,
-  `skipped_no_progress`,
+  `sample_slots`, `native_samples`,
+  `skipped_no_progress`, `skipped_visited`,
+  `rejected_budget`, stan budżetów kontaktu i osłony na początku i końcu,
   `rejected_native_path`,
   `rejected_concealment`,
   `rejected_explosive`,
@@ -186,6 +166,8 @@ bezpiecznej trasy objazdu.
 wykonuje rzeczywiste czyste
 funkcje UC (`ScoreSabotageAStarDetour`,
 `HasVerifiedX4AStarGeometry`,
+`SabotageAStarSampleIndex`,
+`HasSabotageContactScanBudget`,
 `ScoreSabotageRecovery`) i
 kontroluje natywne kontrakty
 od actor/socket przez A*,

@@ -1143,6 +1143,19 @@ static function XComGameState_Unit ResolveRecoverySoldier(XGUnit Member, int Pla
     return Soldier;
 }
 
+/** Copy this soldier's same-turn visited destinations so recovery can try another route. */
+function GetVisitedRecoveryEndpoints(int SoldierID, out array<TTile> Endpoints)
+{
+    local VisitedPosition Position;
+
+    Endpoints.Length = 0;
+    foreach VisitedPositions(Position)
+    {
+        if (Position.UnitID == SoldierID)
+            Endpoints.AddItem(Position.Tile);
+    }
+}
+
 /**
  * Select the best executable recovery move found on the local squad's roster.
  * The callers' remaining route-inspection budgets are consumed across all soldiers.
@@ -1159,7 +1172,7 @@ function bool SelectSquadSabotageRecovery(XGPlayer SquadPlayer,
 {
     local XGSquad Squad;
     local XComGameState_Unit Soldier;
-    local array<TTile> CandidatePath;
+    local array<TTile> CandidatePath, VisitedEndpoints;
     local float Score;
     local string Reason;
     local int Index, Count;
@@ -1179,11 +1192,12 @@ function bool SelectSquadSabotageRecovery(XGPlayer SquadPlayer,
         Soldier = ResolveRecoverySoldier(Squad.GetMemberAt(Index), SquadPlayer.ObjectID);
         if (Soldier == none)
             continue;
+        GetVisitedRecoveryEndpoints(Soldier.ObjectID, VisitedEndpoints);
         bFound = class'APX_MissionPlanner'.static.ChooseSabotageCCRecoveryMove(
             Soldier, CandidatePath, Score, Reason, ContactUnits, ContactInteractives,
             bSnapshotComplete, SnapshotReason, RemainingContactDetectors, RemainingContactTiles,
             RemainingContactLOS, RemainingCoverChecks, RemainingConcealmentChecks,
-            RemainingTempoCoverChecks);
+            RemainingTempoCoverChecks, VisitedEndpoints);
         if (MissionRecorder != none)
             MissionRecorder.Marker("objective_recovery_scan", "unit=" $ Soldier.ObjectID
                 @ "found=" $ string(bFound) @ "reason=" $ Reason

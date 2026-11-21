@@ -8,8 +8,8 @@ source CI nie dowodzi naprawienia zamknięcia gry.
 
 ## Materiał i poziom pewności
 
-- Przesłano `AutoplayXCom2-20261121-002406-d1623db0.zip`, ten sam
-  `Launch(2).log` (dokładnie identyczne bajty i SHA-256).
+- Przesłano `AutoplayXCom2-20261121-002406-d1623db0.zip` i osobny
+  `Launch.log` zgodny bajt w bajt z bieżącym logiem ZIP-a.
   Inne logi ZIP dotyczą wcześniejszych uruchomień, nie wolno ich
   mieszać z aktualną sesją.
 - `XCom2.rar` zawiera `XCom2.exe` 32 006 600 B, poprawny
@@ -23,10 +23,8 @@ source CI nie dowodzi naprawienia zamknięcia gry.
   `Interact_PlantBomb` w wynikach).
   962,17s APXREC `end reason=tactical_game_ended outcome=win
   history=3265 history_pending=0` i
-  `Stopped: Mission ended or world changed`. **Brak następnych
-  decyzji, ruchów ani prób `PerformEndTurn` wykonanych przez autoplay.**
-  To przeczy hipotezie, że automat *na pewno* nadal wydawał rozkazy
-  po zwycięstwie.
+  `Stopped: Mission ended or world changed`. To ostatni zapis
+  działania autoplay w bieżącym logu.
 - 982,51s stock `X2TacticalGameRuleset.EndTacticalGame`.
   988,82s i 989,34s stock
   `NextSessionCommand` zapisuje
@@ -38,14 +36,14 @@ source CI nie dowodzi naprawienia zamknięcia gry.
   nie ma dowodu, że jej autorem jest mod.
 - 990,56s **stock `Avenger_Root` ładuje się pomyślnie**.
   Potem przez kilkadziesiąt sekund są zdarzenia UI Avengera.
-  Dopiero 1093,98s `Failed; returning to Entry` i 1094,97s
-  stock `XPACK_Shell_Intro` prawidłowo startuje.
-  Ostatni zapis `Launch.log` 1095,62s; **brak**
-  `Fatal error`, `Critical`, `Unhandled Exception`,
-  minidumpu i systemowego Windows Event ID w tym materiale.
-  Nie można na podstawie samego logu uznać, czy proces
-  zakończył się przez crash, zamknięcie/wyjście do menu,
-  czy błąd natywnej sesji strategicznej po wejściu do Avengera.
+  Po 103,42 s następuje `Failed; returning to Entry`, a
+  `XPACK_Shell_Intro` startuje o 1094,97 s. Ostatni wpis
+  o 1095,62 s dotyczy odczytu `DefaultCharacterPool.bin`.
+  Ten sam błąd wystąpił o 22,47 s, przed udanym rozpoczęciem misji.
+  Użytkownik zgłosił wyłączenie gry. Przyczyna zakończenia procesu
+  pozostaje nieustalona, ponieważ log nie zawiera wyjątku ani zrzutu.
+  Informacja o wyłączeniu po porażce w GasStation pochodzi od innych
+  testerów. Z tych prób nie otrzymaliśmy logów.
 - Porównanie z pełnym prywatnym WOTC SDK:
   `X2TacticalGameRuleset.uc` około l.5165–5200 i 5311–5370:
   `EndTacticalGame::NextSessionCommand` oraz
@@ -81,13 +79,13 @@ Nie ma potrzeby niszczyć kontrolera wcześniej.
   modyfikacji FullIntel, zmiany punktacji lub
   `Controller.Destroy()`. Loguje jednokrotnie
   `HUD quiesced after native tactical end`.
-- `Tick` testuje wyłącznie natywną fazę, po jej końcu
-  nie wywołuje score history ani RevealMap.
-  `UpdateStatus`, `GetDisplayedScoreText`,
-  `OnToggleClicked`, `OnControlMouseEvent` są również
-  wstrzymane, jeżeli asynchroniczny callback przyjdzie
-  z nieusuniętego jeszcze HUD. Stock `Removed` nadal
-  wykonuje rzeczywisty Cleanup/Destroy.
+- `CanUpdateTacticalHUD` wymaga aktywnej fazy, obiektów historii
+  i odtwarzania oraz zakończonej aktualizacji historii, zanim wywoła
+  natywny odczyt końca misji. `Tick`, inicjalizacja widoczności mapy
+  i callbacki statusu, punktacji i myszy korzystają z tej samej kontroli.
+  Pierwsza próba odsłonięcia mapy może zostać odroczona do aktywnej tury.
+  Opóźniony callback sprawdza stan gry już przed pierwszym tickiem HUD
+  po końcu misji. Stock `Removed` zwalnia obiekty HUD.
 - Odrębny `Controller.Tick` nadal ma szansę wykonać
   końcowy `MissionRecorder.Finish` przed własnym
   `StopAutoplay`, więc nie zamieniamy WIN na

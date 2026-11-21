@@ -119,7 +119,7 @@ class NativeRecoverySourceSafety(unittest.TestCase):
         for token in ('BattleData.MapData.ActiveMission.sType == "SabotageCC"',
                       "GetImmediateThreats(Soldier, Immediate)",
                       "FindBerserkerSabotageGoal(Soldier, BattleData, GoalTile,",
-                      "NativePlantReason, NativePlantStatus)",
+                      "NativePlantReason, NativePlantStatus, GoalAStarPath)",
                       "NativePlantStatus == 0 && TileDistance(Soldier.TileLocation, GoalTile) <= 3.0",
                       '"native_plant_already_consumed"'):
             self.assertIn(token, f)
@@ -212,6 +212,20 @@ class NativeRecoverySourceSafety(unittest.TestCase):
         self.assertNotIn("BestScore <= 2", body)
         self.assertIn('Marker("objective_recovery_candidate"', select[loop:])
         self.assertIn("return bSelected;", select[loop:])
+
+    def test_recovery_passes_only_current_soldier_visited_tiles(self):
+        """Reject individual same-turn endpoints before ranking, without touching other soldiers' paths."""
+        copy = function_body(self.controller, 'GetVisitedRecoveryEndpoints')
+        sequence = ('Endpoints.Length = 0;', 'foreach VisitedPositions(Position)',
+                    'if (Position.UnitID == SoldierID)', 'Endpoints.AddItem(Position.Tile);')
+        self.assertEqual(sorted(map(copy.index, sequence)), list(map(copy.index, sequence)))
+        self.assertNotIn('VisitedPositions.Length =', copy)
+
+        select = function_body(self.controller, 'SelectSquadSabotageRecovery')
+        gather = select.index('GetVisitedRecoveryEndpoints(Soldier.ObjectID, VisitedEndpoints);')
+        planner = select.index('ChooseSabotageCCRecoveryMove(', gather)
+        guard = select.index('CanUseMove(Soldier, CandidatePath)', planner)
+        self.assertIn('RemainingTempoCoverChecks, VisitedEndpoints);', select[planner:guard])
 
     def test_recovery_rereads_squad_member_and_rejects_missing_removed_or_hostile_state(self):
         """Reject stale visualizers and units that cannot issue the native move."""
