@@ -803,6 +803,14 @@ function ConfirmEndTurnRequest(string Evidence, int EvidenceHistory)
 {
     bEndTurnPending = false;
     bEndTurnRequested = true;
+    // Only the native-confirmed ticket can complete one squad-wide patrol wait.
+    if (PatrolAmbushPlanner != none
+        && PatrolAmbushPlanner.NoteWaitConfirmed(EndTurnPlayerTurn)
+        && MissionRecorder != none)
+        MissionRecorder.Marker("patrol_ambush_wait_confirmed",
+            "group=" $ PatrolAmbushPlanner.CurrentGroupID()
+            @ "completed=" $ PatrolAmbushPlanner.ConfirmedWaitCount()
+            @ "turn=" $ EndTurnPlayerTurn);
     if (MissionRecorder != none)
         MissionRecorder.Marker("end_turn_confirmed", "player=" $ EndTurnPlayerID
             @ "turn=" $ EndTurnPlayerTurn @ "history=" $ EvidenceHistory
@@ -1966,7 +1974,9 @@ function MakeDecision(XComTacticalController PC)
             if (MissionRecorder != none)
                 MissionRecorder.Marker("patrol_ambush_wait",
                     "group=" $ PatrolAmbushPlanner.CurrentGroupID()
-                    @ "phase=" $ string(PatrolAmbushPlanner.CurrentPhase()));
+                    @ "phase=" $ string(PatrolAmbushPlanner.CurrentPhase())
+                    @ "completed=" $ PatrolAmbushPlanner.ConfirmedWaitCount());
+            PatrolAmbushPlanner.NoteWaitRequested(PlayerState.PlayerTurnCount);
             RequestEndTurn(PC); // Native confirmed end-turn ticket still applies.
             return;
         }
