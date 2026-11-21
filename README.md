@@ -1,6 +1,6 @@
 # Autoplay XCOM 2 — War of the Chosen
 
-**v46 łączy zmianę dojścia do X4 w SabotageCC z wygaszaniem panelu po zakończeniu taktyki.** W próbie v45 gra zaliczyła SabotageCC po ręcznej interwencji. Później wróciła do menu i według testera wyłączyła się. Przyczyna wyłączenia pozostaje nieustalona. [Raport v45](docs/report-v45-2026-11-21.pl.md) · [Paczka i próba Windows #4](https://github.com/HeisenbergC29/autoplay-xcom2/issues/4)
+**GasStation w v46 zakończyła się zwycięstwem za +10 200 punktów bez odnotowanej interwencji gracza.** W jednym procesie rozegrano pięć misji. W SabotageCC dojście do X4 nadal zatrzymywało oddział. LEAD dodał w v47 diagnostykę odrzuconych tras i rozliczenie Overwatch w analizatorze. HELPER przygotowuje zmiany zasadzek przed kolejną wspólną próbą. [Raport v46](docs/report-v46-2026-11-21.pl.md) · [Zadanie HELPERA #111](https://github.com/HeisenbergC29/autoplay-xcom2/issues/111)
 
 [Start pomocnika i komunikacja zespołu — issue #1](https://github.com/HeisenbergC29/autoplay-xcom2/issues/1) ·
 [Organizacja zespołu i import prac pomocnika](docs/TEAM.pl.md) ·

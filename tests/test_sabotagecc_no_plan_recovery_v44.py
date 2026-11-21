@@ -140,7 +140,7 @@ class NativeRecoverySourceSafety(unittest.TestCase):
         for token in ("!IsKnownCombatTile(Tile)", "HasBlockingHazard(Soldier, Tile)",
                       "!IsRecoveryFormationAllowed(StartSupport, NearestSupportDistance(Soldier, Tile))",
                       "Risk = ExposureRisk(Soldier, Tile, KnownEnemies, Reaches, Weights);",
-                      "return Risk <= CurrentRisk + 3.0;"):
+                      "if (Risk <= CurrentRisk + 3.0)"):
             self.assertIn(token, step)
 
     def test_bounded_native_cache_exact_path_current_clear_and_covered_all_tiles(self):

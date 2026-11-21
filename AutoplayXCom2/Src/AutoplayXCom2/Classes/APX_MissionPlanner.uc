@@ -30,6 +30,25 @@ struct MissionGoal
     var string BerserkerSabotageGoalSource;
 };
 
+/** First tile check to fail, counted once for an endpoint or for an intermediate step. */
+struct SabotageStepRejections
+{
+    var int UnknownTile;
+    var int Hazard;
+    var int Support;
+    var int Exposure;
+};
+
+/** One soldier's first-failure counts over the candidate blue paths in one recovery scan. */
+struct SabotagePathRejections
+{
+    var int Unreachable;
+    var int Cost;
+    var int Geometry;
+    var SabotageStepRejections Endpoint;
+    var SabotageStepRejections Step;
+};
+
 // A component marks an actual mission unit (VIP/captive), rather than every civilian.
 static function bool HasObjectiveInfo(XComGameState_BaseObject StateObject)
 {
@@ -2179,50 +2198,94 @@ static function bool HasSabotageContactScanBudget(int MovedTiles, int DetectorsP
         && RemainingDetectors >= MovedTiles * DetectorsPerTile;
 }
 
-/** Validate one tile against the known threat snapshot and measure its exposure for endpoint scoring. */
+/** Check one tile in native evaluation order. Increment just its first failed check.
+ * On a known, hazard-free, supported tile, return its exposure through Risk for scoring.
+ */
 static function bool InspectSabotageStep(XComGameState_Unit Soldier, TTile Tile,
     float CurrentRisk, float StartSupport, const out array<StateObjectReference> KnownEnemies,
-    const out array<float> Reaches, const out array<float> Weights, out float Risk)
+    const out array<float> Reaches, const out array<float> Weights, out float Risk,
+    out SabotageStepRejections Failures)
 {
-    if (!IsKnownCombatTile(Tile)
-        || class'APX_HazardKnowledge'.static.HasBlockingHazard(Soldier, Tile)
-        || !IsRecoveryFormationAllowed(StartSupport, NearestSupportDistance(Soldier, Tile)))
+    if (!IsKnownCombatTile(Tile))
+    {
+        ++Failures.UnknownTile;
         return false;
+    }
+    if (class'APX_HazardKnowledge'.static.HasBlockingHazard(Soldier, Tile))
+    {
+        ++Failures.Hazard;
+        return false;
+    }
+    if (!IsRecoveryFormationAllowed(StartSupport, NearestSupportDistance(Soldier, Tile)))
+    {
+        ++Failures.Support;
+        return false;
+    }
     Risk = ExposureRisk(Soldier, Tile, KnownEnemies, Reaches, Weights);
-    return Risk <= CurrentRisk + 3.0;
+    if (Risk <= CurrentRisk + 3.0)
+        return true;
+    ++Failures.Exposure;
+    return false;
 }
 
-/** Build an affordable native blue path with exact endpoints. Check its destination first
- * and inspect every intervening tile before returning its exposure in EndRisk.
+/** Build an affordable native blue path with exact endpoints. Inspect its destination
+ * before its intervening tiles. Each rejected path increments exactly one counter.
  * Failed calls may leave path data, which the caller must discard.
  */
 static function bool BuildSabotageRecoveryPath(XComGameState_Unit Soldier, XGUnit Visualizer,
     TTile Tile, float CurrentRisk, float StartSupport, const out array<StateObjectReference> KnownEnemies,
     const out array<float> Reaches, const out array<float> Weights, out array<TTile> CandidatePath,
-    out float EndRisk)
+    out float EndRisk, out SabotagePathRejections Failures)
 {
     local int PathIndex;
     local float Cost, StepRisk;
 
     CandidatePath.Length = 0;
     if (!Visualizer.m_kReachableTilesCache.IsTileReachable(Tile))
+    {
+        ++Failures.Unreachable;
         return false;
+    }
     Cost = Visualizer.m_kReachableTilesCache.GetPathCostToTile(Tile);
-    if (Cost < 0.0 || Cost > Visualizer.GetMobility()
-        || !InspectSabotageStep(Soldier, Tile, CurrentRisk, StartSupport, KnownEnemies, Reaches, Weights, EndRisk))
+    if (Cost < 0.0 || Cost > Visualizer.GetMobility())
+    {
+        ++Failures.Cost;
+        return false;
+    }
+    if (!InspectSabotageStep(Soldier, Tile, CurrentRisk, StartSupport, KnownEnemies,
+        Reaches, Weights, EndRisk, Failures.Endpoint))
         return false;
     if (!Visualizer.m_kReachableTilesCache.BuildPathToTile(Tile, CandidatePath)
         || CandidatePath.Length < 2 || CandidatePath.Length > 48
         || CandidatePath[0] != Soldier.TileLocation
         || CandidatePath[CandidatePath.Length - 1] != Tile)
+    {
+        ++Failures.Geometry;
         return false;
+    }
     for (PathIndex = 1; PathIndex < CandidatePath.Length - 1; ++PathIndex)
     {
         if (!InspectSabotageStep(Soldier, CandidatePath[PathIndex], CurrentRisk,
-            StartSupport, KnownEnemies, Reaches, Weights, StepRisk))
+            StartSupport, KnownEnemies, Reaches, Weights, StepRisk, Failures.Step))
             return false;
     }
     return true;
+}
+
+/** Append the first-failure counts for this soldier's scan to its existing recovery log line. */
+static function string SabotagePathRejectionFields(const out SabotagePathRejections Failures)
+{
+    return "|native_unreachable=" $ Failures.Unreachable
+        $ "|native_cost=" $ Failures.Cost
+        $ "|native_geometry=" $ Failures.Geometry
+        $ "|endpoint_unknown=" $ Failures.Endpoint.UnknownTile
+        $ "|endpoint_hazard=" $ Failures.Endpoint.Hazard
+        $ "|endpoint_support=" $ Failures.Endpoint.Support
+        $ "|endpoint_exposure=" $ Failures.Endpoint.Exposure
+        $ "|step_unknown=" $ Failures.Step.UnknownTile
+        $ "|step_hazard=" $ Failures.Step.Hazard
+        $ "|step_support=" $ Failures.Step.Support
+        $ "|step_exposure=" $ Failures.Step.Exposure;
 }
 
 /** Choose one native blue move toward X4 when normal squad planning has exhausted its options.
@@ -2247,6 +2310,7 @@ static function bool ChooseSabotageCCRecoveryMove(XComGameState_Unit Soldier,
     local TTile Tile, GoalTile, Closest;
     local int Index, Sample, Count, Cleared, Rejected, ContactStatus;
     local int RouteSamples, RouteIndex, UniformSample, UniformCount;
+    local SabotagePathRejections NativeRejections;
     local int RejectedNativePath, RejectedConcealment, RejectedExplosive;
     local int RejectedContact, AcceptedDetours, SkippedNoProgress, SkippedVisited;
     local int RejectedBudget, ContactDetectorsBefore, TempoCoverBefore, DetectorsPerTile;
@@ -2357,7 +2421,7 @@ static function bool ChooseSabotageCCRecoveryMove(XComGameState_Unit Soldier,
             continue;
         }
         if (!BuildSabotageRecoveryPath(Soldier, Visualizer, Tile, CurrentRisk, StartSupport,
-                KnownEnemies, Reaches, Weights, CandidatePath, EndRisk))
+                KnownEnemies, Reaches, Weights, CandidatePath, EndRisk, NativeRejections))
         {
             ++RejectedNativePath;
             ++Rejected;
@@ -2449,6 +2513,7 @@ static function bool ChooseSabotageCCRecoveryMove(XComGameState_Unit Soldier,
         $ "|tempo_cover_before=" $ TempoCoverBefore
         $ "|tempo_cover_left=" $ RemainingTempoCoverChecks
         $ "|rejected_native_path=" $ RejectedNativePath
+        $ SabotagePathRejectionFields(NativeRejections)
         $ "|rejected_concealment=" $ RejectedConcealment
         $ "|rejected_explosive=" $ RejectedExplosive
         $ "|rejected_contact=" $ RejectedContact

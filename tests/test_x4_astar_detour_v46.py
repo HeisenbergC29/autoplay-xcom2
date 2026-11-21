@@ -5,6 +5,7 @@ stock A*, reachability, hazards and game outcomes remain source contracts
 and require a separate Windows WOTC gameplay E2E.
 """
 from pathlib import Path
+import re
 import unittest
 
 from test_ui_gating import function_body
@@ -153,6 +154,60 @@ class VerifiedX4AStarIntegrationContracts(unittest.TestCase):
                           "ActivateAbility_ReturnContext(",
                           "GameStateMoveUnitSingle("):
             self.assertNotIn(forbidden, recovery)
+
+    def test_single_tile_only_counts_the_first_failure(self):
+        """Guards short-circuit in stock order, with one counter per first failure."""
+        body = function_body(self.mission, "InspectSabotageStep")
+        expected = [
+            ("!IsKnownCombatTile(Tile)", "UnknownTile"),
+            ("class'APX_HazardKnowledge'.static.HasBlockingHazard(Soldier, Tile)", "Hazard"),
+            ("!IsRecoveryFormationAllowed(StartSupport, NearestSupportDistance(Soldier, Tile))", "Support"),
+        ]
+        first_failures = re.findall(r"if \(([^\n]*)\)\s*\{\s*\+\+Failures\.(\w+);\s*return false;\s*\}", body)
+        self.assertEqual(expected, first_failures)
+        self.assertEqual(1, body.count("ExposureRisk("))
+        self.assertRegex(body, r"if \(Risk <= CurrentRisk \+ 3\.0\)\s*return true;\s*"
+                               r"\+\+Failures\.Exposure;\s*return false;")
+        self.assertEqual(4, body.count("return false;"))
+        self.assertEqual(4, body.count("++Failures."))
+
+    def test_path_rejections_preserve_native_order_and_tile_stage(self):
+        """Validated paths pass; endpoint and intermediate failures use distinct counts."""
+        body = function_body(self.mission, "BuildSabotageRecoveryPath")
+        stages = [
+            "IsTileReachable(Tile)", "++Failures.Unreachable;", "GetPathCostToTile(Tile)",
+            "Cost > Visualizer.GetMobility()", "++Failures.Cost;", "InspectSabotageStep(Soldier, Tile,",
+            "EndRisk, Failures.Endpoint)", "BuildPathToTile(Tile, CandidatePath)",
+            "CandidatePath[CandidatePath.Length - 1] != Tile", "++Failures.Geometry;",
+            "InspectSabotageStep(Soldier, CandidatePath[PathIndex],", "StepRisk, Failures.Step)",
+            "return true;",
+        ]
+        indices = [body.index(token) for token in stages]
+        self.assertEqual(sorted(indices), indices)
+        for token in ("IsTileReachable(", "GetPathCostToTile(", "BuildPathToTile("):
+            self.assertEqual(1, body.count(token))
+        for bucket in ("Unreachable", "Cost", "Geometry"):
+            self.assertRegex(body, rf"\+\+Failures\.{bucket};\s*return false;")
+        self.assertEqual(5, body.count("return false;"))
+        self.assertEqual(3, body.count("++Failures."))
+
+    def test_one_scan_formats_each_failure_bucket_once(self):
+        """The native-path subtotal can be reconciled without inspecting or logging each tile."""
+        scan = function_body(self.mission, "ChooseSabotageCCRecoveryMove")
+        self.assertRegex(scan, r"CandidatePath, EndRisk, NativeRejections\)\)\s*"
+                               r"\{\s*\+\+RejectedNativePath;\s*\+\+Rejected;\s*continue;")
+        self.assertEqual(1, scan.count("SabotagePathRejectionFields(NativeRejections)"))
+        self.assertLess(scan.index("RejectedNativePath", scan.index('"|rejected_native_path="')),
+                        scan.index("SabotagePathRejectionFields(NativeRejections)"))
+        formatter = function_body(self.mission, "SabotagePathRejectionFields")
+        fields = re.findall(r'"\|(\w+)=" \$ Failures\.([.\w]+)', formatter)
+        expected = [("native_unreachable", "Unreachable"), ("native_cost", "Cost"),
+                    ("native_geometry", "Geometry")]
+        for prefix, stage in (("endpoint", "Endpoint"), ("step", "Step")):
+            for name, member in (("unknown", "UnknownTile"), ("hazard", "Hazard"),
+                                 ("support", "Support"), ("exposure", "Exposure")):
+                expected.append((f"{prefix}_{name}", f"{stage}.{member}"))
+        self.assertEqual(expected, fields)
 
     def test_rejection_reasons_appear_before_native_controller_move_choice(self):
         """Previously six identical no-plan stops lacked per-stage rejection data."""
