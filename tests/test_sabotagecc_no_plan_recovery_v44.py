@@ -156,7 +156,7 @@ class NativeRecoverySourceSafety(unittest.TestCase):
                       "!InspectSabotageStep(Soldier, CandidatePath[PathIndex]"):
             self.assertIn(token, path)
         for token in ("GetAllPathableTiles(Tiles, Visualizer.GetMobility())",
-                      "GetClosestReachableDestination(GoalTile)", "Count = Min(48, Tiles.Length)",
+                      "GetClosestReachableDestination(GoalTile)", "Count = Min(48, Tiles.Length + RouteSamples + 1)",
                       "GetVisibleThreats(Soldier, KnownEnemies)", "GetMeleeThreatReaches(Soldier, KnownEnemies",
                       "GetThreatWeights(Soldier, KnownEnemies", "AssessRoute(",
                       "bSnapshotComplete, SnapshotReason, 0", "RemainingContactDetectors",
