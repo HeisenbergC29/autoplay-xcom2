@@ -80,6 +80,19 @@ class QuiescenceIntegrationContracts(unittest.TestCase):
                           "GetTotalScore(", "RevealMapForPlayer("):
             self.assertNotIn(forbidden, cleanup)
 
+    def test_late_hud_events_are_all_idempotently_blocked(self):
+        """A queued mouse click or score refresh cannot reenter the old world."""
+        for method in ("OnToggleClicked", "OnControlMouseEvent",
+                       "UpdateStatus", "GetDisplayedScoreText"):
+            with self.subTest(method=method):
+                f = function_body(self.hud, method)
+                self.assertIn("bIsRemoved || bPostMissionQuiesced", f)
+                self.assertLess(f.index("bIsRemoved || bPostMissionQuiesced"),
+                                f.index("Controller.Toggle()") if method == "OnToggleClicked"
+                                else f.index("ScoreCounter.GetText()") if method == "GetDisplayedScoreText"
+                                else f.index("GetDisplayedScoreText()") if method == "UpdateStatus"
+                                else f.index("switch (Cmd)"))
+
     def test_real_recorder_finalizes_and_unsubscribes_after_win_not_by_hud_gate(self):
         """Final scoring and all four event unsubscriptions remain owned by recorder."""
         controller_tick = function_body(self.controller, "Tick")
