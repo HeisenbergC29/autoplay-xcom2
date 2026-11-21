@@ -2137,7 +2137,7 @@ static function float ScoreSabotageAStarDetour(int PathIndex,
         return -10000.0;
     if (EndRisk > CurrentRisk + 3.0)
         return -10000.0;
-    Value = 22.0 + FMin(14.0, float(PathIndex) * 2.0);
+    Value = 22.0 + FMin(14.0, PathIndex * 2.0);
     Value -= FMax(0.0, EndRisk - CurrentRisk) * 0.5;
     Value -= FMin(24.0, FMax(0.0, FormationLoss)) * 0.25;
     return Value;
