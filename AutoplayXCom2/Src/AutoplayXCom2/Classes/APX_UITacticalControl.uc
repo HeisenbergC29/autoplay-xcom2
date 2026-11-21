@@ -98,6 +98,8 @@ simulated function APX_UITacticalControl InitAutoplayControl()
 
 simulated function OnToggleClicked(UIButton Button)
 {
+    if (bIsRemoved || bPostMissionQuiesced)
+        return;
     if (Controller != none)
     {
         Controller.Toggle();
@@ -109,6 +111,8 @@ simulated function OnToggleClicked(UIButton Button)
 
 simulated function OnControlMouseEvent(UIPanel Panel, int Cmd)
 {
+    if (bIsRemoved || bPostMissionQuiesced)
+        return;
     switch (Cmd)
     {
     case class'UIUtilities_Input'.const.FXS_L_MOUSE_IN:
@@ -189,7 +193,8 @@ simulated function string GetDisplayedScoreText()
     local int HistoryIndex;
 
     bScoreReadDeferred = false;
-    if (ScoreCounter == none)
+    // A late UI callback after native end must never touch tactical history.
+    if (bIsRemoved || bPostMissionQuiesced || ScoreCounter == none)
         return "";
 
     History = `XCOMHISTORY;
@@ -225,6 +230,8 @@ simulated function UpdateStatus()
 {
     local string ScoreText;
 
+    if (bIsRemoved || bPostMissionQuiesced)
+        return;
     // UIText caches its HTML, so unchanged score/font values do not issue
     // another Flash update. Keep this independent of autoplay's run state.
     if (ScoreCounter != none && ScoreLabel != none && ToggleButton != none)
