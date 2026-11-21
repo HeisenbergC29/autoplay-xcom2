@@ -9,9 +9,9 @@ Gotowe zadania niezależne: [diagnostyka raportów #2](https://github.com/Heisen
 i [macierz misji #3](https://github.com/HeisenbergC29/autoplay-xcom2/issues/3).
 Osobny dowód kompilacji/gry użytkownika: [próby bieżącej wersji #4](https://github.com/HeisenbergC29/autoplay-xcom2/issues/4).
 
-## Wspólna próba v46
+## Po próbie v46
 
-HELPER przygotował dojście do X4 przez natywnie osiągalny objazd i wygaszenie panelu po taktyce. LEAD połączył obie zmiany do jednej kompilacji Windows i próby przejścia do kolejnej misji. Użytkownik przekazuje log w razie ostrzeżenia, błędu albo ponownego zakończenia procesu. Przy 0 błędów i 0 ostrzeżeń wystarczy podać wynik kompilacji. [Paczka i stan próby #4](https://github.com/HeisenbergC29/autoplay-xcom2/issues/4)
+LEAD opracował wyniki pięciu misji, liczniki odrzuceń dróg do X4 i raportowanie strzałów Overwatch. HELPER przejmuje pracę nad trzyturowym oczekiwaniem drużyny i doborem rezerwy podczas walki. LEAD przejrzy PR i przekaże jeden wspólny build użytkownikowi. Przy kompilacji z zerem błędów i ostrzeżeń wystarczy podać wynik. [Zadanie #111](https://github.com/HeisenbergC29/autoplay-xcom2/issues/111) · [Raport v46](report-v46-2026-11-21.pl.md)
 
 Przegląd każdego PR obejmuje komentarze dokumentacyjne właściwe dla języka, podział złożonych metod, testy jednostkowe metod i testy E2E złożonych przebiegów. [Zasady dla obu agentów](../AGENTS.md)
 

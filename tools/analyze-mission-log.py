@@ -20,6 +20,7 @@ MAX_LOG_BYTES = 128 * 1024 * 1024
 MAX_ARCHIVE_BYTES = 256 * 1024 * 1024
 MAX_ARCHIVE_ENTRIES = 32
 MAX_RECORDS = 100000
+OVERWATCH_SHOTS = {'overwatchshot', 'pistoloverwatchshot', 'longwatchshot'}
 KEY = re.compile(r'^[a-z_][a-z0-9_]*$')
 INTEGER = re.compile(r'^-?\d+$')
 DECIMAL = re.compile(r'^-?\d+(?:\.\d+)?$')
@@ -102,6 +103,7 @@ def parse_record(line: str) -> dict | None:
 
 
 def action_family(ability: str) -> str:
+    """Group an action by its case-insensitive Unreal ability template name."""
     # Unreal FName comparisons are case insensitive; its displayed spelling can
     # be inherited from the first name interned by the engine (e.g. overwatch).
     ability = ability.casefold()
@@ -123,6 +125,39 @@ def action_family(ability: str) -> str:
 def marker_details(record: dict) -> dict[str, str]:
     """Read a marker's inline key/value diagnostics; never treat as a dispatch."""
     return dict(re.findall(r'\b([a-z_]+)=([^\s]+)', str(record.get('details', ''))))
+
+
+def summarize_overwatch(accepted_orders: int, resolved_results: list[dict]) -> dict:
+    """Count accepted autoplay orders and independently observed stock arm and shot results.
+
+    The caller excludes interrupt frames before resolution. Only an explicit friendly
+    scope certifies which side acted at that moment. Friendly results include manual
+    actions and reactions triggered by abilities such as Return Fire. Totals alone
+    cannot identify a particular patrol or tell which reservation triggered a shot.
+    """
+    arm_results = 0
+    unknown_scope_results = 0
+    shot_outcomes = Counter()
+    for result in resolved_results:
+        ability = str(result.get('ability', '')).casefold()
+        is_shot = ability in OVERWATCH_SHOTS
+        if not is_shot and action_family(ability) != 'overwatch':
+            continue
+        scope = result.get('source_scope')
+        if scope == 'friendly':
+            if is_shot:
+                shot_outcomes[str(result.get('hit', 'unknown'))] += 1
+            else:
+                arm_results += 1
+        elif scope not in {'visible_enemy', 'unseen_other'}:
+            unknown_scope_results += 1
+    return {
+        'accepted_autoplay_orders': accepted_orders,
+        'observed_friendly_arm_results': arm_results,
+        'observed_friendly_shot_results': sum(shot_outcomes.values()),
+        'friendly_shot_outcomes': dict(sorted(shot_outcomes.items())),
+        'unknown_scope_results': unknown_scope_results,
+    }
 
 
 def summarize_grenade_preparation(records: list[dict]) -> dict:
@@ -335,6 +370,7 @@ def summarize_session(session: str, records: list[dict], conflicting_records: bo
         'rejected_actions': sum(record.get('accepted') is False for record in chosen),
         'abilities': dict(sorted(abilities.items())),
         'action_families': dict(sorted(families.items())),
+        'overwatch_observations': summarize_overwatch(families['overwatch'], results),
         'moves': sum(record.get('kind') in {'move', 'explore'} for record in accepted),
         'hit_results': dict(sorted(hit_results.items())),
         'hit_results_by_source': {scope: dict(sorted(counts.items()))
@@ -424,6 +460,7 @@ def analyze_logs(logs: list[tuple[str, str]]) -> dict:
             'Candidate scores describe planner preferences, not proven reasons for victory or defeat.',
             'Missing logs or end markers do not establish a mission result.',
             'Accepted actions are autoplay submissions; result records include friendly reactions and incoming actions too.',
+            'Friendly Overwatch arm and shot results can include manual actions and other stock reaction triggers.',
             'Result hit enums include non-attack abilities; they are not a weapon accuracy percentage.',
             'Comparison points use one game-derived profile with explicit conventions; missing components prevent a final total.',
             'Native score snapshots are authoritative observations; initialization MaxScore is not earned score.',
@@ -463,6 +500,16 @@ def human_summary(report: dict) -> str:
         families = session['action_families']
         lines.append('  ' + ', '.join(f'{name}={families.get(name, 0)}'
                                      for name in ['overwatch', 'hunker', 'grenade', 'reload', 'support', 'evacuation']))
+        overwatch = session['overwatch_observations']
+        if any(overwatch.values()):
+            lines.append(
+                f"  Observed Overwatch autoplay orders={overwatch['accepted_autoplay_orders']}, "
+                f"friendly arm results={overwatch['observed_friendly_arm_results']}, "
+                f"friendly shot results={overwatch['observed_friendly_shot_results']}, "
+                f"results with unknown source scope={overwatch['unknown_scope_results']}")
+            if overwatch['friendly_shot_outcomes']:
+                lines.append('  Friendly Overwatch shot outcomes include ' + ', '.join(
+                    f'{outcome}={count}' for outcome, count in overwatch['friendly_shot_outcomes'].items()))
         if session['unsupported_abilities']:
             lines.append('  Recorded unsupported abilities: ' + ', '.join(session['unsupported_abilities']))
         if session['grenade_diagnostics']['scans']:
