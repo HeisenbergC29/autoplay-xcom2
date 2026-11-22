@@ -2553,8 +2553,7 @@ static function bool HasLegalMove(XComGameState_Unit UnitState)
 static function float ScoreTimedBerserkerLastAP(float Progress, int TimerTurns,
     float AdditionalExposure, bool bSafeConcealment)
 {
-    if (TimerTurns <= 0 || TimerTurns > 4 || Progress < 1.0
-        || !bSafeConcealment || AdditionalExposure > 8.0)
+    if (TimerTurns <= 0 || TimerTurns > 4 || Progress < 1.0 || !bSafeConcealment || AdditionalExposure > 8.0)
         return -10000.0;
     return 36.0 + FMin(12.0, Progress * 3.0)
         - FMax(0.0, AdditionalExposure) * 1.5;
