@@ -70,7 +70,7 @@ class AreaSpitSourceContracts(unittest.TestCase):
         for token in ("Enemy.FindAbility('PoisonSpit')", "Enemy.IsAlive()",
                       "KnownEnemies.Length > 64", "TileDistance("):
             self.assertIn(token, spit)
-        for token in ("Scanned > 256", "FriendTiles.Length >= 12", "Friend.IsAlive()",
+        for token in ("Count > 24", "FriendTiles.Length >= 12", "Friend.IsAlive()",
                       "Friend.IsFriendlyUnit("):
             if token == "Friend.IsFriendlyUnit(":
                 self.assertIn("Soldier.IsFriendlyUnit(Friend)", friends)
