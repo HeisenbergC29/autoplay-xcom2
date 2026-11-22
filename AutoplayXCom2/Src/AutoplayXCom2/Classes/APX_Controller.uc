@@ -1746,10 +1746,7 @@ function MakeDecision(XComTacticalController PC)
             SelectedRouteUnitID = UnitState.ObjectID;
         }
 
-        // Under the real SabotageTransmitter timer, a remembered enemy is a
-        // choice, not exclusive control of movement. A second, independent
-        // mission candidate competes with the contact-search proposal.
-        // When only one AP is left, use a stricter full-path X4 helper.
+        // Offer X4 progress independently of a search for remembered contacts.
         bCompareTimedObjective = ShouldCompareTimedObjective(
             FocusBattle != none
                 && FocusBattle.MapData.ActiveMission.sType == "SabotageTransmitter",
@@ -1759,33 +1756,9 @@ function MakeDecision(XComTacticalController PC)
             TimedNativeTimer, UnitState.GetMyTemplateName() == 'BerserkerMP');
         if (bCompareTimedObjective && (bContactSearch || UnitState.NumActionPoints() == 1))
         {
-            CandidatePath.Length = 0;
-            TimedMoveReason = "none";
-            bTimedMoveFound = false;
-            iCandidateRoutine = 0;
-            iCandidateFirstBlue = 0;
-            iCandidateEmergencyRoute = 0;
-            if (UnitState.NumActionPoints() >= 2)
-            {
-                bTimedMoveFound = class'APX_MissionPlanner'.static.ChooseMove(
-                    UnitState, CandidatePath, Score, RemainingConcealmentChecks,
-                    RemainingCoverChecks, FocusTargetID, bFocusedGoal,
-                    RangedTargetID, bRangedFocusGoal,
-                    ContactSnapshotUnits, ContactSnapshotInteractives,
-                    bContactSnapshotComplete, ContactSnapshotReason,
-                    RemainingContactDetectors, RemainingContactTiles, RemainingContactLOS,
-                    RouteTempo, PlayerState.PlayerTurnCount,
-                    PatrolAmbushPlanner.HasActiveStaging(), bContactSearch || bVisibleThreats,
-                    CandidateRouteGoal, iCandidateRoutine, iCandidateFirstBlue,
-                    RemainingTempoCoverChecks, iCandidateEmergencyRoute);
-                TimedMoveReason = bTimedMoveFound ? "native_mission_route" : "no_native_mission_route";
-            }
-            else if (UnitState.NumActionPoints() == 1)
-            {
-                bTimedMoveFound = class'APX_MissionPlanner'.static.ChooseTimedBerserkerLastAP(
-                    UnitState, CandidatePath, Score, TimedMoveReason,
-                    RemainingConcealmentChecks, RemainingTempoCoverChecks);
-            }
+            bTimedMoveFound = class'APX_MissionPlanner'.static.ChooseTimedBerserkerObjective(
+                UnitState, FocusBattle, TimedNativeTimer, CandidatePath, Score, TimedMoveReason,
+                RemainingConcealmentChecks, RemainingTempoCoverChecks);
             if (MissionRecorder != none)
                 MissionRecorder.Marker("timed_objective_comparison",
                     "unit=" $ UnitState.ObjectID
@@ -1798,8 +1771,7 @@ function MakeDecision(XComTacticalController PC)
                     @ "candidate_score=" $ Score
                     @ "best_before=" $ BestScore);
             if (bTimedMoveFound && TraceCandidateMove(UnitState, CandidatePath, Score)
-                && Score > BestScore && CanUseMove(UnitState, CandidatePath,
-                    iCandidateEmergencyRoute > 0))
+                && Score > BestScore && CanUseMove(UnitState, CandidatePath))
             {
                 BestPath = CandidatePath;
                 BestMovePlanner = UnitState.NumActionPoints() == 1
@@ -1810,12 +1782,8 @@ function MakeDecision(XComTacticalController PC)
                 bArea = false;
                 BestLocations.Length = 0;
                 bHavePlan = true;
-                bSelectedRoute = UnitState.NumActionPoints() >= 2
-                    && iCandidateRoutine > 0;
-                bSelectedFirstBlue = bSelectedRoute && iCandidateFirstBlue > 0;
-                BestRouteGoal = CandidateRouteGoal;
-                SelectedRouteDestination = CandidatePath[CandidatePath.Length - 1];
-                SelectedRouteUnitID = UnitState.ObjectID;
+                bSelectedRoute = false;
+                bSelectedFirstBlue = false;
             }
         }
         CandidatePath.Length = 0;

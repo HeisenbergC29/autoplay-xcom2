@@ -2560,48 +2560,73 @@ static function float ScoreTimedBerserkerLastAP(float Progress, int TimerTurns,
 }
 
 /**
- * Preserve scarce AP only if an executable movement action can approach a
- * real X4 goal without an estimated concealment break, new poison/explosive
- * risk, unsupported separation or increased observed exposure.
- * Native action availability is still revalidated by Controller.CanUseMove;
- * neither the route nor the score grants planting or relay damage.
+ * Check the complete native X4 prefix with shared inspection budgets.
+ * The result is a risk estimate for the current history, not future contact.
  */
-static function bool ChooseTimedBerserkerLastAP(XComGameState_Unit Soldier,
-    out array<TTile> Path, out float Score, out string Reason,
+static function bool CheckTimedObjectPath(XComGameState_Unit Soldier,
+    const out array<TTile> Path, out float ExtraRisk,
     out int RemainingConcealmentChecks, out int RemainingTempoCoverChecks)
 {
-    local XComGameState_BattleData Battle;
-    local XGUnit Visualizer;
-    local TTile GoalTile;
-    local string GoalSource, ConcealmentReason;
     local array<StateObjectReference> KnownEnemies;
     local array<float> Reaches, Weights;
-    local float OriginRisk, StepRisk, Progress, ExtraRisk;
-    local int TimerTurns, NativeGoalStatus, Step;
+    local float OriginRisk, StepRisk;
+    local string ConcealmentReason;
+    local int Step;
+
+    ExtraRisk = 0.0;
+    if (RemainingTempoCoverChecks < Path.Length - 1
+        || class'APX_ConcealmentPlanner'.static.InspectPathRisk(
+            Soldier, Path, ConcealmentReason, RemainingConcealmentChecks))
+        return false;
+    GetVisibleThreats(Soldier, KnownEnemies);
+    if (KnownEnemies.Length > 64)
+        return false;
+    GetMeleeThreatReaches(Soldier, KnownEnemies, Reaches);
+    GetThreatWeights(Soldier, KnownEnemies, Weights);
+    OriginRisk = ExposureRisk(Soldier, Soldier.TileLocation, KnownEnemies, Reaches, Weights);
+    for (Step = 1; Step < Path.Length; ++Step)
+    {
+        if (class'APX_HazardKnowledge'.static.HasBlockingHazard(Soldier, Path[Step])
+            || !class'APX_FullIntel'.static.CanPlanAtTile(Soldier, Path[Step])
+            || class'APX_ExplosiveCoverKnowledge'.static.InspectRiskAtTile(
+                Soldier, Path[Step], KnownEnemies, RemainingTempoCoverChecks) > 0.0)
+            return false;
+        StepRisk = ExposureRisk(Soldier, Path[Step], KnownEnemies, Reaches, Weights);
+        ExtraRisk = FMax(ExtraRisk, StepRisk - OriginRisk);
+        if (ExtraRisk > 8.0)
+            return false;
+    }
+    return true;
+}
+
+/**
+ * Return an affordable blue prefix toward the unplanted X4 site.
+ * Battle and timer are read by the controller during this decision.
+ * The normal dispatcher still validates the selected route.
+ */
+static function bool ChooseTimedBerserkerObjective(XComGameState_Unit Soldier,
+    XComGameState_BattleData Battle, int TimerTurns, out array<TTile> Path,
+    out float Score, out string Reason, out int RemainingConcealmentChecks,
+    out int RemainingTempoCoverChecks)
+{
+    local XGUnit Visualizer;
+    local TTile GoalTile;
+    local string GoalSource;
+    local float Progress, ExtraRisk;
 
     Path.Length = 0;
     Score = -10000.0;
-    Reason = "last_ap_not_applicable";
-    if (Soldier == none || Soldier.GetMyTemplate() == none
-        || Soldier.GetMyTemplateName() != 'BerserkerMP'
-        || Soldier.NumActionPoints() != 1
-        || Soldier.NumActionPointsForMoving() < 1
-        || !Soldier.IsAbleToAct()
-        || !class'APX_MissionPlanner'.static.HasLegalMove(Soldier)
-        || class'APX_MissionPlanner'.static.ShouldEvacuate(Soldier)
-        || class'APX_MissionPlanner'.static.HasBleedingSquadmate(Soldier))
-        return false;
-    Battle = XComGameState_BattleData(`XCOMHISTORY.GetSingleGameStateObjectForClass(
-        class'XComGameState_BattleData', true));
-    TimerTurns = class'APX_BerserkerFocus'.static.ReadActiveTimerTurns();
-    if (Battle == none || Battle.MapData.ActiveMission.sType != "SabotageTransmitter"
+    Reason = "timed_x4_not_applicable";
+    if (Soldier == none || Soldier.GetMyTemplateName() != 'BerserkerMP'
+        || Soldier.NumActionPointsForMoving() < 1 || !Soldier.IsAbleToAct()
+        || !HasLegalMove(Soldier) || ShouldEvacuate(Soldier) || HasBleedingSquadmate(Soldier)
+        || Battle == none || Battle.MapData.ActiveMission.sType != "SabotageTransmitter"
         || class'APX_PlantInteractionKnowledge'.static.NativePlantObjectivePhase(Battle) != 0
         || TimerTurns <= 0 || TimerTurns > 4
-        || !class'APX_FullIntel'.default.EnableFullIntel)
+        || !class'APX_FullIntel'.default.EnableFullIntel || !default.PrioritizeBerserkerSabotage)
         return false;
     Reason = "no_verified_x4_goal";
-    if (!FindBerserkerSabotageGoal(Soldier, Battle, GoalTile,
-        GoalSource, NativeGoalStatus))
+    if (!FindBerserkerSabotageGoal(Soldier, Battle, GoalTile, GoalSource))
         return false;
     Visualizer = XGUnit(Soldier.GetVisualizer());
     if (Visualizer == none || Visualizer.m_kReachableTilesCache == none)
@@ -2612,64 +2637,27 @@ static function bool ChooseTimedBerserkerLastAP(XComGameState_Unit Soldier,
     Visualizer.m_kReachableTilesCache.UpdateTileCacheIfNeeded();
     Reason = "no_native_prefix";
     if (!ChooseRoutePrefix(Soldier, Visualizer, GoalTile, Path)
-        || Path.Length > 32 || Path[0] != Soldier.TileLocation)
+        || Path.Length <= 1 || Path.Length > 32 || Path[0] != Soldier.TileLocation)
     {
         Path.Length = 0;
         return false;
     }
     Progress = TileDistance(Soldier.TileLocation, GoalTile)
         - TileDistance(Path[Path.Length - 1], GoalTile);
-    if (Progress < 1.0)
+    Reason = "no_verified_goal_progress";
+    if (Progress >= 1.0)
     {
-        Reason = "no_verified_goal_progress";
-        Path.Length = 0;
-        return false;
-    }
-    // No one-AP dash into an uncertain patrol, smoke, explosive scenery or
-    // concealment break. Each full path element consumes one shared budget.
-    Reason = "unsafe_native_path";
-    if (RemainingTempoCoverChecks < Path.Length - 1
-        || class'APX_ConcealmentPlanner'.static.InspectPathRisk(
-            Soldier, Path, ConcealmentReason, RemainingConcealmentChecks))
-    {
-        Path.Length = 0;
-        return false;
-    }
-    GetVisibleThreats(Soldier, KnownEnemies);
-    if (KnownEnemies.Length > 64)
-    {
-        Path.Length = 0;
-        return false;
-    }
-    GetMeleeThreatReaches(Soldier, KnownEnemies, Reaches);
-    GetThreatWeights(Soldier, KnownEnemies, Weights);
-    OriginRisk = ExposureRisk(Soldier, Soldier.TileLocation,
-        KnownEnemies, Reaches, Weights);
-    ExtraRisk = 0.0;
-    for (Step = 1; Step < Path.Length; ++Step)
-    {
-        --RemainingTempoCoverChecks;
-        if (class'APX_HazardKnowledge'.static.HasBlockingHazard(Soldier, Path[Step])
-            || !class'APX_FullIntel'.static.CanPlanAtTile(Soldier, Path[Step])
-            || class'APX_ExplosiveCoverKnowledge'.static.RiskAtTile(
-                Soldier, Path[Step], KnownEnemies) > 0.0)
+        Reason = "unsafe_native_path";
+        if (CheckTimedObjectPath(Soldier, Path, ExtraRisk, RemainingConcealmentChecks,
+            RemainingTempoCoverChecks))
         {
-            Path.Length = 0;
-            return false;
-        }
-        StepRisk = ExposureRisk(Soldier, Path[Step], KnownEnemies, Reaches, Weights);
-        ExtraRisk = FMax(ExtraRisk, StepRisk - OriginRisk);
-        if (ScoreTimedBerserkerLastAP(Progress, TimerTurns,
-            ExtraRisk, true) <= -1000.0)
-        {
-            Reason = "risk_exceeds_last_ap_budget";
-            Path.Length = 0;
-            return false;
+            Score = ScoreTimedBerserkerLastAP(Progress, TimerTurns, ExtraRisk, true);
+            Reason = Soldier.NumActionPoints() == 1 ? "timed_x4_native_one_ap" : "timed_x4_native_blue";
+            return Score > 0.0;
         }
     }
-    Score = ScoreTimedBerserkerLastAP(Progress, TimerTurns, ExtraRisk, true);
-    Reason = "timed_x4_native_one_ap";
-    return Score > 0.0;
+    Path.Length = 0;
+    return false;
 }
 
 // The distance heuristic can get stuck behind a wall: a real route may first

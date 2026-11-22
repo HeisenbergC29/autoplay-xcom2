@@ -63,32 +63,39 @@ class TimedObjectiveSourceContracts(unittest.TestCase):
         cls.controller = CONTROLLER.read_text(encoding="utf-8-sig")
         cls.mission = MISSION.read_text(encoding="utf-8-sig")
 
-    def test_one_ap_uses_current_native_path_and_checks_every_step(self):
-        """No fabricated reachability, enemy intent, points or speculative shot."""
-        body = function_body(self.mission, "ChooseTimedBerserkerLastAP")
-        for name in ('BerserkerMP', '"SabotageTransmitter"', 'NumActionPoints() != 1',
-                     'NativePlantObjectivePhase(Battle) != 0',
-                     'ReadActiveTimerTurns()', 'FindBerserkerSabotageGoal(',
-                     'ChooseRoutePrefix(', 'Path[0] != Soldier.TileLocation',
-                     'Path.Length > 32', 'Progress < 1.0', 'InspectPathRisk(',
-                     'RemainingTempoCoverChecks < Path.Length - 1',
-                     'RiskAtTile(', 'ExposureRisk(', 'HasBlockingHazard(',
+    def test_timed_blue_route_uses_real_goal_and_checks_every_step(self):
+        """One and two AP use the same X4-only blue prefix and safety gates."""
+        body = function_body(self.mission, "ChooseTimedBerserkerObjective")
+        for name in ('BerserkerMP', '"SabotageTransmitter"', 'NumActionPointsForMoving() < 1',
+                     'NativePlantObjectivePhase(Battle) != 0', '!default.PrioritizeBerserkerSabotage',
+                     'FindBerserkerSabotageGoal(', 'ChooseRoutePrefix(', 'Path[0] != Soldier.TileLocation',
+                     'Path.Length > 32', 'Progress >= 1.0', 'CheckTimedObjectPath(',
                      'ScoreTimedBerserkerLastAP(', 'Path.Length = 0;'):
             self.assertIn(name, body)
+        self.assertNotIn('ChooseMove(', body)
+        safety = function_body(self.mission, "CheckTimedObjectPath")
+        for name in ('InspectPathRisk(', 'RemainingTempoCoverChecks < Path.Length - 1',
+                     'InspectRiskAtTile(', 'ExposureRisk(', 'HasBlockingHazard(',
+                     'ExtraRisk > 8.0', 'CanPlanAtTile('):
+            self.assertIn(name, safety)
         for forbidden in ('CreateNewGameState(', 'Rand(', 'SYNC_RAND(',
                           'SubmitGameState(', 'ActivateAbility_ReturnContext('):
-            self.assertNotIn(forbidden, body)
+            self.assertNotIn(forbidden, body + safety)
 
     def test_contact_and_mission_compete_under_timer_without_altering_combat(self):
         """Both candidates go through common Trace/CanUseMove and >BestScore."""
         body = function_body(self.controller, "MakeDecision")
         current = body.index('ChooseContactSearchMove(')
         timed = body.index('ShouldCompareTimedObjective(', current)
-        mission = body.index("ChooseTimedBerserkerLastAP(", timed)
+        mission = body.index("ChooseTimedBerserkerObjective(", timed)
         last = body.index("TraceCandidateMove(UnitState, CandidatePath, Score)", mission)
         self.assertLess(current, timed)
         self.assertLess(timed, mission)
         self.assertLess(mission, last)
+        comparison = body[timed:last]
+        self.assertIn('UnitState, FocusBattle, TimedNativeTimer,', comparison)
+        self.assertNotIn('FocusTargetID', comparison)
+        self.assertNotIn('.static.ChooseMove(', comparison)
         self.assertIn("Score > BestScore && CanUseMove(UnitState, CandidatePath", body)
         self.assertIn('MissionRecorder.Marker("timed_objective_comparison"', body)
         self.assertIn("if (!bHavePlan)", body)
