@@ -9,9 +9,9 @@ Gotowe zadania niezależne: [diagnostyka raportów #2](https://github.com/Heisen
 i [macierz misji #3](https://github.com/HeisenbergC29/autoplay-xcom2/issues/3).
 Osobny dowód kompilacji/gry użytkownika: [próby bieżącej wersji #4](https://github.com/HeisenbergC29/autoplay-xcom2/issues/4).
 
-## Po próbie v48
+## Wspólna próba v50
 
-LEAD odpowiada za [raport z trzech misji](report-v48-2026-11-22.pl.md) i zmianę oceny Hunker Down w #114. HELPER otrzymuje dwa zadania do jednej kolejnej próby. Pierwsze dotyczy wyboru pozycji strzeleckiej i kosztu skupienia oddziału w zasięgu Vipera. Drugie dotyczy wykorzystania AP w Blood Killer przy zapamiętanym kontakcie i biegnącym zegarze. LEAD przejrzy oba PR i przekaże użytkownikowi jedną paczkę po integracji. [Rozstawienie i ruch #115](https://github.com/HeisenbergC29/autoplay-xcom2/issues/115) · [Blood Killer #116](https://github.com/HeisenbergC29/autoplay-xcom2/issues/116)
+LEAD łączy zmianę Hunker Down z pracą HELPERA nad rozstawieniem strzelców i wykorzystaniem AP w Blood Killer. Użytkownik wykonuje jedną kompilację i próbę. Przy zerze błędów i ostrzeżeń wystarczy podać wynik kompilacji. [Próba #4](https://github.com/HeisenbergC29/autoplay-xcom2/issues/4) · [Rozstawienie i ruch #115](https://github.com/HeisenbergC29/autoplay-xcom2/issues/115) · [Blood Killer #116](https://github.com/HeisenbergC29/autoplay-xcom2/issues/116)
 
 Przegląd każdego PR obejmuje komentarze dokumentacyjne właściwe dla języka, podział złożonych metod, testy jednostkowe metod i testy E2E złożonych przebiegów. [Zasady dla obu agentów](../AGENTS.md)
 

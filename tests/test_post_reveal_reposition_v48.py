@@ -58,10 +58,19 @@ class PostRevealReturnTests(unittest.TestCase):
         """Check quality gates on the sole call site granting the post-reveal exception."""
         source = CONTROLLER.read_text()
         scan = function_body(source, "ChooseCompetitiveReposition")
-        grant = "CanUseMove(UnitState, CandidatePath, false, bProposed, ScanReason)"
+        grant = "CanUseMove(UnitState, CandidatePath, false, bMaterialShotGain, ScanReason)"
+        material_reason = 'bMaterialShotGain = ScanReason == "safe_move_and_shot_candidate";'
         self.assertEqual(1, source.count(grant))
-        order = ("static.ChooseMove(", "if (bProposed)", "if (Score <= BestScore)", grant)
+        order = ("static.ChooseMove(", "if (bProposed)", material_reason, "if (Score <= BestScore)", grant)
         self.assertEqual([scan.index(item) for item in order], sorted(scan.index(item) for item in order))
+        planner = REPOSITION.read_text()
+        self.assertIn('return "safe_move_and_shot_candidate";', function_body(planner, "ForecastScanReason"))
+        choose = function_body(planner, "ChooseMove")
+        self.assertIn("if (bSelected && bBestArea)", choose)
+        for reason in ("area_spit_reposition_retains_shot", "area_spit_reposition_opens_squad_lane"):
+            self.assertIn(f'"{reason}"', choose)
+        self.assertLess(choose.index("if (bSelected && bBestArea)"),
+                        choose.index("ScanReason = ForecastScanReason(SupportedShots, InspectedEndpoints"))
         move_and_shot = load_uc_function(REPOSITION, "MoveAndShotScore")
         # One retained shot, at least +12 percentage points, at least +8 utility, no added exposure.
         self.assertGreater(move_and_shot(35, 50, 45, 60, 10, 8, 4, 2), 35)

@@ -156,9 +156,10 @@ static function bool HasVisibleRuler(const out array<StateObjectReference> Visib
     return false;
 }
 
-/** Enumerate bounded currently legal native basic shots, preserve target safety and projected post-blue AP; empty output means unsupported/unproven. */
+/** Read verified current shots and an optional shot whose only current blocker is no target. */
 static function GatherForecasts(XComGameState_Unit UnitState,
-    const out array<StateObjectReference> VisibleEnemies, out array<AttackForecast> Forecasts)
+    const out array<StateObjectReference> VisibleEnemies, out array<AttackForecast> Forecasts,
+    optional out XComGameState_Ability OpeningShot)
 {
     local GameRulesCache_Unit Cache;
     local GameRulesCache_VisibilityInfo Visibility;
@@ -174,6 +175,7 @@ static function GatherForecasts(XComGameState_Unit UnitState,
     local int ActionIndex, TargetIndex, ModifierIndex, Distance;
 
     Forecasts.Length = 0;
+    OpeningShot = none;
     if (`TACTICALRULES == none || `TACTICALRULES.VisibilityMgr == none || !CanForecastUnit(UnitState)
         || VisibleEnemies.Length == 0 || VisibleEnemies.Length > 64
         || HasVisibleRuler(VisibleEnemies)
@@ -184,7 +186,8 @@ static function GatherForecasts(XComGameState_Unit UnitState,
     for (ActionIndex = 0; ActionIndex < Min(64, Cache.AvailableActions.Length); ++ActionIndex)
     {
         Candidate = Cache.AvailableActions[ActionIndex];
-        if (!Candidate.bInputTriggered || Candidate.AvailableCode != 'AA_Success' || Candidate.bFreeAim)
+        if (!Candidate.bInputTriggered || Candidate.bFreeAim
+            || (Candidate.AvailableCode != 'AA_Success' && Candidate.AvailableCode != 'AA_NoTargets'))
             continue;
         Ability = XComGameState_Ability(`XCOMHISTORY.GetGameStateForObjectID(Candidate.AbilityObjectRef.ObjectID));
         if (!SupportsForecast(Ability) || Ability.OwnerStateObject.ObjectID != UnitState.ObjectID
@@ -194,6 +197,12 @@ static function GatherForecasts(XComGameState_Unit UnitState,
         WeaponState = Ability.GetSourceWeapon();
         if (WeaponState == none || X2WeaponTemplate(WeaponState.GetMyTemplate()) == none)
             continue;
+        if (Candidate.AvailableCode == 'AA_NoTargets')
+        {
+            if (OpeningShot == none && WeaponState.Ammo > 0)
+                OpeningShot = Ability;
+            continue;
+        }
         Aim = X2AbilityToHitCalc_StandardAim(Ability.GetMyTemplate().AbilityToHitCalc);
         for (TargetIndex = 0; TargetIndex < Min(8, Candidate.AvailableTargets.Length); ++TargetIndex)
         {
@@ -242,6 +251,237 @@ static function GatherForecasts(XComGameState_Unit UnitState,
                 return;
         }
     }
+}
+
+/**
+ * Read CURRENT installed PoisonSpit on a nearby living hostile as a risk
+ * capability only. Do not inspect cooldown, AI intent or a predicted target.
+ * Four tiles is the stock PoisonSpitGlob radius in the supplied WOTC data.
+ */
+static function bool HasNearbySpitCapability(XComGameState_Unit Soldier,
+    const out array<StateObjectReference> KnownEnemies)
+{
+    local XComGameState_Unit Enemy;
+    local int Index;
+
+    if (Soldier == none || KnownEnemies.Length > 64 || `XCOMHISTORY == none)
+        return false;
+    for (Index = 0; Index < KnownEnemies.Length; ++Index)
+    {
+        Enemy = XComGameState_Unit(`XCOMHISTORY.GetGameStateForObjectID(
+            KnownEnemies[Index].ObjectID));
+        if (Enemy != none && Enemy.IsAlive() && !Enemy.IsIncapacitated() && !Enemy.bRemoved
+            && !Enemy.bRemovedFromPlay && Soldier.IsEnemyUnit(Enemy)
+            && Enemy.FindAbility('PoisonSpit').ObjectID > 0
+            && class'APX_MissionPlanner'.static.TileDistance(
+                Soldier.TileLocation, Enemy.TileLocation) <= 18.0)
+            return true;
+    }
+    return false;
+}
+
+/**
+ * Read present squadmate tiles once per decision, not per remote movement
+ * sample. Downed living allies still count as potential AoE victims.
+ * Unknown/oversized rosters fail closed on elective anti-Spit movement.
+ */
+static function bool ReadNearbyFriendlyTiles(XComGameState_Unit Soldier,
+    out array<TTile> FriendTiles)
+{
+    local XComGameState_Player PlayerState;
+    local XGPlayer PlayerVisualizer;
+    local XGSquad Squad;
+    local XGUnit Member;
+    local XComGameState_Unit Friend;
+    local array<int> MemberIDs;
+    local int Index, Count;
+
+    FriendTiles.Length = 0;
+    if (Soldier == none || `XCOMHISTORY == none || `TACTICALRULES == none
+        || Soldier.GetAssociatedPlayerID() != `TACTICALRULES.GetLocalClientPlayerObjectID()
+        || Soldier.IsRobotic() || Soldier.IsImmuneToDamage('Poison'))
+        return false;
+    PlayerState = XComGameState_Player(`XCOMHISTORY.GetGameStateForObjectID(
+        Soldier.GetAssociatedPlayerID()));
+    if (PlayerState == none || PlayerState.GetTeam() != eTeam_XCom)
+        return false;
+    PlayerVisualizer = XGPlayer(PlayerState.GetVisualizer());
+    if (PlayerVisualizer == none || PlayerVisualizer.ObjectID != PlayerState.ObjectID
+        || PlayerVisualizer.m_kSquad == none)
+        return false;
+    Squad = PlayerVisualizer.m_kSquad;
+    if (Squad.m_kPlayer != PlayerVisualizer)
+        return false;
+    Count = Squad.GetNumMembers();
+    if (Count <= 0 || Count > 24)
+        return false;
+    for (Index = 0; Index < Count; ++Index)
+    {
+        Member = Squad.GetMemberAt(Index);
+        if (Member == none || Member.ObjectID <= 0 || MemberIDs.Find(Member.ObjectID) != INDEX_NONE)
+            return false;
+        MemberIDs.AddItem(Member.ObjectID);
+        Friend = XComGameState_Unit(`XCOMHISTORY.GetGameStateForObjectID(
+            Member.ObjectID));
+        if (Friend == none)
+            return false;
+        if (Friend.ObjectID == Soldier.ObjectID
+            || !Friend.IsAlive() || Friend.bRemoved || Friend.bRemovedFromPlay
+            || Friend.IsCivilian() || Friend.GetMyTemplate() == none
+            || Friend.GetMyTemplate().bIsCosmetic
+            || Friend.GetAssociatedPlayerID() != Soldier.GetAssociatedPlayerID()
+            || !Soldier.IsFriendlyUnit(Friend) || Friend.IsRobotic()
+            || Friend.IsImmuneToDamage('Poison'))
+            continue;
+        if (FriendTiles.Length >= 12)
+            return false;
+        FriendTiles.AddItem(Friend.TileLocation);
+    }
+    return MemberIDs.Find(Soldier.ObjectID) != INDEX_NONE;
+}
+
+/**
+ * Score only a reduction in *possible shared PoisonSpit victims*. A confirmed
+ * high-value native shot remains preferable; losing significant hit chance,
+ * increasing exposure, or retaining the same AoE cluster are not rewarded.
+ * This geometric estimate is NOT an assertion that the Viper will spit.
+ */
+static function float ScoreAreaShotMove(float NativeScore, float ProjectedScore,
+    int NativeChance, int ProjectedChance, int SharedBefore, int SharedAfter,
+    float RiskBefore, float RiskAfter, float PathCost, int OrdinaryAP)
+{
+    if (OrdinaryAP < 2 || NativeChance < 55 || ProjectedChance < NativeChance - 8)
+        return -10000.0;
+    if (SharedBefore < 3 || SharedAfter >= SharedBefore || SharedAfter < 1)
+        return -10000.0;
+    if (NativeScore < 6.0 || ProjectedScore < 6.0)
+        return -10000.0;
+    if (NativeScore >= 100.0 && NativeChance >= 75)
+        return -10000.0;
+    if (RiskBefore < 0.0 || RiskAfter < 0.0 || RiskAfter > RiskBefore || PathCost < 0.0)
+        return -10000.0;
+    return ProjectedScore - 8.0 - FMin(6.0, PathCost * 0.2)
+        + FMin(40.0, float(SharedBefore - SharedAfter) * 21.0);
+}
+
+/**
+ * Weak fallback when a verified blue endpoint could CREATE a personal firing
+ * line to a squad-visible target. No native current shot estimate exists:
+ * score only reduced shared exposure, below a strong immediate attack.
+ */
+static function float ScoreOpeningAreaMove(int SharedBefore, int SharedAfter,
+    float RiskBefore, float RiskAfter, float PathCost, int OrdinaryAP)
+{
+    if (OrdinaryAP < 2 || SharedBefore < 3 || SharedAfter >= SharedBefore)
+        return -10000.0;
+    if (SharedAfter < 1 || RiskBefore < 0.0 || RiskAfter < 0.0 || RiskAfter > RiskBefore || PathCost < 0.0)
+        return -10000.0;
+    return 18.0 + FMin(22.0, float(SharedBefore - SharedAfter) * 13.0)
+        - FMin(6.0, PathCost * 0.2);
+}
+
+/**
+ * One currently legal basic shot can remain plausible after a blue move
+ * without its hit chance materially improving. Check remote CURRENT target
+ * conditions and weapon range only; controller must read native actions again.
+ */
+static function bool ProjectSafeAreaShotAtTile(XComGameState_Unit Soldier,
+    TTile Tile, const out array<AttackForecast> Forecasts,
+    out float NativeScore, out float ProjectedScore,
+    out int NativeChance, out int ProjectedChance)
+{
+    local AttackForecast Forecast;
+    local GameRulesCache_VisibilityInfo Visibility, EmptyVisibility;
+    local vector Source, Target;
+    local int Distance, RangeModifier, Chance;
+    local float Value;
+
+    ProjectedScore = -10000.0;
+    NativeScore = 0.0;
+    NativeChance = 0;
+    ProjectedChance = 0;
+    if (Soldier == none || `TACTICALRULES == none
+        || `TACTICALRULES.VisibilityMgr == none || `XWORLD == none)
+        return false;
+    Source = `XWORLD.GetPositionFromTileCoordinates(Tile);
+    foreach Forecasts(Forecast)
+    {
+        Visibility = EmptyVisibility;
+        Visibility.SourceID = Soldier.ObjectID;
+        Visibility.TargetID = Forecast.TargetUnit.ObjectID;
+        if (!`TACTICALRULES.VisibilityMgr.GetVisibilityInfoFromRemoteLocation(
+                Soldier.ObjectID, Tile, Forecast.TargetUnit.ObjectID, Visibility)
+            || !Visibility.bClearLOS
+            || !`TACTICALRULES.VisibilityMgr.EvaluateConditions(Visibility,
+                `XCOMHISTORY.GetCurrentHistoryIndex(),
+                class'UITacticalHUD_EnemyPreview'.default.LivingHostileGameplayVisibleFilter)
+            || (!Forecast.bIgnoreCover && Visibility.TargetCover != CT_None)
+            || !X2AbilityTarget_Single(Forecast.Ability.GetMyTemplate().AbilityTargetStyle).
+                ValidatePrimaryTargetOptionFromRemoteLocation(
+                    Soldier, Tile, Forecast.TargetUnit))
+            continue;
+        Target = `XWORLD.GetPositionFromTileCoordinates(Forecast.TargetUnit.TileLocation);
+        Distance = int(VSize(Source - Target) / class'XComWorldData'.const.WORLD_StepSize);
+        RangeModifier = 0;
+        if (Forecast.Weapon.RangeAccuracy.Length > 0)
+            RangeModifier = Forecast.Weapon.RangeAccuracy[
+                RangeBandIndex(Distance, Forecast.Weapon.RangeAccuracy.Length)];
+        // A new elevation benefit is deliberately omitted in this policy;
+        // never promise a higher chance from an unverified future height state.
+        Chance = ProjectedHitChance(Forecast.NativeChance,
+            RangeModifier - Forecast.CurrentRangeModifier, Forecast.CoverRecovery);
+        Value = ProjectedShotScore(Forecast.NativeScore, Forecast.NativeChance, Chance);
+        if (Chance >= Forecast.NativeChance - 8 && Value > ProjectedScore)
+        {
+            NativeScore = Forecast.NativeScore;
+            ProjectedScore = Value;
+            NativeChance = Forecast.NativeChance;
+            ProjectedChance = Chance;
+        }
+    }
+    return ProjectedScore > 0.0;
+}
+
+/**
+ * Search for a firing line to a squad-visible enemy for an already verified
+ * AA_NoTargets shot. The caller has checked its ownership and post-blue AP.
+ * The next decision still needs an actual native target.
+ */
+static function bool OpensSquadContactLane(XComGameState_Unit Soldier, TTile Tile,
+    XComGameState_Ability OpeningShot, const out array<StateObjectReference> SquadEnemies)
+{
+    local XComGameState_Unit Enemy;
+    local GameRulesCache_VisibilityInfo Visibility, EmptyVisibility;
+    local int Index;
+
+    if (Soldier == none || !SupportsForecast(OpeningShot)
+        || SquadEnemies.Length == 0 || SquadEnemies.Length > 24
+        || `XCOMHISTORY == none || `TACTICALRULES == none
+        || `TACTICALRULES.VisibilityMgr == none)
+        return false;
+    for (Index = 0; Index < SquadEnemies.Length; ++Index)
+    {
+        Enemy = XComGameState_Unit(`XCOMHISTORY.GetGameStateForObjectID(
+            SquadEnemies[Index].ObjectID));
+        if (Enemy == none || Enemy.bRemoved || Enemy.bRemovedFromPlay
+            || Enemy.GetMyTemplate() == none
+            || !class'APX_CombatPlanner'.static.IsVisibleHostile(Soldier, Enemy, SquadEnemies)
+            || Enemy.IsMindControlled())
+            continue;
+        Visibility = EmptyVisibility;
+        Visibility.SourceID = Soldier.ObjectID;
+        Visibility.TargetID = Enemy.ObjectID;
+        if (`TACTICALRULES.VisibilityMgr.GetVisibilityInfoFromRemoteLocation(
+                Soldier.ObjectID, Tile, Enemy.ObjectID, Visibility)
+            && Visibility.bClearLOS
+            && `TACTICALRULES.VisibilityMgr.EvaluateConditions(Visibility,
+                `XCOMHISTORY.GetCurrentHistoryIndex(),
+                class'UITacticalHUD_EnemyPreview'.default.LivingHostileGameplayVisibleFilter)
+            && X2AbilityTarget_Single(OpeningShot.GetMyTemplate().AbilityTargetStyle).
+                ValidatePrimaryTargetOptionFromRemoteLocation(Soldier, Tile, Enemy))
+            return true;
+    }
+    return false;
 }
 
 /** Read-only remote LOS, cover and target-condition preview; outputs the strongest material basic-shot estimate or false. */
@@ -480,16 +720,21 @@ static function bool ChooseMove(XComGameState_Unit UnitState,
     optional out int ImprovedShots, optional out int SafeRoutes)
 {
     local XGUnit Visualizer;
+    local XComGameState_Unit FirstSquadEnemy;
+    local XComGameState_Ability OpeningShot;
     local array<TTile> Tiles, CandidatePath;
-    local array<StateObjectReference> VisibleEnemies;
+    local array<StateObjectReference> VisibleEnemies, SquadEnemies;
     local array<AttackForecast> Forecasts;
     local array<float> Reaches, Weights;
+    local array<TTile> FriendTiles;
     local TTile Tile;
     local float CurrentRisk, CandidateRisk, CurrentSupport, PathCost, Value;
-    local float NativeScore, ProjectedScore;
+    local float NativeScore, ProjectedScore, RetainedNativeScore, RetainedProjectedScore;
+    local float AreaValue, AreaRadius;
     local int SampleIndex, Index, Samples, TargetID, NativeChance, ProjectedChance;
-    local int InspectedEndpoints;
-    local bool bSelected;
+    local int RetainedNativeChance, RetainedProjectedChance;
+    local int InspectedEndpoints, SharedBefore, SharedAfter, AreaProbes;
+    local bool bSelected, bAreaThreat, bBestArea, bAreaAlternative;
 
     Path.Length = 0;
     Score = -10000.0;
@@ -500,9 +745,24 @@ static function bool ChooseMove(XComGameState_Unit UnitState,
     if (!CanForecastUnit(UnitState))
         return false;
     class'APX_MissionPlanner'.static.GetVisibleThreats(UnitState, VisibleEnemies);
-    GatherForecasts(UnitState, VisibleEnemies, Forecasts);
+    GatherForecasts(UnitState, VisibleEnemies, Forecasts, OpeningShot);
     SupportedShots = Forecasts.Length;
-    if (Forecasts.Length == 0)
+    // Only present, installed Viper capability plus a compact ACTUAL squad
+    // formation can justify changing an otherwise good shot. Neither cooldown
+    // nor future AI target/spit accuracy is considered.
+    bAreaThreat = (Forecasts.Length > 0 || OpeningShot != none)
+        && HasNearbySpitCapability(UnitState, VisibleEnemies)
+        && ReadNearbyFriendlyTiles(UnitState, FriendTiles);
+    if (bAreaThreat)
+    {
+        AreaRadius = FMax(4.0, class'APX_MissionPlanner'.default.SquadAreaRiskRadiusTiles);
+        SharedBefore = class'APX_MissionPlanner'.static.WorstSharedAreaTargets(
+            UnitState.TileLocation, FriendTiles, AreaRadius);
+        bAreaThreat = SharedBefore >= 3;
+        if (bAreaThreat)
+            class'APX_MissionPlanner'.static.GetImmediateThreats(UnitState, SquadEnemies);
+    }
+    if (Forecasts.Length == 0 && (!bAreaThreat || OpeningShot == none || SquadEnemies.Length == 0))
     {
         ScanReason = ForecastScanReason(0, 0, 0, 0, false);
         return false;
@@ -520,7 +780,23 @@ static function bool ChooseMove(XComGameState_Unit UnitState,
         ScanReason = ForecastScanReason(SupportedShots, 0, 0, 0, false);
         return false;
     }
-    Tiles.InsertItem(0, Visualizer.m_kReachableTilesCache.GetClosestReachableDestination(Forecasts[0].TargetUnit.TileLocation));
+    if (Forecasts.Length > 0)
+        Tiles.InsertItem(0, Visualizer.m_kReachableTilesCache.GetClosestReachableDestination(
+            Forecasts[0].TargetUnit.TileLocation));
+    else
+    {
+        // With no current native shot, remote squad vision may reveal a legal
+        // personal lane after moving, but only the next decision can fire.
+        FirstSquadEnemy = XComGameState_Unit(`XCOMHISTORY.GetGameStateForObjectID(
+            SquadEnemies[0].ObjectID));
+        if (FirstSquadEnemy == none)
+        {
+            ScanReason = "squad_target_unavailable";
+            return false;
+        }
+        Tiles.InsertItem(0, Visualizer.m_kReachableTilesCache.GetClosestReachableDestination(
+            FirstSquadEnemy.TileLocation));
+    }
     Samples = Min(64, Tiles.Length);
     class'APX_MissionPlanner'.static.GetMeleeThreatReaches(UnitState, VisibleEnemies, Reaches);
     class'APX_MissionPlanner'.static.GetThreatWeights(UnitState, VisibleEnemies, Weights);
@@ -552,12 +828,44 @@ static function bool ChooseMove(XComGameState_Unit UnitState,
             continue;
         CandidateRisk = class'APX_MissionPlanner'.static.ExposureRisk(UnitState, Tile,
             VisibleEnemies, Reaches, Weights);
-        if (CandidateRisk > CurrentRisk
-            || !ProjectAtTile(UnitState, Tile, Forecasts, TargetID, NativeChance,
-                ProjectedChance, NativeScore, ProjectedScore))
+        if (CandidateRisk > CurrentRisk)
             continue;
-        Value = MoveAndShotScore(NativeScore, ProjectedScore, NativeChance, ProjectedChance,
-            CurrentRisk, CandidateRisk, PathCost, UnitState.NumActionPoints());
+        Value = -10000.0;
+        if (Forecasts.Length > 0
+            && ProjectAtTile(UnitState, Tile, Forecasts, TargetID, NativeChance,
+                ProjectedChance, NativeScore, ProjectedScore))
+            Value = MoveAndShotScore(NativeScore, ProjectedScore,
+                NativeChance, ProjectedChance, CurrentRisk, CandidateRisk,
+                PathCost, UnitState.NumActionPoints());
+        AreaValue = -10000.0;
+        // Shared-area improvement is a separate, bounded alternative to a
+        // better firing angle: 12 extra remote probes maximum per decision.
+        if (bAreaThreat && AreaProbes < 12)
+        {
+            SharedAfter = class'APX_MissionPlanner'.static.WorstSharedAreaTargets(
+                Tile, FriendTiles, AreaRadius);
+            if (SharedAfter < SharedBefore)
+            {
+                ++AreaProbes;
+                if (Forecasts.Length > 0
+                    && ProjectSafeAreaShotAtTile(UnitState, Tile, Forecasts,
+                        RetainedNativeScore, RetainedProjectedScore,
+                        RetainedNativeChance, RetainedProjectedChance))
+                    AreaValue = ScoreAreaShotMove(
+                        RetainedNativeScore, RetainedProjectedScore,
+                        RetainedNativeChance, RetainedProjectedChance,
+                        SharedBefore, SharedAfter, CurrentRisk, CandidateRisk,
+                        PathCost, UnitState.NumActionPoints());
+                else if (Forecasts.Length == 0
+                    && OpensSquadContactLane(UnitState, Tile, OpeningShot, SquadEnemies))
+                    AreaValue = ScoreOpeningAreaMove(
+                        SharedBefore, SharedAfter, CurrentRisk, CandidateRisk,
+                        PathCost, UnitState.NumActionPoints());
+            }
+        }
+        bAreaAlternative = AreaValue > Value;
+        if (bAreaAlternative)
+            Value = AreaValue;
         if (Value <= -1000.0)
             continue;
         ++ImprovedShots;
@@ -574,9 +882,15 @@ static function bool ChooseMove(XComGameState_Unit UnitState,
         ++SafeRoutes;
         Path = CandidatePath;
         Score = Value;
+        bBestArea = bAreaAlternative;
     }
     bSelected = Path.Length >= 2 && Score > 0.0;
-    ScanReason = ForecastScanReason(SupportedShots, InspectedEndpoints,
-        ImprovedShots, SafeRoutes, bSelected);
+    if (bSelected && bBestArea)
+        ScanReason = SupportedShots > 0
+            ? "area_spit_reposition_retains_shot"
+            : "area_spit_reposition_opens_squad_lane";
+    else
+        ScanReason = ForecastScanReason(SupportedShots, InspectedEndpoints,
+            ImprovedShots, SafeRoutes, bSelected);
     return bSelected;
 }

@@ -1,6 +1,6 @@
 # Autoplay XCOM 2 — War of the Chosen
 
-**W próbie v48 rozegrano trzy misje.** SabotageCC zakończyła się zwycięstwem po ręcznej pomocy. GasStation i Blood Killer zakończyły się porażką. LEAD koryguje wycenę Hunker Down, a HELPER sprawdza rozstawienie strzelców oraz niewykorzystane AP w misji z zegarem. [Wyniki próby v48](docs/report-v48-2026-11-22.pl.md) · [Kolejka prac](https://github.com/HeisenbergC29/autoplay-xcom2/issues/1)
+**v50 łączy trzy zmiany do wspólnej próby.** Autoplay porównuje Hunker Down z ekspozycją konkretnego żołnierza, szuka bezpieczniejszego rozstawienia przy zagrożeniu Poison Spit i uwzględnia postęp do X4 przy ostatnim AP w Blood Killer. W poprzedniej próbie SabotageCC wygrała po ręcznych ruchach, a GasStation i Blood Killer zakończyły się porażką. [Paczka i próba Windows #4](https://github.com/HeisenbergC29/autoplay-xcom2/issues/4) · [Wyniki v48](docs/report-v48-2026-11-22.pl.md)
 
 [Start pomocnika i komunikacja zespołu — issue #1](https://github.com/HeisenbergC29/autoplay-xcom2/issues/1) ·
 [Organizacja zespołu i import prac pomocnika](docs/TEAM.pl.md) ·
