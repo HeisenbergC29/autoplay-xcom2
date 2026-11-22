@@ -2544,6 +2544,122 @@ static function bool HasLegalMove(XComGameState_Unit UnitState)
     return false;
 }
 
+/**
+ * Conservative one-AP mission progress when the actual SabotageTransmitter
+ * timer would otherwise cede the entire turn to obsolete contact search.
+ * Only meaningful reduction in remaining goal distance has value; risk,
+ * retained concealment and native legality remain separate hard gates.
+ */
+static function float ScoreTimedBerserkerLastAP(float Progress, int TimerTurns,
+    float AdditionalExposure, bool bSafeConcealment)
+{
+    if (TimerTurns <= 0 || TimerTurns > 4 || Progress < 1.0 || !bSafeConcealment || AdditionalExposure > 8.0)
+        return -10000.0;
+    return 36.0 + FMin(12.0, Progress * 3.0)
+        - FMax(0.0, AdditionalExposure) * 1.5;
+}
+
+/**
+ * Check the complete native X4 prefix with shared inspection budgets.
+ * The result is a risk estimate for the current history, not future contact.
+ */
+static function bool CheckTimedObjectPath(XComGameState_Unit Soldier,
+    const out array<TTile> Path, out float ExtraRisk,
+    out int RemainingConcealmentChecks, out int RemainingTempoCoverChecks)
+{
+    local array<StateObjectReference> KnownEnemies;
+    local array<float> Reaches, Weights;
+    local float OriginRisk, StepRisk;
+    local string ConcealmentReason;
+    local int Step;
+
+    ExtraRisk = 0.0;
+    if (RemainingTempoCoverChecks < Path.Length - 1
+        || class'APX_ConcealmentPlanner'.static.InspectPathRisk(
+            Soldier, Path, ConcealmentReason, RemainingConcealmentChecks))
+        return false;
+    GetVisibleThreats(Soldier, KnownEnemies);
+    if (KnownEnemies.Length > 64)
+        return false;
+    GetMeleeThreatReaches(Soldier, KnownEnemies, Reaches);
+    GetThreatWeights(Soldier, KnownEnemies, Weights);
+    OriginRisk = ExposureRisk(Soldier, Soldier.TileLocation, KnownEnemies, Reaches, Weights);
+    for (Step = 1; Step < Path.Length; ++Step)
+    {
+        if (class'APX_HazardKnowledge'.static.HasBlockingHazard(Soldier, Path[Step])
+            || !class'APX_FullIntel'.static.CanPlanAtTile(Soldier, Path[Step])
+            || class'APX_ExplosiveCoverKnowledge'.static.InspectRiskAtTile(
+                Soldier, Path[Step], KnownEnemies, RemainingTempoCoverChecks) > 0.0)
+            return false;
+        StepRisk = ExposureRisk(Soldier, Path[Step], KnownEnemies, Reaches, Weights);
+        ExtraRisk = FMax(ExtraRisk, StepRisk - OriginRisk);
+        if (ExtraRisk > 8.0)
+            return false;
+    }
+    return true;
+}
+
+/**
+ * Return an affordable blue prefix toward the unplanted X4 site.
+ * Battle and timer are read by the controller during this decision.
+ * The normal dispatcher still validates the selected route.
+ */
+static function bool ChooseTimedBerserkerObjective(XComGameState_Unit Soldier,
+    XComGameState_BattleData Battle, int TimerTurns, out array<TTile> Path,
+    out float Score, out string Reason, out int RemainingConcealmentChecks,
+    out int RemainingTempoCoverChecks)
+{
+    local XGUnit Visualizer;
+    local TTile GoalTile;
+    local string GoalSource;
+    local float Progress, ExtraRisk;
+
+    Path.Length = 0;
+    Score = -10000.0;
+    Reason = "timed_x4_not_applicable";
+    if (Soldier == none || Soldier.GetMyTemplateName() != 'BerserkerMP'
+        || Soldier.NumActionPointsForMoving() < 1 || !Soldier.IsAbleToAct()
+        || !HasLegalMove(Soldier) || ShouldEvacuate(Soldier) || HasBleedingSquadmate(Soldier)
+        || Battle == none || Battle.MapData.ActiveMission.sType != "SabotageTransmitter"
+        || class'APX_PlantInteractionKnowledge'.static.NativePlantObjectivePhase(Battle) != 0
+        || TimerTurns <= 0 || TimerTurns > 4
+        || !class'APX_FullIntel'.default.EnableFullIntel || !default.PrioritizeBerserkerSabotage)
+        return false;
+    Reason = "no_verified_x4_goal";
+    if (!FindBerserkerSabotageGoal(Soldier, Battle, GoalTile, GoalSource))
+        return false;
+    Visualizer = XGUnit(Soldier.GetVisualizer());
+    if (Visualizer == none || Visualizer.m_kReachableTilesCache == none)
+    {
+        Reason = "native_cache_missing";
+        return false;
+    }
+    Visualizer.m_kReachableTilesCache.UpdateTileCacheIfNeeded();
+    Reason = "no_native_prefix";
+    if (!ChooseRoutePrefix(Soldier, Visualizer, GoalTile, Path)
+        || Path.Length <= 1 || Path.Length > 32 || Path[0] != Soldier.TileLocation)
+    {
+        Path.Length = 0;
+        return false;
+    }
+    Progress = TileDistance(Soldier.TileLocation, GoalTile)
+        - TileDistance(Path[Path.Length - 1], GoalTile);
+    Reason = "no_verified_goal_progress";
+    if (Progress >= 1.0)
+    {
+        Reason = "unsafe_native_path";
+        if (CheckTimedObjectPath(Soldier, Path, ExtraRisk, RemainingConcealmentChecks,
+            RemainingTempoCoverChecks))
+        {
+            Score = ScoreTimedBerserkerLastAP(Progress, TimerTurns, ExtraRisk, true);
+            Reason = Soldier.NumActionPoints() == 1 ? "timed_x4_native_one_ap" : "timed_x4_native_blue";
+            return Score > 0.0;
+        }
+    }
+    Path.Length = 0;
+    return false;
+}
+
 // The distance heuristic can get stuck behind a wall: a real route may first
 // move away from its goal. Use the game's unrestricted A* only for planning,
 // then rebuild a blue-range prefix from the actual reachable cache for dispatch.
