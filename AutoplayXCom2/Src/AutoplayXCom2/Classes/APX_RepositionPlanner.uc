@@ -693,6 +693,7 @@ static function bool ChooseMove(XComGameState_Unit UnitState,
     optional out int ImprovedShots, optional out int SafeRoutes)
 {
     local XGUnit Visualizer;
+    local XComGameState_Unit FirstSquadEnemy;
     local array<TTile> Tiles, CandidatePath;
     local array<StateObjectReference> VisibleEnemies, SquadEnemies;
     local array<AttackForecast> Forecasts;
@@ -757,9 +758,15 @@ static function bool ChooseMove(XComGameState_Unit UnitState,
     {
         // With no current native shot, remote squad vision may reveal a legal
         // personal lane after moving, but only the next decision can fire.
+        FirstSquadEnemy = XComGameState_Unit(`XCOMHISTORY.GetGameStateForObjectID(
+            SquadEnemies[0].ObjectID));
+        if (FirstSquadEnemy == none)
+        {
+            ScanReason = "squad_target_unavailable";
+            return false;
+        }
         Tiles.InsertItem(0, Visualizer.m_kReachableTilesCache.GetClosestReachableDestination(
-            XComGameState_Unit(`XCOMHISTORY.GetGameStateForObjectID(
-                SquadEnemies[0].ObjectID)).TileLocation));
+            FirstSquadEnemy.TileLocation));
     }
     Samples = Min(64, Tiles.Length);
     class'APX_MissionPlanner'.static.GetMeleeThreatReaches(UnitState, VisibleEnemies, Reaches);
