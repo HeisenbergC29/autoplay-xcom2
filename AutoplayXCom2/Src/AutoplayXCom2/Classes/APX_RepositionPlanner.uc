@@ -279,16 +279,37 @@ static function bool HasNearbySpitCapability(XComGameState_Unit Soldier,
 static function bool ReadNearbyFriendlyTiles(XComGameState_Unit Soldier,
     out array<TTile> FriendTiles)
 {
+    local XComGameState_Player PlayerState;
+    local XGPlayer PlayerVisualizer;
+    local XGSquad Squad;
+    local XGUnit Member;
     local XComGameState_Unit Friend;
-    local int Scanned;
+    local int Index, Count;
 
     FriendTiles.Length = 0;
     if (Soldier == none || `XCOMHISTORY == none)
         return false;
-    foreach `XCOMHISTORY.IterateByClassType(class'XComGameState_Unit', Friend)
+    PlayerState = XComGameState_Player(`XCOMHISTORY.GetGameStateForObjectID(
+        Soldier.GetAssociatedPlayerID()));
+    if (PlayerState == none || PlayerState.GetTeam() != eTeam_XCom)
+        return false;
+    PlayerVisualizer = XGPlayer(PlayerState.GetVisualizer());
+    if (PlayerVisualizer == none || PlayerVisualizer.ObjectID != PlayerState.ObjectID
+        || PlayerVisualizer.m_kSquad == none)
+        return false;
+    Squad = PlayerVisualizer.m_kSquad;
+    if (Squad.m_kPlayer != PlayerVisualizer)
+        return false;
+    Count = Squad.GetNumMembers();
+    if (Count <= 0 || Count > 24)
+        return false;
+    for (Index = 0; Index < Count; ++Index)
     {
-        if (++Scanned > 256)
-            return false;
+        Member = Squad.GetMemberAt(Index);
+        if (Member == none || Member.ObjectID <= 0)
+            continue;
+        Friend = XComGameState_Unit(`XCOMHISTORY.GetGameStateForObjectID(
+            Member.ObjectID));
         if (Friend == none || Friend.ObjectID == Soldier.ObjectID
             || !Friend.IsAlive() || Friend.bRemoved || Friend.bRemovedFromPlay
             || Friend.IsCivilian() || Friend.GetMyTemplate() == none
