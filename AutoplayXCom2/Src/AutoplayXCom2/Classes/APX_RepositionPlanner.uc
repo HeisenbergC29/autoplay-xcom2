@@ -313,11 +313,15 @@ static function float ScoreAreaShotMove(float NativeScore, float ProjectedScore,
     int NativeChance, int ProjectedChance, int SharedBefore, int SharedAfter,
     float RiskBefore, float RiskAfter, float PathCost, int OrdinaryAP)
 {
-    if (OrdinaryAP < 2 || NativeChance < 55 || ProjectedChance < NativeChance - 8
-        || SharedBefore < 3 || SharedAfter >= SharedBefore || SharedAfter < 1
-        || NativeScore < 6.0 || ProjectedScore < 6.0
-        || (NativeScore >= 100.0 && NativeChance >= 75)
-        || RiskBefore < 0.0 || RiskAfter > RiskBefore || PathCost < 0.0)
+    if (OrdinaryAP < 2 || NativeChance < 55 || ProjectedChance < NativeChance - 8)
+        return -10000.0;
+    if (SharedBefore < 3 || SharedAfter >= SharedBefore || SharedAfter < 1)
+        return -10000.0;
+    if (NativeScore < 6.0 || ProjectedScore < 6.0)
+        return -10000.0;
+    if (NativeScore >= 100.0 && NativeChance >= 75)
+        return -10000.0;
+    if (RiskBefore < 0.0 || RiskAfter > RiskBefore || PathCost < 0.0)
         return -10000.0;
     return ProjectedScore - 8.0 - FMin(6.0, PathCost * 0.2)
         + FMin(40.0, float(SharedBefore - SharedAfter) * 21.0);
@@ -331,9 +335,9 @@ static function float ScoreAreaShotMove(float NativeScore, float ProjectedScore,
 static function float ScoreOpeningAreaMove(int SharedBefore, int SharedAfter,
     float RiskBefore, float RiskAfter, float PathCost, int OrdinaryAP)
 {
-    if (OrdinaryAP < 2 || SharedBefore < 3
-        || SharedAfter >= SharedBefore || SharedAfter < 1
-        || RiskBefore < 0.0 || RiskAfter > RiskBefore || PathCost < 0.0)
+    if (OrdinaryAP < 2 || SharedBefore < 3 || SharedAfter >= SharedBefore)
+        return -10000.0;
+    if (SharedAfter < 1 || RiskBefore < 0.0 || RiskAfter > RiskBefore || PathCost < 0.0)
         return -10000.0;
     return 18.0 + FMin(22.0, float(SharedBefore - SharedAfter) * 13.0)
         - FMin(6.0, PathCost * 0.2);
