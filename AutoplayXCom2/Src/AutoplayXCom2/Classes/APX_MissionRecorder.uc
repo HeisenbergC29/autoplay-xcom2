@@ -37,6 +37,7 @@ var private int RecordedLadderIndex;
 var private int RecordedLadderRung;
 var private int LastRelayScanTurn;
 var private int LastPatrolObservationTurn;
+var private int LastPatrolWindowTurn;
 var private XComGameStateHistory RecordedHistory;
 var private int RecordedBattleID;
 var private int RecordedStartStateIndex;
@@ -107,10 +108,11 @@ function Start(int PlayerID)
     RecordedMissionType = Mission;
     LastRelayScanTurn = -1; // include turn zero on a late F8/start.
     LastPatrolObservationTurn = -1;
+    LastPatrolWindowTurn = INDEX_NONE;
     bStarted = true;
     Emit("start", "|player=" $ PlayerID $ "|mission=" $ Safe(Mission)
         $ "|difficulty=" $ `TacticalDifficultySetting $ "|history=" $ HistoryCursor
-        $ "|revision=mission-report-v47|full_intel_enabled=" $ class'APX_FullIntel'.default.EnableFullIntel
+        $ "|revision=mission-report-v48|full_intel_enabled=" $ class'APX_FullIntel'.default.EnableFullIntel
         $ "|formation_area_radius_tiles=" $ class'APX_MissionPlanner'.default.SquadAreaRiskRadiusTiles
         $ "|formation_area_weight=" $ class'APX_MissionPlanner'.default.SquadAreaRiskWeight
         $ "|concealment_risk_penalty=" $ class'APX_ConcealmentPlanner'.default.ConcealmentRiskPenalty
@@ -526,9 +528,18 @@ function RecordHUDScore(string DisplayText)
     Emit("hud_score", Fields);
 }
 
+/** Attach the native boundary to a manual/autoplay stop so delayed results can be ordered. */
 function Marker(string Kind, string Details)
 {
-    Emit("marker", "|kind=" $ Safe(Kind) $ "|details=" $ Safe(Details));
+    local string Clock;
+    local int CurrentHistory;
+
+    if (Kind == "autoplay_stop" && IsRecordingMission())
+    {
+        CurrentHistory = RecordedHistory.GetCurrentHistoryIndex();
+        Clock = "|history=" $ CurrentHistory $ "|turn=" $ TurnAtHistory(CurrentHistory);
+    }
+    Emit("marker", "|kind=" $ Safe(Kind) $ "|details=" $ Safe(Details) $ Clock);
 }
 
 function BeginDecision()
@@ -894,6 +905,73 @@ function RecordCurrentPatrolWaypoints(int Turn)
         $ "|future_route=unknown");
 }
 
+/** List the local living units holding standard rifle or pistol Overwatch reserves at one native frame. */
+function bool CollectPatrolReserves(int HistoryIndex, out string Armed)
+{
+    local XComGameState_Unit Soldier;
+    local int Checked;
+
+    Armed = "";
+    foreach RecordedHistory.IterateByClassType(class'XComGameState_Unit', Soldier,
+        eReturnType_Reference, false, HistoryIndex)
+    {
+        if (++Checked > 256)
+            return false;
+        if (Soldier.GetAssociatedPlayerID() != OwnerPlayerID || Soldier.GetTeam() != eTeam_XCom
+            || Soldier.bRemovedFromPlay
+            || !Soldier.IsAlive())
+            continue;
+        if (Soldier.NumReserveActionPoints(class'X2CharacterTemplateManager'.default.OverwatchReserveActionPoint) <= 0
+            && Soldier.NumReserveActionPoints(class'X2CharacterTemplateManager'.default.PistolOverwatchReserveActionPoint) <= 0)
+            continue;
+        if (Armed != "")
+            Armed $= ",";
+        Armed $= string(Soldier.ObjectID);
+    }
+    return true;
+}
+
+/** Log a patrol-specific order after acceptance; its history index precedes native dispatch. */
+function RecordPatrolArm(int GroupID, int SourceID, name AbilityName, int Turn, int HistoryIndex)
+{
+    if (GroupID <= 0 || SourceID <= 0 || Turn < 0 || !IsRecordingMission())
+        return;
+    Emit("patrol_arm", "|group=" $ GroupID $ "|source=" $ SourceID $ "|ability=" $ string(AbilityName)
+        $ "|turn=" $ Turn $ "|history=" $ HistoryIndex);
+}
+
+/** Record the historical squad reserves at an accepted opener or confirmed wait, including unavailable rosters. */
+function RecordPatrolWindow(int GroupID, int Turn, int HistoryIndex, name Kind)
+{
+    local string Armed;
+    local bool bComplete;
+
+    if (GroupID <= 0 || Turn < 0 || !IsRecordingMission())
+        return;
+    if (HistoryIndex >= RecordingStartHistory && HistoryIndex <= RecordedHistory.GetCurrentHistoryIndex()
+        && RecordedHistory.GetGameStateFromHistory(HistoryIndex) != none && TurnAtHistory(HistoryIndex) == Turn)
+        bComplete = CollectPatrolReserves(HistoryIndex, Armed);
+    if (Armed == "")
+        Armed = "none";
+    Emit("patrol_window", "|group=" $ GroupID $ "|turn=" $ Turn $ "|history=" $ HistoryIndex
+        $ "|kind=" $ string(Kind) $ "|armed=" $ Armed $ "|complete=" $ string(bComplete));
+    LastPatrolWindowTurn = Turn;
+}
+
+/** Emit a watermark only when the result reader has passed an observed patrol window's native player turn. */
+function RecordPatrolDrain()
+{
+    local int DrainedTurn;
+
+    if (LastPatrolWindowTurn < 0)
+        return;
+    DrainedTurn = TurnAtHistory(HistoryCursor);
+    if (DrainedTurn <= LastPatrolWindowTurn)
+        return;
+    Emit("patrol_drain", "|turn=" $ DrainedTurn $ "|history=" $ HistoryCursor);
+    LastPatrolWindowTurn = INDEX_NONE;
+}
+
 function Observe(string Phase)
 {
     local XComGameState_Unit UnitState;
@@ -929,7 +1007,8 @@ function Observe(string Phase)
         PhaseState $= "|active_team=" $ string(`TACTICALRULES.GetUnitActionTeam());
     if (PhaseState != LastPhase)
     {
-        Emit("phase", PhaseState);
+        Emit("phase", PhaseState $ "|history=" $ RecordedHistory.GetCurrentHistoryIndex()
+            $ "|history_drained=" $ HistoryCursor);
         LastPhase = PhaseState;
     }
     foreach `XCOMHISTORY.IterateByClassType(class'XComGameState_Unit', UnitState)
@@ -957,6 +1036,7 @@ function Observe(string Phase)
     }
     PreviousVisibleIDs = VisibleIDs;
     RecordResults();
+    RecordPatrolDrain();
 }
 
 function bool IsOwnUnitAt(int ObjectID, int HistoryIndex)
@@ -997,16 +1077,134 @@ function bool IsOwnUnitAcrossResult(int ObjectID, int ResultHistoryIndex,
         && IsOwnUnitAt(ObjectID, BeforeHistoryIndex);
 }
 
+/**
+ * Classify the observed one-point stock shot cost in consecutive friendly states.
+ * Return 1 for the expected Overwatch reserve, 2 for a pistol's Return Fire
+ * point, and 0 when a refund, simultaneous changes or absent deltas are ambiguous.
+ */
+static function int ClassifyReserveChange(int BeforeOW, int AfterOW, int BeforeReturn, int AfterReturn)
+{
+    if (BeforeOW - AfterOW == 1 && BeforeReturn == AfterReturn)
+        return 1;
+    if (BeforeOW == AfterOW && BeforeReturn - AfterReturn == 1)
+        return 2;
+    return 0;
+}
+
+/** Identify the point type actually spent by the shot; inspect only the local shooter's states. */
+function string ShotReserveSpent(name AbilityName, int SourceID, int BeforeIndex, int ResultIndex)
+{
+    local XComGameState_Unit BeforeUnit, AfterUnit;
+    local name ReserveType;
+    local int BeforeReturn, AfterReturn, Evidence;
+
+    BeforeUnit = XComGameState_Unit(RecordedHistory.GetGameStateForObjectID(
+        SourceID, eReturnType_Reference, BeforeIndex));
+    AfterUnit = XComGameState_Unit(RecordedHistory.GetGameStateForObjectID(
+        SourceID, eReturnType_Reference, ResultIndex));
+    if (BeforeUnit == none || AfterUnit == none
+        || BeforeUnit.GetAssociatedPlayerID() != OwnerPlayerID || AfterUnit.GetAssociatedPlayerID() != OwnerPlayerID)
+        return "unknown";
+    ReserveType = class'X2CharacterTemplateManager'.default.OverwatchReserveActionPoint;
+    if (AbilityName == 'PistolOverwatchShot')
+    {
+        ReserveType = class'X2CharacterTemplateManager'.default.PistolOverwatchReserveActionPoint;
+        BeforeReturn = BeforeUnit.NumReserveActionPoints(class'X2CharacterTemplateManager'.default.ReturnFireActionPoint);
+        AfterReturn = AfterUnit.NumReserveActionPoints(class'X2CharacterTemplateManager'.default.ReturnFireActionPoint);
+    }
+    Evidence = ClassifyReserveChange(BeforeUnit.NumReserveActionPoints(ReserveType),
+        AfterUnit.NumReserveActionPoints(ReserveType), BeforeReturn, AfterReturn);
+    if (Evidence == 1)
+        return "spent";
+    if (Evidence == 2)
+        return "other";
+    return "unknown";
+}
+
+/** Confirm that the complete old roster died and no new members appeared in the result state. */
+function bool IsPatrolEliminated(XComGameState_AIGroup BeforeGroup, int ResultIndex)
+{
+    local XComGameState_AIGroup AfterGroup;
+    local XComGameState_Unit Member;
+    local StateObjectReference Ref;
+
+    AfterGroup = XComGameState_AIGroup(RecordedHistory.GetGameStateForObjectID(
+        BeforeGroup.ObjectID, eReturnType_Reference, ResultIndex));
+    if (AfterGroup == none || AfterGroup.m_arrMembers.Length > 24)
+        return false;
+    foreach AfterGroup.m_arrMembers(Ref)
+        if (BeforeGroup.m_arrMembers.Find('ObjectID', Ref.ObjectID) == INDEX_NONE)
+            return false;
+    foreach BeforeGroup.m_arrMembers(Ref)
+    {
+        Member = XComGameState_Unit(RecordedHistory.GetGameStateForObjectID(
+            Ref.ObjectID, eReturnType_Reference, ResultIndex));
+        if (Member == none || !Member.IsDead())
+            return false;
+    }
+    return true;
+}
+
+/** Report the visible primary target's group, or only its verified extinction for other friendly actions. */
+function string ReactionGroupField(int TargetID, int BeforeIndex, int ResultIndex, optional bool bOnlyElimination)
+{
+    local XComGameState_Unit Target, AfterTarget;
+    local XComGameState_AIGroup Group;
+
+    if (TargetID <= 0)
+        return bOnlyElimination ? "" : "|target_group=0";
+    AfterTarget = XComGameState_Unit(RecordedHistory.GetGameStateForObjectID(
+        TargetID, eReturnType_Reference, ResultIndex));
+    if (bOnlyElimination && (AfterTarget == none || !AfterTarget.IsDead()))
+        return "";
+    Target = XComGameState_Unit(RecordedHistory.GetGameStateForObjectID(
+        TargetID, eReturnType_Reference, BeforeIndex));
+    if (Target == none || Target.GetAssociatedPlayerID() == OwnerPlayerID || Target.GroupMembershipID <= 0)
+        return bOnlyElimination ? "" : "|target_group=0";
+    Group = XComGameState_AIGroup(RecordedHistory.GetGameStateForObjectID(
+        Target.GroupMembershipID, eReturnType_Reference, BeforeIndex));
+    if (Group == none || Group.bRemoved || Group.m_arrMembers.Length > 24
+        || Group.m_arrMembers.Find('ObjectID', TargetID) == INDEX_NONE)
+        return bOnlyElimination ? "" : "|target_group=0";
+    if (Target.IsAlive() && AfterTarget != none && AfterTarget.IsDead()
+        && IsPatrolEliminated(Group, ResultIndex))
+        return "|target_group=" $ Group.ObjectID $ "|patrol_targets_remaining=0";
+    if (bOnlyElimination)
+        return "";
+    return "|target_group=" $ Group.ObjectID;
+}
+
+/** Report resolved friendly reaction costs and any observed final direct-target kill in full-intel mode. */
+function string PatrolReactionFields(bool bOwnAction, name AbilityName, int SourceID, int TargetID,
+    int BeforeIndex, int ResultIndex)
+{
+    local bool bStockReaction;
+
+    if (!bOwnAction || !class'APX_FullIntel'.default.EnableFullIntel)
+        return "";
+    bStockReaction = AbilityName == 'OverwatchShot' || AbilityName == 'PistolOverwatchShot'
+        || AbilityName == 'LongWatchShot';
+    if ((!bStockReaction && TargetID <= 0) || BeforeIndex < 0 || BeforeIndex < RecordedStartStateIndex
+        || BeforeIndex + 1 != ResultIndex || RecordedHistory.GetGameStateFromHistory(BeforeIndex) == none)
+        return bStockReaction ? "|target_group=0|ow_reserve=unknown" : "";
+    if (!bStockReaction)
+        return ReactionGroupField(TargetID, BeforeIndex, ResultIndex, true);
+    return ReactionGroupField(TargetID, BeforeIndex, ResultIndex) $ "|ow_reserve="
+        $ ShotReserveSpent(AbilityName, SourceID, BeforeIndex, ResultIndex);
+}
+
+/** Drain bounded native frames, reporting unreadable history and resolved results with redacted targets. */
 function RecordResults()
 {
     local XComGameState HistoryState;
     local XComGameStateContext_Ability Context;
     local array<StateObjectReference> VisibleEnemies, BeforeActionEnemies;
     local StateObjectReference TargetRef;
-    local int EndIndex, SourceID, TargetID, TargetIndex, BeforeHistoryIndex;
+    local int EndIndex, SourceID, TargetID, TargetIndex, BeforeHistoryIndex, GapStart;
     local bool bOwnAction, bOwnActionBefore, bOwnTarget, bPrimaryOwnTarget, bSourceVisible;
     local string AbilityName, SourceScope;
 
+    GapStart = INDEX_NONE;
     EndIndex = Min(`XCOMHISTORY.GetCurrentHistoryIndex(),
         HistoryCursor + Clamp(MaxHistoryFramesPerObserve, 16, 2048));
     while (HistoryCursor < EndIndex && !bLimitReported)
@@ -1014,7 +1212,16 @@ function RecordResults()
         ++HistoryCursor;
         HistoryState = `XCOMHISTORY.GetGameStateFromHistory(HistoryCursor);
         if (HistoryState == none)
+        {
+            if (GapStart == INDEX_NONE)
+                GapStart = HistoryCursor;
             continue;
+        }
+        if (GapStart != INDEX_NONE)
+        {
+            Emit("patrol_history_gap", "|first=" $ GapStart $ "|last=" $ (HistoryCursor - 1));
+            GapStart = INDEX_NONE;
+        }
         RecordScoreDeltas(HistoryState);
         Context = XComGameStateContext_Ability(HistoryState.GetContext());
         if (Context == none)
@@ -1076,6 +1283,8 @@ function RecordResults()
             $ "|hit=" $ string(Context.ResultContext.HitResult)
             $ "|chance=" $ Context.ResultContext.CalculatedHitChance
             $ "|interruption=" $ string(Context.InterruptionStatus)
+            $ PatrolReactionFields(bOwnAction, Context.InputContext.AbilityTemplateName, SourceID, TargetID,
+                BeforeHistoryIndex, HistoryCursor)
             $ TargetHealthFields(TargetID, HistoryCursor));
         for (TargetIndex = 0; TargetIndex < Context.InputContext.MultiTargets.Length; ++TargetIndex)
         {
@@ -1095,6 +1304,8 @@ function RecordResults()
                 $ TargetHealthFields(TargetID, HistoryCursor));
         }
     }
+    if (GapStart != INDEX_NONE)
+        Emit("patrol_history_gap", "|first=" $ GapStart $ "|last=" $ HistoryCursor);
 }
 
 function string TargetHealthFields(int TargetID, int HistoryIndex)

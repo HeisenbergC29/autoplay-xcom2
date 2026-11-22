@@ -20,7 +20,6 @@ MAX_LOG_BYTES = 128 * 1024 * 1024
 MAX_ARCHIVE_BYTES = 256 * 1024 * 1024
 MAX_ARCHIVE_ENTRIES = 32
 MAX_RECORDS = 100000
-OVERWATCH_SHOTS = {'overwatchshot', 'pistoloverwatchshot', 'longwatchshot'}
 KEY = re.compile(r'^[a-z_][a-z0-9_]*$')
 INTEGER = re.compile(r'^-?\d+$')
 DECIMAL = re.compile(r'^-?\d+(?:\.\d+)?$')
@@ -28,6 +27,10 @@ SCORING_SPEC = importlib.util.spec_from_file_location(
     'apx_game_scoring', Path(__file__).with_name('game_scoring.py'))
 SCORING = importlib.util.module_from_spec(SCORING_SPEC)
 SCORING_SPEC.loader.exec_module(SCORING)
+PATROL_SPEC = importlib.util.spec_from_file_location(
+    'apx_patrol_overwatch', Path(__file__).with_name('patrol_overwatch.py'))
+PATROL = importlib.util.module_from_spec(PATROL_SPEC)
+PATROL_SPEC.loader.exec_module(PATROL)
 
 
 def decode_log(data: bytes) -> str:
@@ -107,7 +110,7 @@ def action_family(ability: str) -> str:
     # Unreal FName comparisons are case insensitive; its displayed spelling can
     # be inherited from the first name interned by the engine (e.g. overwatch).
     ability = ability.casefold()
-    if ability in {'overwatch', 'pistoloverwatch', 'sniperrifleoverwatch', 'longwatch'}:
+    if ability in PATROL.OVERWATCH_STANCES:
         return 'overwatch'
     if ability == 'hunkerdown':
         return 'hunker'
@@ -140,7 +143,7 @@ def summarize_overwatch(accepted_orders: int, resolved_results: list[dict]) -> d
     shot_outcomes = Counter()
     for result in resolved_results:
         ability = str(result.get('ability', '')).casefold()
-        is_shot = ability in OVERWATCH_SHOTS
+        is_shot = ability in PATROL.OVERWATCH_SHOTS
         if not is_shot and action_family(ability) != 'overwatch':
             continue
         scope = result.get('source_scope')
@@ -357,6 +360,13 @@ def summarize_session(session: str, records: list[dict], conflicting_records: bo
         warnings.append('Recorder reached its configured record limit.')
     if ends and isinstance(ends[-1].get('history_pending'), int) and ends[-1]['history_pending'] > 0:
         warnings.append(f"{ends[-1]['history_pending']} history frames remain unrecorded; action results are incomplete.")
+    patrol_issue = None
+    if conflicting_records:
+        patrol_issue = 'conflicting_records'
+    elif sequence_gaps:
+        patrol_issue = 'sequence_gaps'
+    elif events['limit']:
+        patrol_issue = 'record_limit'
     return {
         'session': session,
         'mission': start.get('mission', 'unknown'),
@@ -371,6 +381,7 @@ def summarize_session(session: str, records: list[dict], conflicting_records: bo
         'abilities': dict(sorted(abilities.items())),
         'action_families': dict(sorted(families.items())),
         'overwatch_observations': summarize_overwatch(families['overwatch'], results),
+        'patrol_overwatch': PATROL.summarize_windows(records, patrol_issue),
         'moves': sum(record.get('kind') in {'move', 'explore'} for record in accepted),
         'hit_results': dict(sorted(hit_results.items())),
         'hit_results_by_source': {scope: dict(sorted(counts.items()))
@@ -510,6 +521,10 @@ def human_summary(report: dict) -> str:
             if overwatch['friendly_shot_outcomes']:
                 lines.append('  Friendly Overwatch shot outcomes include ' + ', '.join(
                     f'{outcome}={count}' for outcome, count in overwatch['friendly_shot_outcomes'].items()))
+        for window in session['patrol_overwatch']['windows']:
+            lines.append(f"  Patrol Overwatch group={window['group']}, turn={window['turn']} "
+                         f"{window['kind']} {window['outcome']}, shooters observed on patrol="
+                         f"{len(window['fired_at_patrol'])}/{len(window['armed'])}")
         if session['unsupported_abilities']:
             lines.append('  Recorded unsupported abilities: ' + ', '.join(session['unsupported_abilities']))
         if session['grenade_diagnostics']['scans']:

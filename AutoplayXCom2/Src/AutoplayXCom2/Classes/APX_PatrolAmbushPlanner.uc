@@ -20,7 +20,13 @@ var private int LastHistory, GroupID, StartTurn, LastTurn;
 var private TTile Waypoint;
 var private int PreparedMoves, OrderedReactions;
 // Count native-confirmed whole-squad waits, not turns since the patrol was detected.
-var private int PendingWaitTurn, ConfirmedWaits;
+var private int PendingWaitTurn, ConfirmedWaits, LastCountedWaitTurn;
+/** Native group budgets survive changes in which patrol is nearest to the scout. */
+struct PatrolWaitHistory
+{
+    var int PatrolID, Waits, LastWaitTurn;
+};
+var private array<PatrolWaitHistory> WaitHistory;
 var private name Phase;
 var private bool bExpired;
 
@@ -65,6 +71,7 @@ static function float VariantPositionScore(float Progress, int CoveredLanes,
     return Value;
 }
 
+/** Discard observations, pending waits and patrol budgets at an epoch boundary or OFF. */
 function Reset()
 {
     OwnedHistory = none;
@@ -79,13 +86,68 @@ function Reset()
     OrderedReactions = 0;
     PendingWaitTurn = INDEX_NONE;
     ConfirmedWaits = 0;
+    LastCountedWaitTurn = INDEX_NONE;
+    WaitHistory.Length = 0;
     Phase = 'none';
     bExpired = false;
 }
 
+/**
+ * Locate the last player-controlled snapshot before this player's native turn ended.
+ * If the bounded history scan cannot recover it, the armed roster is unknown.
+ */
+function int FindWaitRosterHistory(int CurrentHistory)
+{
+    local int Index, ScanEnd;
+    local XComGameState Frame;
+    local XComGameStateContext_TacticalGameRule Rule;
+
+    if (OwnedHistory == none || PendingWaitTurn < 0 || LastHistory < 0)
+        return INDEX_NONE;
+    ScanEnd = Min(CurrentHistory, LastHistory + 256);
+    for (Index = LastHistory + 1; Index <= ScanEnd; ++Index)
+    {
+        Frame = OwnedHistory.GetGameStateFromHistory(Index);
+        if (Frame == none)
+            continue;
+        Rule = XComGameStateContext_TacticalGameRule(Frame.GetContext());
+        if (Rule != none && Rule.GameRuleType == eGameRule_PlayerTurnEnd
+            && Rule.PlayerRef.ObjectID == OwnedPlayerID)
+            return Index - 1;
+    }
+    return INDEX_NONE;
+}
+
+/** A later local turn confirms one previously armed turn after the epoch check in Refresh. */
+static function bool IsPendingTurnComplete(int PendingTurn, int PreviousTurn, int CurrentTurn)
+{
+    return PendingTurn >= 0 && PendingTurn == PreviousTurn && CurrentTurn > PreviousTurn;
+}
+
+/** Restore the selected group's completed waits when the nearest verified patrol changes. */
+function SelectWaitBudget(int NewGroupID)
+{
+    local int Index;
+
+    PendingWaitTurn = INDEX_NONE;
+    Index = WaitHistory.Find('PatrolID', NewGroupID);
+    if (Index == INDEX_NONE)
+    {
+        ConfirmedWaits = 0;
+        LastCountedWaitTurn = INDEX_NONE;
+    }
+    else
+    {
+        ConfirmedWaits = WaitHistory[Index].Waits;
+        LastCountedWaitTurn = WaitHistory[Index].LastWaitTurn;
+    }
+}
+
+/** Observe the scout's current patrol and advance native turn evidence within its mission epoch. */
 function bool Refresh(XComGameState_Unit Scout, int Turn,
     StateObjectReference PatrolGroup, TTile CurrentWaypoint,
-    bool bSnapshotComplete, bool bUrgent, out string Reason)
+    bool bSnapshotComplete, bool bUrgent, out string Reason,
+    optional APX_MissionRecorder Recorder)
 {
     local XComGameState_BattleData Battle;
     local int HistoryIndex, StartIndex, Index;
@@ -116,6 +178,8 @@ function bool Refresh(XComGameState_Unit Scout, int Turn,
         || HistoryIndex < LastHistory || Turn < LastTurn;
     if (bNewEpoch)
         Reset();
+    else if (IsPendingTurnComplete(PendingWaitTurn, LastTurn, Turn))
+        NoteWaitConfirmed(LastTurn, Recorder, FindWaitRosterHistory(HistoryIndex), "next_local_turn");
     OwnedHistory = `XCOMHISTORY;
     OwnedStartIndex = StartIndex;
     OwnedBattleID = Battle.ObjectID;
@@ -125,6 +189,7 @@ function bool Refresh(XComGameState_Unit Scout, int Turn,
 
     if (bUrgent)
     {
+        PendingWaitTurn = INDEX_NONE;
         Phase = 'abort';
         bExpired = true;
         Reason = "urgent_mission_preempts";
@@ -132,6 +197,7 @@ function bool Refresh(XComGameState_Unit Scout, int Turn,
     }
     if (!bSnapshotComplete || PatrolGroup.ObjectID <= 0)
     {
+        PendingWaitTurn = INDEX_NONE;
         // Green-alert membership can disappear precisely when the squad
         // makes actual contact. Preserve ONLY a native-visible current
         // member of the previously verified group as an opening candidate.
@@ -153,7 +219,7 @@ function bool Refresh(XComGameState_Unit Scout, int Turn,
                         if (Group.m_arrMembers.Find('ObjectID',
                             CurrentEnemies[Index].ObjectID) != INDEX_NONE)
                         {
-                            Phase = 'setup'; // Actual contact, not a future route.
+                            Phase = 'contact'; // A legal opener remains possible here.
                             Reason = "verified_group_entered_contact";
                             return true;
                         }
@@ -173,6 +239,7 @@ function bool Refresh(XComGameState_Unit Scout, int Turn,
         `XCOMHISTORY.GetGameStateForObjectID(PatrolGroup.ObjectID));
     if (Group == none || Group.bRemoved)
     {
+        PendingWaitTurn = INDEX_NONE;
         Reason = "patrol_missing";
         Phase = 'abort';
         bExpired = true;
@@ -186,8 +253,7 @@ function bool Refresh(XComGameState_Unit Scout, int Turn,
         StartTurn = Turn;
         PreparedMoves = 0;
         OrderedReactions = 0;
-        PendingWaitTurn = INDEX_NONE;
-        ConfirmedWaits = 0;
+        SelectWaitBudget(GroupID);
         Phase = 'approach';
         bExpired = false;
     }
@@ -224,18 +290,17 @@ function bool HasActiveStaging()
         && (PreparedMoves > 0 || OrderedReactions > 0);
 }
 
-// One bounded native turn handoff after a submitted setup move OR reaction.
-// Native AP/trigger is not inferred: the state counters change only after
-// successful action dispatch. No wait on a fresh unarmed, speculative plan.
+/** Whether accepted staging or arming permits another voluntary squad handoff. */
 static function bool CanWaitWindow(bool bEnabled, bool bWindowExpired,
     bool bStaged, bool bArmed, int Moves, int Reactions,
-    int ElapsedTurns, int MaxTurns)
+    int WaitsCompleted, int MaxTurns)
 {
     return bEnabled && !bWindowExpired && (bStaged || bArmed)
-        && (Moves > 0 || Reactions > 0) && ElapsedTurns >= 0
-        && ElapsedTurns < Clamp(MaxTurns, 1, 3);
+        && (Moves > 0 || Reactions > 0) && WaitsCompleted >= 0
+        && WaitsCompleted < Clamp(MaxTurns, 1, 3);
 }
 
+/** Return whether accepted staging for the current verified patrol can still request a wait. */
 function bool CanWaitForContact()
 {
     return CanWaitWindow(EnablePatrolAmbush, bExpired,
@@ -245,9 +310,7 @@ function bool CanWaitForContact()
 }
 
 /**
- * Increment only when a real native end-turn ticket for THIS armed episode
- * was confirmed. The result is capped and a repeated confirmation is ignored
- * by NoteWaitConfirmed after clearing PendingWaitTurn.
+ * Return the new capped wait count when native evidence matches the pending patrol turn.
  */
 static function int CountConfirmedWait(int AlreadyWaited, int PendingTurn, int RequestedTurn)
 {
@@ -256,20 +319,43 @@ static function int CountConfirmedWait(int AlreadyWaited, int PendingTurn, int R
     return Clamp(AlreadyWaited + 1, 0, 3);
 }
 
-/** Mark a possible squad wait before submitting the native end-turn request. */
+/** Remember an accepted reserve or deliberate handoff once in this local player turn. */
 function NoteWaitRequested(int Turn)
 {
-    if (CanWaitForContact() && Turn >= StartTurn && Turn >= 0)
+    if (CanWaitForContact() && Turn >= StartTurn && Turn >= 0 && Turn > LastCountedWaitTurn)
         PendingWaitTurn = Turn;
 }
 
-/** Advance the one shared patrol counter only after verified native history. */
-function bool NoteWaitConfirmed(int RequestedTurn)
+/**
+ * Consume one eligible squad turn once when a native handoff or a later local turn
+ * is observed. RosterHistory selects the pre-handoff state for reserve evidence.
+ */
+function bool NoteWaitConfirmed(int RequestedTurn, APX_MissionRecorder Recorder,
+    int RosterHistory, string Evidence)
 {
+    local int Index;
+    local PatrolWaitHistory Budget;
+
     if (PendingWaitTurn < 0 || PendingWaitTurn != RequestedTurn)
         return false;
     ConfirmedWaits = CountConfirmedWait(ConfirmedWaits, PendingWaitTurn, RequestedTurn);
+    LastCountedWaitTurn = RequestedTurn;
     PendingWaitTurn = INDEX_NONE;
+    Budget.PatrolID = GroupID;
+    Budget.Waits = ConfirmedWaits;
+    Budget.LastWaitTurn = RequestedTurn;
+    Index = WaitHistory.Find('PatrolID', GroupID);
+    if (Index == INDEX_NONE)
+        WaitHistory.AddItem(Budget);
+    else
+        WaitHistory[Index] = Budget;
+    if (Recorder != none)
+    {
+        Recorder.Marker("patrol_ambush_wait_confirmed", "group=" $ GroupID
+            @ "completed=" $ ConfirmedWaits @ "turn=" $ RequestedTurn
+            @ "evidence=" $ Evidence);
+        Recorder.RecordPatrolWindow(GroupID, RequestedTurn, RosterHistory, 'wait');
+    }
     return true;
 }
 
@@ -289,23 +375,31 @@ function TTile GetWaypointTile()
     return Waypoint;
 }
 
-function NoteSubmitted(bool bMove, bool bReaction, bool bOpener)
+/** Mark the accepted staging turn so stock AP exhaustion can end it without a mod ticket. */
+function NoteSubmitted(bool bMove, bool bReaction, bool bOpener, bool bArmedOverwatch)
 {
     if (bOpener)
     {
+        PendingWaitTurn = INDEX_NONE;
         Phase = 'open';
         bExpired = true;
     }
     else if (bReaction)
     {
         ++OrderedReactions;
-        Phase = 'armed';
+        if (Phase != 'contact')
+        {
+            Phase = 'armed';
+            NoteWaitRequested(LastTurn);
+        }
     }
     else if (bMove)
     {
         ++PreparedMoves;
         Phase = 'setup';
     }
+    else if (bArmedOverwatch && HasActiveStaging())
+        NoteWaitRequested(LastTurn);
 }
 
 // A directional LOS check to one possible approach tile gives one geometric
@@ -384,7 +478,7 @@ function bool ChooseApproach(XComGameState_Unit Soldier,
         return false;
     if (!CanStage(EnablePatrolAmbush, false, false, true,
         Soldier.NumActionPoints(), PreparedMoves,
-        Clamp(MaxSetupActions, 1, 8), LastTurn - StartTurn,
+        Clamp(MaxSetupActions, 1, 8), ConfirmedWaits,
         Clamp(MaxSetupTurns, 1, 3))
         || !class'APX_SquadPlanner'.static.CanStageMove(
             Soldier.NumActionPoints(), OWCost, false))

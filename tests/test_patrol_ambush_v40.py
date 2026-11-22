@@ -152,8 +152,8 @@ class PatrolAmbushSourceContracts(unittest.TestCase):
         self.assertIn("PreparedMoves, OrderedReactions", bounded_wait)
         self.assertIn("ConfirmedWaits", bounded_wait)
         self.assertIn("(Moves > 0 || Reactions > 0)", policy)
-        self.assertIn("ElapsedTurns >= 0", policy)
-        self.assertIn("ElapsedTurns < Clamp(MaxTurns", policy)
+        self.assertIn("WaitsCompleted >= 0", policy)
+        self.assertIn("WaitsCompleted < Clamp(MaxTurns", policy)
         self.assertIn("!bWindowExpired", policy)
         self.assertIn("PatrolAmbushPlanner.Reset();",
                       function_body(self.controller, "StopAutoplay"))
@@ -237,7 +237,7 @@ class PatrolAmbushSourceContracts(unittest.TestCase):
         self.assertIn("PatrolScout = UnitState", decision)
         self.assertIn("MaxSetupTurns=3", INI.read_text(encoding="utf-8-sig"))
         self.assertIn("MaxReactionSupport=3", INI.read_text(encoding="utf-8-sig"))
-        self.assertIn("mission-report-v47",
+        self.assertIn("mission-report-v48",
                       (SRC / "APX_MissionRecorder.uc").read_text(encoding="utf-8-sig"))
 
 

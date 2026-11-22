@@ -49,40 +49,98 @@ class ConfirmedPatrolWaitTests(unittest.TestCase):
         self.assertFalse(self.wait(True, True, True, False, 1, 0, 1, 3))
         self.assertFalse(self.wait(True, False, True, False, 1, 0, -1, 3))
 
-    def test_waypoint_changes_do_not_rearm_the_same_group(self):
-        """Only a changed native group can reset the wait budget and episode."""
-        refresh = function_body(AMBUSH.read_text(), "Refresh")
+    def test_waypoint_and_a_b_a_do_not_renew_patrol_budget(self):
+        """A/B/A restores A's total and last-counted turn by native patrol ID."""
+        ambush = AMBUSH.read_text()
+        refresh = function_body(ambush, "Refresh")
+        select = function_body(ambush, "SelectWaitBudget")
+        confirm = function_body(ambush, "NoteWaitConfirmed")
         start = refresh.index("if (GroupID != Group.ObjectID)")
         waypoint = refresh.index("else if (CurrentWaypoint != Waypoint)", start)
         limit = refresh.index("if (bExpired || ConfirmedWaits >=", waypoint)
-        self.assertIn("ConfirmedWaits = 0;", refresh[start:waypoint])
-        self.assertIn("PendingWaitTurn = INDEX_NONE;", refresh[start:waypoint])
-        self.assertNotIn("ConfirmedWaits = 0;", refresh[waypoint:limit])
-        self.assertNotIn("StartTurn = Turn;", refresh[waypoint:limit])
+        self.assertIn("SelectWaitBudget(GroupID);", refresh[start:waypoint])
         self.assertIn("Waypoint = CurrentWaypoint;", refresh[waypoint:limit])
-        self.assertIn("ConfirmedWaits", refresh[limit:])
+        for reset in ("SelectWaitBudget(", "StartTurn =", "ConfirmedWaits =", "PreparedMoves =", "OrderedReactions ="):
+            self.assertNotIn(reset, refresh[waypoint:limit])
+        self.assertIn("Index = WaitHistory.Find('PatrolID', NewGroupID);", select)
+        fresh, returning = select.split("else")
+        self.assertIn("if (Index == INDEX_NONE)", fresh)
+        self.assertIn("ConfirmedWaits = 0;", fresh)
+        self.assertIn("ConfirmedWaits = WaitHistory[Index].Waits;", returning)
+        self.assertIn("LastCountedWaitTurn = WaitHistory[Index].LastWaitTurn;", returning)
+        for step in ("Budget.PatrolID = GroupID;", "Budget.Waits = ConfirmedWaits;",
+                     "Budget.LastWaitTurn = RequestedTurn;", "Index = WaitHistory.Find('PatrolID', GroupID);",
+                     "WaitHistory.AddItem(Budget);", "WaitHistory[Index] = Budget;"):
+            self.assertIn(step, confirm)
+        self.assertNotIn("WaitHistory.Length = 0;", refresh + select + confirm)
 
-    def test_native_ticket_completion_and_manual_off_are_wired(self):
-        """One confirmed SkipTurn or player transition increments only a marked wait."""
+    def test_explicit_wait_requires_committed_native_evidence(self):
+        """An interrupted initiative can clear a stock ticket without counting a patrol wait."""
         controller = CONTROLLER.read_text()
         ambush = AMBUSH.read_text()
         decision = function_body(controller, "MakeDecision")
+        poll = function_body(controller, "PollEndTurnRequest")
         confirm = function_body(controller, "ConfirmEndTurnRequest")
         note = function_body(ambush, "NoteWaitConfirmed")
-        reset = function_body(ambush, "Reset")
         marker = decision.index('MissionRecorder.Marker("patrol_ambush_wait"')
-        requested = decision.index("PatrolAmbushPlanner.NoteWaitRequested(", marker)
-        dispatch = decision.index("RequestEndTurn(PC);", requested)
-        self.assertLess(marker, requested)
-        self.assertLess(requested, dispatch)
-        self.assertIn("PatrolAmbushPlanner.NoteWaitConfirmed(EndTurnPlayerTurn)", confirm)
-        self.assertIn('MissionRecorder.Marker("patrol_ambush_wait_confirmed"', confirm)
+        request = decision.index("PatrolAmbushPlanner.NoteWaitRequested(", marker)
+        self.assertLess(request, decision.index("RequestEndTurn(PC);", request))
+        self.assertIn('ConfirmEndTurnRequest("skip_turn_history", EndTurnHistoryCursor, true);', poll)
+        self.assertIn('ConfirmEndTurnRequest("player_or_turn_transition", EndIndex);', poll)
+        self.assertIn("bCommittedSkip", confirm)
+        self.assertLess(confirm.index("FindWaitRosterHistory(EvidenceHistory) != INDEX_NONE"),
+                        confirm.index("PatrolAmbushPlanner.NoteWaitConfirmed("))
+        self.assertIn("EndTurnRequestHistory, Evidence);", confirm)
         self.assertIn("if (PendingWaitTurn < 0 || PendingWaitTurn != RequestedTurn)", note)
         self.assertIn("PendingWaitTurn = INDEX_NONE;", note)
-        self.assertIn("PatrolAmbushPlanner.Reset();",
-                      function_body(controller, "StopAutoplay"))
-        self.assertIn("ConfirmedWaits = 0;", reset)
-        self.assertIn("PendingWaitTurn = INDEX_NONE;", reset)
+        self.assertIn('Recorder.Marker("patrol_ambush_wait_confirmed"', note)
+        self.assertIn("Recorder.RecordPatrolWindow(GroupID, RequestedTurn, RosterHistory, 'wait');", note)
+        requested = function_body(ambush, "NoteWaitRequested")
+        self.assertIn("Turn > LastCountedWaitTurn", requested)
+        self.assertIn("LastCountedWaitTurn = RequestedTurn;", note)
+
+    def test_automatic_exhaustion_counts_once_after_accepted_reserve(self):
+        """A stock AP handoff can occur without a ticket; use advancement of the local turn."""
+        ambush = AMBUSH.read_text()
+        completed = load_uc_function(AMBUSH, "IsPendingTurnComplete")
+        for pending, previous, current, valid in (
+                (8, 8, 8, False), (8, 8, 9, True), (-1, 8, 9, False),
+                (8, 9, 10, False), (8, 8, 7, False), (8, 8, 12, True)):
+            self.assertEqual(valid, completed(pending, previous, current))
+        refresh = function_body(ambush, "Refresh")
+        self.assertLess(refresh.index("if (bNewEpoch)"), refresh.index("else if (IsPendingTurnComplete("))
+        self.assertLess(refresh.index('FindWaitRosterHistory(HistoryIndex), "next_local_turn"'),
+                        refresh.index("LastTurn = Turn;"))
+        submit = function_body(ambush, "NoteSubmitted")
+        self.assertIn("else if (bArmedOverwatch && HasActiveStaging())", submit)
+        self.assertIn("if (Phase != 'contact')", submit)
+        self.assertNotIn("NoteWaitRequested", submit.split("else if (bMove)")[1].split("else if (bArmedOverwatch")[0])
+        decision = function_body(CONTROLLER.read_text(), "MakeDecision")
+        self.assertLess(decision.index("if (!bSuccess)"), decision.index("PatrolAmbushPlanner.NoteSubmitted("))
+        roster = function_body(ambush, "FindWaitRosterHistory")
+        for guard in ("PendingWaitTurn < 0", "LastHistory + 256", "eGameRule_PlayerTurnEnd",
+                      "Rule.PlayerRef.ObjectID == OwnedPlayerID", "return Index - 1;"):
+            self.assertIn(guard, roster)
+        self.assertTrue(roster.strip().endswith("return INDEX_NONE;"))
+
+    def test_contact_only_manual_off_and_epoch_boundaries(self):
+        """A contact can permit an immediate opener; missing movement and old epochs cannot fund a wait."""
+        ambush = AMBUSH.read_text()
+        refresh = function_body(ambush, "Refresh")
+        self.assertIn("Phase = 'contact';", refresh)
+        self.assertIn("PendingWaitTurn = INDEX_NONE;", refresh.split("if (!bSnapshotComplete")[1].split("GroupID > 0")[0])
+        can_wait = function_body(ambush, "CanWaitForContact")
+        self.assertIn("Phase == 'setup', Phase == 'armed'", can_wait)
+        self.assertNotIn("'contact'", can_wait)
+        for guard in ("OwnedHistory != `XCOMHISTORY", "OwnedStartIndex != StartIndex",
+                      "OwnedBattleID != Battle.ObjectID", "OwnedPlayerID != Scout.GetAssociatedPlayerID()",
+                      "HistoryIndex < LastHistory", "Turn < LastTurn"):
+            self.assertIn(guard, refresh)
+        self.assertIn("PatrolAmbushPlanner.Reset();", function_body(CONTROLLER.read_text(), "StopAutoplay"))
+        reset = function_body(ambush, "Reset")
+        for clear in ("ConfirmedWaits = 0;", "PendingWaitTurn = INDEX_NONE;",
+                      "LastCountedWaitTurn = INDEX_NONE;", "WaitHistory.Length = 0;"):
+            self.assertIn(clear, reset)
 
 
 class OverwatchPersonalOpportunityTests(unittest.TestCase):
@@ -103,17 +161,16 @@ class OverwatchPersonalOpportunityTests(unittest.TestCase):
                         self.score(True, False, 1, 0, 0))
 
     def test_bounded_personal_los_and_native_guard_not_weakened(self):
-        """Personal geometric LOS is a hint, not a guarantee of future fire."""
+        """Use the reaction target checks while preserving the native submission guard."""
         combat = COMBAT.read_text()
         lane = function_body(combat, "HasPlausibleLocalReactionLane")
         score = function_body(combat, "ScoreSelfAction")
         self.assertIn("SquadVisibleEnemies.Length > 64", lane)
         self.assertIn("IsVisibleHostile(", lane)
-        self.assertIn("CanSeeTileToTile(Soldier.TileLocation, Enemy.TileLocation", lane)
-        self.assertIn("Visibility.DefaultTargetDist <= SightSq", lane)
+        self.assertIn("IsCurrentReactionTarget(Template, Shot, Soldier, Enemy)", lane)
         self.assertNotIn("GetNextDestination(", lane)
         self.assertNotIn("SubmitGameState(", lane)
-        self.assertIn("HasPlausibleLocalReactionLane(UnitState, VisibleEnemies)", score)
+        self.assertIn("HasPlausibleLocalReactionLane(UnitState, Ability, VisibleEnemies)", score)
         self.assertIn("GuardOverwatchForKnownAlly(", score)
         self.assertIn("!bSquadOverwatchSafe", score)
 

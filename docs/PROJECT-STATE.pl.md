@@ -1,4 +1,4 @@
-# Stan przekazania projektu — 21 listopada 2026
+# Stan przekazania projektu — 22 listopada 2026
 
 To punkt startowy po pierwszym przeglądzie importu pomocnika. Bieżące issue i PR-y mogą zawierać nowsze
 ustalenia; po integracji aktualizuj ten dokument, gdy zmienia się baza lub
@@ -6,7 +6,8 @@ poziom potwierdzenia działania.
 
 ## Baza kodu
 
-- **v47, diagnostyka po próbie v46.** W 26 ocenach dojścia do X4 wszystkie 603 kandydatury skierowane do kontroli ścieżki odpadły w zbiorczym teście. Nowe liczniki ujawniają pierwszą przyczynę odrzucenia. Analizator osobno zlicza rozkazy Overwatch, uzbrojenia i strzały reakcyjne. Trwają przygotowania do wspólnego buildu po [pracy HELPERA #111](https://github.com/HeisenbergC29/autoplay-xcom2/issues/111).
+- **v48, wspólna próba Windows.** HELPER i LEAD połączyli zmiany dotyczące wyboru patrolu, liczenia tur zasadzki i oceny Overwatch z diagnostyką X4. Próba ma ustalić, jak często uda się znaleźć ruchomy patrol i ilu wartowników odda strzał do jego członków. Dowód kompilacji i wyniki misji dostarcza użytkownik. [Paczka i próba #4](https://github.com/HeisenbergC29/autoplay-xcom2/issues/4) · [Warunki próby zasadzek](experiment-111-ambush-overwatch-v48.pl.md)
+- **v47, diagnostyka po próbie v46.** W 26 ocenach dojścia do X4 wszystkie 603 kandydatury skierowane do kontroli ścieżki odpadły w zbiorczym teście. Nowe liczniki ujawniają pierwszą przyczynę odrzucenia. Analizator osobno zlicza rozkazy Overwatch, uzbrojenia i strzały reakcyjne. Diagnostyka wchodzi do paczki v48. [Praca HELPERA #111](https://github.com/HeisenbergC29/autoplay-xcom2/issues/111)
 - **Próba v46.** Pięć misji w jednym procesie i cztery przejścia, normalne zakończenie gry. Jeden potwierdzony sukces projektu w GasStation (+10 200). Cemetery zakończone zwycięstwem i ujemną punktacją misji. W SabotageCC ponowne zatrzymania przy X4. [Pełny raport](report-v46-2026-11-21.pl.md)
 - **v46, wspólna zmiana dla #106 i #107.** Rozważenie objazdu do X4 oraz wygaszenie obserwacji HUD po taktyce. Scenariusz Windows obejmuje X4, przejście po zakończeniu taktyki i start następnej misji. [Bieżąca próba #4](https://github.com/HeisenbergC29/autoplay-xcom2/issues/4)
 - **Dowód v45.** W SabotageCC sześć zatrzymań w turach 19–20 skończyło się ręcznymi ruchami. Gra zaliczyła zwycięstwo w turze 29. Punkty są częściowe. Później gra załadowała Avengera i wróciła do menu. Przyczyna zgłoszonego wyłączenia pozostaje nieustalona. [Raport v45](report-v45-2026-11-21.pl.md)
