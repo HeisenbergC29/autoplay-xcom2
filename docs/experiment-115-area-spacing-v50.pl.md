@@ -14,7 +14,7 @@ Baza `main d0f827edb5335360e69e32710437c9174038a6ee`, osobna gałąź `helper/11
 Dotychczas `APX_RepositionPlanner.ChooseMove` szukał głównie **materialnie wyższej** szansy podstawowego strzału na obecnie legalny cel. Taki warunek odrzucał bezpieczne rozproszenie po którym natywny strzał nadal byłby legalny, ale szansa trafienia nie poprawiłaby się o co najmniej 12 p.p.
 
 Nowa, niezależna ścieżka rozważa wyłącznie:
-1. Żołnierza aktualnie ujawnionego, z 2 AP, natywnie legalnym ruchem i bez aktywnego blokującego hazardu. Jeden skan z maks. 256 historycznych jednostek i 12 własnych towarzyszy; brak kompletnego odczytu wyłącza opcjonalną zmianę rozstawienia.
+1. Żołnierza aktualnie ujawnionego, z 2 AP, natywnie legalnym ruchem i bez aktywnego blokującego hazardu. Jeden odczyt natywnego rosteru lokalnego XCom (maks. 24 wpisy) i 12 własnych towarzyszy; brak kompletnego odczytu wyłącza opcjonalną zmianę rozstawienia.
 2. Bliską aktualnie żywą jednostkę z faktycznie zainstalowanym `PoisonSpit`, odległość maks. 18 pól — **możliwą zdolność**, nie gotowość do natychmiastowego ataku.
 3. Obecnie możliwą powierzchnię rażenia: `WorstSharedAreaTargets` przed i po przesunięciu z promieniem minimum 4. Wymaga minimum trzech potencjalnie jednocześnie trafionych i **realnego spadku** po ruchu. Bez spadku pozostają normalne strzały i ruchy.
 4. Gdy istnieje bieżący legalny `StandardShot` lub `PistolStandardShot`, jego prawdziwą obecnie zmierzoną szansę/damage, aktualny cel oraz natywny remote LOS/warunki/cover, koszt AP po blue. Nowa prognoza może stracić maksymalnie 8 p.p. (zamiast wymagać wzrostu 12 p.p.). Wysoce wartościowy strzał `NativeScore >= 100` przy `NativeChance >= 75` pozostaje i nie jest zastępowany wyłącznie za sprawą geometrii rozproszenia.
