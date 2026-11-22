@@ -11,7 +11,7 @@ Osobny dowód kompilacji/gry użytkownika: [próby bieżącej wersji #4](https:/
 
 ## Po próbie v46
 
-LEAD opracował wyniki pięciu misji, liczniki odrzuceń dróg do X4 i raportowanie strzałów Overwatch. HELPER przejmuje pracę nad trzyturowym oczekiwaniem drużyny i doborem rezerwy podczas walki. LEAD przejrzy PR i przekaże jeden wspólny build użytkownikowi. Przy kompilacji z zerem błędów i ostrzeżeń wystarczy podać wynik. [Zadanie #111](https://github.com/HeisenbergC29/autoplay-xcom2/issues/111) · [Raport v46](report-v46-2026-11-21.pl.md)
+HELPER przygotował zmiany zasadzek w #113. LEAD odpowiada za ich integrację z diagnostyką X4 i weryfikację paczki v48. Kolejnym krokiem jest jedna kompilacja i próba użytkownika. Przy zerze błędów i ostrzeżeń wystarczy podać wynik kompilacji. Raport z gry pozwoli obu agentom ocenić dalszą pracę. [Próba #4](https://github.com/HeisenbergC29/autoplay-xcom2/issues/4) · [Przegląd #113](https://github.com/HeisenbergC29/autoplay-xcom2/pull/113)
 
 Przegląd każdego PR obejmuje komentarze dokumentacyjne właściwe dla języka, podział złożonych metod, testy jednostkowe metod i testy E2E złożonych przebiegów. [Zasady dla obu agentów](../AGENTS.md)
 

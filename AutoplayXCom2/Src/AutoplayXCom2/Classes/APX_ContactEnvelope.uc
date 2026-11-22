@@ -67,21 +67,23 @@ static function bool BuildSnapshot(XComGameState_Unit Soldier,
     out array<StateObjectReference> KnownUnits,
     out array<StateObjectReference> KnownInteractives,
     out string Reason, out int RemainingGroups, out int RemainingMembers,
-    optional out StateObjectReference PatrolGroup, optional out TTile PatrolWaypoint)
+    optional out StateObjectReference PatrolGroup, optional out TTile PatrolWaypoint,
+    optional out string PatrolSelectionEvidence)
 {
     local array<StateObjectReference> VisibleObjects;
     local StateObjectReference Ref;
     local XComGameState_Unit UnitState;
     local XComGameState_InteractiveObject Interactive;
     local XComGameState_AIGroup Group;
-    local int Index, Scanned;
+    local int Index, Scanned, UnlistedPatrols, UnobservedMotion, AtTurnStart;
     local float PatrolDistanceSq, BestPatrolDistanceSq;
     local vector ScoutPosition;
-    local string PatrolReason;
+    local string PatrolReason, SelectedEvidence;
 
     KnownUnits.Length = 0;
     KnownInteractives.Length = 0;
     PatrolGroup.ObjectID = 0;
+    PatrolSelectionEvidence = "not_observed";
     BestPatrolDistanceSq = 1000000000000.0;
     Reason = "none";
     if (Soldier == none || `XCOMHISTORY == none || `XWORLD == none
@@ -144,6 +146,8 @@ static function bool BuildSnapshot(XComGameState_Unit Soldier,
         if (RemainingGroups <= 0)
         {
             Reason = "group_budget";
+            PatrolGroup.ObjectID = 0;
+            PatrolSelectionEvidence = Reason;
             return false;
         }
         --RemainingGroups;
@@ -153,12 +157,26 @@ static function bool BuildSnapshot(XComGameState_Unit Soldier,
         if (!class'APX_PatrolKnowledge'.static.StoredPatrolEvidence(
             Group, Soldier.GetAssociatedPlayerID(), RemainingMembers, PatrolReason))
         {
+            if (PatrolReason == "patrol_no_net_displacement")
+            {
+                ++AtTurnStart;
+                continue;
+            }
+            if (PatrolReason == "patrol_motion_unobserved")
+            {
+                ++UnobservedMotion;
+                continue;
+            }
             if (PatrolReason != "not_listed_patrol")
             {
+                // Incomplete stored metadata fails closed; do not silently
+                // promote a group observed by the recorder to a real patrol.
+                PatrolSelectionEvidence = PatrolReason;
                 Reason = PatrolReason;
                 PatrolGroup.ObjectID = 0;
                 return false;
             }
+            ++UnlistedPatrols;
         }
         else
         {
@@ -170,11 +188,20 @@ static function bool BuildSnapshot(XComGameState_Unit Soldier,
             {
                 BestPatrolDistanceSq = PatrolDistanceSq;
                 PatrolGroup.ObjectID = Group.ObjectID;
+                SelectedEvidence = PatrolReason;
                 PatrolWaypoint = `XWORLD.GetTileCoordinatesFromPosition(
                     Group.CurrentTargetLocation);
             }
         }
     }
+    // Identify the selected source or show how many groups lacked movement evidence.
+    if (PatrolGroup.ObjectID > 0)
+        PatrolSelectionEvidence = "verified_stored_patrol source=" $ SelectedEvidence;
+    else
+        PatrolSelectionEvidence = "no_verified_moving_patrol groups=" $ Scanned
+            @ "unregistered_or_ineligible=" $ UnlistedPatrols
+            @ "motion_unobserved=" $ UnobservedMotion
+            @ "at_turn_start_tile=" $ AtTurnStart;
     Reason = "current_known_contacts";
     return true;
 }

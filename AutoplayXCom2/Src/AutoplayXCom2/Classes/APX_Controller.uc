@@ -48,6 +48,7 @@ struct VisitedPosition
 {
     var int UnitID;
     var TTile Tile;
+    var bool bLeftWhileConcealed;
 };
 
 struct RejectedAreaPlan
@@ -799,10 +800,16 @@ function bool EndTurnTicketIsCurrent()
     return BattleData != none && BattleData.ObjectID == EndTurnBattleID;
 }
 
-function ConfirmEndTurnRequest(string Evidence, int EvidenceHistory)
+/** Consume the confirmed native ticket and attribute any pending patrol wait for this turn. */
+function ConfirmEndTurnRequest(string Evidence, int EvidenceHistory, optional bool bCommittedSkip)
 {
     bEndTurnPending = false;
     bEndTurnRequested = true;
+    // An interrupt can temporarily give another player initiative in the same turn.
+    if (PatrolAmbushPlanner != none && (bCommittedSkip
+        || PatrolAmbushPlanner.FindWaitRosterHistory(EvidenceHistory) != INDEX_NONE))
+        PatrolAmbushPlanner.NoteWaitConfirmed(EndTurnPlayerTurn, MissionRecorder,
+            EndTurnRequestHistory, Evidence);
     if (MissionRecorder != none)
         MissionRecorder.Marker("end_turn_confirmed", "player=" $ EndTurnPlayerID
             @ "turn=" $ EndTurnPlayerTurn @ "history=" $ EvidenceHistory
@@ -848,7 +855,7 @@ function bool PollEndTurnRequest(float DeltaTime)
             RuleContext.GameRuleType == eGameRule_SkipTurn,
             EndTurnPlayerID, RuleContext.PlayerRef.ObjectID))
         {
-            ConfirmEndTurnRequest("skip_turn_history", EndTurnHistoryCursor);
+            ConfirmEndTurnRequest("skip_turn_history", EndTurnHistoryCursor, true);
             return true;
         }
     }
@@ -1241,7 +1248,7 @@ function bool ChooseCompetitiveReposition(XComGameState_Unit UnitState, float Be
         TraceCandidateMove(UnitState, CandidatePath, Score);
         if (Score <= BestScore)
             ScanReason = "outscored_by_current_squad_action";
-        else if (!CanUseMove(UnitState, CandidatePath))
+        else if (!CanUseMove(UnitState, CandidatePath, false, bProposed, ScanReason))
             ScanReason = "destination_already_visited";
         else
             bCompetitive = true;
@@ -1270,7 +1277,7 @@ function MakeDecision(XComTacticalController PC)
     local vector CandidateAim, BestAim;
     local int TargetIndex, BestTargetIndex, ChosenTargetID, AmbushTargetIndex, RescuePatientID, MedicalPatientID;
     local int PatrolReactionIndex, PatrolApproachUnitID;
-    local int PatrolReactionUnitID, PatrolReactionAbilityID;
+    local int PatrolReactionUnitID, PatrolReactionAbilityID, PatrolOrderHistory;
     local TTile PatrolApproachDestination, CandidateRouteGoal, BestRouteGoal;
     local TTile SelectedRouteDestination;
     local int SelectedRouteUnitID;
@@ -1281,7 +1288,7 @@ function MakeDecision(XComTacticalController PC)
     local int RemainingContactDetectors, RemainingContactTiles, RemainingContactLOS;
     local int RemainingTempoCoverChecks, RemainingMedicalSamples;
     local array<StateObjectReference> ContactSnapshotUnits, ContactSnapshotInteractives;
-    local string ContactSnapshotReason;
+    local string ContactSnapshotReason, PatrolSelectionEvidence;
     local bool bContactSnapshotReady, bContactSnapshotComplete;
     local int FocusTargetID, FocusGroupMembers, FocusLiving, FocusTimer;
     local int FocusHistoryIndex, FocusStartIndex, FocusPlantPhase, FocusPreviousGroupID;
@@ -1290,10 +1297,11 @@ function MakeDecision(XComTacticalController PC)
     local TTile FocusTile, RangedTile, AmbushPatrolWaypoint;
     local float FocusDistance, RangedDistance;
     local float Score, BestScore, AmbushScore, PatrolReactionScore, PatrolApproachScore;
-    local bool bMove, bArea, bHavePlan, bSuccess, bCanExplore, bCombatThreats;
+    local bool bMove, bArea, bHavePlan, bSuccess, bCanExplore, bCombatThreats, bLeftWhileConcealed;
     local bool bVisibleThreats, bContactSearch, bCandidateMove, bGrenadeCandidate;
     local bool bOpeningContact, bFocusedGoal, bRangedFocusGoal, bRangedConcealed;
     local bool bPatrolRefreshed, bPatrolActive, bSelectedPatrolMove, bSelectedPatrolReaction;
+    local bool bPatrolOpener, bPatrolArm;
     local bool bSquadUrgentHealAvailable;
     local string PatrolReason, PatrolApproachReason, BestMovePlanner, MissionMovePlanner;
     local XComGameState_Unit PatrolSupporter, PatrolScout;
@@ -1369,6 +1377,8 @@ function MakeDecision(XComTacticalController PC)
     {
         BerserkerFocusGroupID = 0;
         NativeOpeningStrikesThisTurn = 0;
+        // Another battle or a rewind can reuse this turn number, unit ID and tile.
+        VisitedPositions.Length = 0;
     }
     BerserkerFocusHistory = `XCOMHISTORY;
     BerserkerFocusStartIndex = FocusStartIndex;
@@ -1514,13 +1524,14 @@ function MakeDecision(XComTacticalController PC)
             bContactSnapshotComplete = class'APX_ContactEnvelope'.static.BuildSnapshot(
                 UnitState, ContactSnapshotUnits, ContactSnapshotInteractives,
                 ContactSnapshotReason, RemainingContactGroups, RemainingContactMembers,
-                AmbushPatrolRef, AmbushPatrolWaypoint);
+                AmbushPatrolRef, AmbushPatrolWaypoint, PatrolSelectionEvidence);
             if (MissionRecorder != none)
                 MissionRecorder.Marker("contact_snapshot",
                     "complete=" $ string(bContactSnapshotComplete)
                     @ "reason=" $ ContactSnapshotReason
                     @ "detectors=" $ ContactSnapshotUnits.Length
-                    @ "interactives=" $ ContactSnapshotInteractives.Length);
+                    @ "interactives=" $ ContactSnapshotInteractives.Length
+                    @ "patrol_selection=" $ PatrolSelectionEvidence);
         }
         if (!bPatrolRefreshed)
         {
@@ -1531,12 +1542,16 @@ function MakeDecision(XComTacticalController PC)
                 class'APX_MissionPlanner'.static.HasActiveMissionDeadline()
                 || class'APX_MissionPlanner'.static.HasBleedingSquadmate(UnitState)
                 || class'APX_MissionPlanner'.static.ShouldEvacuate(UnitState),
-                PatrolReason);
+                PatrolReason, MissionRecorder);
             if (MissionRecorder != none)
                 MissionRecorder.Marker("patrol_ambush_state",
                     "phase=" $ string(PatrolAmbushPlanner.CurrentPhase())
                     @ "group=" $ PatrolAmbushPlanner.CurrentGroupID()
+                    @ "turn=" $ PlayerState.PlayerTurnCount
+                    @ "history=" $ `XCOMHISTORY.GetCurrentHistoryIndex()
                     @ "reason=" $ PatrolReason
+                    @ "selection=" $ PatrolSelectionEvidence
+                    @ "completed_waits=" $ PatrolAmbushPlanner.ConfirmedWaitCount()
                     @ "horizon=variants_unknown");
         }
         if (class'APX_CombatPlanner'.static.ChooseAction(UnitState, Candidate,
@@ -1951,7 +1966,7 @@ function MakeDecision(XComTacticalController PC)
 
     // Avoid burning whole turns on overwatch forever when no objective, attack
     // or useful move can be found. An unknown scripted objective needs a human.
-    if ((!bHavePlan || BestScore <= 2.0) && MeaningfulActionsThisTurn == 0
+    if ((!bHavePlan || (BestScore <= 2.0 && MeaningfulActionsThisTurn == 0))
         && !bCombatThreats)
     {
         if (bPatrolActive && AutoEndTurn && PatrolAmbushPlanner != none
@@ -1966,17 +1981,22 @@ function MakeDecision(XComTacticalController PC)
             if (MissionRecorder != none)
                 MissionRecorder.Marker("patrol_ambush_wait",
                     "group=" $ PatrolAmbushPlanner.CurrentGroupID()
-                    @ "phase=" $ string(PatrolAmbushPlanner.CurrentPhase()));
+                    @ "phase=" $ string(PatrolAmbushPlanner.CurrentPhase())
+                    @ "completed=" $ PatrolAmbushPlanner.ConfirmedWaitCount());
+            PatrolAmbushPlanner.NoteWaitRequested(PlayerState.PlayerTurnCount);
             RequestEndTurn(PC); // Native confirmed end-turn ticket still applies.
             return;
         }
-        if (FocusBattle != none
-            && FocusBattle.MapData.ActiveMission.sType == "SabotageCC")
-            StopWithStatus("SabotageCC: no currently verified native X4 route; see objective_recovery_scan",
-                StatusNoPlan);
-        else
-            StopWithStatus("No constructive action or understood mission goal", StatusNoPlan);
-        return;
+        if (MeaningfulActionsThisTurn == 0)
+        {
+            if (FocusBattle != none
+                && FocusBattle.MapData.ActiveMission.sType == "SabotageCC")
+                StopWithStatus("SabotageCC: no currently verified native X4 route; see objective_recovery_scan",
+                    StatusNoPlan);
+            else
+                StopWithStatus("No constructive action or understood mission goal", StatusNoPlan);
+            return;
+        }
     }
     if (!bHavePlan)
     {
@@ -2014,6 +2034,8 @@ function MakeDecision(XComTacticalController PC)
         // The stock helper copies the human cursor's waypoints. They must not
         // be applied to an independently planned route or a different soldier.
         PC.m_kPathingPawn.ClearAllWaypoints();
+        bLeftWhileConcealed = BestPath.Length > 1 && BestPath[0] == BestUnit.TileLocation
+            && BestUnit.IsConcealed();
         bSuccess = PC.GameStateMoveUnitSingle(XGUnit(BestUnit.GetVisualizer()), BestPath);
         `log("Move unit" @ BestUnit.ObjectID @ "tiles" @ BestPath.Length
             @ "to" @ BestPath[BestPath.Length - 1].X @ BestPath[BestPath.Length - 1].Y
@@ -2041,6 +2063,16 @@ function MakeDecision(XComTacticalController PC)
         Ability = XComGameState_Ability(`XCOMHISTORY.GetGameStateForObjectID(OwnedAbilityID));
         if (BestTargetIndex >= 0 && BestTargetIndex < BestAction.AvailableTargets.Length)
             ChosenTargetID = BestAction.AvailableTargets[BestTargetIndex].PrimaryTarget.ObjectID;
+        if (bPatrolActive && PatrolAmbushPlanner != none)
+        {
+            // The opener itself can kill the target or scatter its patrol.
+            // Classify the final native action while its source group still exists.
+            PatrolOrderHistory = `XCOMHISTORY.GetCurrentHistoryIndex();
+            bPatrolArm = bSelectedPatrolReaction && BestUnit.ObjectID == PatrolReactionUnitID
+                && BestAction.AbilityObjectRef.ObjectID == PatrolReactionAbilityID;
+            bPatrolOpener = !bPatrolArm && PatrolAmbushPlanner.IsActualOpener(
+                BestAction, BestTargetIndex, BestUnit);
+        }
         SubmittedContext = class'XComGameStateContext_Ability'.static.ActivateAbility_ReturnContext(
             BestAction, BestTargetIndex, BestLocations);
         OwnedActionContext = SubmittedContext;
@@ -2068,17 +2100,24 @@ function MakeDecision(XComTacticalController PC)
         && Ability.GetMyTemplateName() == 'DevastatingPunchMP')
         ++NativeOpeningStrikesThisTurn;
     if (bPatrolActive && PatrolAmbushPlanner != none)
+    {
+        if (MissionRecorder != none)
+        {
+            if (bPatrolArm)
+                MissionRecorder.RecordPatrolArm(PatrolAmbushPlanner.CurrentGroupID(),
+                    BestUnit.ObjectID, Ability.GetMyTemplateName(), PlayerState.PlayerTurnCount, PatrolOrderHistory);
+            else if (bPatrolOpener)
+                MissionRecorder.RecordPatrolWindow(PatrolAmbushPlanner.CurrentGroupID(),
+                    PlayerState.PlayerTurnCount, PatrolOrderHistory, 'open');
+        }
         PatrolAmbushPlanner.NoteSubmitted(
             bMove && bSelectedPatrolMove && BestUnit != none
                 && BestUnit.ObjectID == PatrolApproachUnitID
                 && BestPath.Length > 1
                 && BestPath[BestPath.Length - 1] == PatrolApproachDestination,
-            !bMove && bSelectedPatrolReaction && BestUnit != none
-                && BestUnit.ObjectID == PatrolReactionUnitID
-                && BestAction.AbilityObjectRef.ObjectID == PatrolReactionAbilityID,
-            !bMove && !bSelectedPatrolReaction
-                && PatrolAmbushPlanner.IsActualOpener(
-                    BestAction, BestTargetIndex, BestUnit));
+            bPatrolArm, bPatrolOpener, !bCombatThreats && !bMove && !bArea && Ability != none
+                && class'APX_CombatPlanner'.default.OverwatchAbilities.Find(Ability.GetMyTemplateName()) != INDEX_NONE);
+    }
     if (bMove)
     {
         if (bSelectedRoute && RouteTempo != none && BestUnit != none
@@ -2098,7 +2137,7 @@ function MakeDecision(XComTacticalController PC)
                     @ "goal_z=" $ BestRouteGoal.Z
                     @ "memory_entries=" $ RouteTempo.CountVisits());
         }
-        RecordMove(BestUnit, BestPath);
+        RecordMove(BestUnit, BestPath, bLeftWhileConcealed);
     }
     ++ActionsThisTurn;
     if (BestScore > 2.0)
@@ -2122,35 +2161,50 @@ function bool TraceCandidateMove(XComGameState_Unit UnitState,
     return true;
 }
 
-// Re-evaluation after every ally action can change support scores. Remember
-// this turn's visited endpoints so those changes cannot produce A-B-A shuffles.
+/** Check whether a previously visited tile has a newly available offensive use since concealment broke. */
+static function bool IsPostRevealShotReturn(bool bVerifiedReposition, bool bDepartedConcealed, bool bConcealedNow)
+{
+    return bVerifiedReposition && bDepartedConcealed && !bConcealedNow;
+}
+
+/**
+ * Permit fresh endpoints, proposal-specific emergencies and a post-reveal move-and-shot.
+ * Only ChooseCompetitiveReposition supplies the verified blue route and projected shot gain.
+ * On that exception, annotate its existing scan reason. The most recent visit takes precedence.
+ */
 function bool CanUseMove(XComGameState_Unit UnitState, const out array<TTile> Path,
-    optional bool bEmergencyRevisit)
+    optional bool bEmergencyRevisit, optional bool bVerifiedReposition, optional out string ScanReason)
 {
     local int Index;
-    if (Path.Length < 2)
+    if (UnitState == none || Path.Length < 2)
         return false;
-    // Only an actual emergency proposal may revisit a same-turn endpoint.
-    // The default is false: an unrelated bleeding ally or mission timer
-    // cannot remove anti-shuffle protection from combat, loot or staging.
     if (bEmergencyRevisit)
         return true;
-    for (Index = 0; Index < VisitedPositions.Length; ++Index)
+    for (Index = VisitedPositions.Length - 1; Index >= 0; --Index)
     {
         if (VisitedPositions[Index].UnitID == UnitState.ObjectID
             && VisitedPositions[Index].Tile == Path[Path.Length - 1])
-            return false;
+        {
+            if (!IsPostRevealShotReturn(bVerifiedReposition,
+                VisitedPositions[Index].bLeftWhileConcealed, UnitState.IsConcealed()))
+                return false;
+            ScanReason = "post_reveal_move_and_shot_candidate";
+            return true;
+        }
     }
     return true;
 }
 
-function RecordMove(XComGameState_Unit UnitState, const out array<TTile> Path)
+/** Remember an accepted move's origin concealment and destination for this soldier in the current turn. */
+function RecordMove(XComGameState_Unit UnitState, const out array<TTile> Path, bool bLeftWhileConcealed)
 {
     local VisitedPosition Entry;
     Entry.UnitID = UnitState.ObjectID;
     Entry.Tile = Path[0];
+    Entry.bLeftWhileConcealed = bLeftWhileConcealed;
     VisitedPositions.AddItem(Entry);
     Entry.Tile = Path[Path.Length - 1];
+    Entry.bLeftWhileConcealed = false;
     VisitedPositions.AddItem(Entry);
 }
 

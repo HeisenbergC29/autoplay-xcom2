@@ -156,7 +156,7 @@ class MedicalSource(unittest.TestCase):
                         decision.index("ChooseMedicalMove("))
         self.assertLess(decision.index("ChooseMedicalMove("),
                         decision.index("ActivateAbility_ReturnContext("))
-        self.assertIn("mission-report-v47",
+        self.assertIn("mission-report-v48",
                       (SRC / "APX_MissionRecorder.uc").read_text(encoding="utf-8-sig"))
 
 

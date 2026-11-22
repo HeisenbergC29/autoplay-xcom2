@@ -52,10 +52,11 @@ class PatrolAmbushNumericPolicy(unittest.TestCase):
         # blue move or a genuinely submitted affordable overwatch.
         self.assertTrue(self.wait(True, False, True, False, 1, 0, 1, 2))
         self.assertTrue(self.wait(True, False, False, True, 0, 2, 1, 2))
+        self.assertTrue(self.wait(True, False, True, False, 1, 0, 0, 2))
         for args in (
             (True, False, True, False, 0, 0, 1, 2),
             (True, False, False, False, 1, 0, 1, 2),
-            (True, False, True, False, 1, 0, 0, 2),
+            (True, False, True, False, 1, 0, -1, 2),
             (True, False, False, True, 0, 1, 2, 2),
             (True, True, True, False, 1, 0, 1, 2),
             (False, False, True, False, 1, 0, 1, 2),
@@ -149,10 +150,10 @@ class PatrolAmbushSourceContracts(unittest.TestCase):
         self.assertIn("Phase == 'setup'", bounded_wait)
         self.assertIn("Phase == 'armed'", bounded_wait)
         self.assertIn("PreparedMoves, OrderedReactions", bounded_wait)
-        self.assertIn("LastTurn - StartTurn", bounded_wait)
+        self.assertIn("ConfirmedWaits", bounded_wait)
         self.assertIn("(Moves > 0 || Reactions > 0)", policy)
-        self.assertIn("ElapsedTurns > 0", policy)
-        self.assertIn("ElapsedTurns < Clamp(MaxTurns", policy)
+        self.assertIn("WaitsCompleted >= 0", policy)
+        self.assertIn("WaitsCompleted < Clamp(MaxTurns", policy)
         self.assertIn("!bWindowExpired", policy)
         self.assertIn("PatrolAmbushPlanner.Reset();",
                       function_body(self.controller, "StopAutoplay"))
@@ -234,9 +235,9 @@ class PatrolAmbushSourceContracts(unittest.TestCase):
         self.assertIn("RequestEndTurn(PC);", decision)
         self.assertIn("StopWithStatus(\"No constructive action", decision)
         self.assertIn("PatrolScout = UnitState", decision)
-        self.assertIn("MaxSetupTurns=2", INI.read_text(encoding="utf-8-sig"))
+        self.assertIn("MaxSetupTurns=3", INI.read_text(encoding="utf-8-sig"))
         self.assertIn("MaxReactionSupport=3", INI.read_text(encoding="utf-8-sig"))
-        self.assertIn("mission-report-v47",
+        self.assertIn("mission-report-v48",
                       (SRC / "APX_MissionRecorder.uc").read_text(encoding="utf-8-sig"))
 
 

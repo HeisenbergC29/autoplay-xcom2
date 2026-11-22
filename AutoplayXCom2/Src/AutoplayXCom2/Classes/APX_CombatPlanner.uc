@@ -940,6 +940,89 @@ static function bool HasVisibleReclaimableReactionTarget(
     return false;
 }
 
+/**
+ * Resolve the stock movement reaction granted to this soldier for the arming
+ * ability's actual weapon. Missing or unsupported pairs yield no evidence.
+ */
+static function XComGameState_Ability ResolveStockReactionShot(
+    XComGameState_Unit Soldier, XComGameState_Ability ArmAbility)
+{
+    local name ShotName;
+    local StateObjectReference ShotRef;
+    local XComGameState_Ability Shot;
+
+    if (Soldier == none || ArmAbility == none || `XCOMHISTORY == none
+        || ArmAbility.OwnerStateObject.ObjectID != Soldier.ObjectID
+        || ArmAbility.SourceWeapon.ObjectID <= 0)
+        return none;
+    switch (ArmAbility.GetMyTemplateName())
+    {
+    case 'Overwatch':
+    case 'SniperRifleOverwatch':
+        ShotName = 'OverwatchShot';
+        break;
+    case 'PistolOverwatch':
+        ShotName = 'PistolOverwatchShot';
+        break;
+    case 'LongWatch':
+        ShotName = 'LongWatchShot';
+        break;
+    default:
+        return none;
+    }
+    ShotRef = Soldier.FindAbility(ShotName, ArmAbility.SourceWeapon);
+    if (ShotRef.ObjectID <= 0)
+        return none;
+    Shot = XComGameState_Ability(`XCOMHISTORY.GetGameStateForObjectID(ShotRef.ObjectID));
+    if (Shot == none || Shot.OwnerStateObject.ObjectID != Soldier.ObjectID)
+        return none;
+    return Shot;
+}
+
+/** Evaluate current range and target conditions of the resolved stock reaction.
+ * The caller supplies the shot's template and a living squad-visible enemy.
+ */
+static function bool IsCurrentReactionTarget(X2AbilityTemplate Template,
+    XComGameState_Ability Shot, XComGameState_Unit Soldier, XComGameState_Unit Enemy)
+{
+    return Template.AbilityTargetStyle.ValidatePrimaryTargetOption(Shot, Soldier, Enemy)
+        && Template.CheckTargetConditions(Shot, Soldier, Enemy) == 'AA_Success';
+}
+
+/**
+ * Test the target half of the movement listener on up to 64 current contacts.
+ * The reaction's own style checks weapon range, and its conditions evaluate
+ * visibility (including Long Watch squadsight) and target exclusions at the
+ * present tile. Future movement, concealment breaks and hits remain unknown.
+ */
+static function bool HasPlausibleLocalReactionLane(XComGameState_Unit Soldier,
+    XComGameState_Ability ArmAbility, const out array<StateObjectReference> SquadVisibleEnemies)
+{
+    local XComGameState_Ability Shot;
+    local X2AbilityTemplate Template;
+    local XComGameState_Unit Enemy;
+    local StateObjectReference Ref;
+
+    if (SquadVisibleEnemies.Length == 0 || SquadVisibleEnemies.Length > 64)
+        return false;
+    Shot = ResolveStockReactionShot(Soldier, ArmAbility);
+    if (Shot == none)
+        return false;
+    Template = Shot.GetMyTemplate();
+    if (Template == none || Template.AbilityTargetStyle == none
+        || Template.AbilityTargetStyle.Class != class'X2AbilityTarget_Single')
+        return false;
+
+    foreach SquadVisibleEnemies(Ref)
+    {
+        Enemy = XComGameState_Unit(`XCOMHISTORY.GetGameStateForObjectID(Ref.ObjectID));
+        if (IsVisibleHostile(Soldier, Enemy, SquadVisibleEnemies)
+            && IsCurrentReactionTarget(Template, Shot, Soldier, Enemy))
+            return true;
+    }
+    return false;
+}
+
 /** Score self-targeted actions and veto Overwatch before choosing this unit's best alternative. */
 static function float ScoreSelfAction(XComGameState_Unit UnitState,
     XComGameState_Ability Ability, name AbilityName,
@@ -970,8 +1053,10 @@ static function float ScoreSelfAction(XComGameState_Unit UnitState,
         / FMax(1.0, UnitState.GetMaxStat(eStat_HP));
     if (default.OverwatchAbilities.Find(AbilityName) != INDEX_NONE)
         return GuardOverwatchForKnownAlly(
-            ScoreOverwatchDefense(VisibleEnemies.Length > 0 || bRecentContact,
-                UnitState.IsConcealed(), HealthFraction, RangedRisk, NearbyMelee),
+            ScoreOverwatchDefense(
+                HasPlausibleLocalReactionLane(UnitState, Ability, VisibleEnemies),
+                UnitState.IsConcealed(), HealthFraction, RangedRisk, NearbyMelee,
+                VisibleEnemies.Length > 0 || bRecentContact),
             !bSquadOverwatchSafe);
     return ScoreHunkerDefense(HealthFraction, RangedRisk, RangedThreats,
         NearbyMelee, UnitState.IsBurning(), UnitState.IsConcealed());
@@ -1027,15 +1112,22 @@ static function float DefensiveRisk(XComGameState_Unit UnitState,
     return class'APX_MissionPlanner'.static.CombinedExposure(TotalRisk, WorstRisk, 1.0);
 }
 
-// Defensive values deliberately compete with poor shots, not reliable kills.
-// Out of contact overwatch stays below every useful advance/exploration score.
-static function float ScoreOverwatchDefense(bool bEnemiesVisible, bool bConcealed,
-    float HealthFraction, float RangedRisk, int NearbyMelee)
+/** Rank the reserve against legal alternatives. Only a target that passes the
+ * soldier's reaction checks merits the higher close-contact scores. Squad-only
+ * or remembered contact retains a low fallback score.
+ */
+static function float ScoreOverwatchDefense(bool bReactionLane, bool bConcealed,
+    float HealthFraction, float RangedRisk, int NearbyMelee,
+    optional bool bSquadOnlyContact)
 {
     local float Result;
 
-    if (!bEnemiesVisible)
+    if (!bReactionLane)
+    {
+        if (bSquadOnlyContact)
+            return 5.0;
         return 2.0;
+    }
     Result = 17.0;
     if (bConcealed)
         Result = 22.0;
