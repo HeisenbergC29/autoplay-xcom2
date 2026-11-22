@@ -91,9 +91,8 @@ class AreaSpitSourceContracts(unittest.TestCase):
             self.assertIn("GetVisibilityInfoFromRemoteLocation(", part)
             self.assertIn("ValidatePrimaryTargetOptionFromRemoteLocation(", part)
             self.assertIn("EvaluateConditions(", part)
-        self.assertIn("CanAttackWithActionPoints(", opening)
-        self.assertIn("ActionPointsAfterBlueMove(", opening)
-        self.assertIn("Weapon.Ammo <= 0", opening)
+        self.assertIn("OpeningShot == none", choose)
+        self.assertIn("Enemy.IsMindControlled()", opening)
         self.assertIn("GetImmediateThreats(UnitState, SquadEnemies)", choose)
         self.assertIn("ScoreOpeningAreaMove(", choose)
         self.assertIn("ScoreAreaShotMove(", choose)
@@ -104,6 +103,23 @@ class AreaSpitSourceContracts(unittest.TestCase):
         self.assertIn('"area_spit_reposition_opens_squad_lane"', choose)
         self.assertIn("if (ChooseCompetitiveReposition(", function_body(self.controller, "MakeDecision"))
         self.assertIn("GameStateMoveUnitSingle(", function_body(self.controller, "MakeDecision"))
+
+    def test_opened_lane_requires_a_real_no_targets_action(self):
+        """Rulers, missing caches and blocked abilities cannot appear to be usable shots."""
+        gather = function_body(self.source, "GatherForecasts")
+        gates = ('OpeningShot = none;', 'HasVisibleRuler(VisibleEnemies)',
+                 'ActionPointsAfterBlueMove(UnitState, RemainingPoints)',
+                 'GetGameRulesCache_Unit(', "Candidate.AvailableCode != 'AA_NoTargets'",
+                 'Ability.OwnerStateObject.ObjectID != UnitState.ObjectID',
+                 'CanAttackWithActionPoints(Ability, UnitState, RemainingPoints)',
+                 "if (Candidate.AvailableCode == 'AA_NoTargets')",
+                 'WeaponState.Ammo > 0', 'OpeningShot = Ability;')
+        offsets = [gather.index(gate) for gate in gates]
+        self.assertEqual(sorted(offsets), offsets)
+        self.assertIn("Candidate.AvailableCode != 'AA_Success'", gather)
+        choose = function_body(self.source, "ChooseMove")
+        self.assertIn("GatherForecasts(UnitState, VisibleEnemies, Forecasts, OpeningShot)", choose)
+        self.assertIn("OpensSquadContactLane(UnitState, Tile, OpeningShot, SquadEnemies)", choose)
 
     def test_guard_against_unknown_path_and_do_not_force_movement(self):
         """Every scored proposed route is checked by the original complete-path gate."""

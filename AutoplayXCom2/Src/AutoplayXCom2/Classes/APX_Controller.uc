@@ -1237,7 +1237,7 @@ function bool ChooseCompetitiveReposition(XComGameState_Unit UnitState, float Be
     out array<TTile> CandidatePath, out float Score, out int RemainingTempoCoverChecks)
 {
     local int SupportedShots, ImprovedShots, SafeRoutes;
-    local bool bProposed, bCompetitive;
+    local bool bProposed, bCompetitive, bMaterialShotGain;
     local string ScanReason;
 
     CandidatePath.Length = 0;
@@ -1245,10 +1245,13 @@ function bool ChooseCompetitiveReposition(XComGameState_Unit UnitState, float Be
         Score, RemainingTempoCoverChecks, ScanReason, SupportedShots, ImprovedShots, SafeRoutes);
     if (bProposed)
     {
+        // Spacing can justify a fresh blue endpoint while retaining the same
+        // shot. Returning to a visited tile requires a materially better shot.
+        bMaterialShotGain = ScanReason == "safe_move_and_shot_candidate";
         TraceCandidateMove(UnitState, CandidatePath, Score);
         if (Score <= BestScore)
             ScanReason = "outscored_by_current_squad_action";
-        else if (!CanUseMove(UnitState, CandidatePath, false, bProposed, ScanReason))
+        else if (!CanUseMove(UnitState, CandidatePath, false, bMaterialShotGain, ScanReason))
             ScanReason = "destination_already_visited";
         else
             bCompetitive = true;
