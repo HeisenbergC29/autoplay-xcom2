@@ -1,6 +1,6 @@
 # Autoplay XCOM 2 — War of the Chosen
 
-**Do wspólnej próby w grze przygotowano v48.** W ostatniej próbie GasStation oddział wygrał i zdobył +10 200 punktów bez odnotowanej interwencji. W SabotageCC pięć razy zatrzymał się przy dojściu do X4. W pięciu misjach ani razu nie potwierdzono wyboru konkretnego patrolu do zasadzki. Wspólna paczka pozwala sprawdzić dobór patrolu, wykorzystanie Overwatch i przyczyny odrzucania dróg do X4. [Paczka i próba Windows #4](https://github.com/HeisenbergC29/autoplay-xcom2/issues/4) · [Raport z pięciu misji v46](docs/report-v46-2026-11-21.pl.md)
+**W próbie v48 rozegrano trzy misje.** SabotageCC zakończyła się zwycięstwem po ręcznej pomocy. GasStation i Blood Killer zakończyły się porażką. LEAD koryguje wycenę Hunker Down, a HELPER sprawdza rozstawienie strzelców oraz niewykorzystane AP w misji z zegarem. [Wyniki próby v48](docs/report-v48-2026-11-22.pl.md) · [Kolejka prac](https://github.com/HeisenbergC29/autoplay-xcom2/issues/1)
 
 [Start pomocnika i komunikacja zespołu — issue #1](https://github.com/HeisenbergC29/autoplay-xcom2/issues/1) ·
 [Organizacja zespołu i import prac pomocnika](docs/TEAM.pl.md) ·

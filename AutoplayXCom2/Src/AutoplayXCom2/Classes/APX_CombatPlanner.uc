@@ -1139,10 +1139,17 @@ static function float ScoreOverwatchDefense(bool bReactionLane, bool bConcealed,
     return Result;
 }
 
+/**
+ * Rank a legal Hunker Down against other actions at the soldier's current tile.
+ * RangedRisk is the shared directional exposure estimate before the HP multiplier.
+ * Scale the benefit of guarding a wounded soldier by that exposure. A single
+ * unweighted, unobstructed ranged threat against an uncovered tile rates 42
+ * (30 directional risk passed to CombinedExposure as both sum and maximum).
+ */
 static function float ScoreHunkerDefense(float HealthFraction, float RangedRisk,
     int RangedThreats, int NearbyMelee, bool bBurning, bool bConcealed)
 {
-    local float Result;
+    local float Result, ExposureFraction;
 
     // Stock HunkerDown removes Burning, even without a visible enemy.
     if (bBurning)
@@ -1151,6 +1158,8 @@ static function float ScoreHunkerDefense(float HealthFraction, float RangedRisk,
         return 1.0;
     Result = 13.0 + (1.0 - FClamp(HealthFraction, 0.0, 1.0)) * 24.0
         + FMin(18.0, RangedRisk * 0.4);
+    ExposureFraction = FClamp(RangedRisk / 42.0, 0.0, 1.0);
+    Result = 1.0 + ExposureFraction * (Result - 1.0);
     if (NearbyMelee > 0)
         Result -= 12.0;
     return FMax(1.0, Result);
