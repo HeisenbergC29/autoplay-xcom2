@@ -1262,6 +1262,18 @@ function bool ChooseCompetitiveReposition(XComGameState_Unit UnitState, float Be
     return bCompetitive;
 }
 
+/**
+ * A real, approaching X4 timer must not be hidden by a remembered contact.
+ * This only permits an extra candidate; current attacks and safer moves still
+ * compete in the unchanged score/CanUseMove/CanUseAction selection.
+ */
+static function bool ShouldCompareTimedObjective(bool bBerserkerMission,
+    bool bPlantOutstanding, int NativeTimerTurns, bool bUnitIsBerserker)
+{
+    return bBerserkerMission && bPlantOutstanding && bUnitIsBerserker
+        && NativeTimerTurns > 0 && NativeTimerTurns <= 4;
+}
+
 /** Compare legal squad actions for the current decision, then submit one action through the native controller. */
 function MakeDecision(XComTacticalController PC)
 {
@@ -1302,7 +1314,9 @@ function MakeDecision(XComTacticalController PC)
     local bool bOpeningContact, bFocusedGoal, bRangedFocusGoal, bRangedConcealed;
     local bool bPatrolRefreshed, bPatrolActive, bSelectedPatrolMove, bSelectedPatrolReaction;
     local bool bPatrolOpener, bPatrolArm;
-    local bool bSquadUrgentHealAvailable;
+    local bool bSquadUrgentHealAvailable, bCompareTimedObjective, bTimedMoveFound;
+    local int TimedNativeTimer;
+    local string TimedMoveReason;
     local string PatrolReason, PatrolApproachReason, BestMovePlanner, MissionMovePlanner;
     local XComGameState_Unit PatrolSupporter, PatrolScout;
     local bool bNativeStrikeOnly;
@@ -1499,6 +1513,12 @@ function MakeDecision(XComTacticalController PC)
     PruneObservedDefeats(PlayerRef.ObjectID);
     bContactSearch = !bVisibleThreats && RecentContacts.Length > 0;
     bCombatThreats = bVisibleThreats || bContactSearch;
+    // Read the current installed timer once per squad decision, not a
+    // speculative future clock. The selection only concerns BerserkerMP X4.
+    TimedNativeTimer = -1;
+    if (FocusBattle != none
+        && FocusBattle.MapData.ActiveMission.sType == "SabotageTransmitter")
+        TimedNativeTimer = class'APX_BerserkerFocus'.static.ReadActiveTimerTurns();
     if (bContactSearch && MissionRecorder != none)
         MissionRecorder.Marker("recent_contacts", "count=" $ RecentContacts.Length);
 
@@ -1724,6 +1744,79 @@ function MakeDecision(XComTacticalController PC)
             BestRouteGoal = CandidateRouteGoal;
             SelectedRouteDestination = CandidatePath[CandidatePath.Length - 1];
             SelectedRouteUnitID = UnitState.ObjectID;
+        }
+
+        // Under the real SabotageTransmitter timer, a remembered enemy is a
+        // choice, not exclusive control of movement. A second, independent
+        // mission candidate competes with the contact-search proposal.
+        // When only one AP is left, use a stricter full-path X4 helper.
+        bCompareTimedObjective = ShouldCompareTimedObjective(
+            FocusBattle != none
+                && FocusBattle.MapData.ActiveMission.sType == "SabotageTransmitter",
+            FocusBattle != none
+                && class'APX_PlantInteractionKnowledge'.static.NativePlantObjectivePhase(
+                    FocusBattle) == 0,
+            TimedNativeTimer, UnitState.GetMyTemplateName() == 'BerserkerMP');
+        if (bCompareTimedObjective && (bContactSearch || UnitState.NumActionPoints() == 1))
+        {
+            CandidatePath.Length = 0;
+            TimedMoveReason = "none";
+            bTimedMoveFound = false;
+            iCandidateRoutine = 0;
+            iCandidateFirstBlue = 0;
+            iCandidateEmergencyRoute = 0;
+            if (UnitState.NumActionPoints() >= 2)
+            {
+                bTimedMoveFound = class'APX_MissionPlanner'.static.ChooseMove(
+                    UnitState, CandidatePath, Score, RemainingConcealmentChecks,
+                    RemainingCoverChecks, FocusTargetID, bFocusedGoal,
+                    RangedTargetID, bRangedFocusGoal,
+                    ContactSnapshotUnits, ContactSnapshotInteractives,
+                    bContactSnapshotComplete, ContactSnapshotReason,
+                    RemainingContactDetectors, RemainingContactTiles, RemainingContactLOS,
+                    RouteTempo, PlayerState.PlayerTurnCount,
+                    PatrolAmbushPlanner.HasActiveStaging(), bContactSearch || bVisibleThreats,
+                    CandidateRouteGoal, iCandidateRoutine, iCandidateFirstBlue,
+                    RemainingTempoCoverChecks, iCandidateEmergencyRoute);
+                TimedMoveReason = bTimedMoveFound ? "native_mission_route" : "no_native_mission_route";
+            }
+            else if (UnitState.NumActionPoints() == 1)
+            {
+                bTimedMoveFound = class'APX_MissionPlanner'.static.ChooseTimedBerserkerLastAP(
+                    UnitState, CandidatePath, Score, TimedMoveReason,
+                    RemainingConcealmentChecks, RemainingTempoCoverChecks);
+            }
+            if (MissionRecorder != none)
+                MissionRecorder.Marker("timed_objective_comparison",
+                    "unit=" $ UnitState.ObjectID
+                    @ "turn=" $ PlayerState.PlayerTurnCount
+                    @ "timer=" $ TimedNativeTimer
+                    @ "ap=" $ UnitState.NumActionPoints()
+                    @ "recent_contact=" $ string(bContactSearch)
+                    @ "found=" $ string(bTimedMoveFound)
+                    @ "reason=" $ TimedMoveReason
+                    @ "candidate_score=" $ Score
+                    @ "best_before=" $ BestScore);
+            if (bTimedMoveFound && TraceCandidateMove(UnitState, CandidatePath, Score)
+                && Score > BestScore && CanUseMove(UnitState, CandidatePath,
+                    iCandidateEmergencyRoute > 0))
+            {
+                BestPath = CandidatePath;
+                BestMovePlanner = UnitState.NumActionPoints() == 1
+                    ? "timed_last_ap_objective" : "timed_mission_route";
+                BestScore = Score;
+                BestUnit = UnitState;
+                bMove = true;
+                bArea = false;
+                BestLocations.Length = 0;
+                bHavePlan = true;
+                bSelectedRoute = UnitState.NumActionPoints() >= 2
+                    && iCandidateRoutine > 0;
+                bSelectedFirstBlue = bSelectedRoute && iCandidateFirstBlue > 0;
+                BestRouteGoal = CandidateRouteGoal;
+                SelectedRouteDestination = CandidatePath[CandidatePath.Length - 1];
+                SelectedRouteUnitID = UnitState.ObjectID;
+            }
         }
         CandidatePath.Length = 0;
         if (class'APX_MissionPlanner'.static.ChooseRescueMove(UnitState, CandidatePath, Score, RescuePatientID)
