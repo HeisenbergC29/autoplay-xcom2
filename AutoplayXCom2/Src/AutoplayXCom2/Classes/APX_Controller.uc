@@ -1386,6 +1386,16 @@ function MakeDecision(XComTacticalController PC)
     FocusStartIndex = `XCOMHISTORY.FindStartStateIndex();
     FocusBattle = XComGameState_BattleData(`XCOMHISTORY.GetSingleGameStateObjectForClass(
         class'XComGameState_BattleData', true));
+    // Once per decision, report the squad policy, not one event per path or
+    // per soldier. VIP/civilian exceptions can still evacuate independently.
+    if (MissionRecorder != none && FocusBattle != none
+        && class'XComGameState_EvacZone'.static.GetEvacZone(eTeam_XCom) != none
+        && class'APX_MissionPlanner'.static.SquadEvacuationReason(FocusBattle)
+            == 'required_tactical_objective_pending')
+        MissionRecorder.Marker("evacuation_blocked",
+            "scope=ordinary_squad reason=required_tactical_objective_pending"
+            @ "turn=" $ PlayerState.PlayerTurnCount
+            @ "history=" $ FocusHistoryIndex);
     if (BerserkerFocusHistory != `XCOMHISTORY
         || BerserkerFocusStartIndex != FocusStartIndex
         || (FocusBattle != none && BerserkerFocusBattleID != FocusBattle.ObjectID)
@@ -2073,6 +2083,24 @@ function MakeDecision(XComTacticalController PC)
         return;
     }
 
+    // Re-read the current native mission state at the actual Evac submission
+    // boundary, before caching ownership or preparing a chosen action record.
+    if (!bMove)
+    {
+        Ability = XComGameState_Ability(`XCOMHISTORY.GetGameStateForObjectID(
+            BestAction.AbilityObjectRef.ObjectID));
+        if (Ability != none && Ability.GetMyTemplateName() == 'Evac'
+            && !class'APX_MissionPlanner'.static.ShouldEvacuate(BestUnit))
+        {
+            if (MissionRecorder != none)
+                MissionRecorder.Marker("evacuation_blocked",
+                    "scope=dispatch reason=evacuation_policy_revalidation"
+                    @ "unit=" $ BestUnit.ObjectID);
+            UntilDecision = FMax(0.25, DecisionInterval);
+            return;
+        }
+    }
+
     // Freeze diagnostic previews before submitting; the resulting history may
     // change hit chances and health before the accepted-result record is made.
     if (MissionRecorder != none)
@@ -2289,7 +2317,7 @@ simulated event Destroyed()
     super.Destroyed();
 }
 
-/** Verify ownership, Overwatch safety, native availability, and the per-target submission budget. */
+/** Verify ownership, evacuation/Overwatch policy, native availability and per-target submission budget. */
 function bool CanUseAction(XComGameState_Unit UnitState, AvailableAction Action, int TargetIndex)
 {
     local XComGameState_Ability Ability;
@@ -2304,6 +2332,11 @@ function bool CanUseAction(XComGameState_Unit UnitState, AvailableAction Action,
     Ability = XComGameState_Ability(`XCOMHISTORY.GetGameStateForObjectID(
         Action.AbilityObjectRef.ObjectID));
     if (Ability == none || Ability.OwnerStateObject.ObjectID != UnitState.ObjectID)
+        return false;
+    // A native AA_Success Evac is legal for the unit, but may abandon a
+    // required tactical objective. Use the same gate as the movement planner.
+    if (Ability.GetMyTemplateName() == 'Evac'
+        && !class'APX_MissionPlanner'.static.ShouldEvacuate(UnitState))
         return false;
     if (!bSquadOverwatchSafe
         && class'APX_CombatPlanner'.default.OverwatchAbilities.Find(Ability.GetMyTemplateName()) != INDEX_NONE)
