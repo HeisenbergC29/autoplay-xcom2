@@ -58,14 +58,14 @@ simulated function APX_UITacticalControl InitAutoplayControl()
     if (CanUpdateTacticalHUD() && class'APX_FullIntel'.static.RevealMapForPlayer())
     {
         bMapRevealInitialized = true;
-        `log("Full intel|revision=mission-report-v50|enabled=True|map_revealed=True", true, 'AutoplayXCom2');
+        `log("Full intel|revision=mission-report-v51|enabled=True|map_revealed=True", true, 'AutoplayXCom2');
     }
     ScoreCounter = new(self) class'APX_MissionScore';
     bScoreTextValid = false;
     CachedScoreHistory = none;
     CachedScoreHistoryIndex = -1;
     ScoreRefreshRemaining = 0.0;
-    `log("HUD score polling|revision=mission-report-v50|stable_interval_seconds=1.0|status_interval_seconds=0.25|history_invalidation=true", true, 'AutoplayXCom2');
+    `log("HUD score polling|revision=mission-report-v51|stable_interval_seconds=1.0|status_interval_seconds=0.25|history_invalidation=true", true, 'AutoplayXCom2');
 
     ToggleButton = Spawn(class'UIButton', self);
     ToggleButton.InitButton('APX_ToggleButton', EnableLabel, OnToggleClicked);
@@ -304,7 +304,7 @@ simulated function QuiescePostMissionHUD()
     bScoreReadDeferred = false;
     ScoreRefreshRemaining = 0.0;
     RefreshRemaining = 0.0;
-    `log("HUD quiesced after native tactical end|revision=mission-report-v50"
+    `log("HUD quiesced after native tactical end|revision=mission-report-v51"
         $ "|autoplay_controller_retained_for_final_record=True",
         true, 'AutoplayXCom2');
 }
@@ -367,7 +367,7 @@ simulated event Tick(float DeltaTime)
         && class'APX_FullIntel'.static.RevealMapForPlayer())
     {
         if (!bMapRevealInitialized)
-            `log("Full intel|revision=mission-report-v50|enabled=True|map_revealed=True", true, 'AutoplayXCom2');
+            `log("Full intel|revision=mission-report-v51|enabled=True|map_revealed=True", true, 'AutoplayXCom2');
         bMapRevealInitialized = true;
     }
 
