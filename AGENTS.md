@@ -5,12 +5,20 @@ and [docs/PROJECT-STATE.pl.md](docs/PROJECT-STATE.pl.md) before changing this pr
 
 ## Roles and communication
 
-- **LEAD** is the assistant maintaining the original project. It owns technical
-  direction, integration review, merges and publication.
-- **HELPER** is the external GPT-6 collaborator. It may independently research,
-  implement, test and propose useful changes, including work from its own repo.
-- **USER** compiles with the Windows WOTC SDK, runs game missions and supplies
-  reports. Ideas from the user are welcome, but are not a prerequisite for work.
+The division of work established by the project owner on 27 November 2026
+supersedes earlier historical assignments. See [issue #1](https://github.com/HeisenbergC29/autoplay-xcom2/issues/1)
+and [program #120](https://github.com/HeisenbergC29/autoplay-xcom2/issues/120).
+
+- **LEAD** analyzes autoplay reports and observed behavior with the user,
+  sets priorities, breaks work into small issues with acceptance criteria,
+  reviews changes, merges approved PRs and owns integration and publication.
+- **HELPER** executes the assigned source-code, documentation and automated
+  test work. It researches SDK details needed for its issue, implements,
+  validates and hands off a focused PR. It may report findings and propose
+  follow-up ideas for LEAD, but does not independently reprioritize the program.
+- **USER** supplies observations and reports, compiles with the Windows WOTC
+  SDK, runs game missions and provides the resulting evidence. The owner
+  may change priorities or working rules.
 - Use GitHub issues and PR conversations as the durable handoff. Start comments
   with `LEAD:` or `HELPER:` when roles could be confused. A shared GitHub login
   does not make a helper comment a lead approval.
@@ -23,9 +31,14 @@ and [docs/PROJECT-STATE.pl.md](docs/PROJECT-STATE.pl.md) before changing this pr
   Windows build or gameplay validation.
 - Claim an issue with role, intended files and the base commit before editing.
   Use `helper/<issue>-<topic>` or `lead/<issue>-<topic>` for focused work.
-- A helper opens a draft PR early and can continue other independent tasks while
-  waiting for review. Keep at most three active implementation PRs. Do not wait
-  idle for permission to perform already authorized research or reversible work.
+- One issue, one focused topic, one branch and one PR. HELPER executes exactly
+  one assigned task per user-requested work round; finish its handoff or report
+  its blocker before starting another task on a subsequent request. Do not
+  automatically start a second task in the same round.
+- Open a draft PR early. Pending review does not prevent a later round from
+  taking a different ready, independent issue. Keep at most three active
+  implementation PRs; the limit is not permission to execute multiple tasks
+  in one round. Respect prerequisite acceptance gates and overlapping ownership.
 - Coordinate overlapping edits to the controller/planners in the issue. Rebase
   or merge current `main` into the work branch before requesting final review.
 - HELPER does not push to `main`, merge its own PR, force-push shared branches,
@@ -140,17 +153,24 @@ and [docs/PROJECT-STATE.pl.md](docs/PROJECT-STATE.pl.md) before changing this pr
 
 ## Review handoff
 
-An implementation PR states the issue, final behavior, evidence/source commits,
-tests actually run (including skips), limits, game test scenario and remaining
-questions. A helper marks it ready when reviewable. LEAD can merge source work
-after review/CI while explicitly tracking outstanding Windows/game validation;
-merging is not gameplay acceptance or a binary release.
+Each PR and handoff states its issue, exact full base commit SHA, exact full
+current head SHA, branch, final changes, source/evidence references, checks
+actually run (including skips), limitations, and next acceptance step. For
+implementation work, include a repeatable game test scenario; for documentation
+only, state that runtime behavior and recording revision are unchanged.
+If the head changes, report the new SHA and distinguish checks run on the old
+head from checks run on the new one. Do not mark an unverified check as passed.
+HELPER marks the PR ready when reviewable; LEAD records review against its
+exact head and can merge after review/CI while tracking outstanding Windows/game
+validation. Merging is not gameplay acceptance or a binary release.
 
 ## Combined game testing
 
-The user compiles and tests once LEAD has integrated the currently assigned source work.
-The completed queue in #86 documents the first such round. Check #1 for the current
-assignment and #4 for the next Windows/game handoff. For a clean Windows compile
+The user compiles and tests the exact source revision designated by LEAD for
+a combined Windows/game trial. The trial may run alongside independent source
+work on later branches; do not silently substitute a new head for a pinned
+test package. The completed queue in #86 documents an earlier combined round.
+Check #1 for the current assignment and #4 for the next Windows/game handoff. For a clean Windows compile
 (0 errors and 0 warnings), the user can report success without sending mod-make.log.
 Record an explicit user confirmation as reported evidence. A missing log by itself
 does not establish a result. The user supplies the build log when diagnostics occur.
