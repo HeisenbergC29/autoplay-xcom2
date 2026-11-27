@@ -145,6 +145,16 @@ class CompiledTableTests(unittest.TestCase):
         self.assertIn("APX_EnemyKnowledge", report["own_classes"])
         self.assertEqual(set(report["import_roots"]), {'Core', 'Engine', 'XComGame'})
 
+    def test_accepts_live_unit_stats_helper_with_stock_superclass(self):
+        """Review the new #125 reader without relaxing other class restrictions."""
+        data, _ = table_fixture(extra_classes={"APX_UnitStats": "Object"})
+        report = CHECKS.parse_ue3_package(data)
+        self.assertIn("APX_UnitStats", report["own_classes"])
+        self.assertEqual(set(report["import_roots"]), {"Core", "Engine", "XComGame"})
+        wrong, _ = table_fixture(extra_classes={"APX_UnitStats": "Actor"})
+        with self.assertRaisesRegex(CHECKS.InvalidPackage, "Unexpected superclass for APX_UnitStats"):
+            CHECKS.parse_ue3_package(wrong)
+
     def test_rejects_unknown_additional_class(self):
         for name in ("UnrelatedClass", "APX_UnreviewedFutureHelper"):
             with self.subTest(name=name):
