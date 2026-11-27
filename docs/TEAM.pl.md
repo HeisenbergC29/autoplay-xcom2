@@ -1,17 +1,22 @@
 # Organizacja pracy i komunikacja na GitHub
 
-Ustalenia właściciela projektu z 5 listopada 2026, po korekcie oznaczeń
-„Ja/Ty” w tabeli. Repozytorium wspólne:
+Aktualny podział pracy według ustaleń właściciela projektu z 27 listopada
+2026, opisanych w [#1](https://github.com/HeisenbergC29/autoplay-xcom2/issues/1)
+i [#120](https://github.com/HeisenbergC29/autoplay-xcom2/issues/120).
+Zastępuje wcześniejszy podział z 5 listopada. Starsze przekazania w tym
+dokumencie są zapisem historii, a nie aktualną kolejką zadań.
+Repozytorium wspólne:
 [HeisenbergC29/autoplay-xcom2](https://github.com/HeisenbergC29/autoplay-xcom2).
 
 Punkt wejścia i inwentaryzacja importu: [issue #1](https://github.com/HeisenbergC29/autoplay-xcom2/issues/1).
-Gotowe zadania niezależne: [diagnostyka raportów #2](https://github.com/HeisenbergC29/autoplay-xcom2/issues/2)
+Aktualna kolejka: [program oceny jednostek #120](https://github.com/HeisenbergC29/autoplay-xcom2/issues/120).
+Historyczne zadania początkowe: [diagnostyka raportów #2](https://github.com/HeisenbergC29/autoplay-xcom2/issues/2)
 i [macierz misji #3](https://github.com/HeisenbergC29/autoplay-xcom2/issues/3).
 Osobny dowód kompilacji/gry użytkownika: [próby bieżącej wersji #4](https://github.com/HeisenbergC29/autoplay-xcom2/issues/4).
 
 ## Wspólna próba v50
 
-LEAD łączy zmianę Hunker Down z pracą HELPERA nad rozstawieniem strzelców i wykorzystaniem AP w Blood Killer. Użytkownik wykonuje jedną kompilację i próbę. Przy zerze błędów i ostrzeżeń wystarczy podać wynik kompilacji. [Próba #4](https://github.com/HeisenbergC29/autoplay-xcom2/issues/4) · [Rozstawienie i ruch #115](https://github.com/HeisenbergC29/autoplay-xcom2/issues/115) · [Blood Killer #116](https://github.com/HeisenbergC29/autoplay-xcom2/issues/116)
+LEAD scalił zmianę Hunker Down z pracą HELPERA nad rozstawieniem strzelców i wykorzystaniem AP w Blood Killer. Użytkownik wykonuje kompilację i próbę przypiętej paczki v50 wskazanej w #4. Nowe niezależne prace źródłowe nie zmieniają podstawy tej próby. Przy zerze błędów i ostrzeżeń wystarczy podać wynik kompilacji. [Próba #4](https://github.com/HeisenbergC29/autoplay-xcom2/issues/4) · [Rozstawienie i ruch #115](https://github.com/HeisenbergC29/autoplay-xcom2/issues/115) · [Blood Killer #116](https://github.com/HeisenbergC29/autoplay-xcom2/issues/116)
 
 Przegląd każdego PR obejmuje komentarze dokumentacyjne właściwe dla języka, podział złożonych metod, testy jednostkowe metod i testy E2E złożonych przebiegów. [Zasady dla obu agentów](../AGENTS.md)
 
@@ -19,13 +24,15 @@ Przegląd każdego PR obejmuje komentarze dokumentacyjne właściwe dla języka,
 
 | Obszar | Odpowiedzialny |
 | --- | --- |
-| Kierunek techniczny, priorytety i przegląd integracji | prowadzący asystent — `LEAD` |
-| Analiza SDK i mechanik, projektowanie AI, kod i testy automatyczne | `LEAD`, z samodzielną pracą pomocnika `HELPER` |
+| Analiza raportów i zachowania autoplaya w rozmowie z użytkownikiem | prowadzący asystent — `LEAD` |
+| Priorytety, podział pracy na małe zadania, kryteria odbioru | `LEAD` |
+| Realizacja przydzielonych zadań: analiza SDK potrzebna do implementacji, kod, dokumentacja, testy automatyczne | `HELPER` |
+| Przegląd PR, decyzja o odbiorze i scalenie | `LEAD` |
 | Przenoszenie przydatnych rozwiązań z repozytorium pomocnika | `HELPER`, przegląd i scalenie przez `LEAD` |
 | Publikowanie scalonych zmian i wydań na GitHub | `LEAD` |
 | Kompilacja w Windows WOTC SDK | użytkownik |
-| Pełne testy w grze i przekazywanie raportów | użytkownik |
-| Sugestie i nowe pomysły | użytkownik opcjonalnie; agenci również mogą proponować rozwiązania |
+| Próby w grze, obserwacje, przekazywanie raportów | użytkownik |
+| Sugestie i zmiana priorytetów | agenci mogą zgłaszać pomysły; LEAD ustala kolejkę, właściciel może zmienić zasady |
 
 ## Oficjalność punktacji naliczanej przez mod
 
@@ -74,10 +81,18 @@ oraz kompletność historii; sama zgodność stawek nie wystarcza.
 Dalsze przeżycie Sweep/source-control pozostaje w #56, synchronizacja
 Overwatch w #31. [Integracja v35](integration-2026-11-14-v35.pl.md).
 
-Pomocnik może pracować częściej niż prowadzący. Samodzielnie analizuje,
-implementuje i testuje przydatne zmiany. Przegląd prowadzącego jest bramką
-integracji, a nie wymogiem pytania o zgodę przed każdą odwracalną czynnością.
-Właściciel projektu może zmienić priorytety i te zasady.
+Pomocnik samodzielnie realizuje przydzielony zakres bez pytania o zgodę
+przed każdą odwracalną czynnością. LEAD odpowiada za analizę raportów,
+ustalenie kolejki, przegląd i integrację. Wyniki badań i propozycje kolejnych
+zmian HELPER przekazuje LEAD. Właściciel projektu może zmienić priorytety
+i zasady.
+
+**Jedno zadanie na rundę.** Na każde polecenie wykonania pracy HELPER realizuje
+jedno gotowe zadanie, przekazuje jego wynik do przeglądu albo jasno opisuje
+blokadę i kończy rundę. Nie rozpoczyna automatycznie kolejnego tematu.
+Oczekujące na odbiór PR nie blokują następnej, osobno zleconej rundy nad
+niezależnym zadaniem, o ile nie ma konfliktu zakresu ani niespełnionej
+zależności.
 
 ## Jedno miejsce integracji
 
@@ -86,14 +101,17 @@ wygranej próby najnowszej wersji. [Stan i ostatnia baza](PROJECT-STATE.pl.md)
 oddzielają implementację, kontrole automatyczne, Windows i grę.
 
 Jeden temat ma jedno issue, gałąź `helper/<numer>-opis` lub `lead/<numer>-opis`
-i pull request. Przed edycją wykonawca podaje w issue rolę, SHA bazy i pliki,
-których zamierza dotknąć. Roboczy PR wcześnie pokazuje postęp. Przed końcowym
-przeglądem trzeba uwzględnić aktualny `main` i rozwiązać konflikty.
+i pull request. Przed edycją wykonawca podaje w issue rolę, pełny SHA aktualnej
+bazy i pliki, których zamierza dotknąć. Roboczy PR wcześnie pokazuje postęp.
+Przed końcowym przeglądem trzeba uwzględnić aktualny `main` i rozwiązać konflikty.
+Handoff zawiera także pełny aktualny HEAD PR, wyniki kontroli przypisane do
+tego commitu i ograniczenia dowodu.
 
 Nie równoleglimy bez uzgodnienia edycji tych samych kontrolerów/planerów.
 Jeżeli drugi agent już tam pracuje, wybierz niezależne zadanie lub uzgodnij
-konkretny podział w issue. Do trzech aktywnych PR-ów implementacyjnych pomocnika
-wystarczy; resztę pomysłów zapisuj jako kolejne zadania.
+konkretny podział w issue. Limit wynosi trzy aktywne PR-y implementacyjne pomocnika.
+Nie znosi to zasady jednego zadania na rundę. Pomysły przekazuj LEAD do
+kolejki, a zależne etapy zaczynaj dopiero po uzgodnionym odbiorze poprzednika.
 
 ## Import z osobnego repozytorium
 
@@ -284,8 +302,12 @@ legalny focus/OW po ujawnieniu i ograniczony fallback. Nie wymuszać
 „wszystkie pody przed relay” ani nie przypisywać CurrentTargetLocation
 gwarantowanej przyszłej trasy; presję czasu oceniać osobno per misja.
 
-W PR napisz: konkretny problem i zachowanie po zmianie, źródła/commity,
-testy rzeczywiście wykonane, pominięcia, ograniczenia oraz scenariusz do gry.
+W każdym PR i handoffie napisz: numer issue, gałąź, pełny SHA bazy i aktualnego
+HEAD, konkretny problem i zmiany, źródła/dowody, rzeczywiście wykonane
+kontrole (wraz z pominięciami), ograniczenia i następny krok odbioru.
+Dla implementacji dodaj odtwarzalny scenariusz do gry; dla dokumentacji
+wskaż brak zmian runtime i rewizji rejestratora. Po zmianie HEAD podaj nowy
+SHA i rozróżnij wyniki kontroli poprzedniej i aktualnej rewizji.
 Oznacz gotowość do przeglądu, gdy wynik jest konkretny i odtwarzalny.
 
 Prowadzący zapisuje `LEAD: reviewed <pełny SHA> — merge / changes requested`
@@ -315,9 +337,11 @@ wynikiem nie zalicza próby projektu; niepełne punkty pozostawiają ją niepotw
 GitHub jest trwałą skrzynką zadań i przeglądów. Każdy agent na początku sesji
 czyta aktualne issue, PR-y i ostatnie komentarze. Nikt nie zakłada całodobowego
 monitorowania ani automatycznego przenoszenia wiadomości do tej rozmowy.
-Przy zakończeniu sesji zostaw krótki handoff: SHA/gałąź, co działa, wyniki,
-otwarte ryzyka i następny krok. Gdy prowadzący jest niedostępny, pomocnik może
-kontynuować niezależne zadania i przygotowywać kolejne PR-y do przeglądu.
+Przy zakończeniu sesji zostaw krótki handoff: pełny SHA bazy i aktualnego
+HEAD, gałąź, zakres, wyniki kontroli, otwarte ryzyka i następny krok.
+Gdy prowadzący jest niedostępny, pomocnik może w następnej osobno zleconej
+rundzie realizować jedno niezależne, gotowe zadanie. Nie rozpoczyna kolejnego
+w tej samej rundzie; nie pomija zależności ani decyzji LEAD o odbiorze.
 
 SDK, surowe INI, prywatne logi i zapisy nie trafiają do publicznego repozytorium.
 W issue publikuj odpowiedni wyciąg lub podsumowanie z SHA, rewizją rejestratora,
