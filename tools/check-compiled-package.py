@@ -59,6 +59,7 @@ OPTIONAL_CLASSES = {
     "APX_RevealedFocus": "Object",
     "APX_RouteTempo": "Object",
     "APX_SquadPlanner": "Object",
+    "APX_UnitStats": "Object",
 }
 REQUIRED_FILES = {
     f"{ROOT}/AutoplayXCom2.XComMod",
