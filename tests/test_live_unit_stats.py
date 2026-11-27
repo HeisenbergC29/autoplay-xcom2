@@ -319,12 +319,19 @@ class LiveUnitStatsTests(unittest.TestCase):
         self.enemy.GetCurrentStat.side_effect = advance
         self.assertEqual((False, [0] * 7, [0] * 7), self.read())
 
-    def test_new_reader_is_not_connected_to_ranking_or_dispatch(self):
-        """This stage exports only facts and private helpers; consumers are later work."""
-        for file in CLASSES.glob("*.uc"):
-            if file != SOURCE:
-                self.assertNotIn("APX_UnitStats", CHECKS.without_comments(
-                    file.read_text(encoding="utf-8-sig")))
+    def test_armor_read_invalidating_snapshot_does_not_read_other_stats(self):
+        """Do not publish or continue another stat read after the native armor callback."""
+        def invalidated_armor():
+            """Simulate a re-entrant mod effect changing the history index."""
+            self.history.index += 1
+            return 3.0
+
+        self.enemy.GetArmorMitigationForUnitFlag.side_effect = invalidated_armor
+        self.assertEqual((False, [0] * 7, [0] * 7), self.read())
+        self.enemy.GetCurrentStat.assert_not_called()
+
+    def test_reader_has_no_ranking_or_dispatch(self):
+        """This class must remain observational even after future consumers arrive."""
         for forbidden in ("GetAvailableActions(", "CanActivateAbility(", "NumActionPoints(",
                           ".Ammo", "Cooldown", "Charges", "GetMyTemplateName(",
                           "GetBaseStat(", "ModifyStateObject(", "SubmitGameState(",
