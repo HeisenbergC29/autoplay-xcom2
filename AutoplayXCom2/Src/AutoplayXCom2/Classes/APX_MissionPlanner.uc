@@ -74,19 +74,78 @@ static function bool IsUnfinishedObject(XComGameState_InteractiveObject ObjectSt
             || ObjectState.InteractionCount < ObjectState.MaxInteractionCount);
 }
 
-// Do not evacuate the combat squad merely because a flare exists. The mission's
-// strategy objective must be complete; controlled civilians and carried VIPs go first.
-static function bool ShouldEvacuate(XComGameState_Unit UnitState)
+/**
+ * Classify one CURRENT mission definition. ExtractAll is the verified native
+ * CovertEscape extraction objective, not the localized "Extract" UI row.
+ * Unrecognized required tactical objectives remain blocking, not completed.
+ * After explicit native mission abort preserve the old strategy-only policy;
+ * this planner does not decide to abandon a mission or invoke AbortMission.
+ */
+static function name ObjectiveEvacuationBlock(name ObjectiveName,
+    bool bCompleted, bool bStrategy, bool bTactical, bool bAborted)
 {
-    local XComGameState_BattleData BattleData;
+    if (bCompleted)
+        return 'None';
+    if (!bAborted && ObjectiveName == 'ExtractAll')
+        return 'None';
+    if (bStrategy)
+        return 'strategy_objective_pending';
+    if (!bAborted && bTactical)
+        return 'required_tactical_objective_pending';
+    return 'None';
+}
+
+/**
+ * Read the active mission's actual native objective flags and completion bits.
+ * No count of remaining aliens, UI row, timer or presence of an evac flare
+ * substitutes for native objective completion. An empty strategy/extraction
+ * set still cannot authorize ordinary squad evacuation on a defense mission.
+ */
+static function name SquadEvacuationReason(XComGameState_BattleData BattleData)
+{
+    local int Index;
+    local bool bHasStrategyOrExtraction;
+    local name BlockReason;
+
+    if (BattleData == none)
+        return 'missing_battle_data';
+    bHasStrategyOrExtraction = false;
+    for (Index = 0; Index < BattleData.MapData.ActiveMission.MissionObjectives.Length; ++Index)
+    {
+        if (BattleData.MapData.ActiveMission.MissionObjectives[Index].bIsStrategyObjective
+            || (!BattleData.bMissionAborted
+                && BattleData.MapData.ActiveMission.MissionObjectives[Index].bIsTacticalObjective
+                && BattleData.MapData.ActiveMission.MissionObjectives[Index].ObjectiveName == 'ExtractAll'))
+            bHasStrategyOrExtraction = true;
+        BlockReason = ObjectiveEvacuationBlock(
+            BattleData.MapData.ActiveMission.MissionObjectives[Index].ObjectiveName,
+            BattleData.MapData.ActiveMission.MissionObjectives[Index].bCompleted,
+            BattleData.MapData.ActiveMission.MissionObjectives[Index].bIsStrategyObjective,
+            BattleData.MapData.ActiveMission.MissionObjectives[Index].bIsTacticalObjective,
+            BattleData.bMissionAborted);
+        if (BlockReason != 'None')
+            return BlockReason;
+    }
+    if (!bHasStrategyOrExtraction)
+        return 'no_strategy_or_extraction_objective';
+    return 'allowed';
+}
+
+/**
+ * Preserve the existing rescue exception: controlled civilians and a unit
+ * currently carrying an objective unit may extract while Sweep remains open.
+ * Resolve the actual carry effect's source; a different carrier or ordinary
+ * casualty is not this exception. Native actions and path checks still apply.
+ */
+static function bool IsRescueEvacuation(XComGameState_Unit UnitState)
+{
     local XComGameState_Unit CarriedUnit;
     local XComGameState_Effect CarryEffect;
-    local int ObjectiveIndex;
-    local bool bHasStrategyObjective;
 
+    if (UnitState == none || `XCOMHISTORY == none)
+        return false;
     if (UnitState.IsCivilian() && UnitState.GetTeam() == eTeam_XCom)
         return true;
-
     if (UnitState.IsUnitAffectedByEffectName(class'X2Ability_CarryUnit'.default.CarryUnitEffectName))
     {
         foreach `XCOMHISTORY.IterateByClassType(class'XComGameState_Unit', CarriedUnit)
@@ -98,23 +157,23 @@ static function bool ShouldEvacuate(XComGameState_Unit UnitState)
                 return true;
         }
     }
+    return false;
+}
 
-    BattleData = XComGameState_BattleData(`XCOMHISTORY.GetSingleGameStateObjectForClass(class'XComGameState_BattleData', true));
-    if (BattleData == none)
+/**
+ * Shared policy for ordinary evacuation movement, legal Evac action and
+ * the controller's dispatch guard. A flare is preparation, not permission.
+ */
+static function bool ShouldEvacuate(XComGameState_Unit UnitState)
+{
+    local XComGameState_BattleData BattleData;
+
+    if (UnitState == none || `XCOMHISTORY == none)
         return false;
-    for (ObjectiveIndex = 0;
-        ObjectiveIndex < BattleData.MapData.ActiveMission.MissionObjectives.Length;
-        ++ObjectiveIndex)
-    {
-        if (BattleData.MapData.ActiveMission.MissionObjectives[ObjectiveIndex].bIsStrategyObjective)
-        {
-            bHasStrategyObjective = true;
-            break;
-        }
-    }
-    // The game's helper returns true for an empty strategy-objective set.
-    // That must not tell a defense squad to abandon an active mission.
-    return bHasStrategyObjective && BattleData.AllStrategyObjectivesCompleted();
+    if (IsRescueEvacuation(UnitState))
+        return true;
+    BattleData = XComGameState_BattleData(`XCOMHISTORY.GetSingleGameStateObjectForClass(class'XComGameState_BattleData', true));
+    return SquadEvacuationReason(BattleData) == 'allowed';
 }
 
 static function bool IsObjectiveAbility(name AbilityName)
@@ -412,8 +471,11 @@ static function bool ChooseInteraction(XComGameState_Unit UnitState,
             continue;
         AbilityName = AbilityState.GetMyTemplateName();
 
-        if (AbilityName == 'Evac' && ShouldEvacuate(UnitState))
+        if (AbilityName == 'Evac')
         {
+            // Do not let a blocked evacuation fall through to generic interaction scoring.
+            if (!ShouldEvacuate(UnitState))
+                continue;
             Action = Candidate;
             TargetIndex = Candidate.AvailableTargets.Length > 0 ? 0 : INDEX_NONE;
             Score = 300;
