@@ -348,6 +348,7 @@ private static function ReadDeclaredArmorMarkup(X2ArmorTemplate Armor, ECharStat
     local int MarkupIndex;
     local float Total;
     local bool bFound;
+    local delegate<X2StrategyGameRulesetDataStructures.SpecialRequirementsDelegate> DisplayFn;
 
     if (Armor.UIStatMarkups.Length > 64)
         return;
@@ -357,7 +358,8 @@ private static function ReadDeclaredArmorMarkup(X2ArmorTemplate Armor, ECharStat
     {
         if (Armor.UIStatMarkups[MarkupIndex].StatType != Stat)
             continue;
-        if (Armor.UIStatMarkups[MarkupIndex].ShouldStatDisplayFn != none)
+        DisplayFn = Armor.UIStatMarkups[MarkupIndex].ShouldStatDisplayFn;
+        if (DisplayFn != none)
             return;
         Total += float(Armor.UIStatMarkups[MarkupIndex].StatModifier);
         bFound = true;
