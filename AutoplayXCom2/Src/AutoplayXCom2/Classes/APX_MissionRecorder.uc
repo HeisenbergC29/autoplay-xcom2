@@ -60,11 +60,16 @@ function string Safe(string Value)
     return Value;
 }
 
-function Emit(string EventName, string Fields)
+/** Write a bounded detail record, or the single terminal record from Finish.
+ * The terminal allowance does not restore detail logging or advance the cursor.
+ */
+function Emit(string EventName, string Fields, optional bool bTerminal)
 {
     if (!bStarted || bFinished)
         return;
-    if (Sequence >= Clamp(MaxRecords, 100, 100000))
+    if (bTerminal && EventName != "end" && EventName != "recording_context_lost")
+        return;
+    if (!bTerminal && Sequence >= Clamp(MaxRecords, 100, 100000))
     {
         if (!bLimitReported)
         {
@@ -112,7 +117,7 @@ function Start(int PlayerID)
     bStarted = true;
     Emit("start", "|player=" $ PlayerID $ "|mission=" $ Safe(Mission)
         $ "|difficulty=" $ `TacticalDifficultySetting $ "|history=" $ HistoryCursor
-        $ "|revision=mission-report-v50|full_intel_enabled=" $ class'APX_FullIntel'.default.EnableFullIntel
+        $ "|revision=mission-report-v52|full_intel_enabled=" $ class'APX_FullIntel'.default.EnableFullIntel
         $ "|formation_area_radius_tiles=" $ class'APX_MissionPlanner'.default.SquadAreaRiskRadiusTiles
         $ "|formation_area_weight=" $ class'APX_MissionPlanner'.default.SquadAreaRiskWeight
         $ "|concealment_risk_penalty=" $ class'APX_ConcealmentPlanner'.default.ConcealmentRiskPenalty
@@ -187,12 +192,15 @@ static function bool RecordingEpochMatches(bool bSameHistory, int StartStateInde
         && BattleID == CurrentBattleID;
 }
 
-function bool IsRecordingMission()
+/** Validate the same battle epoch even after the detail budget is exhausted.
+ * Only Finish uses the terminal allowance; ordinary callers still stop reading details.
+ */
+function bool IsRecordingMission(optional bool bAllowTerminal)
 {
     local XComGameState_BattleData BattleData;
     local int CurrentHistory;
 
-    if (!bStarted || bFinished || bLimitReported || bRecordingEpochInvalid
+    if (!bStarted || bFinished || bRecordingEpochInvalid
         || RecordedHistory == none || `XCOMHISTORY == none)
         return false;
     BattleData = XComGameState_BattleData(`XCOMHISTORY.GetSingleGameStateObjectForClass(
@@ -212,7 +220,7 @@ function bool IsRecordingMission()
         return false;
     }
     LastObservedMissionHistory = CurrentHistory;
-    return true;
+    return bAllowTerminal || !bLimitReported;
 }
 
 function EventListenerReturn OnObjectiveCompleted(Object EventData, Object EventSource,
@@ -1204,6 +1212,8 @@ function RecordResults()
     local bool bOwnAction, bOwnActionBefore, bOwnTarget, bPrimaryOwnTarget, bSourceVisible;
     local string AbilityName, SourceScope;
 
+    if (bLimitReported)
+        return;
     GapStart = INDEX_NONE;
     EndIndex = Min(`XCOMHISTORY.GetCurrentHistoryIndex(),
         HistoryCursor + Clamp(MaxHistoryFramesPerObserve, 16, 2048));
@@ -1304,6 +1314,9 @@ function RecordResults()
                 $ TargetHealthFields(TargetID, HistoryCursor));
         }
     }
+    // A detail rejected inside the last frame means it was not fully drained.
+    if (bLimitReported)
+        --HistoryCursor;
     if (GapStart != INDEX_NONE)
         Emit("patrol_history_gap", "|first=" $ GapStart $ "|last=" $ HistoryCursor);
 }
@@ -1656,6 +1669,9 @@ function ChosenMove(XComGameState_Unit UnitState, const out array<TTile> Path,
     Emit("chosen", PreparedChoiceFields $ "|move_planner=" $ MovePlanner $ "|accepted=" $ bAccepted);
 }
 
+/** Close exactly once; a capped session still records its native winner if
+ * the original epoch is intact. Scores remain subject to the existing drain rule.
+ */
 function Finish(string Reason)
 {
     local XComGameState_BattleData BattleData;
@@ -1664,12 +1680,12 @@ function Finish(string Reason)
 
     if (!bStarted || bFinished)
         return;
-    if (!IsRecordingMission())
+    if (!IsRecordingMission(true))
     {
         // Closing a stale observer cannot borrow the next world's outcome.
         // Leave this session incomplete rather than inventing a native result.
         Emit("recording_context_lost", "|reason=history_or_mission_changed"
-            $ "|history=" $ HistoryCursor);
+            $ "|history=" $ HistoryCursor $ "|details_truncated=" $ bLimitReported, true);
         UnregisterScoreObservers();
         bFinished = true;
         return;
@@ -1705,7 +1721,8 @@ function Finish(string Reason)
     if (BattleData != none && BattleData.VictoriousPlayer.ObjectID != 0)
         Outcome = BattleData.bLocalPlayerWon ? "win" : "loss";
     Emit("end", "|reason=" $ Safe(Reason) $ "|outcome=" $ Outcome
-        $ "|history=" $ HistoryCursor $ "|history_pending=" $ PendingHistory);
+        $ "|history=" $ HistoryCursor $ "|history_pending=" $ PendingHistory
+        $ "|details_truncated=" $ bLimitReported, true);
     UnregisterScoreObservers();
     bFinished = true;
 }
