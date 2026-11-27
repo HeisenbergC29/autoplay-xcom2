@@ -3,7 +3,8 @@
  * No weighting, ability readiness, targeting, game-state mutation or caching.
  * All outputs are stock scalar arrays; no cross-class custom struct dependency.
  */
-class APX_UnitStats extends Object;
+class APX_UnitStats extends Object
+    dependson(X2TacticalGameRulesetDataStructures);
 
 /** Stable positions in both output arrays. Keep in order for future consumers. */
 const FactHP = 0;
@@ -142,6 +143,8 @@ private static function PopulateFacts(XComGameStateHistory History, int HistoryI
     // Negative is an internal armor-only failure sentinel; public output
     // always uses an independent status, including a real known zero.
     Armor = ReadArmor(History, HistoryIndex, Subject);
+    if (!IsCurrentSnapshot(History, HistoryIndex))
+        return;
     StoreFact(Values, Status, FactHP, Subject.GetCurrentStat(eStat_HP), true, false);
     StoreFact(Values, Status, FactMaxHP, Subject.GetMaxStat(eStat_HP), true, false);
     StoreFact(Values, Status, FactShieldHP, Subject.GetCurrentStat(eStat_ShieldHP), true, false);
