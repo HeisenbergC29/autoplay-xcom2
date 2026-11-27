@@ -356,8 +356,10 @@ def summarize_session(session: str, records: list[dict], conflicting_records: bo
         warnings.append('The recorder ended without a confirmed native mission result; outcome remains unknown.')
     if sequence_gaps:
         warnings.append(f'{sequence_gaps} sequence numbers missing; observations are incomplete.')
-    if events['limit']:
-        warnings.append('Recorder reached its configured record limit.')
+    if SCORING.has_truncated_details(records):
+        warnings.append('Recorder reached its configured record limit; action and scoring details are incomplete.')
+    if events['recording_context_lost']:
+        warnings.append('Recording context was lost; no later battle result may be attributed to this session.')
     if ends and isinstance(ends[-1].get('history_pending'), int) and ends[-1]['history_pending'] > 0:
         warnings.append(f"{ends[-1]['history_pending']} history frames remain unrecorded; action results are incomplete.")
     patrol_issue = None
@@ -365,13 +367,14 @@ def summarize_session(session: str, records: list[dict], conflicting_records: bo
         patrol_issue = 'conflicting_records'
     elif sequence_gaps:
         patrol_issue = 'sequence_gaps'
-    elif events['limit']:
+    elif SCORING.has_truncated_details(records):
         patrol_issue = 'record_limit'
     return {
         'session': session,
         'mission': start.get('mission', 'unknown'),
         'difficulty': start.get('difficulty', 'unknown'),
         'outcome': outcome,
+        'details_truncated': SCORING.has_truncated_details(records),
         'critical_objective_failed': None if conflicting_records else bool(critical_failures),
         'objective_failure_evidence_status': 'conflicting_records' if conflicting_records else 'recorded',
         **failure_evidence,
