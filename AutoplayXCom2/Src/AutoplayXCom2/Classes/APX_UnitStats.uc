@@ -23,7 +23,7 @@ const FactKnown = 1;
  * Negative offense/defense modifiers are legitimate; negative HP/shield/
  * armor/mobility are not usable. Unavailable or NaN values are unknown.
  */
-static function int FactStatus(float Value, bool bAvailable, bool bSigned)
+private static function int FactStatus(float Value, bool bAvailable, bool bSigned)
 {
     if (!bAvailable || Value != Value)
         return 0;
@@ -33,7 +33,7 @@ static function int FactStatus(float Value, bool bAvailable, bool bSigned)
 }
 
 /** Clear both arrays on entry and on a rejected or superseded snapshot. */
-static function ResetFacts(out array<float> Values, out array<int> Status)
+private static function ResetFacts(out array<float> Values, out array<int> Status)
 {
     local int Index;
 
@@ -47,7 +47,7 @@ static function ResetFacts(out array<float> Values, out array<int> Status)
 }
 
 /** Record a known scalar or an explicit unknown; do not use zero as a sentinel. */
-static function StoreFact(out array<float> Values, out array<int> Status,
+private static function StoreFact(out array<float> Values, out array<int> Status,
     int Index, float Value, bool bAvailable, bool bSigned)
 {
     Status[Index] = FactStatus(Value, bAvailable, bSigned);
@@ -57,7 +57,7 @@ static function StoreFact(out array<float> Values, out array<int> Status,
 }
 
 /** Reject an old index, another history instance, or missing tactical services. */
-static function bool IsCurrentSnapshot(XComGameStateHistory History, int HistoryIndex)
+private static function bool IsCurrentSnapshot(XComGameStateHistory History, int HistoryIndex)
 {
     return History != none && History == `XCOMHISTORY && HistoryIndex >= 0
         && History.GetCurrentHistoryIndex() == HistoryIndex
@@ -69,7 +69,7 @@ static function bool IsCurrentSnapshot(XComGameStateHistory History, int History
  * the same controller; hostile units must pass the existing full-intel or
  * normal player-visibility policy. Never authorize a unit by its template name.
  */
-static function bool IsAuthorizedSubject(XComGameState_Unit Observer,
+private static function bool IsAuthorizedSubject(XComGameState_Unit Observer,
     XComGameState_Unit Subject)
 {
     local array<StateObjectReference> KnownEnemies;
@@ -105,27 +105,28 @@ static function bool IsAuthorizedSubject(XComGameState_Unit Observer,
  * it can resolve them. Incomplete evidence leaves armor unknown, not zero.
  * No damage roll or hypothetical target is needed.
  */
-static function bool ReadArmor(XComGameStateHistory History, int HistoryIndex,
-    XComGameState_Unit Subject, out float Armor)
+private static function float ReadArmor(XComGameStateHistory History, int HistoryIndex,
+    XComGameState_Unit Subject)
 {
     local StateObjectReference EffectRef;
     local XComGameState_Effect EffectState;
-
-    Armor = 0.0;
+    local float Armor;
     if (!IsCurrentSnapshot(History, HistoryIndex) || Subject == none
         || Subject.AffectedByEffects.Length > 128)
-        return false;
+        return -1.0;
     foreach Subject.AffectedByEffects(EffectRef)
     {
         if (EffectRef.ObjectID <= 0)
-            return false;
+            return -1.0;
         EffectState = XComGameState_Effect(History.GetGameStateForObjectID(
             EffectRef.ObjectID, eReturnType_Reference, HistoryIndex));
         if (EffectState == none || EffectState.bRemoved || EffectState.GetX2Effect() == none)
-            return false;
+            return -1.0;
     }
     Armor = Subject.GetArmorMitigationForUnitFlag();
-    return FactStatus(Armor, IsCurrentSnapshot(History, HistoryIndex), false) == FactKnown;
+    if (FactStatus(Armor, IsCurrentSnapshot(History, HistoryIndex), false) != FactKnown)
+        return -1.0;
+    return Armor;
 }
 
 /**
@@ -134,17 +135,17 @@ static function bool ReadArmor(XComGameStateHistory History, int HistoryIndex,
  * and defense are stat points, not a complete shot probability. Mobility is
  * the native movement stat, not a count of remaining AP or reachable tiles.
  */
-static function PopulateFacts(XComGameStateHistory History, int HistoryIndex,
+private static function PopulateFacts(XComGameStateHistory History, int HistoryIndex,
     XComGameState_Unit Subject, out array<float> Values, out array<int> Status)
 {
     local float Armor;
-    local bool bArmorKnown;
-
-    bArmorKnown = ReadArmor(History, HistoryIndex, Subject, Armor);
+    // Negative is an internal armor-only failure sentinel; public output
+    // always uses an independent status, including a real known zero.
+    Armor = ReadArmor(History, HistoryIndex, Subject);
     StoreFact(Values, Status, FactHP, Subject.GetCurrentStat(eStat_HP), true, false);
     StoreFact(Values, Status, FactMaxHP, Subject.GetMaxStat(eStat_HP), true, false);
     StoreFact(Values, Status, FactShieldHP, Subject.GetCurrentStat(eStat_ShieldHP), true, false);
-    StoreFact(Values, Status, FactArmor, Armor, bArmorKnown, false);
+    StoreFact(Values, Status, FactArmor, Armor, Armor >= 0.0, false);
     StoreFact(Values, Status, FactOffense, Subject.GetCurrentStat(eStat_Offense), true, true);
     StoreFact(Values, Status, FactDefense, Subject.GetCurrentStat(eStat_Defense), true, true);
     StoreFact(Values, Status, FactMobility, Subject.GetCurrentStat(eStat_Mobility), true, false);
