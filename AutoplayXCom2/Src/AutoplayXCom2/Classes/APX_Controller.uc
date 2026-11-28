@@ -2090,11 +2090,11 @@ function MakeDecision(XComTacticalController PC)
         Ability = XComGameState_Ability(`XCOMHISTORY.GetGameStateForObjectID(
             BestAction.AbilityObjectRef.ObjectID));
         if (Ability != none && Ability.GetMyTemplateName() == 'Evac'
-            && !class'APX_MissionPlanner'.static.ShouldEvacuate(BestUnit))
+            && class'APX_MissionPlanner'.static.IsRequiredSweepEvacuationBlocked(BestUnit))
         {
             if (MissionRecorder != none)
                 MissionRecorder.Marker("evacuation_blocked",
-                    "scope=dispatch reason=evacuation_policy_revalidation"
+                    "scope=dispatch reason=required_commander_sweep_pending"
                     @ "unit=" $ BestUnit.ObjectID);
             UntilDecision = FMax(0.25, DecisionInterval);
             return;
@@ -2333,10 +2333,10 @@ function bool CanUseAction(XComGameState_Unit UnitState, AvailableAction Action,
         Action.AbilityObjectRef.ObjectID));
     if (Ability == none || Ability.OwnerStateObject.ObjectID != UnitState.ObjectID)
         return false;
-    // A native AA_Success Evac is legal for the unit, but may abandon a
-    // required tactical objective. Use the same gate as the movement planner.
+    // Revalidate the verified Commander Sweep veto only. Other missions
+    // retain their previous native action eligibility.
     if (Ability.GetMyTemplateName() == 'Evac'
-        && !class'APX_MissionPlanner'.static.ShouldEvacuate(UnitState))
+        && class'APX_MissionPlanner'.static.IsRequiredSweepEvacuationBlocked(UnitState))
         return false;
     if (!bSquadOverwatchSafe
         && class'APX_CombatPlanner'.default.OverwatchAbilities.Find(Ability.GetMyTemplateName()) != INDEX_NONE)
