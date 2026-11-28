@@ -137,8 +137,8 @@ class QuiescenceIntegrationContracts(unittest.TestCase):
         self.assertLess(pending_reveal, gate)
         self.assertLess(gate, reveal)
         self.assertLess(reveal, observed)
-        self.assertIn("mission-report-v54", init)
-        self.assertIn("mission-report-v54", self.recorder)
+        self.assertIn("mission-report-v55", init)
+        self.assertIn("mission-report-v55", self.recorder)
 
 
 if __name__ == "__main__":

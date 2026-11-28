@@ -1288,6 +1288,9 @@ function MakeDecision(XComTacticalController PC)
     local StateObjectReference PlayerRef, AmbushPatrolRef;
     local AvailableAction Candidate, BestAction, AmbushAction, PatrolReaction;
     local array<TTile> CandidatePath, BestPath, AmbushPath, PatrolApproachPath;
+    local array<TTile> DeferredBudgetPrefix;
+    local float DeferredBudgetScore;
+    local bool bMissionMoveAccepted;
     local array<vector> CandidateLocations, BestLocations;
     local vector CandidateAim, BestAim;
     local int TargetIndex, BestTargetIndex, ChosenTargetID, AmbushTargetIndex, RescuePatientID, MedicalPatientID;
@@ -1301,6 +1304,7 @@ function MakeDecision(XComTacticalController PC)
     local int RemainingConcealmentChecks, RemainingCoverChecks;
     local int RemainingContactGroups, RemainingContactMembers;
     local int RemainingContactDetectors, RemainingContactTiles, RemainingContactLOS;
+    local int RemainingRoutineContactChecks, RoutineContactAllowance;
     local int RemainingTempoCoverChecks, RemainingMedicalSamples;
     local array<StateObjectReference> ContactSnapshotUnits, ContactSnapshotInteractives;
     local string ContactSnapshotReason, PatrolSelectionEvidence;
@@ -1335,6 +1339,11 @@ function MakeDecision(XComTacticalController PC)
     RemainingContactGroups = Clamp(class'APX_ContactEnvelope'.default.MaxGroups, 1, 32);
     RemainingContactMembers = Clamp(class'APX_ContactEnvelope'.default.MaxMembers, 1, 128);
     RemainingContactDetectors = Clamp(class'APX_ContactEnvelope'.default.MaxDetectors, 1, 64);
+    // Routine mission prefixes/local routes have a separate pair-work limit;
+    // patrol and objective recovery keep their existing detector allowance.
+    // All consumers still share the same tile and native LOS ceilings.
+    RemainingRoutineContactChecks = class'APX_ContactEnvelope'.static.RoutineDetectorBudget(
+        class'APX_ContactEnvelope'.default.MaxRoutineDetectorChecks);
     RemainingContactTiles = Clamp(class'APX_ContactEnvelope'.default.MaxTiles, 2, 128);
     RemainingContactLOS = Clamp(class'APX_ContactEnvelope'.default.MaxLOS, 1, 512);
     RemainingTempoCoverChecks = Clamp(
@@ -1722,6 +1731,8 @@ function MakeDecision(XComTacticalController PC)
         iCandidateRoutine = 0;
         iCandidateFirstBlue = 0;
         iCandidateEmergencyRoute = 0;
+        DeferredBudgetPrefix.Length = 0;
+        DeferredBudgetScore = 0.0;
         MissionMoveDiagnostic = "reason=not_evaluated";
         MissionMoveOutcome = "not_proposed";
         if (bContactSearch && !class'APX_MissionPlanner'.static.ShouldEvacuate(UnitState))
@@ -1734,22 +1745,57 @@ function MakeDecision(XComTacticalController PC)
         else
         {
             MissionMovePlanner = "mission";
+            // Active patrol preparation retains the original shared pair budget
+            // and streaming assessor, including work already spent this decision.
+            if (bPatrolActive)
+                RoutineContactAllowance = RemainingContactDetectors;
+            else
+                RoutineContactAllowance = RemainingRoutineContactChecks;
             bCandidateMove = class'APX_MissionPlanner'.static.ChooseMove(
                 UnitState, CandidatePath, Score, RemainingConcealmentChecks,
                 RemainingCoverChecks, FocusTargetID, bFocusedGoal,
                 RangedTargetID, bRangedFocusGoal,
                 ContactSnapshotUnits, ContactSnapshotInteractives,
                 bContactSnapshotComplete, ContactSnapshotReason,
-                RemainingContactDetectors, RemainingContactTiles, RemainingContactLOS,
+                RoutineContactAllowance, RemainingContactTiles, RemainingContactLOS,
                 RouteTempo, PlayerState.PlayerTurnCount,
                 PatrolAmbushPlanner.HasActiveStaging(), bContactSearch || bVisibleThreats,
                 CandidateRouteGoal, iCandidateRoutine, iCandidateFirstBlue,
-                RemainingTempoCoverChecks, iCandidateEmergencyRoute, MissionMoveDiagnostic);
+                RemainingTempoCoverChecks, iCandidateEmergencyRoute, MissionMoveDiagnostic,
+                bPatrolActive, DeferredBudgetPrefix, DeferredBudgetScore);
+            if (bPatrolActive)
+                RemainingContactDetectors = RoutineContactAllowance;
+            else
+                RemainingRoutineContactChecks = RoutineContactAllowance;
         }
         if (bCandidateMove
             && TraceCandidateMove(UnitState, CandidatePath, Score)
             && Score > BestScore && CanUseMove(UnitState, CandidatePath,
                 iCandidateEmergencyRoute > 0))
+            bMissionMoveAccepted = true;
+        else
+        {
+            bMissionMoveAccepted = false;
+            // The higher-ranked Clear route may repeat a visited endpoint.
+            // Compare the retained, independently qualified Unknown prefix
+            // against the same global score and unmodified endpoint gate.
+            if (bCandidateMove && DeferredBudgetPrefix.Length > 1
+                && DeferredBudgetScore > BestScore
+                && TraceCandidateMove(UnitState, DeferredBudgetPrefix, DeferredBudgetScore)
+                && CanUseMove(UnitState, DeferredBudgetPrefix))
+            {
+                CandidatePath = DeferredBudgetPrefix;
+                Score = DeferredBudgetScore;
+                iCandidateRoutine = 1;
+                iCandidateFirstBlue = 0;
+                iCandidateEmergencyRoute = 0;
+                bMissionMoveAccepted = true;
+                `log("Contact envelope|unit=" $ UnitState.ObjectID
+                    $ "|horizon_ai_turns=0|status=-1|reason=detector_pair_budget"
+                    $ "|source=controller_budget_prefix_fallback", true, 'AutoplayXCom2');
+            }
+        }
+        if (bMissionMoveAccepted)
         {
             BestPath = CandidatePath;
             BestMovePlanner = MissionMovePlanner;

@@ -26,6 +26,8 @@ RECORDER = CLASSES / "APX_MissionRecorder.uc"
 def compile_fragment(name, args, body, env):
     """Compile the selected real UC statements using a narrow fixture adapter."""
     body = body.replace("class'APX_FullIntel'.default.EnableFullIntel", "FullIntel")
+    # Native log is observational; this fixture tests recorder markers separately.
+    body = re.sub(r"\x60log\(.*?\);", "Log();", body, flags=re.S)
     body = body.replace("class'APX_CombatPlanner'.static.", "Combat.")
     body = body.replace("class'XComGameState_BattleData'", "'battle'")
     body = body.replace("class'APX_MissionPlanner'.static.", "Mission.")
@@ -57,7 +59,7 @@ def compile_fragment(name, args, body, env):
         """Adapt only the diagnostic assignment, retaining real field values."""
         return match[1] + concat_expression(match[2]) + ";"
     body = re.sub(r"(MoveDiagnostic\s*=\s*)([^;]*[@$][^;]*);", concat, body)
-    namespace = dict(env, string=str, UCArray=UCArray)
+    namespace = dict(env, string=str, UCArray=UCArray, Log=lambda:None)
     # The restricted translator splits statements at semicolons. Preserve
     # punctuation within actual quoted diagnostic messages.
     body = re.sub(r'"(?:\\.|[^"\\])*"', lambda m: m[0].replace(";", "__UC_SEMICOLON__"), body)
@@ -366,14 +368,17 @@ class NoPlanMoveScanTests(unittest.TestCase):
                         self.move_body.index("if (!HasLegalMove(UnitState))"))
 
     def test_diagnostics_follow_actual_selection_and_only_emit_on_stop(self):
-        """Source contract: no alternate query, no extra movement or fallback."""
+        """Diagnostics do not re-query paths; #140 adds one retained candidate gate."""
         decision = self.decision
         start = decision.index("MissionMoveDiagnostic = ")
         end = decision.index("bCompareTimedObjective =", start)
         selection = decision[start:end]
         self.assertEqual(1, selection.count("ChooseContactSearchMove("))
         self.assertEqual(1, selection.count(".static.ChooseMove("))
-        self.assertEqual(1, selection.count("CanUseMove("))
+        self.assertEqual(2, selection.count("CanUseMove("))
+        self.assertIn("DeferredBudgetPrefix.Length > 1", selection)
+        self.assertIn("DeferredBudgetScore > BestScore", selection)
+        self.assertIn("CanUseMove(UnitState, DeferredBudgetPrefix)", selection)
         self.assertIn('MissionMoveOutcome = "outscored";', selection)
         self.assertIn('MissionMoveOutcome = "controller_rejected";', selection)
         self.assertIn("MoveStopDiagnostics.Length < 16", selection)
