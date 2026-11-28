@@ -74,6 +74,7 @@ class InstalledAbilityTests(unittest.TestCase):
                    TACTICALRULES=NS(GetLocalClientPlayerObjectID=lambda: 1),
                    FullIntel=NS(GetKnownEnemies=self.known_enemies),
                    EnemyKnowledge=self.classifiers, eTeam_XCom="XCom",
+                   X2AbilityTrigger_PlayerInput=lambda x: x if getattr(x, "player", False) else None,
                    INDEX_NONE=-1, eReturnType_Reference="reference",
                    XComGameState_Unit=lambda x: x if isinstance(x, UnitFixture) else None,
                    XComGameState_Item=lambda x: x if isinstance(x, ItemFixture) else None,
@@ -145,7 +146,7 @@ class InstalledAbilityTests(unittest.TestCase):
                 triggers=[NS(player=True)]), iid)
             ok, rows, ledger = self.read(unit.ObjectID)
             self.assertTrue(ok)
-            self.assertEqual([1, 1, 3, 4, 1, 1, 1, 1], rows[0].facts)
+            self.assertEqual([1, 1, 3, 4, 1, 1, 1, 1, 1], rows[0].facts)
             self.assertEqual((aid, name, iid, "CustomRadius"),
                              (rows[0].id, rows[0].name, rows[0].source, rows[0].style))
             self.assertEqual([(aid, "target", "Unrecognized")], ledger)
@@ -165,15 +166,73 @@ class InstalledAbilityTests(unittest.TestCase):
         self.enemy.Abilities.append(NS(ObjectID=106))
         ok, rows, ledger = self.read()
         self.assertTrue(ok)
-        self.assertEqual([1, 2, 0, 0, 1, 2, 2, 0], rows[0].facts)
-        self.assertEqual([1, 0, 0, 0, 0, 0, 0, 2], rows[1].facts)
+        self.assertEqual([1, 2, 0, 0, 1, 2, 2, 0, 1], rows[0].facts)
+        self.assertEqual([1, 0, 0, 0, 0, 0, 0, 2, 1], rows[1].facts)
         self.assertEqual("OtherShape", rows[1].style)
         self.assertEqual([(102, "multi", ""), (102, "shooter", "UnknownShooter")], ledger)
-        for row in rows[2:]:
-            self.assertEqual([0]*8, row.facts)
+        self.assertEqual([1]+[0]*8, rows[2].facts)
+        for row in rows[3:]:
+            self.assertEqual([0]*9, row.facts)
         wrong.GetMyTemplate.assert_not_called()
         removed.GetMyTemplate.assert_not_called()
         missing.GetMyTemplate.assert_called_once()
+
+    def test_input_status_distinguishes_partial_trigger_lists(self):
+        """Actual reader preserves positive proof and distinguishes unknown from absence."""
+        player = NS(player=True)
+        other = NS(player=False)
+        cases = [
+            ([], 2), ([other], 2), ([other]*16, 2),
+            ([None], 0), ([None, other], 0), ([other, None], 0),
+            ([None, player], 1), ([player, None], 1),
+            ([other, player], 1), ([player]*17, 0), ([other]*17, 0),
+            ([other]*16+[player], 0),
+        ]
+        for n, (triggers, expected) in enumerate(cases):
+            self.install(self.enemy, 100+n, template(triggers=triggers))
+        ok, rows, ledger = self.read()
+        self.assertTrue(ok)
+        self.assertEqual([], ledger)
+        for row, (triggers, expected) in zip(rows, cases):
+            with self.subTest(triggers=triggers):
+                self.assertEqual(expected, row.facts[self.uc["AbilityInputStatus"]])
+                self.assertEqual(1, row.facts[self.uc["AbilityTemplateStatus"]])
+                # The older boolean consumer must retain its original semantics.
+                self.assertEqual(expected == 1, self.classifiers.HasPlayerInputTrigger(
+                    template(triggers=triggers)))
+
+    def test_installed_source_survives_missing_template(self):
+        """Validate explicit source independently, but never invent template facts."""
+        item = self.equip(self.enemy, 201)
+        ability = self.install(self.enemy, 101, None, 201)
+        self.install(self.enemy, 102, None, 0)
+        self.install(self.enemy, 103, None, 999)
+        ok, rows, ledger = self.read()
+        self.assertTrue(ok)
+        self.assertEqual([], ledger)
+        self.assertEqual((201, [1, 1]+[0]*7), (rows[0].source, rows[0].facts))
+        for row in rows[1:]:
+            self.assertEqual((0, [1]+[0]*8), (row.source, row.facts))
+        for row in rows:
+            self.assertEqual(("", ""), (row.name, row.style))
+        for field, rejected in (("bRemoved", True), ("InventorySlot", SLOT["Mission"])):
+            with self.subTest(field=field):
+                original = getattr(item, field)
+                setattr(item, field, rejected)
+                self.assertEqual((0, [1]+[0]*8),
+                                 (self.read()[1][0].source, self.read()[1][0].facts))
+                setattr(item, field, original)
+        item.OwnerStateObject.ObjectID = 99
+        self.assertEqual(0, self.read()[1][0].facts[1])
+        item.OwnerStateObject.ObjectID = 21
+        self.enemy.InventoryItems.Length = 0
+        self.assertEqual(0, self.read()[1][0].facts[1])
+        self.enemy.InventoryItems.AddItem(NS(ObjectID=201))
+        ability.GetMyTemplate.return_value = template()
+        self.history.index += 1
+        row = self.read()[1][0]
+        self.assertEqual((201, [1, 1, 0, 0, 1, 2, 2, 0, 1]),
+                         (row.source, row.facts))
 
     def test_equipment_reference_revalidated_on_current_history(self):
         """No source guessing after swap, wrong owner, removal or non-equipped slot."""
