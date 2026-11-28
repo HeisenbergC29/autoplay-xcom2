@@ -7,7 +7,9 @@ class APX_ContactEnvelope extends Object config(AutoplayXCom2)
 
 var config int MaxGroups;
 var config int MaxMembers;
+// Snapshot cardinality is distinct from the number of detector/tile checks.
 var config int MaxDetectors;
+var config int MaxRoutineDetectorChecks;
 var config int MaxTiles;
 var config int MaxLOS;
 var config float CautionRoutePenalty;
@@ -38,6 +40,20 @@ static function bool SnapshotBudgetsValid(int Groups, int Members,
     int Detectors, int Tiles, int LOS)
 {
     return Groups > 0 && Members > 0 && Detectors > 0 && Tiles > 0 && LOS > 0;
+}
+
+/**
+ * Bound worst-case routine detector/tile work before starting another route.
+ * The current route may finish earlier on positive caution evidence.
+ * This is a work reservation, never a proof of clear geometry or LOS.
+ */
+static function bool HasRoutinePairBudget(int MovedTiles, int DetectorsPerTile,
+    int RemainingDetectors)
+{
+    return MovedTiles > 0 && MovedTiles <= 128
+        && DetectorsPerTile >= 0 && DetectorsPerTile <= 64
+        && RemainingDetectors > 0
+        && RemainingDetectors >= MovedTiles * DetectorsPerTile;
 }
 
 // A dangerous middle tile cannot be erased by a safe endpoint; an
@@ -214,7 +230,7 @@ static function int AssessRoute(XComGameState_Unit Soldier, const out array<TTil
     const out array<StateObjectReference> KnownInteractives,
     bool bSnapshotComplete, string SnapshotReason, int HorizonAITurns,
     out int RemainingDetectors, out int RemainingTiles, out int RemainingLOS,
-    out string Reason)
+    out string Reason, optional bool bRequireFullPairBudget)
 {
     local XComGameState_Unit Detector;
     local XComGameState_InteractiveObject Interactive;
@@ -273,6 +289,15 @@ static function int AssessRoute(XComGameState_Unit Soldier, const out array<TTil
                 return 1;
             }
         }
+    }
+    // Do not spend the remaining routine pair budget on a route that
+    // cannot be fully inspected in the worst case. Shorter alternatives
+    // may still fit. Existing destructive traversal evidence takes priority.
+    if (bRequireFullPairBudget && !HasRoutinePairBudget(Path.Length - 1,
+        KnownUnits.Length + KnownInteractives.Length, RemainingDetectors))
+    {
+        Reason = "detector_pair_budget";
+        return -1;
     }
     Status = 0;
     for (Step = 1; Step < Path.Length; ++Step)
@@ -408,4 +433,10 @@ static function int AssessRoute(XComGameState_Unit Soldier, const out array<TTil
     if (Status == 0)
         Reason = "clear_current_snapshot_only";
     return Status;
+}
+
+// Older user configurations without this setting retain a bounded default.
+defaultproperties
+{
+    MaxRoutineDetectorChecks=1024
 }
