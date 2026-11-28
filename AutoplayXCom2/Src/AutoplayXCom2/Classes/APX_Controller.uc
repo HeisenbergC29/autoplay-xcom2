@@ -319,9 +319,8 @@ function PruneObservedDefeats(int PlayerID)
     }
 }
 
-/** Search a remembered contact using existing legal short steps; report the actual failure stage. */
 function bool ChooseContactSearchMove(XComGameState_Unit UnitState,
-    out array<TTile> Path, out float Score, optional out string MoveDiagnostic)
+    out array<TTile> Path, out float Score)
 {
     local XGUnit Visualizer;
     local TTile GoalTile;
@@ -330,7 +329,6 @@ function bool ChooseContactSearchMove(XComGameState_Unit UnitState,
 
     Path.Length = 0;
     Score = 0.0;
-    MoveDiagnostic = "reason=contact_move_unavailable";
     if (UnitState.NumActionPoints() < 2 || UnitState.IsCivilian()
         || !class'APX_MissionPlanner'.static.HasLegalMove(UnitState))
         return false;
@@ -347,23 +345,14 @@ function bool ChooseContactSearchMove(XComGameState_Unit UnitState,
         }
     }
     if (BestIndex == INDEX_NONE)
-    {
-        MoveDiagnostic = "reason=no_remembered_contact_beyond_two_tiles";
         return false;
-    }
     GoalTile = RecentContacts[BestIndex].LastSeenTile;
     Visualizer = XGUnit(UnitState.GetVisualizer());
     if (Visualizer == none || Visualizer.m_kReachableTilesCache == none)
-    {
-        MoveDiagnostic = "reason=missing_reachable_cache";
         return false;
-    }
     Visualizer.m_kReachableTilesCache.UpdateTileCacheIfNeeded();
     if (!class'APX_MissionPlanner'.static.ChooseRoutePrefix(UnitState, Visualizer, GoalTile, Path))
-    {
-        MoveDiagnostic = "reason=no_qualified_contact_prefix";
         return false;
-    }
     // Investigate the last observed position in short steps, preserving a
     // response. A lost contact is not permission to make a blind rooftop push.
     for (Index = 1; Index < Path.Length; ++Index)
@@ -377,10 +366,7 @@ function bool ChooseContactSearchMove(XComGameState_Unit UnitState,
         }
     }
     if (Path.Length < 2)
-    {
-        MoveDiagnostic = "reason=contact_distance_or_height_limit";
         return false;
-    }
     BestPathIndex = 1;
     BestEndpointValue = -100000.0;
     for (Index = 1; Index < Path.Length; ++Index)
@@ -396,7 +382,6 @@ function bool ChooseContactSearchMove(XComGameState_Unit UnitState,
     if (BestPathIndex < Path.Length - 1)
         Path.Remove(BestPathIndex + 1, Path.Length - BestPathIndex - 1);
     Score = 20.0;
-    MoveDiagnostic = "reason=proposed goal=remembered_contact";
     return true;
 }
 
@@ -1742,7 +1727,9 @@ function MakeDecision(XComTacticalController PC)
         if (bContactSearch && !class'APX_MissionPlanner'.static.ShouldEvacuate(UnitState))
         {
             MissionMovePlanner = "contact_search";
-            bCandidateMove = ChooseContactSearchMove(UnitState, CandidatePath, Score, MissionMoveDiagnostic);
+            // Active remembered contact keeps bCombatThreats true, so it
+            // cannot produce the no-constructive-action stop traced below.
+            bCandidateMove = ChooseContactSearchMove(UnitState, CandidatePath, Score);
         }
         else
         {
