@@ -131,6 +131,18 @@ static function int EffectCapabilities(X2Effect Effect)
     return 0;
 }
 
+/** Classify only the currently supported multi-target shapes; zero is unrecognized. */
+static function int AreaStyleCapability(X2AbilityMultiTargetStyle Style)
+{
+    if (Style != none
+        && (Style.IsA('X2AbilityMultiTarget_Radius')
+            || Style.IsA('X2AbilityMultiTarget_Cylinder')
+            || Style.IsA('X2AbilityMultiTarget_Cone')
+            || Style.IsA('X2AbilityMultiTarget_Line')))
+        return Capability_Area;
+    return 0;
+}
+
 // Potential capabilities only. Do not call CanActivateAbility/CanAfford or
 // read charges/cooldowns to determine the enemy's hidden current availability.
 static function int CapabilityFlags(XComGameState_Unit Enemy)
@@ -152,12 +164,7 @@ static function int CapabilityFlags(XComGameState_Unit Enemy)
         if (Template == none || Template.Hostility != eHostility_Offensive
             || !HasPlayerInputTrigger(Template))
             continue;
-        if (Template.AbilityMultiTargetStyle != none
-            && (Template.AbilityMultiTargetStyle.IsA('X2AbilityMultiTarget_Radius')
-                || Template.AbilityMultiTargetStyle.IsA('X2AbilityMultiTarget_Cylinder')
-                || Template.AbilityMultiTargetStyle.IsA('X2AbilityMultiTarget_Cone')
-                || Template.AbilityMultiTargetStyle.IsA('X2AbilityMultiTarget_Line')))
-            Flags = Flags | Capability_Area;
+        Flags = Flags | AreaStyleCapability(Template.AbilityMultiTargetStyle);
         foreach Template.AbilityTargetEffects(Effect)
             Flags = Flags | EffectCapabilities(Effect);
         foreach Template.AbilityMultiTargetEffects(Effect)

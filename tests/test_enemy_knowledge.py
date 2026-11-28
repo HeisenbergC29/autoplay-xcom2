@@ -131,8 +131,10 @@ class EnemyKnowledgeTests(unittest.TestCase):
             self.assertIn(gate, flags)
         for array in ('Template.AbilityTargetEffects(Effect)', 'Template.AbilityMultiTargetEffects(Effect)'):
             self.assertIn(array, flags)
+        self.assertIn("AreaStyleCapability(Template.AbilityMultiTargetStyle)", flags)
+        area = function_body(self.source, 'AreaStyleCapability')
         for shape in ('Radius', 'Cylinder', 'Cone', 'Line'):
-            self.assertIn("IsA('X2AbilityMultiTarget_" + shape + "')", flags)
+            self.assertIn("IsA('X2AbilityMultiTarget_" + shape + "')", area)
         effects = function_body(self.source, 'EffectCapabilities')
         for kind in ('MindControl', 'Panicked', 'Stunned', 'Sustained', 'Marked', 'SpawnPsiZombie'):
             self.assertIn("IsA('X2Effect_" + kind + "')", effects)
