@@ -3045,9 +3045,13 @@ static function bool ChooseMove(XComGameState_Unit UnitState,
     local float BestAttackNow, BestAttackAfterMove, HealthFraction;
     local float LocalFallbackScore, LocalFallbackRisk;
     local float MemoryPenalty, MemoryFallbackScore, MemoryFallbackRank, MemoryCandidateScore;
+    local string GoalSource;
+    local int EndpointRejected, GainRejected, NativePathRejected, UnsafePathRejected, LaterRejected;
+    local bool bPrefixFound;
 
     Path.Length = 0;
     Score = 0;
+    MoveDiagnostic = "reason=no_legal_move";
     iAcceptedRoutine = 0;
     iFirstBlueClear = 0;
     iEmergencyRoute = 0;
