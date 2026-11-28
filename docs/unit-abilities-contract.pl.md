@@ -24,9 +24,9 @@ Duplikaty lub ponad 128 referencji odrzucają cały snapshot.
 Cztery tablice wierszy: ID służy wyłącznie do odszukania, TemplateNames
 to rzeczywiste DataName, SourceItemIDs to potwierdzone odwołanie do
 wyposażonego przedmiotu (0 przy braku/nieznanym źródle), AreaStyles to
-nazwa rzeczywistej klasy multi-target. Każdy wiersz ma dziewięć liczb w Facts (indeksy 0–7 zachowane,
-nowe pole statusu szablonu na końcu),
-w kolejności stałych AbilityFactCount:
+nazwa rzeczywistej klasy multi-target. Każdy wiersz ma dziewięć liczb
+w Facts (indeksy 0–7 zachowane, status szablonu na końcu), w kolejności
+stałych do AbilityFactCount:
 
 | Pole | Znaczenie |
 |---|---|
@@ -38,7 +38,6 @@ w kolejności stałych AbilityFactCount:
 | AbilityAreaStatus | 0 nieznany styl / 1 rozpoznany / 2 brak multi-target style |
 | AbilityInputStatus | 0 brak szablonu, limit lub niepełna lista bez pozytywnego dowodu / 1 potwierdzony player-input trigger / 2 kompletna lista bez takiego triggera |
 | AbilityUnknownEffectCount | liczba odwiedzonych nierozpoznanych lub pustych wpisów efektów (nie całkowita liczba, gdy skan niepełny) |
-
 | AbilityTemplateStatus | 0 szablon niedostępny / 1 odczytano załadowany szablon |
 
 Nierozwiązany stan ma wyzerowane pola i puste nazwy. Przy poprawnym
@@ -51,7 +50,8 @@ niezależnie od kolejności; null bez pozytywnego dowodu daje unknown,
 a pusta lub kompletna lista bez player-input daje 2. Ponad 16 wpisów
 nadal nie jest skanowane. HasPlayerInputTrigger dotychczasowego
 konsumenta pozostaje bez zmian.
- Zero bitów oznacza
+
+Zero bitów oznacza
 brak rozpoznanych mechanizmów, nie dowód braku innych możliwości.
 Nieznany efekt może być poprawnym efektem gry/moda. Oddzielny ledger
 zawiera jego ID zdolności, scope target/multi/shooter i nazwę klasy
