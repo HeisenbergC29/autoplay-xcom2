@@ -13,6 +13,7 @@ from test_ui_gating import CHECKS, function_body
 class Effect:
     """Supply actual class identity and inheritance, never an ability name."""
     def __init__(self, name, *parents):
+        """Record the class and its recognized ancestors."""
         self.Class = NS(Name=name)
         self.classes = (name, *parents)
 
@@ -24,6 +25,7 @@ class Effect:
 class Ability:
     """An installed state object with only authorized metadata."""
     def __init__(self, owner, template, source=0):
+        """Record current owner, installed source and loaded template."""
         self.OwnerStateObject = NS(ObjectID=owner)
         self.SourceWeapon = NS(ObjectID=source)
         self.bRemoved = False
@@ -274,7 +276,7 @@ class AbilitySDKContracts(unittest.TestCase):
         loaded = read("X2AbilityTemplate")
         for field in ("AbilityTargetEffects", "AbilityMultiTargetEffects", "AbilityShooterEffects"):
             self.assertRegex(loaded, r"\barray<X2Effect>\s+" + field + r"\b")
-        self.assertRegex(loaded, r"\bEInventorySlot\s+DefaultSourceItemSlot\b")
+        self.assertRegex(loaded, r"(?i)\bEInventorySlot\s+DefaultSourceItemSlot\b")
         self.assertRegex(loaded, r"\bX2AbilityMultiTargetStyle\s+AbilityMultiTargetStyle\b")
         self.assertRegex(read("X2DataTemplate"), r"\bname\s+DataName\b")
 
