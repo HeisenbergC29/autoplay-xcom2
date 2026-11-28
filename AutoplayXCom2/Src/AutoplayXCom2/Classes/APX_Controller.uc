@@ -1288,6 +1288,9 @@ function MakeDecision(XComTacticalController PC)
     local StateObjectReference PlayerRef, AmbushPatrolRef;
     local AvailableAction Candidate, BestAction, AmbushAction, PatrolReaction;
     local array<TTile> CandidatePath, BestPath, AmbushPath, PatrolApproachPath;
+    local array<TTile> DeferredBudgetPrefix;
+    local float DeferredBudgetScore;
+    local bool bMissionMoveAccepted;
     local array<vector> CandidateLocations, BestLocations;
     local vector CandidateAim, BestAim;
     local int TargetIndex, BestTargetIndex, ChosenTargetID, AmbushTargetIndex, RescuePatientID, MedicalPatientID;
@@ -1728,6 +1731,8 @@ function MakeDecision(XComTacticalController PC)
         iCandidateRoutine = 0;
         iCandidateFirstBlue = 0;
         iCandidateEmergencyRoute = 0;
+        DeferredBudgetPrefix.Length = 0;
+        DeferredBudgetScore = 0.0;
         MissionMoveDiagnostic = "reason=not_evaluated";
         MissionMoveOutcome = "not_proposed";
         if (bContactSearch && !class'APX_MissionPlanner'.static.ShouldEvacuate(UnitState))
@@ -1757,7 +1762,7 @@ function MakeDecision(XComTacticalController PC)
                 PatrolAmbushPlanner.HasActiveStaging(), bContactSearch || bVisibleThreats,
                 CandidateRouteGoal, iCandidateRoutine, iCandidateFirstBlue,
                 RemainingTempoCoverChecks, iCandidateEmergencyRoute, MissionMoveDiagnostic,
-                bPatrolActive);
+                bPatrolActive, DeferredBudgetPrefix, DeferredBudgetScore);
             if (bPatrolActive)
                 RemainingContactDetectors = RoutineContactAllowance;
             else
@@ -1767,6 +1772,30 @@ function MakeDecision(XComTacticalController PC)
             && TraceCandidateMove(UnitState, CandidatePath, Score)
             && Score > BestScore && CanUseMove(UnitState, CandidatePath,
                 iCandidateEmergencyRoute > 0))
+            bMissionMoveAccepted = true;
+        else
+        {
+            bMissionMoveAccepted = false;
+            // The higher-ranked Clear route may repeat a visited endpoint.
+            // Compare the retained, independently qualified Unknown prefix
+            // against the same global score and unmodified endpoint gate.
+            if (bCandidateMove && DeferredBudgetPrefix.Length > 1
+                && DeferredBudgetScore > BestScore
+                && TraceCandidateMove(UnitState, DeferredBudgetPrefix, DeferredBudgetScore)
+                && CanUseMove(UnitState, DeferredBudgetPrefix))
+            {
+                CandidatePath = DeferredBudgetPrefix;
+                Score = DeferredBudgetScore;
+                iCandidateRoutine = 1;
+                iCandidateFirstBlue = 0;
+                iCandidateEmergencyRoute = 0;
+                bMissionMoveAccepted = true;
+                `log("Contact envelope|unit=" $ UnitState.ObjectID
+                    $ "|horizon_ai_turns=0|status=-1|reason=detector_pair_budget"
+                    $ "|source=controller_budget_prefix_fallback", true, 'AutoplayXCom2');
+            }
+        }
+        if (bMissionMoveAccepted)
         {
             BestPath = CandidatePath;
             BestMovePlanner = MissionMovePlanner;
