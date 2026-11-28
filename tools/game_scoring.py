@@ -159,12 +159,22 @@ def decayed_value(rule: dict, turn: int) -> int:
                int(rule['starting_points']) - elapsed * int(rule['decrease_per_turn']))
 
 
+def has_truncated_details(records: list[dict]) -> bool:
+    """The detail cap may cut a frame even when its pending-frame count is zero."""
+    return any(r['event'] == 'limit'
+               or (r['event'] in {'end', 'recording_context_lost'}
+                   and r.get('details_truncated') is True)
+               for r in records)
+
+
 def terminal_challenge_rollup(records: list[dict]) -> dict | None:
     """Bind an actual native total to a drained tactical end, never to a HUD.
 
     CMPT_TotalScore is a rollup, not another award to sum. Legacy's explicit
     mission-points/baseline contract retains priority over this fallback.
     """
+    if has_truncated_details(records):
+        return None
     if any(r['event'] == 'game_score' and r.get('source') == 'legacy_runtime'
            for r in records):
         return None
@@ -425,7 +435,7 @@ def comparison_score(records: list[dict], profile: dict) -> dict:
         missing.add('recording_end')
     if isinstance(first_phase_turn, int) and first_phase_turn > 1:
         missing.add('recording_started_after_first_turn')
-    if any(r['event'] == 'limit' for r in records):
+    if has_truncated_details(records):
         missing.add('recorder_limit')
     sequences = [r['seq'] for r in records if isinstance(r.get('seq'), int)]
     if any(right > left + 1 for left, right in zip(sequences, sequences[1:])):
@@ -581,7 +591,8 @@ def assess_attempt(records: list[dict], outcome: str, scoring: dict,
                 observed_score = last['mission_points']
                 # An explicit final marker comes from a source-backed terminal
                 # read, never from the sign or stability of a cumulative score.
-                complete = (last.get('mission_final') is True
+                complete = (not has_truncated_details(records)
+                            and last.get('mission_final') is True
                             and last.get('phase') in {'finish', 'end'}
                             and bool(end) and last.get('seq', 0) <= end.get('seq', -1)
                             and type(last.get('history')) is int and last['history'] >= 0
