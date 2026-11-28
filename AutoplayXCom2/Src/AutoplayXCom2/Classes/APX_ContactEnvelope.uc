@@ -42,6 +42,14 @@ static function bool SnapshotBudgetsValid(int Groups, int Members,
     return Groups > 0 && Members > 0 && Detectors > 0 && Tiles > 0 && LOS > 0;
 }
 
+/** Bound configured pair work; a missing/nonpositive older INI uses the stock default. */
+static function int RoutineDetectorBudget(int Configured)
+{
+    if (Configured <= 0)
+        return 1024;
+    return Clamp(Configured, 1, 1024);
+}
+
 /**
  * Bound worst-case routine detector/tile work before starting another route.
  * The current route may finish earlier on positive caution evidence.
@@ -435,8 +443,3 @@ static function int AssessRoute(XComGameState_Unit Soldier, const out array<TTil
     return Status;
 }
 
-// Older user configurations without this setting retain a bounded default.
-defaultproperties
-{
-    MaxRoutineDetectorChecks=1024
-}
