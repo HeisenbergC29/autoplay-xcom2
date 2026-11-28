@@ -58,7 +58,11 @@ def compile_fragment(name, args, body, env):
         return match[1] + concat_expression(match[2]) + ";"
     body = re.sub(r"(MoveDiagnostic\s*=\s*)([^;]*[@$][^;]*);", concat, body)
     namespace = dict(env, string=str, UCArray=UCArray)
-    code = "def " + name + "(" + args + "):\n" + translate_body(body).replace("if __ELSE__:", "else:")
+    # The restricted translator splits statements at semicolons. Preserve
+    # punctuation within actual quoted diagnostic messages.
+    body = re.sub(r'"(?:\\.|[^"\\])*"', lambda m: m[0].replace(";", "__UC_SEMICOLON__"), body)
+    translated = translate_body(body).replace("if __ELSE__:", "else:")
+    code = "def " + name + "(" + args + "):\n" + translated.replace("__UC_SEMICOLON__", ";")
     exec(compile(code, name, "exec"), namespace)
     return namespace[name]
 
