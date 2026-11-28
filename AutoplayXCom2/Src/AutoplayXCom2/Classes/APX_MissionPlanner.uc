@@ -3022,11 +3022,14 @@ static function bool ChooseMove(XComGameState_Unit UnitState,
     optional bool bActivePatrolPreparation, optional bool bRecentContact,
     optional out TTile SelectedRouteGoal, optional out int iAcceptedRoutine,
     optional out int iFirstBlueClear, optional out int RemainingTempoCoverChecks,
-    optional out int iEmergencyRoute, optional out string MoveDiagnostic)
+    optional out int iEmergencyRoute, optional out string MoveDiagnostic,
+    optional bool bPreservePatrolContactBudget)
 {
     local XGUnit UnitVisualizer;
     local XComGameState_EvacZone RouteEvacZone;
     local array<TTile> Tiles, CandidatePath, RiskyRoute, LocalFallbackPath, MemoryFallbackPath;
+    local array<TTile> DeferredBudgetPrefix;
+    local float DeferredBudgetScore;
     local AvailableAction ReadyObjectiveAction;
     local int ReadyObjectiveTarget;
     local float ReadyObjectiveScore;
@@ -3199,7 +3202,7 @@ static function bool ChooseMove(XComGameState_Unit UnitState,
                         UnitState, Path, ContactUnits, ContactInteractives,
                         bContactSnapshotComplete, ContactSnapshotReason, 0,
                         RemainingContactDetectors, RemainingContactTiles,
-                        RemainingContactLOS, ContactReason, true);
+                        RemainingContactLOS, ContactReason, !bPreservePatrolContactBudget);
                     Score = ApplyConstructiveSoftPenalty(Score,
                         class'APX_ContactEnvelope'.static.PathStatusPenalty(ContactStatus));
                 }
@@ -3257,7 +3260,18 @@ static function bool ChooseMove(XComGameState_Unit UnitState,
                         MemoryPenalty = RouteTempo.PenaltyFor(
                             UnitState.ObjectID, GoalTile,
                             Path[Path.Length - 1], CurrentTurn);
-                    if (MemoryPenalty > 0.0 && !bSecondBlue)
+                    if (bInspectContact && ContactStatus < 0 && ContactReason == "detector_pair_budget"
+                        && !bSecondBlue)
+                    {
+                        // A skipped but otherwise qualified prefix must not hide a
+                        // shorter finishable route. Keep its original fallback score.
+                        DeferredBudgetPrefix = Path;
+                        DeferredBudgetScore = Score;
+                        if (MemoryPenalty > 0.0)
+                            DeferredBudgetScore = FMax(8.0, Score - MemoryPenalty);
+                        Path.Length = 0;
+                    }
+                    else if (MemoryPenalty > 0.0 && !bSecondBlue)
                     {
                         MemoryFallbackPath = Path;
                         // It remains useful when this is the *only* legal
@@ -3398,7 +3412,7 @@ static function bool ChooseMove(XComGameState_Unit UnitState,
                     UnitState, CandidatePath, ContactUnits, ContactInteractives,
                     bContactSnapshotComplete, ContactSnapshotReason, 0,
                     RemainingContactDetectors, RemainingContactTiles,
-                    RemainingContactLOS, ContactReason, true);
+                    RemainingContactLOS, ContactReason, !bPreservePatrolContactBudget);
                 CandidateScore -= class'APX_ContactEnvelope'.static.PathStatusPenalty(
                     ContactStatus);
                 if (bSecondBlue && ContactStatus != 0)
@@ -3467,6 +3481,14 @@ static function bool ChooseMove(XComGameState_Unit UnitState,
             }
             if (bSecondBlue && CoverRisk > 0.0)
                 continue;
+            // Compare only qualified, fully assessed alternatives against a
+            // budget-skipped prefix; uncertain or weaker local routes cannot
+            // displace its original legal fallback.
+            if (DeferredBudgetPrefix.Length > 1
+                && (ContactStatus != 0 || CoverRisk > 0.0 || bStealthRisk
+                    || CandidateScore <= BestScore
+                    || ScoreOrdinaryRouteCandidate(CandidateScore - CurrentScore) <= DeferredBudgetScore))
+                continue;
             if (!bSecondBlue && MemoryPenalty > 0.0)
             {
                 // Compare full costs before applying the floor, so equally
@@ -3497,6 +3519,17 @@ static function bool ChooseMove(XComGameState_Unit UnitState,
                 && bTempoCurrentPathSafe;
             Path = CandidatePath;
         }
+    }
+    if (!bSecondBlue && Path.Length < 2 && DeferredBudgetPrefix.Length > 1)
+    {
+        Path = DeferredBudgetPrefix;
+        Score = DeferredBudgetScore;
+        iAcceptedRoutine = 1;
+        iFirstBlueClear = 0;
+        `log("Contact envelope|unit=" $ UnitState.ObjectID
+            $ "|horizon_ai_turns=0|status=-1|reason=detector_pair_budget"
+            $ "|source=budget_prefix_fallback", true, 'AutoplayXCom2');
+        return true;
     }
     if (!bSecondBlue && Path.Length < 2 && RiskyRoute.Length > 1)
     {
