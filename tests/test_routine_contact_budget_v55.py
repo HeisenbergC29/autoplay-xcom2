@@ -17,6 +17,7 @@ CLASSES = ROOT / "AutoplayXCom2/Src/AutoplayXCom2/Classes"
 CONTACT = CLASSES / "APX_ContactEnvelope.uc"
 MISSION = CLASSES / "APX_MissionPlanner.uc"
 CONTROLLER = CLASSES / "APX_Controller.uc"
+PATROL = CLASSES / "APX_PatrolAmbushPlanner.uc"
 
 
 def compile_fragment(name, params, body, env):
@@ -38,7 +39,11 @@ def compile_fragment(name, params, body, env):
     body = re.sub(r"\belse\s+if\s*\(", "if (__UC_ELIF__ && ", body)
     body = re.sub(r"\belse\b", "if (__UC_ELSE__)", body)
     for target, source in (("RiskyRoute", "Path"), ("LocalFallbackPath", "CandidatePath"),
-                           ("Path", "CandidatePath"), ("Path", "RiskyRoute")):
+                           ("Path", "CandidatePath"), ("Path", "RiskyRoute"),
+                           ("DeferredBudgetPrefix", "Path"), ("Path", "DeferredBudgetPrefix"),
+                           ("Path", "LocalFallbackPath"), ("MemoryFallbackPath", "Path"),
+                           ("MemoryFallbackPath", "CandidatePath"), ("Path", "MemoryFallbackPath"),
+                           ("BestPath", "CandidatePath")):
         body = body.replace(f"{target} = {source};", f"{target} = UCArray({source});")
     body = body.replace("bInspectContact ? 1 : 0", "1 if bInspectContact else 0")
     # Replace the specific conditional expression used for the first-blue ticket.
@@ -167,118 +172,230 @@ class RoutineContactBudgetTests(unittest.TestCase):
         self.assertEqual("native_peek_unverified",result[-1])
         self.assertEqual(-1,self.assess(unit,route,self.fixture.refs,UCArray(),False,"incomplete",0,1024,128,512,"",True)[0])
 
-    def run_squad(self, configured, preflight, alternative=True):
-        """Use shared budgets and actual prefix/local candidate selection gates.
-
-        Native inputs and competing position gains are fixtures. The existing
-        routine branch decides whether to accept, retain caution or fall back.
-        """
-        remaining = [configured,128,512]
-        results = []
+    def choose_route(self, unit, path, candidates, remaining, results, preserve=False,
+                     local_gain=12, second=False):
+        """One invocation of the real prefix/local/fallback flow with shared native doubles."""
         def assess(unit,path,units,interactives,complete,reason,horizon,pairs,tiles,los,detail,require):
-            """Model UnrealScript out parameters and capture actual work."""
+            """Model UC out parameters and capture the work of each candidate."""
             before = self.fixture.pair_reads
-            result = self.assess(unit,path,units,interactives,complete,reason,horizon,pairs,tiles,los,detail,preflight)
+            result = self.assess(unit,path,units,interactives,complete,reason,horizon,pairs,tiles,los,detail,require)
             remaining[:] = result[1:4]
-            results.append((unit.ObjectID,result[0],self.fixture.pair_reads-before,result[-1]))
+            results.append((unit.ObjectID,result[0],self.fixture.pair_reads-before,result[-1],path[-1]))
             return result
         env = dict(Contact=NS(AssessRoute=assess,PathStatusPenalty=self.penalty),
                    ApplyConstructiveSoftPenalty=load_uc_function(MISSION,"ApplyConstructiveSoftPenalty"),
                    ScoreOrdinaryRouteCandidate=load_uc_function(MISSION,"ScoreOrdinaryRouteCandidate"),
+                   ScoreRouteAdvance=load_uc_function(MISSION,"ScoreRouteAdvance"),
+                   SquadPositionScore=lambda *_:0,
                    FMin=min,FMax=max,Log=lambda:None,
                    BlueRouteExposureSafe=lambda *_:True,BlueRouteExplosiveSafe=lambda *_:True,
                    Concealment=NS(RouteConcealmentPenalty=lambda *_:0),
                    ConcealmentDefaults=NS(ConcealmentRiskPenalty=18))
-        # Prefix inspection and real caution/second-blue/acceptance branch.
+        # Actual prefix scoring, with equal native cohesion and no extra risk.
+        score_start = self.choose.index("Score = ScoreRouteAdvance(")
+        score_end = self.choose.index(";",score_start)+1
         start = self.choose.index("if (bInspectContact)\n                {\n                    ContactStatus")
-        end = self.choose.index("// Blue moves preserve",start) if "// Blue moves preserve" in self.choose[start:] else self.choose.index("UnitVisualizer.m_kReachableTilesCache.GetAllPathableTiles",start)
+        end = self.choose.index("UnitVisualizer.m_kReachableTilesCache.GetAllPathableTiles",start)
         prefix = self.choose[start:end].rstrip()
         # The enclosing exposure/route blocks were opened before this fragment.
-        prefix = prefix[:prefix.rfind("}")].rstrip()
-        prefix = prefix[:prefix.rfind("}")].rstrip()
-        prefix = prefix[:prefix.rfind("}")].rstrip()
-        prefix = prefix.replace("return true;","return (Path,Score,ContactStatus,RiskyRoute,RiskyRouteScore,iFirstBlueClear);")
-        prefix = ("RiskyRoute = UCArray(); RiskyRouteScore = 0; ContactReason = \"\";"
-                  "bInspectContact = true; bSecondBlue = false; bSingleBlue = true;"
-                  "CoverRisk = 0.0; bConcealmentUrgent = true; RouteTempo = none;"
-                  "VisibleEnemies = UCArray(); MeleeThreatReaches = UCArray(); ThreatWeights = UCArray();"
-                  "CurrentRisk = 0; RemainingTempoCoverChecks = 128; Score = 50; iFirstBlueClear = 0;"
-                  + prefix + "return (Path,Score,ContactStatus,RiskyRoute,RiskyRouteScore,iFirstBlueClear);")
-        prefix_run = compile_fragment("Prefix",
-            "UnitState,Path,ContactUnits,ContactInteractives,bContactSnapshotComplete,ContactSnapshotReason,RemainingContactDetectors,RemainingContactTiles,RemainingContactLOS",
-            prefix,env)
-        selected = []
-        for n,length in ((1,12),(2,8),(3,8),(4,8)):
-            path = UCArray([0]+[-100*i for i in range(1,length+1)])
-            if n==4:
-                path = UCArray([0,100,200,300,1000,2000,2100,2200,2300])
+        for _ in range(3):
+            prefix = prefix[:prefix.rfind("}")].rstrip()
+        start = self.choose.index("if (bSafe)", self.choose.index("++UnsafePathRejected"))
+        end = self.choose.index("\n    }\n    if (!bSecondBlue && Path.Length < 2 && DeferredBudgetPrefix.Length > 1)",start)
+        local = self.choose[start:end]
+        fallback = self.choose[end+len("\n    }\n"):]
+        body = (
+            "RiskyRoute = UCArray(); RiskyRouteScore = 0; RiskyRouteCoverRisk = 0;"
+            "RiskyContactStatus = -1; RiskyContactReason = \"\";"
+            "DeferredBudgetPrefix = UCArray(); DeferredBudgetScore = 0;"
+            "MemoryFallbackPath = UCArray(); MemoryFallbackScore = 0; MemoryFallbackRank = 0;"
+            "ContactReason = \"\"; bInspectContact = true; bSingleBlue = !bSecondBlue;"
+            "CoverRisk = 0.0; bConcealmentUrgent = true; bCoverUrgent = false; RouteTempo = none;"
+            "VisibleEnemies = UCArray(); MeleeThreatReaches = UCArray(); ThreatWeights = UCArray();"
+            "CurrentRisk = 0; RemainingTempoCoverChecks = 128; RemainingCoverChecks = 128;"
+            "iFirstBlueClear = 0; iAcceptedRoutine = 0; bCombatGoal = false;"
+            + self.choose[score_start:score_end] + prefix
+            + "CurrentScore = 0; BestScore = 4; LocalFallbackScore = 4; BestRisk = 0;"
+            "LocalFallbackPath = UCArray(); BestContactStatus = -1;"
+            "bBestBlueFullyClear = false; bUsedLocalFallback = false;"
+            "SampleCount = 0; EndpointRejected = 0; GainRejected = 0;"
+            "NativePathRejected = 0; UnsafePathRejected = 0; bPrefixFound = true;"
+            "MoveDiagnostic = \"\";"
+            "for CandidatePath in Candidates {"
+            "CandidateScore = LocalGain; CandidateRisk = 0; bSafe = true;"
+            + local + "}" + fallback)
+        body = body.replace("return true;","return (true,Path,Score,iAcceptedRoutine,iFirstBlueClear);")
+        body = body.replace("return false;","return (false,Path,Score,iAcceptedRoutine,iFirstBlueClear);")
+        return compile_fragment("Choose",
+            "UnitState,Path,Candidates,ContactUnits,ContactInteractives,bContactSnapshotComplete,ContactSnapshotReason,RemainingContactDetectors,RemainingContactTiles,RemainingContactLOS,bPreservePatrolContactBudget,LocalGain,bSecondBlue",
+            body,env)(unit,UCArray(path),[UCArray(p) for p in candidates],self.fixture.refs,UCArray(),
+                      True,"snapshot",*remaining,preserve,local_gain,second)
+
+    def controller_selection(self, proposals, initial=2, reject=()):
+        """Execute the actual controller comparison and native-validation gate."""
+        make = function_body(CONTROLLER.read_text(encoding="utf-8-sig"),"MakeDecision")
+        start = make.index("if (bCandidateMove\n            && TraceCandidateMove")
+        end = make.index("if (MissionMoveOutcome != \"selected\"",start)
+        gate = make[start:end]
+        body = ("BestScore = Initial; BestUnit = none; BestPath = UCArray(); BestLocations = UCArray();"
+                "bHavePlan = true; bSelectedFirstBlue = false; bContactSearch = false;"
+                "iCandidateEmergencyRoute = 0; MissionMovePlanner = \"mission\"; CandidateRouteGoal = 0;"
+                "for Proposal in Proposals {"
+                "UnitState = Proposal.unit; bCandidateMove = Proposal.found;"
+                "CandidatePath = Proposal.path; Score = Proposal.score;"
+                "iCandidateRoutine = Proposal.routine; iCandidateFirstBlue = Proposal.ticket;"
+                +gate+"} return (BestUnit,BestPath,BestScore,bSelectedFirstBlue);")
+        env = dict(TraceCandidateMove=lambda *_:True,
+                   CanUseMove=lambda unit,*_:unit.ObjectID not in reject)
+        return compile_fragment("Select","Proposals,Initial",body,env)(proposals,initial)
+
+    def run_squad(self, configured, preserve, alternative=True, paths=None):
+        """Share budgets across actual route flows, then choose through the controller gate."""
+        remaining = [configured,128,512]
+        results,proposals = [],[]
+        if paths is None:
+            paths = [[0]+[-100*i for i in range(1,length+1)] for length in (12,8,8,8)]
+            paths[-1] = [0,100,200,300,1000,2000,2100,2200,2300]
+        for n,path in enumerate(paths,1):
             unit = self.fixture.soldier(n)
-            chosen,score,status,risky,risky_score,ticket = prefix_run(unit,path,self.fixture.refs,UCArray(),True,"snapshot",*remaining)
-            if chosen.Length < 2:
-                # Real local assessment, penalty and retained path assignment.
-                # All other native safety checks have passed in this fixture.
-                if alternative:
-                    start = self.choose.index("if (bSafe)", self.choose.index("++UnsafePathRejected"))
-                    end = self.choose.index("\n    }\n    if (!bSecondBlue && Path.Length < 2 && RiskyRoute.Length > 1)",start)
-                    local = self.choose[start:end]
-                    local = ("bInspectContact = true; bSecondBlue = false; bSingleBlue = true;"
-                             "bCoverUrgent = false; bConcealmentUrgent = true; RouteTempo = none;"
-                             "VisibleEnemies = UCArray(); MeleeThreatReaches = UCArray(); ThreatWeights = UCArray();"
-                             "CurrentRisk = 0; CurrentScore = 0; BestScore = 4; LocalFallbackScore = 4;"
-                             "LocalFallbackPath = UCArray(); MemoryFallbackPath = UCArray();"
-                             "RemainingTempoCoverChecks = 128; RemainingCoverChecks = 128;"
-                             "BestContactStatus = -1; bBestBlueFullyClear = false;"
-                             "ContactReason = \"\"; Path = UCArray();"
-                             "for CandidatePath in Candidates {"
-                             "CandidateScore = 45; CandidateRisk = 0; bSafe = true;"
-                             +local+"}\nreturn (Path,BestContactStatus,bBestBlueFullyClear);")
-                    local_run = compile_fragment("Local",
-                        "UnitState,Candidates,ContactUnits,ContactInteractives,bContactSnapshotComplete,ContactSnapshotReason,RemainingContactDetectors,RemainingContactTiles,RemainingContactLOS",local,env)
-                    candidate = UCArray([0,-100,-200,-300,-400,-500,-600])
-                    chosen,status,first_clear = local_run(unit,[candidate],self.fixture.refs,UCArray(),True,"snapshot",*remaining)
-                    # Execute the existing final first-blue ticket assignment.
-                    ticket_source = self.choose[self.choose.index("iAcceptedRoutine = (bInspectContact && !bUsedLocalFallback)"):].replace("return true;","return iFirstBlueClear;")
-                    ticket = compile_fragment("Ticket","bInspectContact,bUsedLocalFallback,bSingleBlue,bBestBlueFullyClear",ticket_source,env)(True,False,True,first_clear)
-                start = self.choose.index("if (!bSecondBlue && Path.Length < 2 && RiskyRoute.Length > 1)")
-                end = self.choose.index("if (!bSecondBlue && Path.Length < 2 && LocalFallbackPath.Length > 1)",start)
-                fallback = self.choose[start:end].replace("return true;","return (Path,RiskyContactStatus);")
-                fallback += "\nreturn (Path,ContactStatus);"
-                chosen,status = compile_fragment("Fallback",
-                    "UnitState,bSecondBlue,Path,RiskyRoute,RiskyRouteScore,RiskyRouteCoverRisk,bInspectContact,RiskyContactStatus,RiskyContactReason,ContactStatus",
-                    fallback,env)(unit,False,chosen,risky,risky_score,0,True,1,"fixture",status)
-            selected.append((n,chosen[-1],status,ticket))
-        return results,selected,remaining
+            candidates = [[0,-100,-200,-300,-400,-500,-600]] if alternative and n==len(paths) else []
+            found,chosen,score,routine,ticket = self.choose_route(unit,path,candidates,remaining,results,preserve)
+            proposals.append(NS(unit=unit,found=found,path=chosen,score=score,routine=routine,ticket=ticket))
+        return results,proposals,remaining,self.controller_selection(proposals)
 
     def test_four_soldiers_old_and_new_budget(self):
-        """Compare actual started/completed inspections and useful safe alternative."""
-        old,old_selected,left = self.run_squad(64,False)
-        self.assertEqual((4,1,0), (len(old),sum(x[2]>0 for x in old),sum(x[1]>=0 for x in old)))
+        """Compare real started/resolved inspections and controller's actual choice."""
+        old,proposals,left,chosen = self.run_squad(64,True)
+        self.assertEqual((4,1,0),(len(old),sum(x[2]>0 for x in old),sum(x[1]>=0 for x in old)))
         self.assertEqual(0,left[0])
-        self.assertEqual(2300,old_selected[-1][1])
-        self.assertEqual(-1,old_selected[-1][2])
+        self.assertEqual(2300,proposals[-1].path[-1])
+        self.assertEqual((1,-1200,17,False),(chosen[0].ObjectID,chosen[1][-1],chosen[2],chosen[3]))
         self.fixture.pair_reads = self.fixture.los_reads = 0
-        new,selected,left = self.run_squad(self.budget(1024),True)
+        new,proposals,left,chosen = self.run_squad(self.budget(1024),False)
         self.assertEqual((5,5,5),(len(new),sum(x[2]>0 for x in new),sum(x[1]>=0 for x in new)))
         self.assertEqual([0,0,0,1,0],[x[1] for x in new])
-        self.assertEqual((4,-600,0,1),selected[-1])
+        self.assertEqual((4,-600,32,True),(chosen[0].ObjectID,chosen[1][-1],chosen[2],chosen[3]))
         self.assertEqual(297,self.fixture.pair_reads)
-        self.assertEqual(1024-297,left[0])
+        self.assertEqual(727,left[0])
         self.assertGreaterEqual(left[1],0)
         self.assertGreaterEqual(left[2],0)
+        # Native CanUseMove and stronger competing action still win.
+        self.assertEqual(1,self.controller_selection(proposals,reject=(4,))[0].ObjectID)
+        self.assertIsNone(self.controller_selection(proposals,initial=80)[0])
 
     def test_only_legal_caution_prefix_remains_usable(self):
         """No qualified alternative does not force the squad to idle."""
-        results,selected,_ = self.run_squad(self.budget(1024),True,False)
+        results,proposals,_,_ = self.run_squad(self.budget(1024),False,False)
         self.assertEqual(1,results[-1][1])
-        self.assertEqual((4,2300,1,0),selected[-1])
+        self.assertEqual((2300,3,0),(proposals[-1].path[-1],proposals[-1].score,proposals[-1].ticket))
+
+    def test_budget_skipped_prefix_competes_in_same_call(self):
+        """Preserved pair work is actually spent on the short qualified route."""
+        unit=self.fixture.soldier()
+        long=[0]+[-100*i for i in range(1,13)]
+        short=[0,-100,-200,-300,-400,-500,-600]
+        for candidates,gain,expected,score,ticket in (([short],12,-600,32,1),
+                ([],12,-1200,17,0),([short],3,-1200,17,0)):
+            remaining,records=[64,128,512],[]
+            found,path,value,routine,first=self.choose_route(unit,long,candidates,remaining,records,local_gain=gain)
+            self.assertTrue(found)
+            self.assertEqual((expected,score,ticket),(path[-1],value,first))
+            self.assertEqual((-1,0,"detector_pair_budget"),records[0][1:4])
+            if candidates:
+                self.assertEqual((0,48),records[1][1:3])
+                self.assertEqual(16,remaining[0])
+        # Second blue cannot use the unverified fallback.
+        found,_,_,_,ticket=self.choose_route(unit,long,[],[64,128,512],[],second=True)
+        self.assertFalse(found)
+        self.assertEqual(0,ticket)
+
+    def test_default_budget_tail_can_select_short_route(self):
+        """32 detectors and 3 x 10 steps leave 64 pairs for the final alternative."""
+        for i in range(9,33):
+            self.fixture.detectors[i]=self.fixture.detectors[8]
+            self.fixture.refs.append(NS(ObjectID=i))
+        remaining,records=[1024,128,512],[]
+        for n in range(1,4):
+            self.choose_route(self.fixture.soldier(n),[0]+[-100*i for i in range(1,11)],[],remaining,records)
+        self.assertEqual(64,remaining[0])
+        found,path,score,routine,ticket=self.choose_route(self.fixture.soldier(4),
+            [0]+[-100*i for i in range(1,9)],[[0,-100,-200]],remaining,records)
+        self.assertEqual((True,-200,32,1),(found,path[-1],score,ticket))
+        self.assertEqual(0,remaining[0])
+        self.assertEqual([320,320,320,0,64],[r[2] for r in records])
+
+    def test_early_contact_not_certified_by_skipped_preflight(self):
+        """An uninspected long route cannot earn a Clear ticket."""
+        unit=self.fixture.soldier()
+        route=UCArray([0,1000]+[2000+i*100 for i in range(11)])
+        legacy=self.assess(unit,route,self.fixture.refs,UCArray(),True,"snapshot",0,64,128,512,"",False)
+        self.assertEqual(1,legacy[0])
+        records=[]
+        found,path,score,routine,ticket=self.choose_route(unit,route,[],[64,128,512],records)
+        self.assertEqual((True,route[-1],17,0),(found,path[-1],score,ticket))
+        self.assertEqual((-1,0,"detector_pair_budget"),records[0][1:4])
+
+    def test_active_patrol_preserves_original_los_work(self):
+        """Execute controller budget routing, real assessor, lanes and variant score."""
+        make=function_body(CONTROLLER.read_text(encoding="utf-8-sig"),"MakeDecision")
+        start=make.index("if (bPatrolActive)\n                RoutineContactAllowance")
+        end=make.index("\n        }\n        if (bCandidateMove",start)
+        budget_flow=make[start:end]
+        call_start=budget_flow.index("bCandidateMove = ")
+        call_end=budget_flow.index(";",call_start)+1
+        self.assertIn("RoutineContactAllowance, RemainingContactTiles, RemainingContactLOS",budget_flow[call_start:call_end])
+        self.assertIn("bPatrolActive)",budget_flow[call_start:call_end])
+        # Out-parameter bridge to the actual route flow, not an independent LOS model.
+        budget_flow=budget_flow[:call_start]+(
+            "RoutineContactAllowance,RemainingContactTiles,RemainingContactLOS = "
+            "Choose(RoutineContactAllowance,RemainingContactTiles,RemainingContactLOS,bPatrolActive);"
+        )+budget_flow[call_end:]
+        budget_flow+="return (RemainingContactDetectors,RemainingRoutineContactChecks,RemainingContactTiles,RemainingContactLOS);"
+        self.fixture.unknown_los=True
+        self.fixture.detectors[1].TileLocation=0
+        unit=self.fixture.soldier()
+        route=UCArray([0]+[100]*12)
+        def choose(pairs,tiles,los,preserve):
+            """Run actual prefix/local flow on controlled native geometry."""
+            remaining=[pairs,tiles,los]
+            self.choose_route(unit,route,[],remaining,[],preserve)
+            return tuple(remaining)
+        budget_run=compile_fragment("Budget","bPatrolActive,RemainingContactDetectors,RemainingRoutineContactChecks,RemainingContactTiles,RemainingContactLOS",budget_flow,dict(Choose=choose))
+        active=budget_run(True,64,1024,128,11)
+        inactive=budget_run(False,64,1024,128,11)
+        self.assertEqual((0,1024,119,3),active)
+        self.assertEqual(0,inactive[-1])
+        # Variant geometry uses three native LOS samples; adapt vector fields only.
+        lanes_body=function_body(PATROL.read_text(encoding="utf-8-sig"),"CountVariantLanes")
+        lanes_body=lanes_body.replace("Variant = Target;","Variant = CopyTile(Target);")
+        lanes_body=lanes_body.replace("for (Index = 0; Index < 3; ++Index)","for Index in range(3)")
+        lanes_body="Lanes = 0; Visibility = MakeVisibility();"+lanes_body
+        lanes_body=re.sub(r"return (0|Lanes);",r"return (\1,RemainingLOS);",lanes_body)
+        def see(_,__,visibility):
+            """All three controlled directional lanes are visible."""
+            visibility.DefaultTargetDist=1
+            return True
+        lanes=compile_fragment("Lanes","Soldier,Position,Target,RemainingLOS",lanes_body,
+            dict(XWORLD=NS(IsTileOutOfRange=lambda _:False,CanSeeTileToTile=see),
+                 Square=lambda x:x*x,METERSTOUNITS=lambda x:x,MakeVisibility=NS,
+                 CopyTile=lambda t:NS(X=t.X,Y=t.Y)))
+        shooter=NS(GetVisibilityRadius=lambda:300)
+        good=lanes(shooter,NS(X=0,Y=0),NS(X=1,Y=1),active[-1])
+        exhausted=lanes(shooter,NS(X=0,Y=0),NS(X=1,Y=1),inactive[-1])
+        self.assertEqual((3,0),good)
+        self.assertEqual((0,0),exhausted)
+        score=load_uc_function(PATROL,"VariantPositionScore")
+        self.assertEqual(66,score(4,good[0],True,0,0,-1,8))
+        self.assertEqual(-10000,score(4,exhausted[0],True,0,0,-1,8))
 
     def test_scope_and_shared_budget_are_wired_to_real_controller(self):
         """Keep nonroutine consumers, snapshot caps and LOS/tile limits unchanged."""
         make = function_body(CONTROLLER.read_text(encoding="utf-8-sig"),"MakeDecision")
-        self.assertEqual(1,make.count("RemainingRoutineContactChecks = "))
-        self.assertIn("RemainingRoutineContactChecks, RemainingContactTiles, RemainingContactLOS",make)
+        self.assertEqual(2,make.count("RemainingRoutineContactChecks = "))
+        self.assertIn("RoutineContactAllowance, RemainingContactTiles, RemainingContactLOS",make)
+        self.assertIn("RemainingContactDetectors = RoutineContactAllowance",make)
         self.assertIn("RemainingContactDetectors, RemainingContactTiles, RemainingContactLOS",make)
-        self.assertEqual(2,self.choose.count("RemainingContactLOS, ContactReason, true)"))
+        self.assertEqual(2,self.choose.count("RemainingContactLOS, ContactReason, !bPreservePatrolContactBudget)"))
         self.assertIn("bInspectContact = !bCoverUrgent && !Goal.bImmediateThreats",self.choose)
         self.assertIn("bSecondBlue && ContactStatus != 0",self.choose)
         self.assertIn("if (!bSecondBlue && Path.Length < 2 && RiskyRoute.Length > 1)",self.choose)
