@@ -57,10 +57,19 @@ def compile_fragment(name, params, body, env):
     body = re.sub(r"ContactStatus = Contact.AssessRoute\((.*?)\);",
                   r"ContactStatus, RemainingContactDetectors, RemainingContactTiles, RemainingContactLOS, ContactReason = Contact.AssessRoute(\1);",
                   body, flags=re.S)
+    def concat(match):
+        """Adapt the real diagnostic's UC string operators."""
+        parts=re.split(r"\s*([@$])\s*",match[1])
+        value="str("+parts[0]+")"
+        for op,part in zip(parts[1::2],parts[2::2]):
+            value+=(' + " " + ' if op=="@" else " + ")+"str("+part+")"
+        return "MoveDiagnostic = "+value+";"
+    body=re.sub(r"MoveDiagnostic\s*=\s*([^;]*[@$][^;]*);",concat,body)
+    body=re.sub(r"\+\+(\w+);",r"\1 += 1;",body)
     translated = re.sub(r"\bif __UC_ELIF__\s+and\s+", "elif ", translate_body(body))
     translated = translated.replace("if __UC_ELSE__:", "else:")
     code = "def " + name + "(" + params + "):\n" + translated
-    ns = dict(env, UCArray=UCArray)
+    ns = dict(env, UCArray=UCArray, string=str)
     exec(compile(code, name, "exec"), ns)
     return ns[name]
 
@@ -203,6 +212,9 @@ class RoutineContactBudgetTests(unittest.TestCase):
         start = self.choose.index("if (bSafe)", self.choose.index("++UnsafePathRejected"))
         end = self.choose.index("\n    }\n    if (!bSecondBlue && Path.Length < 2 && DeferredBudgetPrefix.Length > 1)",start)
         local = self.choose[start:end]
+        gain_start=self.choose.rindex("if (CandidateScore <= BestScore)",0,start)
+        gain_end=self.choose.index("CandidatePath.Length = 0;",gain_start)
+        gain_gate=self.choose[gain_start:gain_end]
         fallback = self.choose[end+len("\n    }\n"):]
         body = (
             "RiskyRoute = UCArray(); RiskyRouteScore = 0; RiskyRouteCoverRisk = 0;"
@@ -223,7 +235,7 @@ class RoutineContactBudgetTests(unittest.TestCase):
             "MoveDiagnostic = \"\";"
             "for CandidatePath in Candidates {"
             "CandidateScore = LocalGain; CandidateRisk = 0; bSafe = true;"
-            + local + "}" + fallback)
+            + gain_gate + local + "}" + fallback)
         body = body.replace("return true;","return (true,Path,Score,iAcceptedRoutine,iFirstBlueClear);")
         body = body.replace("return false;","return (false,Path,Score,iAcceptedRoutine,iFirstBlueClear);")
         return compile_fragment("Choose",
@@ -301,9 +313,12 @@ class RoutineContactBudgetTests(unittest.TestCase):
             self.assertTrue(found)
             self.assertEqual((expected,score,ticket),(path[-1],value,first))
             self.assertEqual((-1,0,"detector_pair_budget"),records[0][1:4])
-            if candidates:
+            if candidates and gain>4:
                 self.assertEqual((0,48),records[1][1:3])
                 self.assertEqual(16,remaining[0])
+            else:
+                self.assertEqual(1,len(records))
+                self.assertEqual(64,remaining[0])
         # Second blue cannot use the unverified fallback.
         found,_,_,_,ticket=self.choose_route(unit,long,[],[64,128,512],[],second=True)
         self.assertFalse(found)
