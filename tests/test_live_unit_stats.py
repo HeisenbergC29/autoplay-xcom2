@@ -49,6 +49,7 @@ def expression(source):
     """Translate the limited expression syntax, preserving actual operators."""
     source = " ".join(source.split()).replace(chr(96), "")
     source = source.replace("class'APX_FullIntel'.static.", "FullIntel.")
+    source = source.replace("class'APX_EnemyKnowledge'.static.", "EnemyKnowledge.")
     source = source.replace("class'X2ItemTemplateManager'.static.GetItemTemplateManager()",
                             "ItemTemplateManager()")
     for uc, python in (("none", "None"), ("true", "True"), ("false", "False")):
