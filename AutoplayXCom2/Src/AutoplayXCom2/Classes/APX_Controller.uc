@@ -2092,6 +2092,13 @@ function MakeDecision(XComTacticalController PC)
         }
         if (MeaningfulActionsThisTurn == 0)
         {
+            if (FocusBattle != none
+                && FocusBattle.MapData.ActiveMission.sType == "SabotageCC")
+                StopWithStatus("SabotageCC: no currently verified native X4 route; see objective_recovery_scan",
+                    StatusNoPlan);
+            else
+                StopWithStatus("No constructive action or understood mission goal", StatusNoPlan);
+            // Preserve the existing stop boundary before optional detail consumes the record budget.
             if (MissionRecorder != none)
             {
                 for (MoveStopIndex = 0; MoveStopIndex < MoveStopDiagnostics.Length; ++MoveStopIndex)
@@ -2104,12 +2111,6 @@ function MakeDecision(XComTacticalController PC)
                         @ "best_score=" $ BestScore @ "omitted=" $ MoveStopOmitted);
                 }
             }
-            if (FocusBattle != none
-                && FocusBattle.MapData.ActiveMission.sType == "SabotageCC")
-                StopWithStatus("SabotageCC: no currently verified native X4 route; see objective_recovery_scan",
-                    StatusNoPlan);
-            else
-                StopWithStatus("No constructive action or understood mission goal", StatusNoPlan);
             return;
         }
     }
