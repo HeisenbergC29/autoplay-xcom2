@@ -33,8 +33,14 @@ class UCArray(list):
         del self[length:]
         self.extend([0] * (length - len(self)))
 
-    def Find(self, field, value):
-        """Return the matching struct index, or stock INDEX_NONE."""
+    def AddItem(self, value):
+        """Append a scalar or reference, like the stock dynamic array."""
+        self.append(value)
+
+    def Find(self, field, value=None):
+        """Return the matching scalar or struct-field index, or INDEX_NONE."""
+        if value is None:
+            return next((i for i, item in enumerate(self) if item == field), -1)
         return next((i for i, item in enumerate(self)
                      if getattr(item, field) == value), -1)
 
@@ -43,6 +49,8 @@ def expression(source):
     """Translate the limited expression syntax, preserving actual operators."""
     source = " ".join(source.split()).replace(chr(96), "")
     source = source.replace("class'APX_FullIntel'.static.", "FullIntel.")
+    source = source.replace("class'X2ItemTemplateManager'.static.GetItemTemplateManager()",
+                            "ItemTemplateManager()")
     for uc, python in (("none", "None"), ("true", "True"), ("false", "False")):
         source = re.sub(r"\b" + uc + r"\b", python, source, flags=re.I)
     return re.sub(r"!(?!=)", "not ", source.replace("&&", " and ").replace("||", " or "))
@@ -63,6 +71,8 @@ def translate_body(body):
     """Translate this class's statements; unfamiliar syntax fails compilation."""
     body = body.replace("for (Index = 0; Index < FactCount; ++Index)",
                         "for Index in range(FactCount)")
+    body = body.replace("for (MarkupIndex = 0; MarkupIndex < Armor.UIStatMarkups.Length; ++MarkupIndex)",
+                        "for MarkupIndex in range(Armor.UIStatMarkups.Length)")
     tokens = [s.strip() for s in re.split(r"([{};])", body)
               if s.strip() and s != ";"]
     lines = []
