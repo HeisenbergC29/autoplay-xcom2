@@ -149,6 +149,16 @@ class NoPlanMoveScanTests(unittest.TestCase):
         self.assertIn("later_rejected=0", summary)
         self.assertTrue(self.stop_gate(best=2.0))
 
+    def test_diagnostic_locals_declared_and_early_reason_initialized(self):
+        """Guard declarations not exercised by the limited fragment adapter."""
+        declarations = self.move_body[:self.move_body.index("Path.Length = 0;")]
+        for name in ("GoalSource", "EndpointRejected", "GainRejected",
+                     "NativePathRejected", "UnsafePathRejected", "LaterRejected",
+                     "bPrefixFound"):
+            self.assertRegex(declarations, r"\blocal\s+\w+\s+[^;]*\b" + name + r"\b[^;]*;")
+        self.assertLess(self.move_body.index('MoveDiagnostic = "reason=no_legal_move";'),
+                        self.move_body.index("if (!HasLegalMove(UnitState))"))
+
     def test_diagnostics_follow_actual_selection_and_only_emit_on_stop(self):
         """Source contract: no alternate query, no extra movement or fallback."""
         decision = self.decision
