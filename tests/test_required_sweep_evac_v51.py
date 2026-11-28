@@ -21,12 +21,13 @@ CONTROLLER = CLASSES / "APX_Controller.uc"
 
 
 def compile_gate(source, environment):
-    """Adapt only the SDK-dependent syntax of the actual four policy methods."""
+    """Adapt only the SDK-dependent syntax of the actual five policy methods."""
     namespace = dict(environment)
     specs = (
-        ("ObjectiveEvacuationBlock", "ObjectiveName,bCompleted,bStrategy,bTactical,bAborted"),
+        ("HasPendingRequiredCommanderSweep", "BattleData"),
         ("SquadEvacuationReason", "BattleData"),
         ("IsRescueEvacuation", "UnitState"),
+        ("IsRequiredSweepEvacuationBlocked", "UnitState"),
         ("ShouldEvacuate", "UnitState"),
     )
     for name, args in specs:
@@ -101,7 +102,9 @@ class RequiredSweepEvacTests(unittest.TestCase):
         self.sweep = objective("Sweep", tactical=True)
         self.goals = UCArray([self.commander, self.sweep])
         self.battle = NS(bMissionAborted=False, MapData=NS(
-            ActiveMission=NS(MissionObjectives=self.goals)))
+            ActiveMission=NS(sType="NeutralizeFieldCommander", MissionObjectives=self.goals)))
+        self.battle.AllStrategyObjectivesCompleted = lambda: all(
+            g.bCompleted for g in self.goals if g.bIsStrategyObjective)
         self.carried = []
         self.unit = soldier()
         self.history = NS(GetSingleGameStateObjectForClass=lambda *_: self.battle)
@@ -112,23 +115,33 @@ class RequiredSweepEvacTests(unittest.TestCase):
             INDEX_NONE=-1))
         compile_evac_branches(self.source, self.uc)
 
-    def test_classifier_required_optional_extraction_and_abort(self):
-        """Classify native flags; UI-like names do not prove extraction."""
-        gate = self.uc["ObjectiveEvacuationBlock"]
-        for args, result in (
-            (("Sweep", True, False, True, False), "None"),
-            (("Sweep", False, False, True, False), "required_tactical_objective_pending"),
-            (("KillCommander", False, True, False, False), "strategy_objective_pending"),
-            (("UnknownRequired", False, False, True, False), "required_tactical_objective_pending"),
-            (("Extract", False, False, True, False), "required_tactical_objective_pending"),
-            (("Optional", False, False, False, False), "None"),
-            (("ExtractAll", False, True, False, False), "None"),
-            (("ExtractAll", False, False, True, False), "None"),
-            (("Sweep", False, False, True, True), "None"),
-            (("ExtractAll", False, True, False, True), "strategy_objective_pending"),
-        ):
-            with self.subTest(args=args):
-                self.assertEqual(result, gate(*args))
+    def test_verified_sweep_veto_only_for_current_required_commander_sweep(self):
+        """Identical native flags in different missions do not mean identical victory rules."""
+        pending = self.uc["HasPendingRequiredCommanderSweep"]
+        dispatch = self.uc["IsRequiredSweepEvacuationBlocked"]
+        self.assertTrue(pending(self.battle))
+        self.assertTrue(dispatch(self.unit))
+        self.assertFalse(dispatch(soldier(civilian=True)))
+        self.carried[:] = [soldier(420, carrier_id=410, objective_unit=True)]
+        self.assertFalse(dispatch(soldier(carrying=True)))
+        for mission_type in ("Sabotage", "SabotageTransmitter", "OtherModMission", ""):
+            self.battle.MapData.ActiveMission.sType = mission_type
+            self.assertFalse(pending(self.battle))
+            self.assertFalse(dispatch(self.unit))
+        self.battle.MapData.ActiveMission.sType = "NeutralizeFieldCommander"
+        self.sweep.bIsTacticalObjective = False
+        self.assertFalse(pending(self.battle))
+        self.sweep.bIsTacticalObjective = True
+        self.sweep.bCompleted = True
+        self.assertFalse(pending(self.battle))
+        self.sweep.bCompleted = False
+        self.battle.bMissionAborted = True
+        self.assertFalse(pending(self.battle))
+        self.assertFalse(dispatch(self.unit))
+        self.battle.bMissionAborted = False
+        self.goals[:] = [self.commander, objective("UnknownRequired", tactical=True)]
+        self.assertFalse(pending(self.battle))
+        self.assertFalse(pending(None))
 
     def test_real_report_order_keeps_soldiers_until_native_sweep(self):
         """A commander kill and flare cannot authorize D34/D36 evacuation."""
@@ -143,22 +156,52 @@ class RequiredSweepEvacTests(unittest.TestCase):
         self.assertEqual("allowed", read(self.battle))
         self.assertTrue(should(self.unit))
 
-    def test_native_extraction_not_circular_optional_not_required(self):
-        """Pending ExtractAll is permitted, while unknown tactical goals block."""
+    def test_other_objectives_keep_original_strategy_only_gate(self):
+        """Do not introduce a new extraction exception or an unverified tactical veto."""
         self.commander.bCompleted = self.sweep.bCompleted = True
         self.goals.extend([objective("ExtractAll", strategy=True), objective("Bonus")])
-        self.assertTrue(self.uc["ShouldEvacuate"](self.unit))
-        self.goals.append(objective("OtherRequired", tactical=True))
         self.assertFalse(self.uc["ShouldEvacuate"](self.unit))
-        self.goals[:] = [objective("ExtractAll", strategy=True)]
+        self.goals[-2].bCompleted = True
+        self.goals.append(objective("OtherRequired", tactical=True))
         self.assertTrue(self.uc["ShouldEvacuate"](self.unit))
+        self.goals[:] = [objective("ExtractAll", strategy=True)]
+        self.battle.MapData.ActiveMission.sType = "CovertEscape"
+        self.assertFalse(self.uc["ShouldEvacuate"](self.unit))
+        self.goals[0].bCompleted = True
+        self.assertTrue(self.uc["ShouldEvacuate"](self.unit))
+
+    def test_alien_facility_can_extract_after_destroy_without_sweep(self):
+        """Regression: real stock Sabotage flags permit evacuation before Sweep."""
+        self.battle.MapData.ActiveMission.sType = "Sabotage"
+        destroy = objective("DestroyFacility", strategy=True)
+        self.goals[:] = [self.sweep, destroy]  # installed definition's order
+        reason = self.uc["SquadEvacuationReason"]
+        should = self.uc["ShouldEvacuate"]
+        dispatch = self.uc["IsRequiredSweepEvacuationBlocked"]
+        zone = NS(CenterLocation=(12, 16, 1))
+        candidate = NS(AvailableTargets=UCArray([self.unit]))
+        self.assertEqual("strategy_objective_pending", reason(self.battle))
+        self.assertFalse(should(self.unit))
+        self.assertFalse(self.uc["EvacGoalBranch"](self.unit, zone, NS(bFound=False, Tile=None)))
+        self.assertFalse(self.uc["EvacActionBranch"](self.unit, "Evac", [candidate]))
+        destroy.bCompleted = True
+        self.assertFalse(self.sweep.bCompleted)
+        self.assertEqual("allowed", reason(self.battle))
+        self.assertTrue(should(self.unit))
+        self.assertFalse(dispatch(self.unit))
+        goal = NS(bFound=False, Tile=None)
+        self.assertTrue(self.uc["EvacGoalBranch"](self.unit, zone, goal))
+        self.assertEqual(zone.CenterLocation, goal.Tile)
+        self.assertTrue(self.uc["EvacActionBranch"](self.unit, "Evac", [candidate]))
+        self.sweep.bCompleted = True
+        self.assertTrue(should(self.unit))
 
     def test_missing_and_empty_non_extraction_missions_fail_closed(self):
         """A completed defense objective alone does not grant evacuation."""
         self.goals.clear()
         reason = self.uc["SquadEvacuationReason"]
         should = self.uc["ShouldEvacuate"]
-        self.assertEqual("no_strategy_or_extraction_objective", reason(self.battle))
+        self.assertEqual("no_strategy_objective", reason(self.battle))
         self.goals.append(objective("Defense", completed=True, tactical=True))
         self.assertFalse(should(self.unit))
         self.battle = None
@@ -226,7 +269,7 @@ class RequiredSweepEvacTests(unittest.TestCase):
 
     def test_synthetic_zip_reports_block_then_native_evac_and_old_loss(self):
         """Execute policy, then preserve synthetic observations in real CLI output."""
-        start = "start|mission=NeutralizeFieldCommander|revision=mission-report-v51"
+        start = "start|mission=NeutralizeFieldCommander|revision=mission-report-v53"
         rows = [(0, start),
                 (32, "chosen|kind=action|unit=410|ability=PlaceEvacZone|score=280|accepted=True")]
         self.commander.bCompleted = True
@@ -241,7 +284,7 @@ class RequiredSweepEvacTests(unittest.TestCase):
             (37, "game_score|source=legacy_runtime|mission_points_known=True|mission_final=True"
                  "|mission_points=120|phase=finish|history=3370"),
             (37, "end|reason=tactical_game_ended|outcome=win|history=3370|history_pending=0")])
-        old = [(0, start.replace("v51", "v50")), rows[1], rows[4],
+        old = [(0, start.replace("v53", "v50")), rows[1], rows[4],
                (37, "end|reason=tactical_game_ended|outcome=loss|history=3370|history_pending=0")]
         report = run_synthetic_bundle(("guarded", rows), ("old_loss", old))
         self.assertEqual([], report["malformed_records"])
@@ -268,12 +311,12 @@ class EvacuationIntegrationContracts(unittest.TestCase):
         self.assertIn("if (!ShouldEvacuate(UnitState))", choose)
         use = function_body(controller, "CanUseAction")
         self.assertLess(use.index("Ability.OwnerStateObject.ObjectID != UnitState.ObjectID"),
-                        use.index("ShouldEvacuate(UnitState)"))
+                        use.index("IsRequiredSweepEvacuationBlocked(UnitState)"))
         decide = function_body(controller, "MakeDecision")
         self.assertIn('Marker("evacuation_blocked"', decide)
-        self.assertLess(decide.index("ShouldEvacuate(BestUnit)"),
+        self.assertLess(decide.index("IsRequiredSweepEvacuationBlocked(BestUnit)"),
                         decide.index("MissionRecorder.PrepareChosenAction("))
-        self.assertLess(decide.index("ShouldEvacuate(BestUnit)"),
+        self.assertLess(decide.index("IsRequiredSweepEvacuationBlocked(BestUnit)"),
                         decide.index("ActivateAbility_ReturnContext("))
         self.assertIn("ChoosePlacement(", decide)
         self.assertIn("ChooseMove(", decide)
@@ -303,6 +346,21 @@ class EvacuationSDKContracts(unittest.TestCase):
         sequence = (self.sdk / "SeqAct_CompleteMissionObjective.uc").read_text(encoding="utf-8-sig")
         self.assertIn("BattleData.CompleteObjective(ObjectiveName)", sequence)
         self.assertIn("SubmitGameState(NewGameState)", sequence)
+
+    def test_alien_network_success_is_not_all_tactical_objectives(self):
+        """Native Alien Facility strategic success does not require Sweep."""
+        sources = (self.sdk / "X2StrategyElement_DefaultMissionSources.uc").read_text(
+            encoding="utf-8-sig")
+        alien = function_body(sources, "CreateAlienNetworkTemplate")
+        self.assertIn("'MissionSource_AlienNetwork'", alien)
+        self.assertIn("Template.WasMissionSuccessfulFn = OneStrategyObjectiveCompleted;", alien)
+        self.assertIn("BattleDataState.OneStrategyObjectiveCompleted()",
+                      function_body(sources, "OneStrategyObjectiveCompleted"))
+        battle = (self.sdk / "XComGameState_BattleData.uc").read_text(encoding="utf-8-sig")
+        one = function_body(battle, "OneStrategyObjectiveCompleted")
+        self.assertIn(".bIsStrategyObjective", one)
+        self.assertIn(".bCompleted", one)
+        self.assertNotIn(".bIsTacticalObjective", one)
 
     def test_native_abort_sets_flag_not_planner(self):
         """The exception is keyed to the actual existing native abort state."""
