@@ -10,7 +10,7 @@ import unittest
 from unittest.mock import Mock, call
 
 from test_live_unit_stats import SOURCE, UCArray, UnitFixture, HistoryFixture, compile_reader
-from test_ui_gating import CHECKS, function_body
+from test_ui_gating import CHECKS
 
 SLOTS = ("Unknown", "Armor", "PrimaryWeapon", "SecondaryWeapon", "HeavyWeapon",
          "Utility", "Mission", "Backpack", "Loot", "GrenadePocket", "CombatSim",
@@ -278,6 +278,29 @@ class EquipmentTests(unittest.TestCase):
             self.assertNotIn(forbidden, source)
 
 
+# Same exact body contract as test_native_multitarget_38b; array<name> is
+# not accepted by the generic function_body helper's scalar return-type regex.
+UPGRADE_NAMES_GETTER = (r"function\s+array<name>\s+GetMyWeaponUpgradeTemplateNames\(\)"
+                        r"\s*\{\s*return m_arrWeaponUpgradeNames;\s*\}")
+
+
+class EquipmentGetterContract(unittest.TestCase):
+    """Regression for the native array-returning getter signature."""
+
+    def test_exact_array_getter_requires_uncached_names(self):
+        """Accept the actual declaration, reject wrong return or a caching body."""
+        source = ("function array<name> GetMyWeaponUpgradeTemplateNames()\n"
+                  "{\n    // Installed names, not templates.\n"
+                  "    return m_arrWeaponUpgradeNames;\n}")
+        self.assertRegex(CHECKS.without_comments(source), UPGRADE_NAMES_GETTER)
+        for changed in (
+                source.replace("array<name>", "name"),
+                source.replace("m_arrWeaponUpgradeNames;", "m_arrWeaponUpgradeTemplates;"),
+                source.replace("return m_arrWeaponUpgradeNames;",
+                               "UpdateCache(); return m_arrWeaponUpgradeNames;")):
+            self.assertNotRegex(CHECKS.without_comments(changed), UPGRADE_NAMES_GETTER)
+
+
 @unittest.skipUnless(os.environ.get("APX_SDK_SOURCE_ROOT"), "Private WOTC SDK needed")
 class EquipmentSDKContracts(unittest.TestCase):
     """Check selected SDK declarations against private, unredistributed sources."""
@@ -292,7 +315,7 @@ class EquipmentSDKContracts(unittest.TestCase):
         self.assertIn("protectedwrite array<StateObjectReference> InventoryItems", unit)
         self.assertIn("EInventorySlot InventorySlot", item)
         self.assertIn("OwnerStateObject", item)
-        self.assertIn("return m_arrWeaponUpgradeNames;", function_body(item, "GetMyWeaponUpgradeTemplateNames"))
+        self.assertRegex(CHECKS.without_comments(item), UPGRADE_NAMES_GETTER)
         self.assertIn("FindItemTemplate(name DataName)", read("X2ItemTemplateManager"))
         equipment = read("X2EquipmentTemplate")
         self.assertIn("UIStatMarkups", equipment)
