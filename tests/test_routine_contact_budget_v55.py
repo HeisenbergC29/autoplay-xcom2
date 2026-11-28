@@ -218,7 +218,7 @@ class RoutineContactBudgetTests(unittest.TestCase):
                 # Real local assessment, penalty and retained path assignment.
                 # All other native safety checks have passed in this fixture.
                 if alternative:
-                    start = self.choose.index("if (bSafe)\n        {\n            MemoryPenalty")
+                    start = self.choose.index("if (bSafe)", self.choose.index("++UnsafePathRejected"))
                     end = self.choose.index("\n    }\n    if (!bSecondBlue && Path.Length < 2 && RiskyRoute.Length > 1)",start)
                     local = self.choose[start:end]
                     local = ("bInspectContact = true; bSecondBlue = false; bSingleBlue = true;"
