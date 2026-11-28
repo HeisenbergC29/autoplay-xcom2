@@ -442,4 +442,3 @@ static function int AssessRoute(XComGameState_Unit Soldier, const out array<TTil
         Reason = "clear_current_snapshot_only";
     return Status;
 }
-
