@@ -368,14 +368,17 @@ class NoPlanMoveScanTests(unittest.TestCase):
                         self.move_body.index("if (!HasLegalMove(UnitState))"))
 
     def test_diagnostics_follow_actual_selection_and_only_emit_on_stop(self):
-        """Source contract: no alternate query, no extra movement or fallback."""
+        """Diagnostics do not re-query paths; #140 adds one retained candidate gate."""
         decision = self.decision
         start = decision.index("MissionMoveDiagnostic = ")
         end = decision.index("bCompareTimedObjective =", start)
         selection = decision[start:end]
         self.assertEqual(1, selection.count("ChooseContactSearchMove("))
         self.assertEqual(1, selection.count(".static.ChooseMove("))
-        self.assertEqual(1, selection.count("CanUseMove("))
+        self.assertEqual(2, selection.count("CanUseMove("))
+        self.assertIn("DeferredBudgetPrefix.Length > 1", selection)
+        self.assertIn("DeferredBudgetScore > BestScore", selection)
+        self.assertIn("CanUseMove(UnitState, DeferredBudgetPrefix)", selection)
         self.assertIn('MissionMoveOutcome = "outscored";', selection)
         self.assertIn('MissionMoveOutcome = "controller_rejected";', selection)
         self.assertIn("MoveStopDiagnostics.Length < 16", selection)
