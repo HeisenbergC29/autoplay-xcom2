@@ -45,10 +45,15 @@ def compile_fragment(name, params, body, env):
     body = re.sub(r"\(bSingleBlue && ContactStatus == 0\s*&& bTempoCurrentPathSafe\) \? 1 : 0",
                   "(1 if (bSingleBlue && ContactStatus == 0 && bTempoCurrentPathSafe) else 0)", body)
     body = body.replace("bMemoryFallbackFirstClear ? 1 : 0", "1 if bMemoryFallbackFirstClear else 0")
+    body = body.replace("(bInspectContact && !bUsedLocalFallback) ? 1 : 0",
+                        "(1 if (bInspectContact && !bUsedLocalFallback) else 0)")
+    body = body.replace("(iAcceptedRoutine > 0 && bSingleBlue && bBestBlueFullyClear) ? 1 : 0",
+                        "(1 if (iAcceptedRoutine > 0 && bSingleBlue && bBestBlueFullyClear) else 0)")
     body = re.sub(r"ContactStatus = Contact.AssessRoute\((.*?)\);",
                   r"ContactStatus, RemainingContactDetectors, RemainingContactTiles, RemainingContactLOS, ContactReason = Contact.AssessRoute(\1);",
                   body, flags=re.S)
-    translated = translate_body(body).replace("if __UC_ELIF__ and ", "elif ").replace("if __UC_ELSE__:", "else:")
+    translated = re.sub(r"\bif __UC_ELIF__\s+and\s+", "elif ", translate_body(body))
+    translated = translated.replace("if __UC_ELSE__:", "else:")
     code = "def " + name + "(" + params + "):\n" + translated
     ns = dict(env, UCArray=UCArray)
     exec(compile(code, name, "exec"), ns)
@@ -213,24 +218,27 @@ class RoutineContactBudgetTests(unittest.TestCase):
                 # Real local assessment, penalty and retained path assignment.
                 # All other native safety checks have passed in this fixture.
                 if alternative:
-                    start = self.choose.index("if (bInspectContact)\n            {\n                ContactStatus")
-                    end = self.choose.index("bTempoCurrentPathSafe = false;",start)
+                    start = self.choose.index("if (bSafe)\n        {\n            MemoryPenalty")
+                    end = self.choose.index("\n    }\n    if (!bSecondBlue && Path.Length < 2 && RiskyRoute.Length > 1)",start)
                     local = self.choose[start:end]
-                    local = ("bInspectContact = true; bSecondBlue = false; CandidateScore = 45;"
-                             "ContactReason = \"\";"+local+
-                             "return (CandidateScore, ContactStatus);")
+                    local = ("bInspectContact = true; bSecondBlue = false; bSingleBlue = true;"
+                             "bCoverUrgent = false; bConcealmentUrgent = true; RouteTempo = none;"
+                             "VisibleEnemies = UCArray(); MeleeThreatReaches = UCArray(); ThreatWeights = UCArray();"
+                             "CurrentRisk = 0; CurrentScore = 0; BestScore = 4; LocalFallbackScore = 4;"
+                             "LocalFallbackPath = UCArray(); MemoryFallbackPath = UCArray();"
+                             "RemainingTempoCoverChecks = 128; RemainingCoverChecks = 128;"
+                             "BestContactStatus = -1; bBestBlueFullyClear = false;"
+                             "ContactReason = \"\"; Path = UCArray();"
+                             "for CandidatePath in Candidates {"
+                             "CandidateScore = 45; CandidateRisk = 0; bSafe = true;"
+                             +local+"}\nreturn (Path,BestContactStatus,bBestBlueFullyClear);")
                     local_run = compile_fragment("Local",
-                        "UnitState,CandidatePath,ContactUnits,ContactInteractives,bContactSnapshotComplete,ContactSnapshotReason,RemainingContactDetectors,RemainingContactTiles,RemainingContactLOS",local,env)
+                        "UnitState,Candidates,ContactUnits,ContactInteractives,bContactSnapshotComplete,ContactSnapshotReason,RemainingContactDetectors,RemainingContactTiles,RemainingContactLOS",local,env)
                     candidate = UCArray([0,-100,-200,-300,-400,-500,-600])
-                    gain,local_status = local_run(unit,candidate,self.fixture.refs,UCArray(),True,"snapshot",*remaining)
-                    # Execute the actual final selection assignments for a
-                    # native-safe candidate passing the existing gain gate.
-                    assignment = self.choose[self.choose.index("BestScore = CandidateScore;\n            BestRisk"):self.choose.index("\n        }\n    }\n    if (!bSecondBlue && Path.Length < 2 && RiskyRoute.Length > 1)")]
-                    assignment += "\nreturn (Path,BestContactStatus);"
-                    if gain > 4:
-                        chosen,status = compile_fragment("Select",
-                            "CandidateScore,CandidateRisk,ContactStatus,ContactReason,bInspectContact,CoverRisk,bStealthRisk,bTempoCurrentPathSafe,CandidatePath",
-                            assignment,env)(gain,0,local_status,"fixture",True,0,False,True,candidate)
+                    chosen,status,first_clear = local_run(unit,[candidate],self.fixture.refs,UCArray(),True,"snapshot",*remaining)
+                    # Execute the existing final first-blue ticket assignment.
+                    ticket_source = self.choose[self.choose.index("iAcceptedRoutine = (bInspectContact && !bUsedLocalFallback)"):].replace("return true;","return iFirstBlueClear;")
+                    ticket = compile_fragment("Ticket","bInspectContact,bUsedLocalFallback,bSingleBlue,bBestBlueFullyClear",ticket_source,env)(True,False,True,first_clear)
                 start = self.choose.index("if (!bSecondBlue && Path.Length < 2 && RiskyRoute.Length > 1)")
                 end = self.choose.index("if (!bSecondBlue && Path.Length < 2 && LocalFallbackPath.Length > 1)",start)
                 fallback = self.choose[start:end].replace("return true;","return (Path,RiskyContactStatus);")
@@ -252,7 +260,7 @@ class RoutineContactBudgetTests(unittest.TestCase):
         new,selected,left = self.run_squad(self.budget(1024),True)
         self.assertEqual((5,5,5),(len(new),sum(x[2]>0 for x in new),sum(x[1]>=0 for x in new)))
         self.assertEqual([0,0,0,1,0],[x[1] for x in new])
-        self.assertEqual((4,-600,0,0),selected[-1])
+        self.assertEqual((4,-600,0,1),selected[-1])
         self.assertEqual(297,self.fixture.pair_reads)
         self.assertEqual(1024-297,left[0])
         self.assertGreaterEqual(left[1],0)
