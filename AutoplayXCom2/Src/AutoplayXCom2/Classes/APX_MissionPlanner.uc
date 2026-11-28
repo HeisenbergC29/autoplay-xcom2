@@ -75,59 +75,56 @@ static function bool IsUnfinishedObject(XComGameState_InteractiveObject ObjectSt
 }
 
 /**
- * Classify one CURRENT mission definition. ExtractAll is the verified native
- * CovertEscape extraction objective, not the localized "Extract" UI row.
- * Unrecognized required tactical objectives remain blocking, not completed.
- * After explicit native mission abort preserve the old strategy-only policy;
- * this planner does not decide to abandon a mission or invoke AbortMission.
+ * The v50 NeutralizeFieldCommander replay proves this specific Sweep veto.
+ * Tactical flags alone do not describe mission victory: stock Sabotage
+ * (Alien Facility) may succeed by extraction after DestroyFacility.
+ * Inspect the current definition and completion bit, not UI labels.
+ * Native abort, missing Sweep or a non-required Sweep add no new veto.
  */
-static function name ObjectiveEvacuationBlock(name ObjectiveName,
-    bool bCompleted, bool bStrategy, bool bTactical, bool bAborted)
+static function bool HasPendingRequiredCommanderSweep(XComGameState_BattleData BattleData)
 {
-    if (bCompleted)
-        return 'None';
-    if (!bAborted && ObjectiveName == 'ExtractAll')
-        return 'None';
-    if (bStrategy)
-        return 'strategy_objective_pending';
-    if (!bAborted && bTactical)
-        return 'required_tactical_objective_pending';
-    return 'None';
+    local int Index;
+
+    if (BattleData == none || BattleData.bMissionAborted
+        || BattleData.MapData.ActiveMission.sType != "NeutralizeFieldCommander")
+        return false;
+    for (Index = 0; Index < BattleData.MapData.ActiveMission.MissionObjectives.Length; ++Index)
+    {
+        if (BattleData.MapData.ActiveMission.MissionObjectives[Index].ObjectiveName == 'Sweep'
+            && BattleData.MapData.ActiveMission.MissionObjectives[Index].bIsTacticalObjective
+            && !BattleData.MapData.ActiveMission.MissionObjectives[Index].bCompleted)
+            return true;
+    }
+    return false;
 }
 
 /**
- * Read the active mission's actual native objective flags and completion bits.
- * No count of remaining aliens, UI row, timer or presence of an evac flare
- * substitutes for native objective completion. An empty strategy/extraction
- * set still cannot authorize ordinary squad evacuation on a defense mission.
+ * Preserve the original nonempty, completed strategy-objective gate for
+ * every mission. Add only the verified Commander Sweep veto. In particular
+ * this does not generalize to other tactical flags or authorize ExtractAll.
  */
 static function name SquadEvacuationReason(XComGameState_BattleData BattleData)
 {
     local int Index;
-    local bool bHasStrategyOrExtraction;
-    local name BlockReason;
+    local bool bHasStrategyObjective;
 
     if (BattleData == none)
         return 'missing_battle_data';
-    bHasStrategyOrExtraction = false;
+    bHasStrategyObjective = false;
     for (Index = 0; Index < BattleData.MapData.ActiveMission.MissionObjectives.Length; ++Index)
     {
-        if (BattleData.MapData.ActiveMission.MissionObjectives[Index].bIsStrategyObjective
-            || (!BattleData.bMissionAborted
-                && BattleData.MapData.ActiveMission.MissionObjectives[Index].bIsTacticalObjective
-                && BattleData.MapData.ActiveMission.MissionObjectives[Index].ObjectiveName == 'ExtractAll'))
-            bHasStrategyOrExtraction = true;
-        BlockReason = ObjectiveEvacuationBlock(
-            BattleData.MapData.ActiveMission.MissionObjectives[Index].ObjectiveName,
-            BattleData.MapData.ActiveMission.MissionObjectives[Index].bCompleted,
-            BattleData.MapData.ActiveMission.MissionObjectives[Index].bIsStrategyObjective,
-            BattleData.MapData.ActiveMission.MissionObjectives[Index].bIsTacticalObjective,
-            BattleData.bMissionAborted);
-        if (BlockReason != 'None')
-            return BlockReason;
+        if (BattleData.MapData.ActiveMission.MissionObjectives[Index].bIsStrategyObjective)
+        {
+            bHasStrategyObjective = true;
+            break;
+        }
     }
-    if (!bHasStrategyOrExtraction)
-        return 'no_strategy_or_extraction_objective';
+    if (!bHasStrategyObjective)
+        return 'no_strategy_objective';
+    if (!BattleData.AllStrategyObjectivesCompleted())
+        return 'strategy_objective_pending';
+    if (HasPendingRequiredCommanderSweep(BattleData))
+        return 'required_tactical_objective_pending';
     return 'allowed';
 }
 
@@ -161,8 +158,23 @@ static function bool IsRescueEvacuation(XComGameState_Unit UnitState)
 }
 
 /**
- * Shared policy for ordinary evacuation movement, legal Evac action and
- * the controller's dispatch guard. A flare is preparation, not permission.
+ * Revalidate ONLY the new Commander Sweep veto at the automatic action
+ * boundary. Preserve other missions' prior native action eligibility.
+ * Rescue units and explicit native abort retain their previous behavior.
+ */
+static function bool IsRequiredSweepEvacuationBlocked(XComGameState_Unit UnitState)
+{
+    local XComGameState_BattleData BattleData;
+
+    if (UnitState == none || `XCOMHISTORY == none)
+        return false;
+    BattleData = XComGameState_BattleData(`XCOMHISTORY.GetSingleGameStateObjectForClass(class'XComGameState_BattleData', true));
+    return HasPendingRequiredCommanderSweep(BattleData) && !IsRescueEvacuation(UnitState);
+}
+
+/**
+ * Shared policy for ordinary evacuation movement and interaction selection.
+ * A flare is preparation, not permission. Other missions retain the old gate.
  */
 static function bool ShouldEvacuate(XComGameState_Unit UnitState)
 {
