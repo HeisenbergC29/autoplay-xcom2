@@ -1339,8 +1339,8 @@ function MakeDecision(XComTacticalController PC)
     // Routine mission prefixes/local routes have a separate pair-work limit;
     // patrol and objective recovery keep their existing detector allowance.
     // All consumers still share the same tile and native LOS ceilings.
-    RemainingRoutineContactChecks = Clamp(
-        class'APX_ContactEnvelope'.default.MaxRoutineDetectorChecks, 1, 1024);
+    RemainingRoutineContactChecks = class'APX_ContactEnvelope'.static.RoutineDetectorBudget(
+        class'APX_ContactEnvelope'.default.MaxRoutineDetectorChecks);
     RemainingContactTiles = Clamp(class'APX_ContactEnvelope'.default.MaxTiles, 2, 128);
     RemainingContactLOS = Clamp(class'APX_ContactEnvelope'.default.MaxLOS, 1, 512);
     RemainingTempoCoverChecks = Clamp(
