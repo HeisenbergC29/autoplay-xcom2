@@ -1321,6 +1321,9 @@ function MakeDecision(XComTacticalController PC)
     local int TimedNativeTimer;
     local string TimedMoveReason;
     local string PatrolReason, PatrolApproachReason, BestMovePlanner, MissionMovePlanner;
+    local string MissionMoveDiagnostic, MissionMoveOutcome, MoveStopDiagnostic;
+    local array<string> MoveStopDiagnostics;
+    local int MoveStopOmitted, MoveStopIndex;
     local XComGameState_Unit PatrolSupporter, PatrolScout;
     local bool bNativeStrikeOnly;
 
@@ -1719,9 +1722,13 @@ function MakeDecision(XComTacticalController PC)
         iCandidateRoutine = 0;
         iCandidateFirstBlue = 0;
         iCandidateEmergencyRoute = 0;
+        MissionMoveDiagnostic = "reason=not_evaluated";
+        MissionMoveOutcome = "not_proposed";
         if (bContactSearch && !class'APX_MissionPlanner'.static.ShouldEvacuate(UnitState))
         {
             MissionMovePlanner = "contact_search";
+            // Active remembered contact keeps bCombatThreats true, so it
+            // cannot produce the no-constructive-action stop traced below.
             bCandidateMove = ChooseContactSearchMove(UnitState, CandidatePath, Score);
         }
         else
@@ -1737,7 +1744,7 @@ function MakeDecision(XComTacticalController PC)
                 RouteTempo, PlayerState.PlayerTurnCount,
                 PatrolAmbushPlanner.HasActiveStaging(), bContactSearch || bVisibleThreats,
                 CandidateRouteGoal, iCandidateRoutine, iCandidateFirstBlue,
-                RemainingTempoCoverChecks, iCandidateEmergencyRoute);
+                RemainingTempoCoverChecks, iCandidateEmergencyRoute, MissionMoveDiagnostic);
         }
         if (bCandidateMove
             && TraceCandidateMove(UnitState, CandidatePath, Score)
@@ -1746,6 +1753,7 @@ function MakeDecision(XComTacticalController PC)
         {
             BestPath = CandidatePath;
             BestMovePlanner = MissionMovePlanner;
+            MissionMoveOutcome = "selected";
             BestScore = Score;
             BestUnit = UnitState;
             bMove = true;
@@ -1757,6 +1765,27 @@ function MakeDecision(XComTacticalController PC)
             BestRouteGoal = CandidateRouteGoal;
             SelectedRouteDestination = CandidatePath[CandidatePath.Length - 1];
             SelectedRouteUnitID = UnitState.ObjectID;
+        }
+
+        // Trace the already evaluated candidate, not another native query.
+        if (MissionMoveOutcome != "selected" && bCandidateMove)
+        {
+            if (Score <= BestScore)
+                MissionMoveOutcome = "outscored";
+            else
+                MissionMoveOutcome = "controller_rejected";
+        }
+        // Keep only a bounded summary until the real no-plan stop. A
+        // successful decision emits no additional movement diagnostic.
+        if (MissionRecorder != none)
+        {
+            if (MoveStopDiagnostics.Length < 16)
+                MoveStopDiagnostics.AddItem("unit=" $ UnitState.ObjectID
+                    @ "ap=" $ UnitState.NumActionPoints()
+                    @ "branch=" $ MissionMovePlanner @ "outcome=" $ MissionMoveOutcome
+                    @ MissionMoveDiagnostic);
+            else
+                ++MoveStopOmitted;
         }
 
         // Offer X4 progress independently of a search for remembered contacts.
@@ -2069,6 +2098,19 @@ function MakeDecision(XComTacticalController PC)
                     StatusNoPlan);
             else
                 StopWithStatus("No constructive action or understood mission goal", StatusNoPlan);
+            // Preserve the existing stop boundary before optional detail consumes the record budget.
+            if (MissionRecorder != none)
+            {
+                for (MoveStopIndex = 0; MoveStopIndex < MoveStopDiagnostics.Length; ++MoveStopIndex)
+                {
+                    MoveStopDiagnostic = MoveStopDiagnostics[MoveStopIndex];
+                    MissionRecorder.Marker("no_plan_move_scan", MoveStopDiagnostic
+                        @ "visible=" $ string(bVisibleThreats)
+                        @ "remembered=" $ RecentContacts.Length
+                        @ "combat_threats=" $ string(bCombatThreats)
+                        @ "best_score=" $ BestScore @ "omitted=" $ MoveStopOmitted);
+                }
+            }
             return;
         }
     }

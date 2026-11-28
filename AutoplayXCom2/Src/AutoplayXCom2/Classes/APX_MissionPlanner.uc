@@ -714,10 +714,12 @@ static function float SweepControlSourceProgressBonus(bool bVerifiedSourceGoal,
     return FMin(12.0, FMax(0.0, CurrentDistance - CandidateDistance) * 2.0);
 }
 
+/** Select the existing mission goal; GoalSource describes the winning branch only. */
 static function bool FindGoal(XComGameState_Unit UnitState, out MissionGoal Goal,
     out array<StateObjectReference> VisibleEnemies,
     optional int BerserkerFocusTargetID, optional bool bBerserkerFocusGoal,
-    optional int RangedFocusTargetID, optional bool bRangedFocusGoal)
+    optional int RangedFocusTargetID, optional bool bRangedFocusGoal,
+    optional out string GoalSource)
 {
     local XComGameState_InteractiveObject ObjectState;
     local XComGameState_Unit OtherUnit;
@@ -728,13 +730,14 @@ static function bool FindGoal(XComGameState_Unit UnitState, out MissionGoal Goal
     local MissionGoal EmptyGoal;
     local TTile SabotageGoalTile;
     local string SabotageGoalSource;
-    local int PlantObjectivePhase, MonumentNativeGoalStatus;
+    local int PlantObjectivePhase, MonumentNativeGoalStatus, SabotageNativeGoalStatus;
     local int SweepScanIndex, ReleasedAllies, LinkedEnemies, BestSourceID;
     local float HealthFraction, CandidatePriority, BestSourcePriority;
     local TTile BestSourceTile;
     local bool bCompletedStrategyObjective, bBerserkerSweep, bSkipUnverifiedPlantMarker;
 
     Goal = EmptyGoal;
+    GoalSource = "none";
 
     GetVisibleThreats(UnitState, VisibleEnemies);
     GetImmediateThreats(UnitState, ImmediateEnemies);
@@ -742,6 +745,7 @@ static function bool FindGoal(XComGameState_Unit UnitState, out MissionGoal Goal
     EvacZone = class'XComGameState_EvacZone'.static.GetEvacZone(eTeam_XCom);
     if (EvacZone != none && ShouldEvacuate(UnitState))
     {
+        GoalSource = "evac";
         Goal.Tile = EvacZone.CenterLocation;
         Goal.bFound = true;
         return true;
@@ -806,6 +810,7 @@ static function bool FindGoal(XComGameState_Unit UnitState, out MissionGoal Goal
             }
             if (BestSourceID > 0)
             {
+                GoalSource = "sweep_control_source";
                 Goal.Tile = BestSourceTile;
                 Goal.Value = BestSourcePriority;
                 Goal.bFound = true;
@@ -838,6 +843,7 @@ static function bool FindGoal(XComGameState_Unit UnitState, out MissionGoal Goal
                 && !class'APX_CombatPlanner'.static.IsReclaimableControlledSquadmate(
                     UnitState, OtherUnit))
             {
+                GoalSource = "berserker_focus";
                 Goal.Tile = OtherUnit.TileLocation;
                 Goal.Value = 70.0;
                 Goal.bFound = true;
@@ -850,8 +856,12 @@ static function bool FindGoal(XComGameState_Unit UnitState, out MissionGoal Goal
             BattleData.MapData.ActiveMission.sType == "SabotageTransmitter",
             bCompletedStrategyObjective)
             && FindBerserkerSabotageGoal(UnitState, BattleData,
-                SabotageGoalTile, SabotageGoalSource))
+                SabotageGoalTile, SabotageGoalSource, SabotageNativeGoalStatus))
         {
+            // A successful movement goal need not be a verified native X4 anchor.
+            GoalSource = "x4_map_marker_unverified";
+            if (SabotageNativeGoalStatus > 0)
+                GoalSource = "native_objective";
             Goal.Tile = SabotageGoalTile;
             Goal.Value = 115.0;
             Goal.bFound = true;
@@ -880,6 +890,7 @@ static function bool FindGoal(XComGameState_Unit UnitState, out MissionGoal Goal
             UnitState, SabotageGoalTile, SabotageGoalSource);
         if (MonumentNativeGoalStatus > 0)
         {
+            GoalSource = "native_objective";
             Goal.Tile = SabotageGoalTile;
             Goal.Value = 115.0;
             Goal.bFound = true;
@@ -911,6 +922,7 @@ static function bool FindGoal(XComGameState_Unit UnitState, out MissionGoal Goal
             && !class'APX_CombatPlanner'.static.IsReclaimableControlledSquadmate(
                 UnitState, OtherUnit))
         {
+            GoalSource = "revealed_focus";
             Goal.Tile = OtherUnit.TileLocation;
             Goal.Value = 45.0;
             Goal.bFound = true;
@@ -931,7 +943,10 @@ static function bool FindGoal(XComGameState_Unit UnitState, out MissionGoal Goal
         ConsiderGoal(UnitState, OtherUnit.TileLocation, 40, true, Goal);
     }
     if (Goal.bFound)
+    {
+        GoalSource = "immediate_enemy";
         return true;
+    }
 
     // PlantBomb is complete: use the existing known-enemy pursuit for Sweep,
     // rather than returning to unrelated glints or the old objective marker.
@@ -944,6 +959,8 @@ static function bool FindGoal(XComGameState_Unit UnitState, out MissionGoal Goal
                 continue;
             ConsiderGoal(UnitState, OtherUnit.TileLocation, 40, true, Goal);
         }
+        if (Goal.bFound)
+            GoalSource = "known_enemy_sweep";
         return Goal.bFound;
     }
 
@@ -975,6 +992,8 @@ static function bool FindGoal(XComGameState_Unit UnitState, out MissionGoal Goal
                 Goal);
     }
 
+    if (Goal.bFound)
+        GoalSource = "mission_object";
     if (!Goal.bFound && !bSkipUnverifiedPlantMarker)
     {
         BattleData = XComGameState_BattleData(`XCOMHISTORY.GetSingleGameStateObjectForClass(class'XComGameState_BattleData', true));
@@ -983,6 +1002,8 @@ static function bool FindGoal(XComGameState_Unit UnitState, out MissionGoal Goal
             Goal.Tile = `XWORLD.GetTileCoordinatesFromPosition(BattleData.MapData.ObjectiveLocation);
             Goal.bCombat = false;
             Goal.bFound = TileDistance(UnitState.TileLocation, Goal.Tile) > 3;
+            if (Goal.bFound)
+                GoalSource = "map_objective";
         }
     }
     // Full knowledge supplies a pursuit fallback, not a universal override of
@@ -997,6 +1018,8 @@ static function bool FindGoal(XComGameState_Unit UnitState, out MissionGoal Goal
                 continue;
             ConsiderGoal(UnitState, OtherUnit.TileLocation, 40, true, Goal);
         }
+        if (Goal.bFound)
+            GoalSource = "known_enemy_pursuit";
     }
     return Goal.bFound;
 }
@@ -2981,6 +3004,7 @@ static function bool EmergencyRouteRevisitAllowed(bool bEvacGoal,
     return bEvacGoal || (bActiveDeadline && !bCombatMovement && !bCombatGoal);
 }
 
+/** Existing movement search with observational failure diagnostics; no extra path queries. */
 static function bool ChooseMove(XComGameState_Unit UnitState,
     out array<TTile> Path, out float Score,
     optional out int RemainingConcealmentChecks,
@@ -2998,7 +3022,7 @@ static function bool ChooseMove(XComGameState_Unit UnitState,
     optional bool bActivePatrolPreparation, optional bool bRecentContact,
     optional out TTile SelectedRouteGoal, optional out int iAcceptedRoutine,
     optional out int iFirstBlueClear, optional out int RemainingTempoCoverChecks,
-    optional out int iEmergencyRoute)
+    optional out int iEmergencyRoute, optional out string MoveDiagnostic)
 {
     local XGUnit UnitVisualizer;
     local XComGameState_EvacZone RouteEvacZone;
@@ -3024,17 +3048,28 @@ static function bool ChooseMove(XComGameState_Unit UnitState,
     local float BestAttackNow, BestAttackAfterMove, HealthFraction;
     local float LocalFallbackScore, LocalFallbackRisk;
     local float MemoryPenalty, MemoryFallbackScore, MemoryFallbackRank, MemoryCandidateScore;
+    local string GoalSource;
+    local int EndpointRejected, GainRejected, NativePathRejected, UnsafePathRejected, LaterRejected;
+    local bool bPrefixFound;
 
     Path.Length = 0;
     Score = 0;
+    MoveDiagnostic = "reason=no_legal_move";
     iAcceptedRoutine = 0;
     iFirstBlueClear = 0;
     iEmergencyRoute = 0;
-    if (!HasLegalMove(UnitState)
-        || !FindGoal(UnitState, Goal, VisibleEnemies,
-            BerserkerFocusTargetID, bBerserkerFocusGoal,
-            RangedFocusTargetID, bRangedFocusGoal))
+    if (!HasLegalMove(UnitState))
         return false;
+    if (!FindGoal(UnitState, Goal, VisibleEnemies,
+        BerserkerFocusTargetID, bBerserkerFocusGoal,
+        RangedFocusTargetID, bRangedFocusGoal, GoalSource))
+    {
+        MoveDiagnostic = "reason=no_goal goal=" $ GoalSource
+            @ "known=" $ VisibleEnemies.Length @ "immediate=" $ string(Goal.bImmediateThreats);
+        return false;
+    }
+    MoveDiagnostic = "goal=" $ GoalSource @ "known=" $ VisibleEnemies.Length
+        @ "immediate=" $ string(Goal.bImmediateThreats);
     GoalTile = Goal.Tile;
     SelectedRouteGoal = GoalTile;
     bSabotageRush = Goal.bBerserkerSabotageGoal
@@ -3100,10 +3135,16 @@ static function bool ChooseMove(XComGameState_Unit UnitState,
             ShouldEvacuate(UnitState), UnitState.NumActionPoints());
     // A known but distant enemy does not remove the reserve-AP travel rule.
     if (!Goal.bImmediateThreats && !bRoutineRoute)
+    {
+        MoveDiagnostic = MoveDiagnostic @ "reason=reserve_ap_gate";
         return false;
+    }
     UnitVisualizer = XGUnit(UnitState.GetVisualizer());
     if (UnitVisualizer == none || UnitVisualizer.m_kReachableTilesCache == none)
+    {
+        MoveDiagnostic = MoveDiagnostic @ "reason=missing_reachable_cache";
         return false;
+    }
 
     UnitVisualizer.m_kReachableTilesCache.UpdateTileCacheIfNeeded();
     // One movement-search snapshot for the early A* endpoint and later local
@@ -3117,6 +3158,7 @@ static function bool ChooseMove(XComGameState_Unit UnitState,
         && ChooseRoutePrefix(UnitState, UnitVisualizer, GoalTile, Path, bCombatGoal,
             (bInspectContact ? RouteTempo : none), CurrentTurn))
     {
+        bPrefixFound = true;
         Score = ScoreRouteAdvance(SquadPositionScore(UnitState, UnitState.TileLocation),
             SquadPositionScore(UnitState, Path[Path.Length - 1]));
         if (bSabotageRush)
@@ -3279,13 +3321,19 @@ static function bool ChooseMove(XComGameState_Unit UnitState,
             || PathCost < 0.0 || PathCost > UnitVisualizer.GetMobility()
             || (bRequireSupport && !IsSupportedAdvanceDestination(StartSupport,
                 NearestSupportDistance(UnitState, Tile))))
+        {
+            ++EndpointRejected;
             continue;
+        }
         CandidateRisk = ExposureRisk(UnitState, Tile, VisibleEnemies, MeleeThreatReaches, ThreatWeights);
         // A rejected objective prefix must not reappear through the local
         // fallback without the same health/risk veto.
         if (bSabotageRush && !IsBerserkerObjectiveRiskAllowed(
             HealthFraction, CurrentRisk, CandidateRisk))
+        {
+            ++GainRejected;
             continue;
+        }
         CandidateScore = PositionScore(UnitState, Tile, GoalTile, bCombatGoal,
             VisibleEnemies, MeleeThreatReaches, ThreatWeights);
         if (Goal.bRangedFocusGoal && !bSabotageRush)
@@ -3301,14 +3349,23 @@ static function bool ChooseMove(XComGameState_Unit UnitState,
         CandidateScore -= PathCost * 0.25;
         if (bCombatGoal && !IsUsefulReposition(CandidateScore - CurrentScore,
             CurrentRisk, CandidateRisk, UnitState.NumActionPoints(), default.MinimumPositionGain))
+        {
+            ++GainRejected;
             continue;
+        }
         if (CandidateScore <= BestScore)
+        {
+            ++GainRejected;
             continue;
+        }
 
         CandidatePath.Length = 0;
         if (!UnitVisualizer.m_kReachableTilesCache.BuildPathToTile(Tile, CandidatePath)
             || CandidatePath.Length < 2)
+        {
+            ++NativePathRejected;
             continue;
+        }
         bSafe = true;
         // Check the entire route, not just its endpoint; allow leaving a burning start tile.
         for (PathIndex = 1; PathIndex < CandidatePath.Length; ++PathIndex)
@@ -3324,6 +3381,8 @@ static function bool ChooseMove(XComGameState_Unit UnitState,
                 break;
             }
         }
+        if (!bSafe)
+            ++UnsafePathRejected;
         if (bSafe)
         {
             // Retain a memory-penalized ordinary return through every soft
@@ -3473,7 +3532,16 @@ static function bool ChooseMove(XComGameState_Unit UnitState,
         return true;
     }
     if (Path.Length < 2)
+    {
+        LaterRejected = SampleCount - EndpointRejected - GainRejected
+            - NativePathRejected - UnsafePathRejected;
+        MoveDiagnostic = MoveDiagnostic @ "reason=no_qualified_route"
+            @ "prefix_found=" $ string(bPrefixFound) @ "samples=" $ SampleCount
+            @ "endpoint_rejected=" $ EndpointRejected @ "gain_risk_rejected=" $ GainRejected
+            @ "native_path_rejected=" $ NativePathRejected @ "unsafe_path_rejected=" $ UnsafePathRejected
+            @ "later_rejected=" $ LaterRejected;
         return false;
+    }
     if (bInspectContact)
         `log("Contact envelope|unit=" $ UnitState.ObjectID
             $ "|horizon_ai_turns=0|status=" $ BestContactStatus
