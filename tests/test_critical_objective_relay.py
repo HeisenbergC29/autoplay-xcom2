@@ -122,7 +122,8 @@ class CriticalObjectiveRelayContracts(unittest.TestCase):
         hud = function_body(self.source, 'RecordHUDScore')
         self.assertLess(hud.index('!IsRecordingMission()'), hud.index('LastHUDScore ='))
         finish = function_body(self.source, 'Finish')
-        lost = finish.split('if (!IsRecordingMission())',1)[1].split('if (`XCOMHISTORY != none)',1)[0]
+        self.assertIn('return bAllowTerminal || !bLimitReported;', guard)
+        lost = finish.split('if (!IsRecordingMission(true))',1)[1].split('if (`XCOMHISTORY != none)',1)[0]
         self.assertIn('Emit("recording_context_lost"',lost)
         self.assertIn('UnregisterScoreObservers();',lost)
         self.assertIn('bFinished = true;',lost)
