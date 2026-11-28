@@ -134,7 +134,9 @@ class ConcealmentRouteContracts(unittest.TestCase):
         self.assertLess(choose.index('for (PathIndex = 1;'), saved)
         self.assertLess(saved, choose.index('CandidateScore -=', saved))
         restored = choose.index('Path = LocalFallbackPath;')
-        self.assertLess(restored, choose.index('if (Path.Length < 2)\n        return false;'))
+        failure = choose.index('if (Path.Length < 2)\n    {\n        LaterRejected =')
+        self.assertLess(restored, failure)
+        self.assertIn('return false;', choose[failure:choose.index('if (bInspectContact)', failure)])
         self.assertIn('MoveOpportunityPenalty(', choose[restored:])
         self.assertIn('ScoreCombatReposition(', choose[restored:])
 
