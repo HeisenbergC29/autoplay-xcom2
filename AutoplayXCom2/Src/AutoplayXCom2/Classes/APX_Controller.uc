@@ -1301,7 +1301,7 @@ function MakeDecision(XComTacticalController PC)
     local int RemainingConcealmentChecks, RemainingCoverChecks;
     local int RemainingContactGroups, RemainingContactMembers;
     local int RemainingContactDetectors, RemainingContactTiles, RemainingContactLOS;
-    local int RemainingRoutineContactChecks;
+    local int RemainingRoutineContactChecks, RoutineContactAllowance;
     local int RemainingTempoCoverChecks, RemainingMedicalSamples;
     local array<StateObjectReference> ContactSnapshotUnits, ContactSnapshotInteractives;
     local string ContactSnapshotReason, PatrolSelectionEvidence;
@@ -1740,17 +1740,28 @@ function MakeDecision(XComTacticalController PC)
         else
         {
             MissionMovePlanner = "mission";
+            // Active patrol preparation retains the original shared pair budget
+            // and streaming assessor, including work already spent this decision.
+            if (bPatrolActive)
+                RoutineContactAllowance = RemainingContactDetectors;
+            else
+                RoutineContactAllowance = RemainingRoutineContactChecks;
             bCandidateMove = class'APX_MissionPlanner'.static.ChooseMove(
                 UnitState, CandidatePath, Score, RemainingConcealmentChecks,
                 RemainingCoverChecks, FocusTargetID, bFocusedGoal,
                 RangedTargetID, bRangedFocusGoal,
                 ContactSnapshotUnits, ContactSnapshotInteractives,
                 bContactSnapshotComplete, ContactSnapshotReason,
-                RemainingRoutineContactChecks, RemainingContactTiles, RemainingContactLOS,
+                RoutineContactAllowance, RemainingContactTiles, RemainingContactLOS,
                 RouteTempo, PlayerState.PlayerTurnCount,
                 PatrolAmbushPlanner.HasActiveStaging(), bContactSearch || bVisibleThreats,
                 CandidateRouteGoal, iCandidateRoutine, iCandidateFirstBlue,
-                RemainingTempoCoverChecks, iCandidateEmergencyRoute, MissionMoveDiagnostic);
+                RemainingTempoCoverChecks, iCandidateEmergencyRoute, MissionMoveDiagnostic,
+                bPatrolActive);
+            if (bPatrolActive)
+                RemainingContactDetectors = RoutineContactAllowance;
+            else
+                RemainingRoutineContactChecks = RoutineContactAllowance;
         }
         if (bCandidateMove
             && TraceCandidateMove(UnitState, CandidatePath, Score)
