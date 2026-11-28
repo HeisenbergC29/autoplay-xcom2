@@ -29,6 +29,8 @@ def compile_fragment(name, args, body, env):
     body = body.replace("class'APX_CombatPlanner'.static.", "Combat.")
     body = body.replace("class'XComGameState_BattleData'", "'battle'")
     body = body.replace("class'APX_MissionPlanner'.static.", "Mission.")
+    body = body.replace("class'APX_MissionPlanner'.default.", "MissionDefaults.")
+    body = body.replace("++MoveStopOmitted", "MoveStopOmitted += 1")
     body = body.replace("class'APX_PlantInteractionKnowledge'.static.", "Plant.")
     body = body.replace("for (ActionIndex = 0; ActionIndex < Min(64, Cache.AvailableActions.Length); ++ActionIndex)",
                         "for ActionIndex in range(min(64, Cache.AvailableActions.Length))")
@@ -45,6 +47,9 @@ def compile_fragment(name, args, body, env):
             result += (' + " " + ' if op == "@" else " + ") + "str(" + expression(part) + ")"
         return result
 
+    body = re.sub(r'MoveStopDiagnostics.AddItem\((.*?)\);',
+                  lambda m: 'MoveStopDiagnostics.AddItem(' + concat_expression(m[1]) + ');',
+                  body, flags=re.S)
     body = re.sub(r'MissionRecorder.Marker\("no_plan_move_scan",\s*(.*?)\);',
                   lambda m: 'MissionRecorder.Marker("no_plan_move_scan",'
                   + concat_expression(m[1]) + ');', body, flags=re.S)
@@ -136,9 +141,6 @@ class NoPlanMoveScanTests(unittest.TestCase):
     def x4_goal(self, status):
         """Run native/fallback resolution and the real successful FindGoal body."""
         body = function_body(self.mission, "FindBerserkerSabotageGoal")
-        body = body.replace("NativeGoalStatus = 0;", "NativeGoalStatus = 0;")
-        body = body.replace("NativeGoalStatus = Plant.FindInteractionGoal",
-                            "NativeGoalStatus = Plant.FindInteractionGoal")
         body = body.replace("class'APX_PlantInteractionKnowledge'.static.FindInteractionGoal(\n        UnitState, NativeGoalTile, NativeGoalReason, VerifiedPath)",
                             "ReadNative(UnitState, VerifiedPath)")
         body = body.replace("NativeGoalStatus = ReadNative(UnitState, VerifiedPath);",
@@ -292,6 +294,32 @@ class NoPlanMoveScanTests(unittest.TestCase):
         self.assertIn("later_rejected=0", summary)
         return ok,summary
 
+    def selected_stop_inputs(self, recorder, proposed, moved, summary):
+        """Pass both real rejection results through the controller's existing gates."""
+        start = self.decision.index("if (ChooseCompetitiveReposition(UnitState, BestScore,")
+        end = self.decision.index("CandidatePath.Length = 0;", start)
+        attack = self.decision[start:end]
+        start = self.decision.index("if (bCandidateMove\n            && TraceCandidateMove",end)
+        end = self.decision.index("bCompareTimedObjective =",start)
+        move = self.decision[start:end]
+        env = dict(self.env, MissionRecorder=recorder,
+                   ChooseCompetitiveReposition=Mock(return_value=proposed),
+                   TraceCandidateMove=Mock(side_effect=AssertionError("Rejected candidate traced")),
+                   CanUseMove=Mock(side_effect=AssertionError("Rejected candidate accepted")))
+        body = ("BestScore = 2.0; bHavePlan = true; Score = -10000.0;"
+                "CandidatePath = UCArray(); RemainingTempoCoverChecks = 1;"
+                "MoveStopDiagnostics = UCArray(); MoveStopOmitted = 0;"
+                'MissionMovePlanner = "mission"; MissionMoveOutcome = "not_proposed";'
+                + attack + move
+                + "return (BestScore,bHavePlan,MoveStopDiagnostics);")
+        best, have, diagnostics = compile_fragment("Selection",
+            "UnitState,bCandidateMove,MissionMoveDiagnostic",body,env)(self.unit,moved,summary)
+        env["ChooseCompetitiveReposition"].assert_called_once()
+        env["TraceCandidateMove"].assert_not_called()
+        env["CanUseMove"].assert_not_called()
+        self.assertEqual(1,len(diagnostics))
+        return best,have,diagnostics[0]
+
     def test_native_path_failure_is_counted_and_stop_remains_justified(self):
         """Join real forecast and path rejection to stop and actual recorder output."""
         self.assertEqual(2,self.unit.NumActionPoints())
@@ -299,13 +327,14 @@ class NoPlanMoveScanTests(unittest.TestCase):
                       AbilityObjectRef=NS(ObjectID=99))]
         proposed = self.rejected_forecast(actions)
         moved, summary = self.route_failure()
-        # The supplied existing Overwatch is the only competing plan; either
-        # successful move would instead bypass this no-plan fixture.
-        best = 20 if proposed or moved else 2
+        # The supplied existing Overwatch is the only competing plan.
         recorder,logs,_ = self.recorder(5)
-        self.assertTrue(self.emit_stop(recorder,summary,best,True))
+        best,have,diagnostic = self.selected_stop_inputs(recorder,proposed,moved,summary)
+        self.assertEqual((2.0,True),(best,have))
+        self.assertTrue(self.emit_stop(recorder,diagnostic,best,have))
         self.assertIn("|kind=autoplay_stop|",logs[0])
         self.assertIn("|kind=no_plan_move_scan|",logs[1])
+        self.assertIn("unit=1 ap=2 branch=mission outcome=not_proposed",logs[1])
         self.assertIn("goal=known_enemy_pursuit",logs[1])
         self.assertIn("native_path_rejected=1",logs[1])
         self.assertFalse(self.emit_stop(recorder,summary,20,True))
