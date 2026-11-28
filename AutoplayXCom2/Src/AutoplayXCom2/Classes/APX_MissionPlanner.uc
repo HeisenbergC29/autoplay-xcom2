@@ -3199,7 +3199,7 @@ static function bool ChooseMove(XComGameState_Unit UnitState,
                         UnitState, Path, ContactUnits, ContactInteractives,
                         bContactSnapshotComplete, ContactSnapshotReason, 0,
                         RemainingContactDetectors, RemainingContactTiles,
-                        RemainingContactLOS, ContactReason);
+                        RemainingContactLOS, ContactReason, true);
                     Score = ApplyConstructiveSoftPenalty(Score,
                         class'APX_ContactEnvelope'.static.PathStatusPenalty(ContactStatus));
                 }
@@ -3398,7 +3398,7 @@ static function bool ChooseMove(XComGameState_Unit UnitState,
                     UnitState, CandidatePath, ContactUnits, ContactInteractives,
                     bContactSnapshotComplete, ContactSnapshotReason, 0,
                     RemainingContactDetectors, RemainingContactTiles,
-                    RemainingContactLOS, ContactReason);
+                    RemainingContactLOS, ContactReason, true);
                 CandidateScore -= class'APX_ContactEnvelope'.static.PathStatusPenalty(
                     ContactStatus);
                 if (bSecondBlue && ContactStatus != 0)
