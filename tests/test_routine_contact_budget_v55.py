@@ -18,6 +18,7 @@ CONTACT = CLASSES / "APX_ContactEnvelope.uc"
 MISSION = CLASSES / "APX_MissionPlanner.uc"
 CONTROLLER = CLASSES / "APX_Controller.uc"
 PATROL = CLASSES / "APX_PatrolAmbushPlanner.uc"
+TEMPO = CLASSES / "APX_RouteTempo.uc"
 
 
 def compile_fragment(name, params, body, env):
@@ -33,6 +34,9 @@ def compile_fragment(name, params, body, env):
     body = re.sub(r"--(Remaining\w+);", r"\1 -= 1;", body)
     body = body.replace("for (Step = 1; Step < Path.Length; ++Step)",
                         "for Step in range(1, Path.Length)")
+    for array_name in ("VisitedPositions", "Visits"):
+        body = body.replace(f"for (Index = {array_name}.Length - 1; Index >= 0; --Index)",
+                            f"for Index in range({array_name}.Length - 1, -1, -1)")
     for name_ in ("KnownUnits", "KnownInteractives"):
         body = body.replace(f"for (Index = 0; Index < {name_}.Length; ++Index)",
                             f"for Index in range({name_}.Length)")
@@ -43,7 +47,7 @@ def compile_fragment(name, params, body, env):
                            ("DeferredBudgetPrefix", "Path"), ("Path", "DeferredBudgetPrefix"),
                            ("Path", "LocalFallbackPath"), ("MemoryFallbackPath", "Path"),
                            ("MemoryFallbackPath", "CandidatePath"), ("Path", "MemoryFallbackPath"),
-                           ("BestPath", "CandidatePath")):
+                           ("BestPath", "CandidatePath"), ("CandidatePath", "DeferredBudgetPrefix")):
         body = body.replace(f"{target} = {source};", f"{target} = UCArray({source});")
     body = body.replace("bInspectContact ? 1 : 0", "1 if bInspectContact else 0")
     # Replace the specific conditional expression used for the first-blue ticket.
@@ -182,7 +186,8 @@ class RoutineContactBudgetTests(unittest.TestCase):
         self.assertEqual(-1,self.assess(unit,route,self.fixture.refs,UCArray(),False,"incomplete",0,1024,128,512,"",True)[0])
 
     def choose_route(self, unit, path, candidates, remaining, results, preserve=False,
-                     local_gain=12, second=False, cover_risk=0, stealth_risk=False, cohesion_gain=0):
+                     local_gain=12, second=False, cover_risk=0, stealth_risk=False, cohesion_gain=0,
+                     tempo=None, goal=5000, turn=1, deferred=None):
         """One invocation of the real prefix/local/fallback flow with shared native doubles."""
         def assess(unit,path,units,interactives,complete,reason,horizon,pairs,tiles,los,detail,require):
             """Model UC out parameters and capture the work of each candidate."""
@@ -201,6 +206,7 @@ class RoutineContactBudgetTests(unittest.TestCase):
                    Concealment=NS(RouteConcealmentPenalty=lambda *_:0,
                                   InspectPathRisk=lambda _,route,*__:stealth_risk and len(route)<len(path)),
                    Cover=NS(InspectRiskAtTile=lambda *_:cover_risk),
+                   RouteTempo=tempo, GoalTile=goal, CurrentTurn=turn,
                    ConcealmentDefaults=NS(ConcealmentRiskPenalty=18))
         # Actual prefix scoring, with equal native cohesion and no extra risk.
         score_start = self.choose.index("Score = ScoreRouteAdvance(")
@@ -224,7 +230,7 @@ class RoutineContactBudgetTests(unittest.TestCase):
             "DeferredBudgetPrefix = UCArray(); DeferredBudgetScore = 0;"
             "MemoryFallbackPath = UCArray(); MemoryFallbackScore = 0; MemoryFallbackRank = 0;"
             "ContactReason = \"\"; ConcealmentRiskReason = \"\"; bInspectContact = true; bSingleBlue = !bSecondBlue;"
-            "CoverRisk = 0.0; bCoverUrgent = false; RouteTempo = none;"
+            "CoverRisk = 0.0; bCoverUrgent = false;"
             "VisibleEnemies = UCArray(); MeleeThreatReaches = UCArray(); ThreatWeights = UCArray();"
             "CurrentRisk = 0; RemainingTempoCoverChecks = 128; RemainingCoverChecks = 128; RemainingConcealmentChecks = 6;"
             "iFirstBlueClear = 0; iAcceptedRoutine = 0; bCombatGoal = false;"
@@ -238,14 +244,17 @@ class RoutineContactBudgetTests(unittest.TestCase):
             "for CandidatePath in Candidates {"
             "Tile = CandidatePath[CandidatePath.Length - 1]; CandidateScore = LocalGain; CandidateRisk = 0; bSafe = true;"
             + gain_gate + local + "}" + fallback)
-        body = body.replace("return true;","return (true,Path,Score,iAcceptedRoutine,iFirstBlueClear);")
-        body = body.replace("return false;","return (false,Path,Score,iAcceptedRoutine,iFirstBlueClear);")
-        return compile_fragment("Choose",
+        body = body.replace("return true;","return (true,Path,Score,iAcceptedRoutine,iFirstBlueClear,DeferredBudgetPrefix,DeferredBudgetScore);")
+        body = body.replace("return false;","return (false,Path,Score,iAcceptedRoutine,iFirstBlueClear,DeferredBudgetPrefix,DeferredBudgetScore);")
+        result = compile_fragment("Choose",
             "UnitState,Path,Candidates,ContactUnits,ContactInteractives,bContactSnapshotComplete,ContactSnapshotReason,RemainingContactDetectors,RemainingContactTiles,RemainingContactLOS,bPreservePatrolContactBudget,LocalGain,bSecondBlue,bConcealmentUrgent",
             body,env)(unit,UCArray(path),[UCArray(p) for p in candidates],self.fixture.refs,UCArray(),
                       True,"snapshot",*remaining,preserve,local_gain,second,not stealth_risk)
+        if deferred is not None:
+            deferred[:] = result[5:]
+        return result[:5]
 
-    def controller_selection(self, proposals, initial=2, reject=()):
+    def controller_selection(self, proposals, initial=2, reject=(), visited=(), traces=None):
         """Execute the actual controller comparison and native-validation gate."""
         make = function_body(CONTROLLER.read_text(encoding="utf-8-sig"),"MakeDecision")
         start = make.index("if (bCandidateMove\n            && TraceCandidateMove")
@@ -258,9 +267,30 @@ class RoutineContactBudgetTests(unittest.TestCase):
                 "UnitState = Proposal.unit; bCandidateMove = Proposal.found;"
                 "CandidatePath = Proposal.path; Score = Proposal.score;"
                 "iCandidateRoutine = Proposal.routine; iCandidateFirstBlue = Proposal.ticket;"
+                "DeferredBudgetPrefix = Proposal.deferred; DeferredBudgetScore = Proposal.deferred_score;"
                 +gate+"} return (BestUnit,BestPath,BestScore,bSelectedFirstBlue);")
-        env = dict(TraceCandidateMove=lambda *_:True,
-                   CanUseMove=lambda unit,*_:unit.ObjectID not in reject)
+        source=CONTROLLER.read_text(encoding="utf-8-sig")
+        # Use the actual endpoint gate, not a mock keyed only by unit ID.
+        visits=UCArray([NS(UnitID=uid,Tile=tile,bLeftWhileConcealed=False)
+                        for uid,tile in visited])
+        for proposal in proposals:
+            if not hasattr(proposal,"deferred"):
+                proposal.deferred,proposal.deferred_score=UCArray(),0
+            if proposal.unit.ObjectID in reject:
+                for route in (proposal.path,proposal.deferred):
+                    if len(route)>1:
+                        visits.append(NS(UnitID=proposal.unit.ObjectID,Tile=route[-1],
+                                         bLeftWhileConcealed=False))
+        can_use=compile_fragment("CanUseMove",
+            "UnitState,Path,bEmergencyRevisit=False,bVerifiedReposition=False,ScanReason=''",
+            function_body(source,"CanUseMove"),
+            dict(VisitedPositions=visits,IsPostRevealShotReturn=load_uc_function(CONTROLLER,"IsPostRevealShotReturn")))
+        trace=compile_fragment("TraceCandidateMove","UnitState,Path,Score",
+            function_body(source,"TraceCandidateMove"),
+            dict(MissionRecorder=NS(CandidateMove=lambda unit,path,score:
+                    traces.append((unit.ObjectID,path[-1],score))) if traces is not None else None,
+                 RecordCandidateScores=True))
+        env = dict(TraceCandidateMove=trace,CanUseMove=can_use,Log=lambda:None)
         return compile_fragment("Select","Proposals,Initial",body,env)(proposals,initial)
 
     def run_squad(self, configured, preserve, alternative=True, paths=None):
@@ -348,6 +378,66 @@ class RoutineContactBudgetTests(unittest.TestCase):
             unit,long,[[0,1000]],[64,128,512],[])
         self.assertEqual((True,-1200,17,0),(found,path[-1],score,ticket))
 
+    def tempo_memory(self, goal):
+        """Actual soft visit penalty for a prior return tile in the supplied goal."""
+        body=function_body(TEMPO.read_text(encoding="utf-8-sig"),"PenaltyFor")
+        visits=UCArray([NS(UnitID=1,GoalTile=goal,FromTile=-600,ToTile=0,Turn=1)])
+        penalty=compile_fragment("PenaltyFor","UnitID,Goal,Destination,CurrentTurn",body,
+            dict(Visits=visits,EnableSoftRouteMemory=True,FMax=max,MaxMemoryTurns=3,
+                 ReturnTilePenalty=28,RevisitTilePenalty=12,
+                 SoftVisitPenalty=load_uc_function(TEMPO,"SoftVisitPenalty")))
+        return NS(PenaltyFor=penalty)
+
+    def test_controller_rechecks_fresh_prefix_after_endpoint_veto(self):
+        """Actual ChooseMove -> TraceCandidateMove -> CanUseMove on a single unit."""
+        unit=self.fixture.soldier()
+        long=[0]+[-100*i for i in range(1,13)]
+        short=long[:7]
+        tempo=self.tempo_memory(5000)
+        self.assertEqual(28,tempo.PenaltyFor(1,5000,-600,1))
+        self.assertEqual(0,tempo.PenaltyFor(1,6000,-600,1))
+        for goal,gain in ((5000,40),(6000,12)):
+            deferred,records,traces=[],[],[]
+            found,path,score,routine,ticket=self.choose_route(unit,long,[short],
+                [64,128,512],records,local_gain=gain,tempo=tempo,goal=goal,deferred=deferred)
+            self.assertEqual((True,-600,32,1),(found,path[-1],score,ticket))
+            self.assertEqual((-1200,17),(deferred[0][-1],deferred[1]))
+            proposal=NS(unit=unit,found=found,path=path,score=score,routine=routine,ticket=ticket,
+                        deferred=deferred[0],deferred_score=deferred[1])
+            selected=self.controller_selection([proposal],visited=[(1,-600)],traces=traces)
+            self.assertEqual((1,-1200,17,False),(selected[0].ObjectID,selected[1][-1],selected[2],selected[3]))
+            self.assertEqual([(1,-600,32),(1,-1200,17)],traces)
+            self.assertEqual(2,len(records)) # no additional path assessment
+            selected=self.controller_selection([proposal],visited=[(1,-600),(1,-1200)])
+            self.assertIsNone(selected[0])
+            selected=self.controller_selection([proposal],initial=18,visited=[(1,-600)])
+            self.assertEqual((None,18),(selected[0],selected[2]))
+            selected=self.controller_selection([proposal],initial=17,visited=[(1,-600)])
+            self.assertIsNone(selected[0])
+            selected=self.controller_selection([proposal],visited=[(2,-600)])
+            self.assertEqual((-600,32,True),(selected[1][-1],selected[2],selected[3]))
+        # A primary fallback is not returned as a duplicate deferred candidate.
+        deferred=[]
+        found,path,score,routine,ticket=self.choose_route(unit,long,[],[64,128,512],[],deferred=deferred)
+        self.assertEqual((True,-1200,17,0),(found,path[-1],score,ticket))
+        self.assertEqual((0,0),(len(deferred[0]),deferred[1]))
+
+    def test_early_contact_rank_boundary_is_explicit(self):
+        """Unknown preflight and observed Caution differ at the exact rank boundary."""
+        unit=self.fixture.soldier()
+        long=[0,1000]+[2000+i*100 for i in range(11)]
+        short=[0,-100,-200,-300,-400,-500,-600]
+        old,new=[],[]
+        prior=self.choose_route(unit,long,[short],[64,128,512],old,
+                                preserve=True,local_gain=4.5,cohesion_gain=8)
+        current=self.choose_route(unit,long,[short],[64,128,512],new,
+                                  local_gain=4.5,cohesion_gain=8)
+        self.assertEqual((1,1),old[0][1:3])
+        self.assertEqual((-600,24.5,1),(prior[1][-1],prior[2],prior[4]))
+        self.assertEqual((-1,0,"detector_pair_budget"),new[0][1:4])
+        self.assertEqual((0,48),new[1][1:3])
+        self.assertEqual((long[-1],25,0),(current[1][-1],current[2],current[4]))
+
     def test_default_budget_tail_can_select_short_route(self):
         """32 detectors and 3 x 10 steps leave 64 pairs for the final alternative."""
         for i in range(9,33):
@@ -383,7 +473,7 @@ class RoutineContactBudgetTests(unittest.TestCase):
         call_start=budget_flow.index("bCandidateMove = ")
         call_end=budget_flow.index(";",call_start)+1
         self.assertIn("RoutineContactAllowance, RemainingContactTiles, RemainingContactLOS",budget_flow[call_start:call_end])
-        self.assertIn("bPatrolActive)",budget_flow[call_start:call_end])
+        self.assertIn("bPatrolActive, DeferredBudgetPrefix, DeferredBudgetScore)",budget_flow[call_start:call_end])
         # Out-parameter bridge to the actual route flow, not an independent LOS model.
         budget_flow=budget_flow[:call_start]+(
             "RoutineContactAllowance,RemainingContactTiles,RemainingContactLOS = "
