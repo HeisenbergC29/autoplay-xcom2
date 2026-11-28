@@ -3004,7 +3004,10 @@ static function bool EmergencyRouteRevisitAllowed(bool bEvacGoal,
     return bEvacGoal || (bActiveDeadline && !bCombatMovement && !bCombatGoal);
 }
 
-/** Existing movement search with observational failure diagnostics; no extra path queries. */
+/** Existing bounded movement search. Optional deferred prefix outputs retain a qualified
+ * Unknown alternative for the controller's endpoint-specific veto; score is its original
+ * adjusted value, never a second-blue ticket. Outputs are cleared at entry and when
+ * the prefix itself is returned. No additional path searches on controller rejection. */
 static function bool ChooseMove(XComGameState_Unit UnitState,
     out array<TTile> Path, out float Score,
     optional out int RemainingConcealmentChecks,
@@ -3023,13 +3026,12 @@ static function bool ChooseMove(XComGameState_Unit UnitState,
     optional out TTile SelectedRouteGoal, optional out int iAcceptedRoutine,
     optional out int iFirstBlueClear, optional out int RemainingTempoCoverChecks,
     optional out int iEmergencyRoute, optional out string MoveDiagnostic,
-    optional bool bPreservePatrolContactBudget)
+    optional bool bPreservePatrolContactBudget,
+    optional out array<TTile> DeferredBudgetPrefix, optional out float DeferredBudgetScore)
 {
     local XGUnit UnitVisualizer;
     local XComGameState_EvacZone RouteEvacZone;
     local array<TTile> Tiles, CandidatePath, RiskyRoute, LocalFallbackPath, MemoryFallbackPath;
-    local array<TTile> DeferredBudgetPrefix;
-    local float DeferredBudgetScore;
     local AvailableAction ReadyObjectiveAction;
     local int ReadyObjectiveTarget;
     local float ReadyObjectiveScore;
@@ -3057,6 +3059,8 @@ static function bool ChooseMove(XComGameState_Unit UnitState,
 
     Path.Length = 0;
     Score = 0;
+    DeferredBudgetPrefix.Length = 0;
+    DeferredBudgetScore = 0.0;
     MoveDiagnostic = "reason=no_legal_move";
     iAcceptedRoutine = 0;
     iFirstBlueClear = 0;
@@ -3524,6 +3528,8 @@ static function bool ChooseMove(XComGameState_Unit UnitState,
     {
         Path = DeferredBudgetPrefix;
         Score = DeferredBudgetScore;
+        DeferredBudgetPrefix.Length = 0; // Do not offer the same route twice.
+        DeferredBudgetScore = 0.0;
         iAcceptedRoutine = 1;
         iFirstBlueClear = 0;
         `log("Contact envelope|unit=" $ UnitState.ObjectID
