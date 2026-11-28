@@ -319,8 +319,9 @@ function PruneObservedDefeats(int PlayerID)
     }
 }
 
+/** Search a remembered contact using existing legal short steps; report the actual failure stage. */
 function bool ChooseContactSearchMove(XComGameState_Unit UnitState,
-    out array<TTile> Path, out float Score)
+    out array<TTile> Path, out float Score, optional out string MoveDiagnostic)
 {
     local XGUnit Visualizer;
     local TTile GoalTile;
@@ -329,6 +330,7 @@ function bool ChooseContactSearchMove(XComGameState_Unit UnitState,
 
     Path.Length = 0;
     Score = 0.0;
+    MoveDiagnostic = "reason=contact_move_unavailable";
     if (UnitState.NumActionPoints() < 2 || UnitState.IsCivilian()
         || !class'APX_MissionPlanner'.static.HasLegalMove(UnitState))
         return false;
@@ -345,14 +347,23 @@ function bool ChooseContactSearchMove(XComGameState_Unit UnitState,
         }
     }
     if (BestIndex == INDEX_NONE)
+    {
+        MoveDiagnostic = "reason=no_remembered_contact_beyond_two_tiles";
         return false;
+    }
     GoalTile = RecentContacts[BestIndex].LastSeenTile;
     Visualizer = XGUnit(UnitState.GetVisualizer());
     if (Visualizer == none || Visualizer.m_kReachableTilesCache == none)
+    {
+        MoveDiagnostic = "reason=missing_reachable_cache";
         return false;
+    }
     Visualizer.m_kReachableTilesCache.UpdateTileCacheIfNeeded();
     if (!class'APX_MissionPlanner'.static.ChooseRoutePrefix(UnitState, Visualizer, GoalTile, Path))
+    {
+        MoveDiagnostic = "reason=no_qualified_contact_prefix";
         return false;
+    }
     // Investigate the last observed position in short steps, preserving a
     // response. A lost contact is not permission to make a blind rooftop push.
     for (Index = 1; Index < Path.Length; ++Index)
@@ -366,7 +377,10 @@ function bool ChooseContactSearchMove(XComGameState_Unit UnitState,
         }
     }
     if (Path.Length < 2)
+    {
+        MoveDiagnostic = "reason=contact_distance_or_height_limit";
         return false;
+    }
     BestPathIndex = 1;
     BestEndpointValue = -100000.0;
     for (Index = 1; Index < Path.Length; ++Index)
@@ -382,6 +396,7 @@ function bool ChooseContactSearchMove(XComGameState_Unit UnitState,
     if (BestPathIndex < Path.Length - 1)
         Path.Remove(BestPathIndex + 1, Path.Length - BestPathIndex - 1);
     Score = 20.0;
+    MoveDiagnostic = "reason=proposed goal=remembered_contact";
     return true;
 }
 
@@ -1321,6 +1336,9 @@ function MakeDecision(XComTacticalController PC)
     local int TimedNativeTimer;
     local string TimedMoveReason;
     local string PatrolReason, PatrolApproachReason, BestMovePlanner, MissionMovePlanner;
+    local string MissionMoveDiagnostic, MissionMoveOutcome, MoveStopDiagnostic;
+    local array<string> MoveStopDiagnostics;
+    local int MoveStopOmitted, MoveStopIndex;
     local XComGameState_Unit PatrolSupporter, PatrolScout;
     local bool bNativeStrikeOnly;
 
@@ -1719,10 +1737,12 @@ function MakeDecision(XComTacticalController PC)
         iCandidateRoutine = 0;
         iCandidateFirstBlue = 0;
         iCandidateEmergencyRoute = 0;
+        MissionMoveDiagnostic = "reason=not_evaluated";
+        MissionMoveOutcome = "not_proposed";
         if (bContactSearch && !class'APX_MissionPlanner'.static.ShouldEvacuate(UnitState))
         {
             MissionMovePlanner = "contact_search";
-            bCandidateMove = ChooseContactSearchMove(UnitState, CandidatePath, Score);
+            bCandidateMove = ChooseContactSearchMove(UnitState, CandidatePath, Score, MissionMoveDiagnostic);
         }
         else
         {
@@ -1737,7 +1757,7 @@ function MakeDecision(XComTacticalController PC)
                 RouteTempo, PlayerState.PlayerTurnCount,
                 PatrolAmbushPlanner.HasActiveStaging(), bContactSearch || bVisibleThreats,
                 CandidateRouteGoal, iCandidateRoutine, iCandidateFirstBlue,
-                RemainingTempoCoverChecks, iCandidateEmergencyRoute);
+                RemainingTempoCoverChecks, iCandidateEmergencyRoute, MissionMoveDiagnostic);
         }
         if (bCandidateMove
             && TraceCandidateMove(UnitState, CandidatePath, Score)
@@ -1746,6 +1766,7 @@ function MakeDecision(XComTacticalController PC)
         {
             BestPath = CandidatePath;
             BestMovePlanner = MissionMovePlanner;
+            MissionMoveOutcome = "selected";
             BestScore = Score;
             BestUnit = UnitState;
             bMove = true;
@@ -1757,6 +1778,27 @@ function MakeDecision(XComTacticalController PC)
             BestRouteGoal = CandidateRouteGoal;
             SelectedRouteDestination = CandidatePath[CandidatePath.Length - 1];
             SelectedRouteUnitID = UnitState.ObjectID;
+        }
+
+        // Trace the already evaluated candidate, not another native query.
+        if (MissionMoveOutcome != "selected" && bCandidateMove)
+        {
+            if (Score <= BestScore)
+                MissionMoveOutcome = "outscored";
+            else
+                MissionMoveOutcome = "controller_rejected";
+        }
+        // Keep only a bounded summary until the real no-plan stop. A
+        // successful decision emits no additional movement diagnostic.
+        if (MissionRecorder != none)
+        {
+            if (MoveStopDiagnostics.Length < 16)
+                MoveStopDiagnostics.AddItem("unit=" $ UnitState.ObjectID
+                    @ "ap=" $ UnitState.NumActionPoints()
+                    @ "branch=" $ MissionMovePlanner @ "outcome=" $ MissionMoveOutcome
+                    @ MissionMoveDiagnostic);
+            else
+                ++MoveStopOmitted;
         }
 
         // Offer X4 progress independently of a search for remembered contacts.
@@ -2063,6 +2105,18 @@ function MakeDecision(XComTacticalController PC)
         }
         if (MeaningfulActionsThisTurn == 0)
         {
+            if (MissionRecorder != none)
+            {
+                for (MoveStopIndex = 0; MoveStopIndex < MoveStopDiagnostics.Length; ++MoveStopIndex)
+                {
+                    MoveStopDiagnostic = MoveStopDiagnostics[MoveStopIndex];
+                    MissionRecorder.Marker("no_plan_move_scan", MoveStopDiagnostic
+                        @ "visible=" $ string(bVisibleThreats)
+                        @ "remembered=" $ RecentContacts.Length
+                        @ "combat_threats=" $ string(bCombatThreats)
+                        @ "best_score=" $ BestScore @ "omitted=" $ MoveStopOmitted);
+                }
+            }
             if (FocusBattle != none
                 && FocusBattle.MapData.ActiveMission.sType == "SabotageCC")
                 StopWithStatus("SabotageCC: no currently verified native X4 route; see objective_recovery_scan",
