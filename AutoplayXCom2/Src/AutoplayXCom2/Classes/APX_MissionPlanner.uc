@@ -730,7 +730,7 @@ static function bool FindGoal(XComGameState_Unit UnitState, out MissionGoal Goal
     local MissionGoal EmptyGoal;
     local TTile SabotageGoalTile;
     local string SabotageGoalSource;
-    local int PlantObjectivePhase, MonumentNativeGoalStatus;
+    local int PlantObjectivePhase, MonumentNativeGoalStatus, SabotageNativeGoalStatus;
     local int SweepScanIndex, ReleasedAllies, LinkedEnemies, BestSourceID;
     local float HealthFraction, CandidatePriority, BestSourcePriority;
     local TTile BestSourceTile;
@@ -856,9 +856,12 @@ static function bool FindGoal(XComGameState_Unit UnitState, out MissionGoal Goal
             BattleData.MapData.ActiveMission.sType == "SabotageTransmitter",
             bCompletedStrategyObjective)
             && FindBerserkerSabotageGoal(UnitState, BattleData,
-                SabotageGoalTile, SabotageGoalSource))
+                SabotageGoalTile, SabotageGoalSource, SabotageNativeGoalStatus))
         {
-            GoalSource = "native_objective";
+            // A successful movement goal need not be a verified native X4 anchor.
+            GoalSource = "x4_map_marker_unverified";
+            if (SabotageNativeGoalStatus > 0)
+                GoalSource = "native_objective";
             Goal.Tile = SabotageGoalTile;
             Goal.Value = 115.0;
             Goal.bFound = true;
