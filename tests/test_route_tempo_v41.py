@@ -212,7 +212,7 @@ class RouteSourceContracts(unittest.TestCase):
         for t in ("EnableSequentialBlue=true", "EnableSoftRouteMemory=true",
                   "MaxVisitEntries=96", "MaxMemoryTurns=3", "MaxTempoCoverChecks=48"):
             self.assertIn(t, INI.read_text(encoding="utf-8-sig"))
-        self.assertIn("mission-report-v50",
+        self.assertIn("mission-report-v52",
                       (SRC / "APX_MissionRecorder.uc").read_text(encoding="utf-8-sig"))
 
 
