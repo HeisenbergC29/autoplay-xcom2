@@ -46,6 +46,17 @@ const EquipmentArmorDefense = 17;
 const EquipmentArmorMobility = 18;
 const EquipmentFactCount = 19;
 
+/** Ability row facts; statuses use unknown=0, present/known=1, absent=2. */
+const AbilityPresence = 0;
+const AbilitySourceStatus = 1;
+const AbilityTargetFlags = 2;
+const AbilityShooterFlags = 3;
+const AbilityEffectScanStatus = 4;
+const AbilityAreaStatus = 5;
+const AbilityInputStatus = 6;
+const AbilityUnknownEffectCount = 7;
+const AbilityFactCount = 8;
+
 /**
  * Classify a scalar independently of the unit's name or ID. Zero is known.
  * Negative offense/defense modifiers are legitimate; negative HP/shield/
@@ -489,5 +500,224 @@ static function bool ReadUnitEquipment(XComGameStateHistory History, int History
     EnsureEquipmentSlot(eInvSlot_SecondaryWeapon, bComplete, ItemIDs, Slots, Presence, Categories, Values, Status);
     EnsureEquipmentSlot(eInvSlot_Armor, bComplete, ItemIDs, Slots, Presence, Categories, Values, Status);
     EnsureEquipmentSlot(eInvSlot_Utility, bComplete, ItemIDs, Slots, Presence, Categories, Values, Status);
+    return true;
+}
+
+
+/** Clear the entire ability snapshot, including the separate unsupported-effect ledger. */
+private static function ResetAbilityFacts(out array<int> AbilityIDs,
+    out array<name> TemplateNames, out array<int> SourceItemIDs,
+    out array<name> AreaStyles, out array<int> Facts,
+    out array<int> UnknownAbilityIDs, out array<name> UnknownScopes,
+    out array<name> UnknownClasses)
+{
+    AbilityIDs.Length = 0;
+    TemplateNames.Length = 0;
+    SourceItemIDs.Length = 0;
+    AreaStyles.Length = 0;
+    Facts.Length = 0;
+    UnknownAbilityIDs.Length = 0;
+    UnknownScopes.Length = 0;
+    UnknownClasses.Length = 0;
+}
+
+/** Add a row with zero/unknown placeholders; return its fact offset. */
+private static function int AppendAbilityRow(int AbilityID,
+    out array<int> AbilityIDs, out array<name> TemplateNames,
+    out array<int> SourceItemIDs, out array<name> AreaStyles, out array<int> Facts)
+{
+    local int Start;
+
+    Start = Facts.Length;
+    AbilityIDs.AddItem(AbilityID);
+    TemplateNames.AddItem('');
+    SourceItemIDs.AddItem(0);
+    AreaStyles.AddItem('');
+    Facts.Length = Start + AbilityFactCount;
+    return Start;
+}
+
+/**
+ * Verify the native installed SourceWeapon reference against current equipment.
+ * SourceWeapon can be a utility item; do not infer a source from a template name
+ * or read SourceAmmo, current ammunition, charges or availability.
+ * Zero with a declared default source slot is unresolved, not source-free.
+ */
+private static function ReadAbilitySource(XComGameStateHistory History, int HistoryIndex,
+    XComGameState_Unit Subject, XComGameState_Ability Ability, X2AbilityTemplate Template,
+    int Row, int Start, out array<int> SourceItemIDs, out array<int> Facts)
+{
+    local int ItemID;
+    local XComGameState_Item Item;
+
+    ItemID = Ability.SourceWeapon.ObjectID;
+    if (ItemID == 0)
+    {
+        if (Template.DefaultSourceItemSlot == eInvSlot_Unknown)
+            Facts[Start + AbilitySourceStatus] = EquipmentAbsent;
+        return;
+    }
+    if (ItemID < 0 || Subject.InventoryItems.Length > 64
+        || Subject.InventoryItems.Find('ObjectID', ItemID) == INDEX_NONE)
+        return;
+    Item = XComGameState_Item(History.GetGameStateForObjectID(
+        ItemID, eReturnType_Reference, HistoryIndex));
+    if (Item == none || Item.bRemoved || Item.OwnerStateObject.ObjectID != Subject.ObjectID
+        || EquipmentSlotKind(Item.InventorySlot) != 1)
+        return;
+    SourceItemIDs[Row] = ItemID;
+    Facts[Start + AbilitySourceStatus] = EquipmentPresent;
+}
+
+/**
+ * Inspect a bounded list of loaded effect objects. Existing class-based
+ * capability bits describe supported mechanisms, not activation or targets.
+ * Unsupported effects are recorded separately by class and application scope.
+ * Missing entries, excessive list size or ledger truncation mark the scan
+ * incomplete. The unknown count counts visited unsupported/null entries.
+ */
+private static function int ScanAbilityEffects(array<X2Effect> Effects, int AbilityID,
+    name Scope, int Start, out array<int> Facts, out array<int> UnknownAbilityIDs,
+    out array<name> UnknownScopes, out array<name> UnknownClasses)
+{
+    local X2Effect Effect;
+    local int Flags, EffectFlags;
+    local name EffectClass;
+
+    Flags = 0;
+    if (Effects.Length > 32)
+    {
+        Facts[Start + AbilityEffectScanStatus] = FactUnknown;
+        return Flags;
+    }
+    foreach Effects(Effect)
+    {
+        EffectFlags = class'APX_EnemyKnowledge'.static.EffectCapabilities(Effect);
+        Flags = Flags | EffectFlags;
+        if (EffectFlags != 0)
+            continue;
+        Facts[Start + AbilityUnknownEffectCount] += 1;
+        EffectClass = '';
+        if (Effect == none)
+            Facts[Start + AbilityEffectScanStatus] = FactUnknown;
+        if (Effect != none)
+            EffectClass = Effect.Class.Name;
+        if (UnknownAbilityIDs.Length >= 256)
+        {
+            Facts[Start + AbilityEffectScanStatus] = FactUnknown;
+            continue;
+        }
+        UnknownAbilityIDs.AddItem(AbilityID);
+        UnknownScopes.AddItem(Scope);
+        UnknownClasses.AddItem(EffectClass);
+    }
+    return Flags;
+}
+
+/** Read the actual loaded template; keep shooter effects distinct from target effects. */
+private static function PopulateAbilityFacts(X2AbilityTemplate Template, int AbilityID,
+    int Row, int Start, out array<name> TemplateNames, out array<name> AreaStyles,
+    out array<int> Facts, out array<int> UnknownAbilityIDs,
+    out array<name> UnknownScopes, out array<name> UnknownClasses)
+{
+    local int AreaFlags, TargetFlags, MultiFlags;
+
+    TemplateNames[Row] = Template.DataName;
+    Facts[Start + AbilityPresence] = EquipmentPresent;
+    Facts[Start + AbilityEffectScanStatus] = FactKnown;
+    AreaFlags = class'APX_EnemyKnowledge'.static.AreaStyleCapability(Template.AbilityMultiTargetStyle);
+    if (Template.AbilityMultiTargetStyle == none)
+        Facts[Start + AbilityAreaStatus] = EquipmentAbsent;
+    if (Template.AbilityMultiTargetStyle != none)
+    {
+        AreaStyles[Row] = Template.AbilityMultiTargetStyle.Class.Name;
+        if (AreaFlags != 0)
+            Facts[Start + AbilityAreaStatus] = EquipmentPresent;
+    }
+    if (Template.AbilityTriggers.Length <= 16)
+    {
+        Facts[Start + AbilityInputStatus] = EquipmentAbsent;
+        if (class'APX_EnemyKnowledge'.static.HasPlayerInputTrigger(Template))
+            Facts[Start + AbilityInputStatus] = EquipmentPresent;
+    }
+    TargetFlags = ScanAbilityEffects(Template.AbilityTargetEffects, AbilityID, 'target',
+        Start, Facts, UnknownAbilityIDs, UnknownScopes, UnknownClasses);
+    MultiFlags = ScanAbilityEffects(Template.AbilityMultiTargetEffects, AbilityID, 'multi',
+        Start, Facts, UnknownAbilityIDs, UnknownScopes, UnknownClasses);
+    Facts[Start + AbilityTargetFlags] = TargetFlags | MultiFlags | AreaFlags;
+    Facts[Start + AbilityShooterFlags] = ScanAbilityEffects(Template.AbilityShooterEffects,
+        AbilityID, 'shooter', Start, Facts, UnknownAbilityIDs, UnknownScopes, UnknownClasses);
+}
+
+/** Resolve one installed ability by current reference and owner, never by its name. */
+private static function ReadInstalledAbility(XComGameStateHistory History, int HistoryIndex,
+    XComGameState_Unit Subject, int AbilityID, out array<int> AbilityIDs,
+    out array<name> TemplateNames, out array<int> SourceItemIDs,
+    out array<name> AreaStyles, out array<int> Facts, out array<int> UnknownAbilityIDs,
+    out array<name> UnknownScopes, out array<name> UnknownClasses)
+{
+    local XComGameState_Ability Ability;
+    local X2AbilityTemplate Template;
+    local int Start, Row;
+
+    Row = AbilityIDs.Length;
+    Start = AppendAbilityRow(AbilityID, AbilityIDs, TemplateNames, SourceItemIDs, AreaStyles, Facts);
+    if (AbilityID <= 0)
+        return;
+    Ability = XComGameState_Ability(History.GetGameStateForObjectID(
+        AbilityID, eReturnType_Reference, HistoryIndex));
+    if (Ability == none || Ability.bRemoved || Ability.OwnerStateObject.ObjectID != Subject.ObjectID)
+        return;
+    Template = Ability.GetMyTemplate();
+    if (Template == none || !IsCurrentSnapshot(History, HistoryIndex))
+        return;
+    ReadAbilitySource(History, HistoryIndex, Subject, Ability, Template, Row, Start, SourceItemIDs, Facts);
+    if (!IsCurrentSnapshot(History, HistoryIndex))
+        return;
+    PopulateAbilityFacts(Template, AbilityID, Row, Start, TemplateNames, AreaStyles, Facts,
+        UnknownAbilityIDs, UnknownScopes, UnknownClasses);
+}
+
+/**
+ * Current authorized installed abilities, including passive/triggered ones.
+ * Four parallel identity/name arrays and AbilityFactCount integers per row.
+ * Unknown effects use a separate parallel ledger (ability ID, scope, class).
+ * True means authorized/current, not complete understanding or readiness.
+ * False clears every output; duplicates or >128 references reject the snapshot.
+ * No inferred AdditionalAbilities, action cache, target checks, AP or RNG.
+ */
+static function bool ReadUnitAbilities(XComGameStateHistory History, int HistoryIndex,
+    int ObserverID, int SubjectID, out array<int> AbilityIDs,
+    out array<name> TemplateNames, out array<int> SourceItemIDs,
+    out array<name> AreaStyles, out array<int> Facts, out array<int> UnknownAbilityIDs,
+    out array<name> UnknownScopes, out array<name> UnknownClasses)
+{
+    local XComGameState_Unit Subject;
+    local StateObjectReference AbilityRef;
+
+    ResetAbilityFacts(AbilityIDs, TemplateNames, SourceItemIDs, AreaStyles, Facts,
+        UnknownAbilityIDs, UnknownScopes, UnknownClasses);
+    Subject = ResolveAuthorizedSubject(History, HistoryIndex, ObserverID, SubjectID);
+    if (Subject == none || Subject.Abilities.Length > 128)
+        return false;
+    foreach Subject.Abilities(AbilityRef)
+    {
+        if (!IsCurrentSnapshot(History, HistoryIndex)
+            || AbilityIDs.Find(AbilityRef.ObjectID) != INDEX_NONE)
+        {
+            ResetAbilityFacts(AbilityIDs, TemplateNames, SourceItemIDs, AreaStyles, Facts,
+                UnknownAbilityIDs, UnknownScopes, UnknownClasses);
+            return false;
+        }
+        ReadInstalledAbility(History, HistoryIndex, Subject, AbilityRef.ObjectID,
+            AbilityIDs, TemplateNames, SourceItemIDs, AreaStyles, Facts,
+            UnknownAbilityIDs, UnknownScopes, UnknownClasses);
+    }
+    if (!IsCurrentSnapshot(History, HistoryIndex))
+    {
+        ResetAbilityFacts(AbilityIDs, TemplateNames, SourceItemIDs, AreaStyles, Facts,
+            UnknownAbilityIDs, UnknownScopes, UnknownClasses);
+        return false;
+    }
     return true;
 }
