@@ -223,7 +223,7 @@ class RoutineContactBudgetTests(unittest.TestCase):
             "RiskyContactStatus = -1; RiskyContactReason = \"\";"
             "DeferredBudgetPrefix = UCArray(); DeferredBudgetScore = 0;"
             "MemoryFallbackPath = UCArray(); MemoryFallbackScore = 0; MemoryFallbackRank = 0;"
-            "ContactReason = \"\"; bInspectContact = true; bSingleBlue = !bSecondBlue;"
+            "ContactReason = \"\"; ConcealmentRiskReason = \"\"; bInspectContact = true; bSingleBlue = !bSecondBlue;"
             "CoverRisk = 0.0; bCoverUrgent = false; RouteTempo = none;"
             "VisibleEnemies = UCArray(); MeleeThreatReaches = UCArray(); ThreatWeights = UCArray();"
             "CurrentRisk = 0; RemainingTempoCoverChecks = 128; RemainingCoverChecks = 128; RemainingConcealmentChecks = 6;"
