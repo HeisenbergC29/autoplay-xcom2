@@ -3,7 +3,9 @@
 The fixtures supply current history, loaded templates and raw installed upgrade
 names. They do not simulate game action resolution or native equipment effects.
 """
+from enum import Enum
 import os
+import re
 from pathlib import Path
 from types import SimpleNamespace as NS
 import unittest
@@ -16,7 +18,8 @@ SLOTS = ("Unknown", "Armor", "PrimaryWeapon", "SecondaryWeapon", "HeavyWeapon",
          "Utility", "Mission", "Backpack", "Loot", "GrenadePocket", "CombatSim",
          "AmmoPocket", "TertiaryWeapon", "QuaternaryWeapon", "QuinaryWeapon",
          "SenaryWeapon", "SeptenaryWeapon")
-SLOT = {name: index for index, name in enumerate(SLOTS)}
+InventorySlot = Enum("InventorySlot", SLOTS)
+SLOT = {name: InventorySlot[name] for name in SLOTS}
 
 
 class ItemFixture:
@@ -102,6 +105,8 @@ class EquipmentTests(unittest.TestCase):
                                         self.history.index if index is None else index,
                                         observer, subject, *arrays)
         ids, slots, presence, categories, values, status = arrays
+        self.assertTrue(all(isinstance(slot, InventorySlot) for slot in slots),
+                        "Slots must remain native enum values, including placeholders")
         width = self.uc["EquipmentFactCount"]
         self.assertEqual(len(ids), len(slots))
         self.assertEqual(len(ids), len(presence))
@@ -269,13 +274,45 @@ class EquipmentTests(unittest.TestCase):
         """Recognize stock slots explicitly and avoid readiness and cache mutation."""
         f = self.uc["EquipmentSlotKind"]
         self.assertEqual([0,1,1,1,1,1,2,2,2,1,1,1,1,1,1,1,1],
-                         [f(i) for i in range(len(SLOTS))])
-        self.assertEqual(0, f(255))
+                         [f(SLOT[name]) for name in SLOTS])
+        self.assertEqual(0, f(object()))
         source = CHECKS.without_comments(SOURCE.read_text(encoding="utf-8-sig"))
         for forbidden in ("GetAllInventoryItems(", "GetMyWeaponUpgradeTemplates(",
                           "GetUIStatMarkup(", "CanActivateAbility(", "GetAvailableActions(",
                           ".Ammo", ".Charges", "Cooldown", "SubmitGameState("):
             self.assertNotIn(forbidden, source)
+
+
+class EquipmentSlotSourceContract(unittest.TestCase):
+    """Protect the UnrealScript slot-type boundary, not just Python behavior."""
+
+    def test_native_slot_type_throughout_reader(self):
+        """Reject the WOTC-invalid int casts and any integer slot parameter."""
+        source = CHECKS.without_comments(SOURCE.read_text(encoding="utf-8-sig"))
+        self.assertNotRegex(source, r"(?i)\bint\s*\(\s*(?:eInvSlot_\w+|Item\s*\.\s*InventorySlot)\b")
+        for method in ("ResetEquipment", "AppendEquipmentRow", "ReadEquipmentItem",
+                       "EnsureEquipmentSlot", "ReadUnitEquipment"):
+            with self.subTest(method=method):
+                signature = re.search(
+                    r"\bfunction\s+(?:\w+\s+)?" + method + r"\s*\(([^)]*)\)", source)
+                self.assertIsNotNone(signature)
+                self.assertRegex(signature[1], r"\bout\s+array<EInventorySlot>\s+Slots\b")
+                self.assertNotRegex(signature[1], r"\barray<int>\s+Slots\b")
+        for method in ("AppendEquipmentRow", "EnsureEquipmentSlot", "EquipmentSlotKind"):
+            self.assertRegex(source, r"\bfunction\s+(?:\w+\s+)?" + method
+                             + r"\s*\([^)]*\bEInventorySlot\s+Slot\b")
+        self.assertIn("Slots.AddItem(Slot)", source)
+        self.assertIn("Slots.Find(Slot)", source)
+        for slot in ("PrimaryWeapon", "SecondaryWeapon", "Armor", "Utility"):
+            self.assertRegex(source, r"\bEnsureEquipmentSlot\(eInvSlot_" + slot + r"\s*,")
+        self.assertRegex(source, r"AppendEquipmentRow\(ItemID,\s*eInvSlot_Unknown\s*,")
+        self.assertRegex(source, r"AppendEquipmentRow\(ItemID,\s*Item\.InventorySlot\s*,")
+
+    def test_enum_fixture_cannot_hide_rejected_integer_cast(self):
+        """Python Enum is deliberately not IntEnum: int(slot) must fail."""
+        for slot in SLOT.values():
+            with self.subTest(slot=slot), self.assertRaises(TypeError):
+                int(slot)
 
 
 # Same exact body contract as test_native_multitarget_38b; array<name> is
@@ -304,6 +341,31 @@ class EquipmentGetterContract(unittest.TestCase):
 @unittest.skipUnless(os.environ.get("APX_SDK_SOURCE_ROOT"), "Private WOTC SDK needed")
 class EquipmentSDKContracts(unittest.TestCase):
     """Check selected SDK declarations against private, unredistributed sources."""
+
+    def test_native_enum_array_operations_and_output_signature(self):
+        """Check stock enum declaration, direct AddItem/Find and enum out arrays."""
+        root = CHECKS.find_sdk_root(Path(os.environ["APX_SDK_SOURCE_ROOT"])) / "XComGame/Classes"
+
+        def read(name):
+            """Load unmodified SDK code locally, ignoring comments."""
+            return CHECKS.without_comments((root / (name + ".uc")).read_text(encoding="utf-8-sig"))
+
+        definitions = read("X2TacticalGameRulesetDataStructures")
+        enum = re.search(r"\benum\s+EInventorySlot\s*\{([^}]+)\}", definitions)
+        self.assertIsNotNone(enum)
+        for name in SLOTS:
+            self.assertRegex(enum[1], r"\beInvSlot_" + name + r"\b")
+        self.assertRegex(read("XComGameState_Item"), r"\bEInventorySlot\s+InventorySlot\b")
+        self.assertIn("InventorySlotIsEquipped(EInventorySlot Slot)", definitions)
+        armory = read("UIArmory_Loadout")
+        self.assertIn("array<EInventorySlot> RelevantSlots", armory)
+        self.assertIn("RelevantSlots.AddItem(eInvSlot_PrimaryWeapon)", armory)
+        self.assertIn("array<EInventorySlot> CannotEditSlotsList", armory)
+        self.assertIn("CannotEditSlotsList.Find(eInvSlot_PrimaryWeapon)", armory)
+        strategy = read("XComGameStateContext_StrategyGameRule")
+        self.assertIn("array<EInventorySlot> SpecialSoldierSlotsToClear, SlotsToClear, LockedSlots", strategy)
+        self.assertIn("SlotsToClear.Find(LockedSlot)", strategy)
+        self.assertIn("out array<EParcelFacingType> arrParcelFacings", read("XComParcelManager"))
 
     def test_inventory_and_upgrade_apis(self):
         """Actual inventory slot/owner, non-caching upgrade name API and loaded manager."""

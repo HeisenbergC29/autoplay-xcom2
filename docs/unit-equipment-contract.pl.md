@@ -13,8 +13,9 @@ Bez cache między decyzjami. Przed każdym odczytem przedmiotu i po całości
 sprawdzamy aktualność snapshotu; false zawsze czyści wszystkie tablice.
 True nie oznacza pełnej wiedzy.
 
-Cztery tablice wierszy: ID służy wyłącznie do odszukania, Slot to bieżący
-EInventorySlot przedmiotu (nie domyślny slot template), Categories to
+Cztery tablice wierszy: ID służy wyłącznie do odszukania, `Slots` to
+`out array<EInventorySlot>` z bieżącym slotem przedmiotu (nie domyślnym
+slotem template), bez konwersji na liczby porządkowe. Categories to
 załadowany ItemCat, Presence: 0 nieznany, 1 rozpoznany przedmiot i template,
 2 jawnie pusty slot. Zachowujemy osobne pozycje utility/grenade pocket,
 heavy weapon, combat sim, ammo pocket (tylko tożsamość przedmiotu) i
@@ -86,3 +87,26 @@ broń i zbroję tej samej jednostki, a po shred sprawdzić że bieżący
 pancerz #125 nie sumuje deklaracji drugi raz. Native build/game NOT RUN.
 Nie zmieniamy markerów ani dotychczasowych decyzji; nie jest to dowód
 zmiany skuteczności taktycznej. Kolejne etapy wyłącznie po review LEAD.
+
+## Korekta kompilacji #137 (v53)
+
+Windows WOTC make na 097d1edefe5695fe26b79e90c38fe296a5798eb8:
+2 errors, 0 warnings, APX_UnitStats.uc:388 i :487 — Int conversion:
+Bad or missing expression. Usunięto sześć rzutowań literałów enum i dwa
+rzutowania Item.InventorySlot. Pięć sygnatur tablic Slots i dwa parametry
+Slot używają teraz natywnego EInventorySlot. Pozostałe tablice i stany
+unknown/present/absent bez zmian; żadnych liczbowych zamienników enum.
+
+Stock UIArmory_Loadout używa array<EInventorySlot>, AddItem z literałem
+slotu oraz Find z tym samym enum. XComGameStateContext_StrategyGameRule
+używa SlotsToClear.Find(LockedSlot). XComParcelManager.FillParcelFacingArray
+potwierdza składnię out array dla innego natywnego enum (EParcelFacingType).
+Testy prywatne sprawdzają te sygnatury oraz dostępne literały SDK.
+Test publiczny odrzuca rzutowania slotów i niezgodne sygnatury; fixture
+Python Enum, nie IntEnum, nie pozwala ukryć int(slot). E2E odczytu
+weryfikuje typ każdego slotu, także placeholderów absent/unknown.
+Poprzedni translator nie wykrywał błędu składni kompilatora UC.
+
+Marker mission-report-v53 pozostaje, brak zmian taktyki i konsumentów.
+Kompilacja poprawionego commitu nadal wymaga Windows WOTC make;
+wynik starej paczki pozostaje FAIL, nie jest dowodem działania poprawki.
