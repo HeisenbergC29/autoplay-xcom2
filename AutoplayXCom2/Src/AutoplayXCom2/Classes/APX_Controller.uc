@@ -1301,6 +1301,7 @@ function MakeDecision(XComTacticalController PC)
     local int RemainingConcealmentChecks, RemainingCoverChecks;
     local int RemainingContactGroups, RemainingContactMembers;
     local int RemainingContactDetectors, RemainingContactTiles, RemainingContactLOS;
+    local int RemainingRoutineContactChecks;
     local int RemainingTempoCoverChecks, RemainingMedicalSamples;
     local array<StateObjectReference> ContactSnapshotUnits, ContactSnapshotInteractives;
     local string ContactSnapshotReason, PatrolSelectionEvidence;
@@ -1335,6 +1336,11 @@ function MakeDecision(XComTacticalController PC)
     RemainingContactGroups = Clamp(class'APX_ContactEnvelope'.default.MaxGroups, 1, 32);
     RemainingContactMembers = Clamp(class'APX_ContactEnvelope'.default.MaxMembers, 1, 128);
     RemainingContactDetectors = Clamp(class'APX_ContactEnvelope'.default.MaxDetectors, 1, 64);
+    // Routine mission prefixes/local routes have a separate pair-work limit;
+    // patrol and objective recovery keep their existing detector allowance.
+    // All consumers still share the same tile and native LOS ceilings.
+    RemainingRoutineContactChecks = Clamp(
+        class'APX_ContactEnvelope'.default.MaxRoutineDetectorChecks, 1, 1024);
     RemainingContactTiles = Clamp(class'APX_ContactEnvelope'.default.MaxTiles, 2, 128);
     RemainingContactLOS = Clamp(class'APX_ContactEnvelope'.default.MaxLOS, 1, 512);
     RemainingTempoCoverChecks = Clamp(
@@ -1740,7 +1746,7 @@ function MakeDecision(XComTacticalController PC)
                 RangedTargetID, bRangedFocusGoal,
                 ContactSnapshotUnits, ContactSnapshotInteractives,
                 bContactSnapshotComplete, ContactSnapshotReason,
-                RemainingContactDetectors, RemainingContactTiles, RemainingContactLOS,
+                RemainingRoutineContactChecks, RemainingContactTiles, RemainingContactLOS,
                 RouteTempo, PlayerState.PlayerTurnCount,
                 PatrolAmbushPlanner.HasActiveStaging(), bContactSearch || bVisibleThreats,
                 CandidateRouteGoal, iCandidateRoutine, iCandidateFirstBlue,
