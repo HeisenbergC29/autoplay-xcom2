@@ -227,7 +227,7 @@ private static function XComGameState_Unit ResolveAuthorizedSubject(
 }
 
 /** Clear all parallel row arrays and flattened numeric arrays. */
-private static function ResetEquipment(out array<int> ItemIDs, out array<int> Slots,
+private static function ResetEquipment(out array<int> ItemIDs, out array<EInventorySlot> Slots,
     out array<int> Presence, out array<name> Categories,
     out array<float> Values, out array<int> Status)
 {
@@ -240,8 +240,8 @@ private static function ResetEquipment(out array<int> ItemIDs, out array<int> Sl
 }
 
 /** Append one row with unknown numeric fields; return its flattened start index. */
-private static function int AppendEquipmentRow(int ItemID, int Slot, int RowStatus,
-    name Category, out array<int> ItemIDs, out array<int> Slots,
+private static function int AppendEquipmentRow(int ItemID, EInventorySlot Slot, int RowStatus,
+    name Category, out array<int> ItemIDs, out array<EInventorySlot> Slots,
     out array<int> Presence, out array<name> Categories,
     out array<float> Values, out array<int> Status)
 {
@@ -369,7 +369,7 @@ private static function ReadDeclaredArmorMarkup(X2ArmorTemplate Armor, ECharStat
 
 /** Read one actual inventory reference. False means slot completeness is unknown. */
 private static function bool ReadEquipmentItem(XComGameStateHistory History, int HistoryIndex,
-    int SubjectID, int ItemID, out array<int> ItemIDs, out array<int> Slots,
+    int SubjectID, int ItemID, out array<int> ItemIDs, out array<EInventorySlot> Slots,
     out array<int> Presence, out array<name> Categories,
     out array<float> Values, out array<int> Status)
 {
@@ -385,7 +385,7 @@ private static function bool ReadEquipmentItem(XComGameStateHistory History, int
             ItemID, eReturnType_Reference, HistoryIndex));
     if (Item == none || Item.bRemoved || Item.OwnerStateObject.ObjectID != SubjectID)
     {
-        AppendEquipmentRow(ItemID, int(eInvSlot_Unknown), EquipmentUnknown, '',
+        AppendEquipmentRow(ItemID, eInvSlot_Unknown, EquipmentUnknown, '',
             ItemIDs, Slots, Presence, Categories, Values, Status);
         return false;
     }
@@ -394,7 +394,7 @@ private static function bool ReadEquipmentItem(XComGameStateHistory History, int
         return true;
     if (Kind == 0)
     {
-        AppendEquipmentRow(ItemID, int(eInvSlot_Unknown), EquipmentUnknown, '',
+        AppendEquipmentRow(ItemID, eInvSlot_Unknown, EquipmentUnknown, '',
             ItemIDs, Slots, Presence, Categories, Values, Status);
         return false;
     }
@@ -403,11 +403,11 @@ private static function bool ReadEquipmentItem(XComGameStateHistory History, int
         return false;
     if (Template == none)
     {
-        AppendEquipmentRow(ItemID, int(Item.InventorySlot), EquipmentUnknown, '',
+        AppendEquipmentRow(ItemID, Item.InventorySlot, EquipmentUnknown, '',
             ItemIDs, Slots, Presence, Categories, Values, Status);
         return true;
     }
-    Start = AppendEquipmentRow(ItemID, int(Item.InventorySlot), EquipmentPresent, Template.ItemCat,
+    Start = AppendEquipmentRow(ItemID, Item.InventorySlot, EquipmentPresent, Template.ItemCat,
         ItemIDs, Slots, Presence, Categories, Values, Status);
     Weapon = X2WeaponTemplate(Template);
     if (Weapon != none)
@@ -424,8 +424,8 @@ private static function bool ReadEquipmentItem(XComGameStateHistory History, int
 }
 
 /** Emit an explicit empty core slot only after every inventory slot was resolved. */
-private static function EnsureEquipmentSlot(int Slot, bool bComplete,
-    out array<int> ItemIDs, out array<int> Slots, out array<int> Presence,
+private static function EnsureEquipmentSlot(EInventorySlot Slot, bool bComplete,
+    out array<int> ItemIDs, out array<EInventorySlot> Slots, out array<int> Presence,
     out array<name> Categories, out array<float> Values, out array<int> Status)
 {
     local int RowStatus;
@@ -440,6 +440,7 @@ private static function EnsureEquipmentSlot(int Slot, bool bComplete,
 
 /**
  * Read equipped item facts for the same authorized snapshot as ReadUnitStats.
+ * Slots carries the native EInventorySlot enum, not cast integers.
  * Four row arrays share an index; Values/Status contain EquipmentFactCount
  * scalars per row. Unknown=0, present=1, absent=2 for Presence; numeric
  * Status retains FactKnown/FactUnknown. Identity is solely for locating items.
@@ -448,7 +449,7 @@ private static function EnsureEquipmentSlot(int Slot, bool bComplete,
  * False clears every output; true may contain unknown rows or numeric fields.
  */
 static function bool ReadUnitEquipment(XComGameStateHistory History, int HistoryIndex,
-    int ObserverID, int SubjectID, out array<int> ItemIDs, out array<int> Slots,
+    int ObserverID, int SubjectID, out array<int> ItemIDs, out array<EInventorySlot> Slots,
     out array<int> Presence, out array<name> Categories,
     out array<float> Values, out array<int> Status)
 {
@@ -484,9 +485,9 @@ static function bool ReadUnitEquipment(XComGameStateHistory History, int History
         ResetEquipment(ItemIDs, Slots, Presence, Categories, Values, Status);
         return false;
     }
-    EnsureEquipmentSlot(int(eInvSlot_PrimaryWeapon), bComplete, ItemIDs, Slots, Presence, Categories, Values, Status);
-    EnsureEquipmentSlot(int(eInvSlot_SecondaryWeapon), bComplete, ItemIDs, Slots, Presence, Categories, Values, Status);
-    EnsureEquipmentSlot(int(eInvSlot_Armor), bComplete, ItemIDs, Slots, Presence, Categories, Values, Status);
-    EnsureEquipmentSlot(int(eInvSlot_Utility), bComplete, ItemIDs, Slots, Presence, Categories, Values, Status);
+    EnsureEquipmentSlot(eInvSlot_PrimaryWeapon, bComplete, ItemIDs, Slots, Presence, Categories, Values, Status);
+    EnsureEquipmentSlot(eInvSlot_SecondaryWeapon, bComplete, ItemIDs, Slots, Presence, Categories, Values, Status);
+    EnsureEquipmentSlot(eInvSlot_Armor, bComplete, ItemIDs, Slots, Presence, Categories, Values, Status);
+    EnsureEquipmentSlot(eInvSlot_Utility, bComplete, ItemIDs, Slots, Presence, Categories, Values, Status);
     return true;
 }
