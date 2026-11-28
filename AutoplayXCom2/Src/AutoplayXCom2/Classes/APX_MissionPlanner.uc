@@ -844,7 +844,7 @@ static function bool FindGoal(XComGameState_Unit UnitState, out MissionGoal Goal
                     UnitState, OtherUnit))
             {
                 GoalSource = "berserker_focus";
-            Goal.Tile = OtherUnit.TileLocation;
+                Goal.Tile = OtherUnit.TileLocation;
                 Goal.Value = 70.0;
                 Goal.bFound = true;
                 Goal.bCombat = true;
@@ -919,6 +919,7 @@ static function bool FindGoal(XComGameState_Unit UnitState, out MissionGoal Goal
             && !class'APX_CombatPlanner'.static.IsReclaimableControlledSquadmate(
                 UnitState, OtherUnit))
         {
+            GoalSource = "revealed_focus";
             Goal.Tile = OtherUnit.TileLocation;
             Goal.Value = 45.0;
             Goal.bFound = true;
