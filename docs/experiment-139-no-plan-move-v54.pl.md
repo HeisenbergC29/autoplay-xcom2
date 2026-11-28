@@ -26,12 +26,18 @@ Nie zmieniamy priorytetu celu ani nie dodajemy fallbacku.
 Do 16 wierszy jednostek na faktyczny stop no-constructive-action
 (lub istniejący wariant SabotageCC w tej samej gałęzi); omitted jawny.
 Nie emituje na normalnych decyzjach ani na ręcznym rozkazie.
+Najpierw istniejący StopWithStatus zapisuje autoplay_stop z history/turn,
+następnie opcjonalne wiersze skanu. Przy jednym wolnym rekordzie zachowuje
+się granica stopu, szczegół skanu może zostać ucięty przez limit. Nie
+zwiększamy limitu ani nie rezerwujemy dodatkowego slotu.
 Pola: unit, ap, branch, outcome, goal, known, immediate, visible,
 remembered, combat_threats, best_score, omitted; w zależności od etapu reason.
 Goal to rzeczywiście wybrana gałąź (evac, sweep_control_source,
-berserker_focus, native_objective, revealed_focus, immediate_enemy,
+berserker_focus, native_objective, x4_map_marker_unverified, revealed_focus, immediate_enemy,
 known_enemy_sweep, mission_object, map_objective, known_enemy_pursuit,
-none). Brak legalnego ruchu przed FindGoal nie certyfikuje known=0.
+none). native_objective oznacza dodatni status natywnego resolvera X4;
+x4_map_marker_unverified oznacza fallback do znacznika mapy przy statusie 0.
+Nie zmieniamy wybranego pola ani wartości celu. Brak legalnego ruchu przed FindGoal nie certyfikuje known=0.
 Outcome: not_proposed, outscored, controller_rejected, selected.
 Selected oznacza chwilowy najlepszy plan, nie native dispatch.
 Controller_rejected oznacza istniejącą bramkę CanUseMove (nie nowy
@@ -54,8 +60,13 @@ Brak markera przy braku ocenionych jednostek nie certyfikuje przyczyny.
 Automatyczne testy wykonują wybrane rzeczywiste fragmenty UC: priorytet
 mapy/pursuit, warunek stop z flagami kontaktu, odmowa native path z mockiem
 cache i jej marker, source contract braku dodatkowej selekcji i limitu.
-Fixture: ostatni zdolny żołnierz 2 AP, dwa znane cele, brak aktualnego
-strzału i bezpiecznej kwalifikowanej trasy. Nie jest to cała gra ani
+Fixture: ostatni zdolny żołnierz 2 AP, dwa znane cele, cache z nieobsługiwaną
+zdolnością podany do rzeczywistych bramek GatherForecasts i no-shot,
+odmowa native path, następnie istniejące bramki wyboru kandydatów przy
+Overwatch=2, stop predicate i rzeczywista emisja Marker/Emit. Osobny
+test przy jednym wolnym rekordzie zachowuje autoplay_stop, a skan
+wywołuje zwykły limit. Test obu ścieżek natywnego celu X4 i fallbacku
+wykonuje rzeczywisty resolver z kontrolowanym statusem native. Nie jest to cała gra ani
 przewidywanie native path. Windows build/game NOT RUN.
 
 W zintegrowanej paczce wskazanej przez LEAD uruchomić Gas Station z tą samą
