@@ -26,6 +26,8 @@ RECORDER = CLASSES / "APX_MissionRecorder.uc"
 def compile_fragment(name, args, body, env):
     """Compile the selected real UC statements using a narrow fixture adapter."""
     body = body.replace("class'APX_FullIntel'.default.EnableFullIntel", "FullIntel")
+    # Native log is observational; this fixture tests recorder markers separately.
+    body = re.sub(r"\x60log\(.*?\);", "Log();", body, flags=re.S)
     body = body.replace("class'APX_CombatPlanner'.static.", "Combat.")
     body = body.replace("class'XComGameState_BattleData'", "'battle'")
     body = body.replace("class'APX_MissionPlanner'.static.", "Mission.")
@@ -57,7 +59,7 @@ def compile_fragment(name, args, body, env):
         """Adapt only the diagnostic assignment, retaining real field values."""
         return match[1] + concat_expression(match[2]) + ";"
     body = re.sub(r"(MoveDiagnostic\s*=\s*)([^;]*[@$][^;]*);", concat, body)
-    namespace = dict(env, string=str, UCArray=UCArray)
+    namespace = dict(env, string=str, UCArray=UCArray, Log=lambda:None)
     # The restricted translator splits statements at semicolons. Preserve
     # punctuation within actual quoted diagnostic messages.
     body = re.sub(r'"(?:\\.|[^"\\])*"', lambda m: m[0].replace(";", "__UC_SEMICOLON__"), body)
